@@ -21,7 +21,7 @@
 // Your account if there's none here (or it's this one, newer); mods,
 // settings, keys and the rest where there are none of them here.
 import { GAME_VERSION } from '../version.js';
-import { SLOTS, MP_SLOTS } from './saves.js';
+import { isMpSlot } from './saves.js';
 
 export const CARRY_KIND = 'tessera-carry';
 // Whether the app's asked (or done) it: { state: 'done' | 'skipped', at }.
@@ -114,7 +114,7 @@ export function bundleSummary(b) {
   const acc = parse(b.kv[ACCOUNT], null);
   return {
     worlds,
-    hosted: worlds.filter((w) => MP_SLOTS.includes(w.id)).length,
+    hosted: worlds.filter((w) => isMpSlot(w.id)).length,
     account: acc && acc.id ? acc.name || (acc.profile && acc.profile.name) || 'your account' : null,
     mods: Object.keys(parse(b.kv[MODS_INDEX], {})).length,
     settings: !!b.kv['tessera-settings'],
@@ -128,9 +128,13 @@ function sameWorld(a, b) {
 }
 
 // A free slot of the kind `id` is (yours or one you host), or null.
+// (Round 82: there's always one, slots being as many as you like.)
 function freeSlotLike(id, ix) {
-  const kind = MP_SLOTS.includes(id) ? MP_SLOTS : SLOTS.filter((s) => s !== 'auto');
-  return kind.find((s) => !ix[s]) || null;
+  const mp = isMpSlot(id);
+  for (let i = 1; ; i++) {
+    const s = mp ? `mp${i}` : String(i);
+    if (!ix[s]) return s;
+  }
 }
 
 // The mods a world was made with (from its text, without reading the

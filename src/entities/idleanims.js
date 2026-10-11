@@ -1,20 +1,21 @@
 // (Round 77) What folk do with their hands while they're standing about:
 //   - sweeping (by their door, or in the shop): a broom going side to side,
-//     the dust flying, and any snow lying there swept off;
+//     the dust flying;
 //   - leaning on a wall, arms folded, for a while;
 //   - talking with their hands, two of them stood together: turned to each
 //     other, a hand up now and then, the odd word in the air.
 //   - (Round 79) a stretch, arms up; a look about, this way and that.
+//   - (Round 82) at home, a chest beside them: its lid up, a rummage in it,
+//     and shut again.
 // Started now and then while they're idle where they meant to be (see
 // npc.js, atGoalBehaviour); drawn by the renderer (see drawIdleAnim).
 // (Round 79: more often than they were, and at work too where it fits: a
 // shopkeeper sweeps the shop, a guard leans by the gate.)
-import { BLOCKS } from '../world/blocks.js';
+import { B, BLOCKS } from '../world/blocks.js';
 
 const DX = [0, -1, 0, 1];
 const DZ = [1, 0, -1, 0];
 const DUST = ['#c8b898', '#b0a080', '#d8ccb0'];
-const SNOWY = ['#f4f8ff', '#dce8f8'];
 const CHAT = ['…', '!', '?', 'ha!', '♪', '…'];
 // (What they're about when a broom, a wall or a chat might come into it.)
 const LOOSE = new Set(['home', 'wander', 'social', 'visit', 'hobby', 'work', 'play', 'help', 'eat']);
@@ -29,6 +30,17 @@ function wallBeside(n) {
     if (b && b.solid && b.render === 'cube' && up && up.solid) return d;
   }
   return -1;
+}
+
+// (Round 82) A chest beside them (or in front), at their own level.
+function chestBeside(n) {
+  const w = n.game.world;
+  for (let d = 0; d < 4; d++) {
+    const x = n.x + DX[d];
+    const z = n.z + DZ[d];
+    if (w.getBlock(x, n.y, z) === B.chest) return { x, y: n.y, z, d };
+  }
+  return null;
 }
 
 function partner(n) {
@@ -60,11 +72,18 @@ export function idleTick(n, act, g, dt) {
   n.idleCd = n.rng.float(6, 18);
   const job = n.rec.job;
   const busy = act.act === 'work' && g && (g.target || (g.tag === 'work' && !SWEEPERS.has(job) && job !== 'guard'));
-  const gfx = n.game.renderer && n.game.renderer.gfx;
-  const snow = gfx && gfx.depth ? gfx.depth(n.x + DX[n.dir], n.z + DZ[n.dir]) + gfx.depth(n.x, n.z) : 0;
   const r = n.rng.next();
-  // A broom out: at home and at the shop, and at once if there's snow.
-  if (!busy && job !== 'guard' && (snow > 0.3 || (r < 0.35 && (act.act === 'home' || act.act === 'work')))) {
+  // (Round 82) At home by a chest: into it a while.
+  const ch = act.act === 'home' && !busy ? chestBeside(n) : null;
+  if (ch && r < 0.3) {
+    n.dir = ch.d;
+    const dur = n.rng.float(3, 5);
+    n.idleAnim = { kind: 'rummage', t: 0, dur, chest: ch };
+    n.game.openChestLid?.(ch.x, ch.y, ch.z, dur - 0.4);
+    return true;
+  }
+  // A broom out: at home and at the shop.
+  if (!busy && job !== 'guard' && r < 0.35 && (act.act === 'home' || act.act === 'work')) {
     n.idleAnim = { kind: 'sweep', t: 0, dur: n.rng.float(6, 11) };
     return true;
   }
@@ -99,20 +118,25 @@ function step(n, a, dt) {
   const R = n.game.renderer;
   const near = n.distTo(n.game.player) < 20;
   if (a.kind === 'sweep') {
+    // (Round 82) The hand's emptied first, the broom taken out: no dust
+    // till it's sweeping, nor once it's being put away.
+    if (a.t < 0.45 || a.t > a.dur - 0.45) return true;
     a.fx = (a.fx ?? 0) - dt;
     if (a.fx > 0) return true;
     a.fx = n.rng.float(0.45, 0.8);
     const fx = n.x + DX[n.dir];
     const fz = n.z + DZ[n.dir];
-    const gfx = R && R.gfx;
-    const snowy = !!(gfx && gfx.depth && (gfx.depth(fx, fz) > 0 || gfx.depth(n.x, n.z) > 0));
-    if (snowy) {
-      gfx.clear(n.x, n.z, 0);
-      gfx.clear(fx, fz, 0);
-    }
-    if (near && R && R.emit) R.emit(fx, n.y, fz, { n: snowy ? 4 : 2, color: snowy ? SNOWY : DUST, up: 10, speed: 22, gravity: 60, life: 0.5, oy: 6, shape: 'puff', grow: 1 });
+    if (near && R && R.emit) R.emit(fx, n.y, fz, { n: 2, color: DUST, up: 10, speed: 22, gravity: 60, life: 0.5, oy: 6, shape: 'puff', grow: 1 });
     // (Now and then a step along, sweeping on.)
     if (n.rng.chance(0.12)) n.dir = (n.dir + (n.rng.chance(0.5) ? 1 : 3)) % 4;
+    return true;
+  }
+  if (a.kind === 'rummage') {
+    // (Hands into it now and then.)
+    a.fx = (a.fx ?? 0.6) - dt;
+    if (a.fx > 0) return true;
+    a.fx = n.rng.float(0.6, 1.1);
+    n.doAction(n.rng.float(0.2, 0.35));
     return true;
   }
   if (a.kind === 'gesture') {

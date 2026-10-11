@@ -1,43 +1,27 @@
 // (Round 77) What the weather and the water do to the ground, as seen:
 //   - rain splashing off whatever it lands on, and rings spreading on
 //     water where it falls;
-//   - snow lying, a thin layer at first and deeper the longer it falls
-//     (on roofs too), melting off after; trodden flat where people go,
-//     cleared with a shovel (or a broom: see npc.js, sweeping);
-//   - tracks in it of everything that walks, a while, and the ruts of
-//     wagons (in mud too, after rain);
+//   - the ruts of wagons in mud, after rain;
 //   - foam along the shore, and rings round whoever's wading or swimming.
+// (Round 82: snow no longer lies in layers, nor holds tracks: what it cost
+// to draw wasn't worth what it showed.)
 // None of it's in the world itself: it's the picture's own (and it can be
-// turned off in Settings: Splashes, snow and tracks; Shore foam and
+// turned off in Settings: Rain splashes and ruts; Shore foam and
 // ripples).
 import { B, BLOCKS } from '../world/blocks.js';
 
 const MUDDY = new Set([B.dirt, B.path, B.mud, B.farmland, B.gravel, B.clay, B.grass]);
-// (What has no legs to leave tracks with.)
-const LEGLESS = /snake|fish|eel|worm|slime|bat|wisp|ghost|spirit|jelly|ooze|ray|shark|crab_swarm|spark/;
 const K = (x, z) => x * 65536 + z;
 const DX = [0, -1, 0, 1];
 const DZ = [1, 0, -1, 0];
 
-// (Round 78) The colour of snow lying on a top at height `y` (r,g,b):
-// greyer and bluer at the ground, white up on the roofs.
-const TINTS = [];
-export function snowTint(y) {
-  const i = Math.max(0, Math.min(63, y | 0));
-  if (TINTS[i]) return TINTS[i];
-  const k = Math.max(0, Math.min(1, (i - 5) / 5));
-  return (TINTS[i] = `${Math.round(196 + 59 * k)},${Math.round(208 + 47 * k)},${Math.round(228 + 27 * k)}`);
-}
-
 export class GroundFx {
   constructor(r) {
     this.r = r;
-    this.snow = new Map(); // tile -> depth (0..4 layers)
     this.marks = new Map(); // tile -> [{ kind, dir, t, life }]
     this.ripples = new Map(); // tile -> [{ y, ox, oz, t, max, big }]
     this.foam = new Map(); // tile|y -> land-side mask (worked out once)
     this.last = new WeakMap(); // entity -> the tile it was on
-    this.acc = 0;
     this.wet = 0; // how wet the ground is (0..1): ruts in mud
     this.foamT = 0;
   }
@@ -54,7 +38,6 @@ export class GroundFx {
     if (!world || !p) return;
     const below = !!game.dungeon;
     const raining = !below && w && w.kind === 'rain' && w.level > 0.15;
-    const snowing = !below && w && w.kind === 'snow' && w.level > 0.15;
     this.wet = Math.max(0, Math.min(1, this.wet + (raining ? dt / 60 : -dt / 400)));
     // (Water shifts, now and then: the foam's looked at afresh.)
     this.foamT -= dt;
@@ -65,66 +48,12 @@ export class GroundFx {
     this.ageMarks(dt);
     this.ageRipples(dt);
     if (!this.on) {
-      if (this.snow.size) this.snow.clear();
       if (this.marks.size) this.marks.clear();
     } else {
-      this.acc += dt;
-      if (this.acc >= 0.5) {
-        const step = this.acc;
-        this.acc = 0;
-        if (snowing) this.settle(world, p, step * w.level);
-        else this.melt(step, raining);
-      }
       if (raining) this.rain(game, dt, w.level);
       this.tread(game, dt);
     }
     if (!this.r.noWaterFx) this.wade(game, dt);
-  }
-
-  // Snow lying deeper on the tops round about (not on water).
-  settle(world, p, k) {
-    const R = 22;
-    for (let dz = -R; dz <= R; dz++) {
-      for (let dx = -R; dx <= R; dx++) {
-        const x = p.x + dx;
-        const z = p.z + dz;
-        const top = world.topAt(x, z);
-        if (top <= 0) continue;
-        const b = BLOCKS[world.getBlock(x, top - 1, z)];
-        if (!b || b.liquid || !(b.solid || b.render === 'plant')) continue;
-        const key = K(x, z);
-        // (About a layer in under a minute of steady snow; four at most.)
-        this.snow.set(key, Math.min(4, (this.snow.get(key) || 0) + k * 0.022));
-      }
-    }
-  }
-
-  melt(step, raining) {
-    for (const [key, d] of this.snow) {
-      const v = d - step * (raining ? 0.05 : 0.008);
-      if (v <= 0) this.snow.delete(key);
-      else this.snow.set(key, v);
-    }
-  }
-
-  depth(x, z) {
-    return this.snow.get(K(x, z)) || 0;
-  }
-
-  // Snow shovelled (or swept) off round (x, z).
-  clear(x, z, r = 1) {
-    let any = false;
-    for (let dz = -r; dz <= r; dz++) {
-      for (let dx = -r; dx <= r; dx++) {
-        const key = K(x + dx, z + dz);
-        if (this.snow.has(key)) {
-          this.snow.delete(key);
-          any = true;
-        }
-        this.marks.delete(key);
-      }
-    }
-    return any;
   }
 
   mark(x, z, kind, dir, life) {
@@ -142,8 +71,7 @@ export class GroundFx {
     }
   }
 
-  // Whoever's walked from one pace to the next: tracks in the snow behind
-  // them (and the snow trodden down a little), ruts behind a wagon.
+  // A wagon gone from one pace to the next in mud: its ruts behind it.
   tread(game) {
     const world = game.world;
     for (const e of game.visibleEntities || []) {
@@ -151,26 +79,14 @@ export class GroundFx {
       const key = K(e.x, e.z);
       const was = this.last.get(e);
       this.last.set(e, key);
-      if (was === undefined || was === key) continue;
+      if (was === undefined || was === key || this.wet <= 0.2 || !(e.mount && e.mount.kind === 'wagon')) continue;
       const px = Math.floor(was / 65536);
       const pz = was - px * 65536;
       const dx = Math.sign(e.x - px);
       const dz = Math.sign(e.z - pz);
       const dir = dz > 0 ? 0 : dx < 0 ? 1 : dz < 0 ? 2 : 3;
-      const d = this.snow.get(was) || 0;
-      const wagon = e.mount && e.mount.kind === 'wagon';
-      if (wagon) {
-        const top = world.topAt(px, pz);
-        const muddy = top > 0 && MUDDY.has(world.getBlock(px, top - 1, pz)) && this.wet > 0.2;
-        if (d > 0.2 || muddy) this.mark(px, pz, 'rut', dir, d > 0.2 ? 120 : 90);
-        if (d > 0) this.snow.set(was, Math.max(0.15, d - 0.5));
-        continue;
-      }
-      const legs = e.kind === 'npc' || e === game.player || e.kind === 'player' || (e.kind === 'creature' && !LEGLESS.test(e.species || ''));
-      if (!legs || d < 0.25) continue;
-      this.mark(px, pz, e.kind === 'creature' ? 'paw' : 'foot', dir, 70);
-      // (Trodden down: a path forms where many go.)
-      this.snow.set(was, Math.max(0.25, d - 0.12));
+      const top = world.topAt(px, pz);
+      if (top > 0 && MUDDY.has(world.getBlock(px, top - 1, pz))) this.mark(px, pz, 'rut', dir, 90);
     }
   }
 
@@ -260,31 +176,10 @@ export class GroundFx {
       return;
     }
     if (!this.on) return;
-    const d = this.snow.get(key);
     const ms = this.marks.get(key);
-    if (!d && !ms) return;
+    if (!ms) return;
     if (world.topAt(wx, wz) !== y + 1) return;
-    if (d) {
-      // A dusting first, then white, then a layer you can see the depth of.
-      const a = Math.min(0.94, 0.25 + d * 0.32);
-      // (Round 78) Snow the higher it lies the brighter: on a roof it's
-      // white in the sun, on the ground a shade greyer and bluer, so the
-      // one stands out from the other.
-      ctx.fillStyle = `rgba(${snowTint(y)},${a})`;
-      if (d < 0.6) {
-        for (let i = 0; i < 16; i++) ctx.fillRect(sx + ((i * 7 + wx * 3) % 16), sy + ((i * 5 + wz * 3) % 16), 2, 1);
-      } else ctx.fillRect(sx, sy, 16, 16);
-      if (d >= 1.2) {
-        const h = Math.min(4, Math.floor(d));
-        ctx.fillStyle = `rgba(${snowTint(y - 1)},0.95)`;
-        ctx.fillRect(sx, sy + 16, 16, h);
-        ctx.fillStyle = 'rgba(170,190,220,0.6)';
-        ctx.fillRect(sx, sy + 16 + h, 16, 1);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillRect(sx, sy, 16, 1);
-      }
-    }
-    if (ms) for (const q of ms) this.drawMark(ctx, q, sx, sy, d);
+    for (const q of ms) this.drawMark(ctx, q, sx, sy);
   }
 
   drawFoam(ctx, m, sx, sy, t, seed) {
@@ -317,33 +212,17 @@ export class GroundFx {
     }
   }
 
-  drawMark(ctx, q, sx, sy, d) {
+  drawMark(ctx, q, sx, sy) {
     const a = Math.min(1, q.t / (q.life * 0.4));
-    const [du, dv] = this.r.toView(DX[q.dir], DZ[q.dir]);
-    const along = du !== 0;
-    if (q.kind === 'rut') {
-      ctx.fillStyle = d ? `rgba(130,150,180,${0.55 * a})` : `rgba(60,44,30,${0.5 * a})`;
-      // Two wheel tracks the length of the pace.
-      if (along) {
-        ctx.fillRect(sx, sy + 4, 16, 1);
-        ctx.fillRect(sx, sy + 11, 16, 1);
-      } else {
-        ctx.fillRect(sx + 4, sy, 1, 16);
-        ctx.fillRect(sx + 11, sy, 1, 16);
-      }
-      return;
+    const [du] = this.r.toView(DX[q.dir], DZ[q.dir]);
+    // Two wheel tracks the length of the pace.
+    ctx.fillStyle = `rgba(60,44,30,${0.5 * a})`;
+    if (du !== 0) {
+      ctx.fillRect(sx, sy + 4, 16, 1);
+      ctx.fillRect(sx, sy + 11, 16, 1);
+    } else {
+      ctx.fillRect(sx + 4, sy, 1, 16);
+      ctx.fillRect(sx + 11, sy, 1, 16);
     }
-    ctx.fillStyle = `rgba(120,140,175,${0.6 * a})`;
-    // Left, right, along the way they went.
-    const w = q.kind === 'paw' ? 1 : 2;
-    for (let i = 0; i < 2; i++) {
-      const o = i * 8 + 3;
-      if (along) {
-        ctx.fillRect(sx + o, sy + 5 + (i % 2) * 5, w + 1, 1);
-      } else {
-        ctx.fillRect(sx + 5 + (i % 2) * 5, sy + o, 1, w + 1);
-      }
-    }
-    if (dv === 0 && du === 0) ctx.fillRect(sx + 7, sy + 7, 2, 1);
   }
 }

@@ -17,37 +17,178 @@ import { countItem, removeItem, addItem } from './inventory.js';
 import { shippable, FERRY_CARRIES } from './stalls.js';
 import { notePlaced } from './invtools.js';
 import { BLOCKS, B } from '../world/blocks.js';
+import { M } from '../world/settlement.js';
+import { MinHeap } from '../util/heap.js';
 
 // How much quicker it all goes, hurried on (see Game.timeRate).
 export const RIDE_FAST = 12;
 
 const centre = (s) => ({ x: Math.round((s.cx + s.cw / 2) * REGION_W), z: Math.round((s.cz + s.cd / 2) * REGION_D) });
-const inside = (s, x, z, m = 2) => !!s.bounds && x >= s.bounds.x0 - m && x <= s.bounds.x1 + m && z >= s.bounds.z0 - m && z <= s.bounds.z1 + m;
 const abs = (game) => game.day * 1440 + game.minute;
 
 // ------------------------------------------------------------ the way
-// The coach's way: from its stand out of town, down the road (or across
-// country), to the far town's stand.
-function coachWay(game, from, to) {
+// The coach's way (Round 82): down its own town's streets from the stand
+// and out (through the gate, in a walled town), along the road if one's
+// finished (or across country the way the caravans go, round the water
+// and the other towns), and in by the far town's streets to its stand:
+// never over the houses, or straight across a lake. Worked out a little
+// at a time (`ms` of it a frame), the coach waiting at its stand till
+// it's ready: null till then.
+function coachWay(game, from, to, ms) {
   const D = game.sim.diplomacy;
-  const LA = game.world.layouts.get(from.id);
-  const a = (LA && coachStand(LA)) || null;
-  // (Worked out now if it isn't yet: a moment, once, as the coach sets off.)
-  const ms = D.wayMs;
-  D.wayMs = game.instantWork ? Infinity : 120;
+  const world = game.world;
+  const LA = world.layouts.get(from.id) || null;
+  // (The far town laid out first, if it isn't yet: in the background.)
+  const LB = world.layouts.get(to.id) || (world.remote ? null : world.layOut(to, game.instantWork ? Infinity : ms));
+  if (!LB && !world.remote) return null;
+  const was = D.wayMs;
+  D.wayMs = game.instantWork ? Infinity : ms;
   let w;
   try {
     w = D.way(from, to);
   } finally {
-    D.wayMs = ms;
+    D.wayMs = was;
   }
-  const mid = w.pts.filter((q) => !inside(from, q.x, q.z) && !inside(to, q.x, q.z));
-  const pts = [];
-  if (a) pts.push({ x: a.x, z: a.z });
-  else pts.push(centre(from));
-  pts.push(...mid);
-  pts.push(endOf(game, to));
-  return pts;
+  if (!w || w.rough) return null;
+  const a = (LA && coachStand(LA)) || centre(from);
+  const b = endOf(game, to);
+  const pts = w.pts;
+  const n = pts.length;
+  // Where the way leaves the one town, and comes into the other.
+  const out = leaving(pts, from.bounds);
+  const inn = leaving(pts.slice().reverse(), to.bounds);
+  // (Towns cheek by jowl: from stand to stand.)
+  if (!out || !inn) return tidy([a, b]);
+  const mid = pts.slice(out.i, n - inn.i).map((q) => ({ x: q.x, z: q.z }));
+  return tidy([...streets(LA, a, out.p), ...mid, ...streets(LB, b, inn.p).reverse()]);
+}
+
+// (The margin round a town the coach goes by: just outside its edge.)
+const RING = 3;
+
+// The first point along `pts` where it's left the town's bounds (and the
+// margin round them), and the first corner after: { p, i }; null if it
+// never does.
+function leaving(pts, bd) {
+  if (!bd) return null;
+  const inR = (x, z) => x >= bd.x0 - RING && x <= bd.x1 + RING && z >= bd.z0 - RING && z <= bd.z1 + RING;
+  for (let k = 1; k < pts.length; k++) {
+    const p0 = pts[k - 1];
+    const p1 = pts[k];
+    const steps = Math.max(1, Math.ceil(Math.hypot(p1.x - p0.x, p1.z - p0.z)));
+    let last = { x: Math.round(p0.x), z: Math.round(p0.z) };
+    for (let j = 1; j <= steps; j++) {
+      const x = Math.round(p0.x + ((p1.x - p0.x) * j) / steps);
+      const z = Math.round(p0.z + ((p1.z - p0.z) * j) / steps);
+      if (!inR(x, z)) return { p: inR(last.x, last.z) ? last : { x, z }, i: k };
+      last = { x, z };
+    }
+  }
+  return null;
+}
+
+// The way through a town from (the stand) `s` to `goal` (just outside
+// its edge): along its streets, squares and bridges where it can, over
+// open ground if it must, never through a house, a yard, a wall or the
+// water; round the outside of it in the margin. A search over its plan,
+// straight runs liked better than turns. The corners of it, from `s` to
+// `goal`; just the two, if there's no plan (or no way).
+function streets(L, s, goal) {
+  const g = { x: Math.round(goal.x), z: Math.round(goal.z) };
+  const st = { x: Math.round(s.x), z: Math.round(s.z) };
+  if (!L || !L.mask || !L.bounds) return [st, g];
+  const bd = L.bounds;
+  const x0 = bd.x0 - RING;
+  const z0 = bd.z0 - RING;
+  const W = bd.x1 - bd.x0 + 1 + RING * 2;
+  const H = bd.z1 - bd.z0 + 1 + RING * 2;
+  const okIn = (x, z) => x >= x0 && z >= z0 && x < x0 + W && z < z0 + H;
+  if (!okIn(st.x, st.z) || !okIn(g.x, g.z)) return [st, g];
+  const cost = (x, z) => {
+    if (!L.inside(x, z)) return 2;
+    switch (L.maskAt(x, z)) {
+      case M.ROAD:
+      case M.PLAZA:
+      case M.BRIDGE:
+        return 1;
+      case M.FREE:
+      case M.FIELD:
+        return 6;
+      case M.WATER:
+      case M.WALL:
+        return 0;
+      // (Through a yard or round a house's corner only if there's no
+      // other way at all.)
+      default:
+        return 60;
+    }
+  };
+  const N = W * H;
+  const best = new Float32Array(N * 5).fill(Infinity);
+  const prev = new Int32Array(N * 5).fill(-1);
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const cell = (x, z) => (z - z0) * W + (x - x0);
+  const heap = new MinHeap();
+  const k0 = cell(st.x, st.z) * 5 + 4;
+  best[k0] = 0;
+  heap.push(k0, Math.abs(g.x - st.x) + Math.abs(g.z - st.z));
+  const gc = cell(g.x, g.z);
+  let end = -1;
+  let n = 0;
+  while (heap.size && n++ < 200000) {
+    const k = heap.pop();
+    const c = (k / 5) | 0;
+    const d = k % 5;
+    if (c === gc) {
+      end = k;
+      break;
+    }
+    const x = (c % W) + x0;
+    const z = ((c / W) | 0) + z0;
+    const gk = best[k];
+    for (let q = 0; q < 4; q++) {
+      const nx = x + DIRS[q][0];
+      const nz = z + DIRS[q][1];
+      if (!okIn(nx, nz)) continue;
+      const cc = nx === g.x && nz === g.z ? 1 : cost(nx, nz);
+      if (!cc) continue;
+      const nk = cell(nx, nz) * 5 + q;
+      const ng = gk + cc + (d !== 4 && d !== q ? 0.6 : 0);
+      if (ng < best[nk]) {
+        best[nk] = ng;
+        prev[nk] = k;
+        heap.push(nk, ng + Math.abs(g.x - nx) + Math.abs(g.z - nz));
+      }
+    }
+  }
+  if (end < 0) return [st, g];
+  const cells = [];
+  for (let k = end; k >= 0; k = prev[k]) {
+    const c = (k / 5) | 0;
+    cells.push({ x: (c % W) + x0, z: ((c / W) | 0) + z0 });
+  }
+  cells.reverse();
+  // (Only the corners kept.)
+  const outp = [cells[0]];
+  for (let i = 1; i < cells.length - 1; i++) {
+    const p0 = cells[i - 1];
+    const p1 = cells[i];
+    const p2 = cells[i + 1];
+    if (p1.x - p0.x !== p2.x - p1.x || p1.z - p0.z !== p2.z - p1.z) outp.push(p1);
+  }
+  if (cells.length > 1) outp.push(cells[cells.length - 1]);
+  return outp;
+}
+
+// (No point twice running, nor three in a line.)
+function tidy(pts) {
+  const out = [];
+  for (const q of pts) {
+    const l = out[out.length - 1];
+    if (l && l.x === q.x && l.z === q.z) continue;
+    out.push({ x: q.x, z: q.z });
+  }
+  return out.length >= 2 ? out : null;
 }
 
 // Where the coach pulls up at `s`.
@@ -186,6 +327,13 @@ function ferryWay(game, from, to, R) {
   return out;
 }
 
+// The way set for the ride, from `t0` (now, as it sets off).
+function setWay(R, pts, t0) {
+  const at = measure(pts);
+  const len = at[at.length - 1] || 1;
+  Object.assign(R, { pts, at, len, t0, pace: len / R.mins, leg: 1 });
+}
+
 function measure(pts) {
   const at = [0];
   for (let i = 1; i < pts.length; i++) at.push(at[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
@@ -212,13 +360,24 @@ export function startRide(game, link) {
   const from = link.from || game.world.ow.settlementAt(p.x, p.z) || game.currentSettlement;
   if (!from) return false;
   const R = { kind: link.kind, from: from.id, to: link.s.id, name: link.s.name, fast: false, leg: 1, key: `ride:${p.id}` };
-  const pts = link.kind === 'ferry' ? ferryWay(game, from, link.s, R) : coachWay(game, from, link.s);
+  const mins = Math.max(10, link.mins);
+  R.mins = mins;
+  let pts;
+  if (link.kind === 'ferry') pts = ferryWay(game, from, link.s, R);
+  else {
+    // (Round 82) The way worked out as you climb in (a moment of it now;
+    // if it's a long one, the rest while the coach waits at the stand).
+    pts = coachWay(game, from, link.s, 120);
+    if (!pts) {
+      const LA = game.world.layouts.get(from.id);
+      const st = (LA && coachStand(LA)) || centre(from);
+      pts = [{ x: st.x, z: st.z }, { x: st.x, z: st.z }];
+      R.pending = true;
+    }
+  }
   if (!pts || pts.length < 2) return false;
   removeItem(p.inv, 'coin', link.fare);
-  const at = measure(pts);
-  const len = at[at.length - 1] || 1;
-  const mins = Math.max(10, link.mins);
-  Object.assign(R, { mins, pts, at, len, t0: abs(game), pace: len / mins });
+  setWay(R, pts, abs(game));
   // (Ridden or driven up: the horse, or the wagon, left where you got in.)
   const m = p.mount;
   if (m && game.riding) {
@@ -371,6 +530,20 @@ export function tick(game, p, dt) {
   if (p.dead) return endRide(game, p, 'dead');
   // (The coach or ferry gone from the world, a load say: put back.)
   if (!R.prop || !game.props.has(R.key)) makeProp(game, p, R);
+  // (Round 82) Still at the stand, the driver making sure of the way: a
+  // few milliseconds more of it a frame, then off.
+  if (R.pending) {
+    const ow = game.world.ow;
+    const got = coachWay(game, ow.settlements[R.from], ow.settlements[R.to], 6);
+    if (!got) {
+      R.prop.moving = false;
+      const info = p.rideInfo;
+      if (!info || !info.wait) p.rideInfo = { kind: R.kind, name: R.name, left: R.mins, fast: false, wait: true };
+      return;
+    }
+    R.pending = false;
+    setWay(R, got, abs(game));
+  }
   const now = abs(game);
   const d = Math.min(R.len, (now - R.t0) * R.pace);
   const at = pointAt(R, d);
@@ -388,7 +561,13 @@ export function tick(game, p, dt) {
   prop.x = at.x;
   prop.z = at.z;
   prop.y = y;
-  if (Math.abs(at.dx) > 0.01 || Math.abs(at.dz) > 0.01) prop.face = Math.abs(at.dx) >= Math.abs(at.dz) * 0.3 ? (at.dx > 0 ? 3 : 1) : prop.face;
+  if (Math.abs(at.dx) > 0.01 || Math.abs(at.dz) > 0.01) {
+    if (R.kind === 'ferry') prop.face = Math.abs(at.dx) >= Math.abs(at.dz) * 0.3 ? (at.dx > 0 ? 3 : 1) : prop.face;
+    else prop.face = Math.abs(at.dx) >= Math.abs(at.dz) ? (at.dx > 0 ? 3 : 1) : at.dz > 0 ? 0 : 2;
+    // (Round 82: the heading it turns toward, round the corners, as the
+    // horse leans into them: see Renderer.steedAngle.)
+    prop.ang = Math.atan2(at.dx, at.dz);
+  }
   prop.moving = d < R.len;
   prop.riders = [p.look];
   // You, carried with it (a pace at a time, smoothly).
@@ -413,7 +592,7 @@ export function tick(game, p, dt) {
   // The line on the screen: whither, and how long yet.
   const leftMin = Math.max(0, Math.ceil((R.len - d) / R.pace));
   const info = p.rideInfo;
-  if (!info || info.left !== leftMin || info.fast !== !!waiting) p.rideInfo = { kind: R.kind, name: R.name, left: leftMin, fast: !!waiting };
+  if (!info || info.wait || info.left !== leftMin || info.fast !== !!waiting) p.rideInfo = { kind: R.kind, name: R.name, left: leftMin, fast: !!waiting };
   // Now and then, the sounds of it.
   R.sndT = (R.sndT ?? 2) - dt;
   if (R.sndT <= 0) {
@@ -496,7 +675,7 @@ export function endRide(game, p, how) {
 export function rideSave(p) {
   const R = p && p._ride;
   if (!R) return null;
-  return { kind: R.kind, from: R.from, to: R.to, name: R.name, mins: R.mins, pts: R.pts, t0: R.t0, pace: R.pace, ashore: !!R.ashore, fast: false, horses: R.horses || [], wagons: R.wagons || [], hold: R.hold || null };
+  return { kind: R.kind, from: R.from, to: R.to, name: R.name, mins: R.mins, pts: R.pts, t0: R.t0, pace: R.pace, ashore: !!R.ashore, fast: false, horses: R.horses || [], wagons: R.wagons || [], hold: R.hold || null, pending: !!R.pending };
 }
 
 export function rideLoad(game, p, d) {
@@ -511,7 +690,7 @@ export function rideLoad(game, p, d) {
 export function rideLine(p) {
   const i = p && p.rideInfo;
   if (!i) return null;
-  const when = ` · ${wayTime(i.left)}`;
+  const when = i.wait ? ' · SETTING OFF' : ` · ${wayTime(i.left)}`;
   const head = `${i.kind === 'ferry' ? 'FERRY' : 'COACH'}: `;
   return { text: `${head}${i.name.toUpperCase().slice(0, Math.max(4, 24 - head.length - when.length))}${when}`, fast: i.fast };
 }

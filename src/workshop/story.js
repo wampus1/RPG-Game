@@ -15,7 +15,7 @@ import { BIOME_LIST } from '../mod/nodes.js';
 import { NODES, CATS, TYPE_COLORS, fits, makeNode, shown } from '../mod/graph.js';
 import { MOTIFS } from '../sim/saga/core.js';
 
-const human = (id) => {
+export const human = (id) => {
   const s = String(id || '').replace(/^m:[^:]+:/, '').replace(/_/g, ' ');
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 };
@@ -108,7 +108,7 @@ export function motifMap(mid) {
 }
 
 // The game's stories, by family: [[family, [ids]]].
-function gameStories() {
+export function gameStories() {
   const fam = new Map();
   for (const [id, M] of Object.entries(MOTIFS)) {
     if (id.startsWith('m:') || !M.nodes) continue;
@@ -122,7 +122,7 @@ function gameStories() {
 // What the game says of its stories (the notes over them in its source),
 // and the shape of each as its source has it (helpers and all), read once,
 // when it can be.
-const ABOUT = new Map();
+export const ABOUT = new Map();
 const SRC = new Map();
 let aboutP = null;
 const FILES = ['beasts', 'threats', 'captive', 'bandits', 'players', 'people', 'crime', 'realm', 'faith', 'world', 'academy', 'hearts', 'intrigue', 'festive', 'ventures', 'wonders', 'kin', 'troubles', 'roads'];
@@ -218,7 +218,7 @@ function readFile(src) {
     SRC.set(idm[1], { nodes, tasks, block, helpers });
   }
 }
-function loadAbout() {
+export function loadAbout() {
   if (aboutP) return aboutP;
   aboutP = Promise.all(FILES.map((f) => window.fetch(new URL(`../sim/saga/motifs/${f}.js`, import.meta.url)).then((r) => (r.ok ? r.text() : '')).catch(() => ''))).then((texts) => {
     for (const src of texts) if (src) readFile(src);

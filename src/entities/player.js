@@ -9,6 +9,7 @@ import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
+import { turnMount, mountStep } from '../game/riding.js';
 import { deckUpdate, tryBoardStep } from '../game/ships3d.js';
 import { stepModMult, gearHp, lanternLight, landArmorTick } from '../game/mods.js';
 import { rule } from '../mod/rules.js';
@@ -166,6 +167,16 @@ export class Player extends Entity {
   // On a raft you float with it, smoothly, sitting on top.
   renderPos() {
     if (this.raft) return { x: this.raft.x, y: GROUND, z: this.raft.z };
+    // (Round 82) Riding: along the line it's heading (see riding.js
+    // mountStep), a little off the square it's on.
+    const t = this.mount && this.tankTo;
+    if (t && !this.deck && Math.abs(t.x - this.x) <= 0.51 && Math.abs(t.z - this.z) <= 0.51) {
+      const b = super.renderPos();
+      const f = this.tankFrom;
+      if (this.moveT >= 1 || !f) return { x: t.x, y: b.y, z: t.z };
+      const k = this.moveT;
+      return { x: f.x + (t.x - f.x) * k, y: b.y, z: f.z + (t.z - f.z) * k };
+    }
     return super.renderPos();
   }
 
@@ -386,6 +397,11 @@ export class Player extends Entity {
       if (!this.dead && !blocked) steer(this, dt, input);
       return;
     }
+    // (Round 82) In the saddle, or on a wagon's bench: tank controls. A
+    // and D turn it, as it goes or on the spot; W drives it on, S backs it
+    // up (see riding.js).
+    const tank = !!(this.mount && (this.mount.kind === 'horse' || this.mount.kind === 'wagon'));
+    if (tank && !this.dead && !blocked && !this._ride) turnMount(this, dt, input);
     if (this.dead || this.moving || blocked) return;
     // Held fast (a drowned one's grab): no walking off, only rolling free.
     if (this.grabbedT > 0) {
@@ -415,9 +431,12 @@ export class Player extends Entity {
       return;
     }
     // Keys move you across the screen, whichever way the camera is turned.
-    const [dx, dz] = screenToWorld(d[0], d[1], this.game.renderer?.view || 0);
+    // (Round 82: riding, along the way it's heading: see mountStep.)
+    const tankStep = tank ? mountStep(this, input) : null;
+    if (tank && !tankStep) return;
+    const [dx, dz] = tankStep ? [tankStep.dx, tankStep.dz] : screenToWorld(d[0], d[1], this.game.renderer?.view || 0);
     // (Drawing a bow, you keep facing your mark as you step.)
-    if (!this.bowDraw) this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
+    if (!this.bowDraw && !tank) this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
     const nx = this.x + dx;
     const nz = this.z + dz;
     const w = this.game.world;
@@ -441,7 +460,7 @@ export class Player extends Entity {
       }
     }
     // (Round 78) On a ladder: toward its wall, up it; away, down it.
-    if (this.climb(dx, dz)) return;
+    if (!tank && this.climb(dx, dz)) return;
     // Onto a ship's deck, from a pier or up her side out of the water.
     if (this.game.ships3d && this.game.ships3d.length && tryBoardStep(this.game, this, nx, nz)) return;
     // (Round 77) On foot, out into water two deep: swimming.
@@ -497,7 +516,15 @@ export class Player extends Entity {
     // (Just up out of a roll: a little slower for a moment. An arrow on
     // the string: careful steps.)
     const recover = (this.rollRecover > 0 ? 1.45 : 1) * (this.bowDraw ? 1.6 : 1);
-    this.startMove(nx, ny, nz, (PLAYER_STEP_TIME / rule('walk')) * stepMult(this.game.hero) * stepModMult(this) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    this.startMove(nx, ny, nz, (PLAYER_STEP_TIME / rule('walk')) * stepMult(this.game.hero) * stepModMult(this) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1) * (tankStep ? tankStep.mul : 1));
+    // (Riding: drawn going evenly along the line it's heading, not square
+    // to square.)
+    if (tankStep) {
+      this.moveEase = 'lin';
+      this.tankFrom = tankStep.from;
+      this.tankTo = tankStep.to;
+      this.tankOff = tankStep.off;
+    }
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

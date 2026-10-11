@@ -10,7 +10,6 @@ import { B, BLOCKS } from '../src/world/blocks.js';
 import { ITEMS } from '../src/world/items.js';
 import { RECIPES } from '../src/world/recipes.js';
 import { FLEE_PLAYER } from '../src/config.js';
-import { snowTint } from '../src/render/groundfx.js';
 import { throwGrapple } from '../src/game/grapple.js';
 import { hears, parseLine } from '../src/net/chat.js';
 import { sortPack, compareGear } from '../src/game/invtools.js';
@@ -36,9 +35,7 @@ const ready = (game) => {
   return game;
 };
 
-test('snow is brighter up on a roof than on the ground; a beast runs from you slower', () => {
-  const lum = (s) => s.split(',').map(Number).reduce((a, b) => a + b, 0);
-  assert.ok(lum(snowTint(10)) > lum(snowTint(5)));
+test('a beast runs from you slower (round 82: snow no longer lies, to be brighter on a roof)', () => {
   assert.ok(Math.abs(1 / FLEE_PLAYER - 0.75) < 1e-9);
 });
 

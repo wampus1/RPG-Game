@@ -82,6 +82,13 @@ function install() {
     for (const [ref, ch] of Object.entries(r.creatures || {})) any = changeSpecies(refKey(m, ref), ch) || any;
   }
   MODS.rules = any ? R : null;
+  // (Round 82) The game's stories the mods have turned off.
+  const off = new Set();
+  for (const m of MODS.active) {
+    const st = m.rules && m.rules.stories;
+    if (st && Array.isArray(st.off)) for (const id of st.off) if (typeof id === 'string') off.add(id);
+  }
+  MODS.storiesOff = off.size ? off : null;
   // (Starred and set pieces made up before: made again from the new.)
   if (saved.items.size) forgetDerived('');
 }
@@ -98,6 +105,7 @@ function uninstall() {
   saved.blocks.clear();
   saved.species.clear();
   MODS.rules = null;
+  MODS.storiesOff = null;
 }
 
 // (After every mod's things are in: their rules change them too.)

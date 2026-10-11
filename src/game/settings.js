@@ -38,7 +38,7 @@ export const DEFAULTS = {
   flashes: true,
   lightStyle: 0, // 0 smooth, 1 tiled
   wallHint: true,
-  weatherGround: true, // ripples, splashes, snow lying, tracks and ruts
+  weatherGround: true, // splashes, and ruts in the mud
   waterFx: true, // foam on the shore, rings where you wade
   sndCreatures: 10,
   sndBlocks: 10,
@@ -66,9 +66,9 @@ export const SETTING_ROWS = [
   { key: 'lightStyle', tab: 'Visuals', label: 'Lighting style', kind: 'choice', opts: ['Smooth', 'Tiled'] },
   { key: 'lighting', tab: 'Visuals', label: 'Lighting quality', kind: 'choice', opts: ['Full', 'Fast'] },
   { key: 'particles', tab: 'Visuals', label: 'Particles', kind: 'choice', opts: ['All', 'Fewer', 'None'] },
-  { key: 'fxCap', tab: 'Visuals', label: 'Particles and effects a frame', kind: 'choice', opts: ['Many (300)', 'Some (150)', 'Few (60)'] },
+  { key: 'fxCap', tab: 'Visuals', label: 'Particles and effects', kind: 'choice', opts: ['Many (300)', 'Some (150)', 'Few (60)'] },
   { key: 'weatherFx', tab: 'Visuals', label: 'Falling rain and snow', kind: 'bool' },
-  { key: 'weatherGround', tab: 'Visuals', label: 'Splashes, snow and tracks', kind: 'bool' },
+  { key: 'weatherGround', tab: 'Visuals', label: 'Rain splashes and ruts', kind: 'bool' },
   { key: 'waterFx', tab: 'Visuals', label: 'Shore foam and ripples', kind: 'bool' },
   { key: 'wallHint', tab: 'Visuals', label: 'Wall outlines indoors', kind: 'bool' },
   { key: 'shake', tab: 'Visuals', label: 'Screen shake', kind: 'bool' },
@@ -154,6 +154,17 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     ui.noJoinNotes = !s.joinNotes;
     ui.noAutosave = s.autosave === false;
   }
+}
+
+// (Round 82) A setting set to a value outright (a square on its bar
+// clicked), kept within what it can be.
+export function setSetting(s, key, v) {
+  const row = SETTING_ROWS.find((r) => r.key === key);
+  if (!row) return s;
+  if (row.kind === 'bool') s[key] = !!v;
+  else if (row.kind === 'choice') s[key] = Math.max(0, Math.min(row.opts.length - 1, Math.round(v)));
+  else s[key] = Math.max(0, Math.min(row.max, Math.round(v)));
+  return s;
 }
 
 export function changeSetting(s, key, d) {

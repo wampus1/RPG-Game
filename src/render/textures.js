@@ -2174,7 +2174,7 @@ function flatSprite(name, v, rand) {
 }
 
 // (Round 79) A rug, by which of its sides run on into more of the same
-// (v: 1 up, 2 right, 4 down, 8 left): laid side by side, rugs make one
+// (v: 1 up, 2 right, 4 down, 8 left; 16, its fringe down the sides): laid side by side, rugs make one
 // big carpet, its border round the whole and its field's lattice running
 // on unbroken from one to the next. On its own (v 0), a rug as it was,
 // with its medallion.
@@ -2189,8 +2189,12 @@ function rugSprite(p, name, v) {
       const rgt = v & 2 ? INF : 14 - x;
       const d = Math.min(top, bot, lft, rgt);
       if (d < 0) {
-        // The fringe, at the ends (not the sides).
-        if ((top < 0 || bot < 0) && lft >= 0 && rgt >= 0 && x % 2) p.set(x, y, col[1]);
+        // The fringe, at the ends (not the sides): its north and south,
+        // across the top and bottom, or (+16, the camera a quarter turned)
+        // down the left and right.
+        if (v & 16) {
+          if ((lft < 0 || rgt < 0) && top >= 0 && bot >= 0 && y % 2) p.set(x, y, col[1]);
+        } else if ((top < 0 || bot < 0) && lft >= 0 && rgt >= 0 && x % 2) p.set(x, y, col[1]);
         continue;
       }
       if (d === 0 || d === 2) p.set(x, y, col[0]);
@@ -2202,7 +2206,7 @@ function rugSprite(p, name, v) {
       }
     }
   }
-  if (!v) p.rect(6, 6, 4, 4, col[1]);
+  if (!(v & 15)) p.rect(6, 6, 4, 4, col[1]);
   return p;
 }
 
@@ -2411,7 +2415,7 @@ function buildBlock(b, TEX) {
         const arr = [];
         if (b.render === 'plant' && CROPS[id]) for (let st = 0; st < CROPS[id].stages; st++) arr.push(addImage(cropSprite(name, st, CROPS[id].stages, seed(st))));
         else if (b.render === 'plant') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(plantSprite(name, v, seed(v))));
-        else if (b.render === 'flat') for (let v = 0; v < (b.rug ? 16 : VARIANTS); v++) arr.push(addImage(flatSprite(name, v, seed(v))));
+        else if (b.render === 'flat') for (let v = 0; v < (b.rug ? 32 : VARIANTS); v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
           const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' || name === 'bunting' || name === 'festival_banner' ? VARIANTS : 1;

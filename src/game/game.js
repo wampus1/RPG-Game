@@ -77,7 +77,7 @@ import { eatDish, dishFx, learnRecipe } from './cooking.js';
 import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
-import { TravelWindow } from '../ui/travel.js';
+import { TravelWindow, CoachMapWindow } from '../ui/travel.js';
 import { coachStand, ferryStand, arrivalSpot, wayTime } from '../sim/coaches.js';
 import { InstrumentWindow } from '../ui/instrument.js';
 import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
@@ -198,7 +198,7 @@ export class Game {
     // (Round 80) Towns laid out in the background on a thread of their own
     // (see world/laywork.js), where there is one.
     this.world.offThread = !remote;
-    this.world.onChange = (x, y, z, o, n) => this.onBlockChange(x, y, z, o, n);
+    this.world.onChange = (x, y, z, o, n, om) => this.onBlockChange(x, y, z, o, n, om);
     this.sim = new Sim(this);
     // (For testing: a world where everything is already known, from the
     // first town laid out.)
@@ -3567,21 +3567,13 @@ export class Game {
       this.riding.useHorse(c.entity);
       return;
     }
-    // (Round 77) Snow shovelled off where it lies (see render/groundfx.js).
-    const gfx = this.renderer && this.renderer.gfx;
-    if (held && /_shovel$/.test(held.key) && c && c.block && c.inReach && gfx && gfx.depth(c.x, c.z) > 0) {
-      gfx.clear(c.x, c.z, 1);
-      this.audio?.play('dig', p);
-      this.renderer.emit(c.x, c.y, c.z, { n: 6, color: ['#f4f8ff', '#dce8f8'], up: 30, speed: 30, life: 0.5, oy: -4 });
-      return;
-    }
     // (Round 77) The coach, or the ferry: where it goes.
     if (c && c.entity && c.entity.kind === 'prop' && c.entity.stop) {
       if (c.entity.distTo ? c.entity.distTo(p) > 6 : Math.max(Math.abs(c.entity.x - p.x), Math.abs(c.entity.z - p.z)) > 6) {
         this.ui.msg(c.entity.stop.kind === 'ferry' ? 'Go down to the pier to take the ferry.' : 'Walk over to the coach to take it.', '#a0c8ff');
         return;
       }
-      this.ui.open(new TravelWindow(this.ui, c.entity.stop));
+      this.ui.open(c.entity.stop.kind === 'coach' ? new CoachMapWindow(this.ui, c.entity.stop) : new TravelWindow(this.ui, c.entity.stop));
       return;
     }
     if (c && c.entity && c.entity.kind === 'prop' && c.entity.type === 'wagon') {
@@ -4439,7 +4431,7 @@ export class Game {
       sp = { ...sp, x: near.x, z: near.z };
       if (sp.type === 'wagon') {
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
-        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null, stop: sp.stop || null });
+        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, ang: sp.ang, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null, stop: sp.stop || null });
       } else if (this.tied.has(k) && !this.tied.get(k).dead) {
         // (Saddled by the handler while you watched.)
         const c = this.tied.get(k);
@@ -4460,6 +4452,8 @@ export class Game {
           c.own = sp.own;
           c.saddled = !!sp.saddled;
           c.tie = null;
+          // (Round 82: facing the way it was left.)
+          if (sp.own.dir !== undefined) c.dir = sp.own.dir;
         }
         this.addCreature(c);
         this.tied.set(k, c);
@@ -4607,6 +4601,14 @@ export class Game {
   }
 
   // ------------------------------------------------------------ interactions
+  // (Round 82) Someone at a chest (not you: yours opens with its window):
+  // its lid up a while, and the creak of it.
+  openChestLid(x, y, z, secs = 2.5) {
+    if (this.world.getBlock(x, y, z) !== B.chest) return;
+    this.renderer?.lidOpen?.(x, y, z, secs);
+    if (Math.max(Math.abs(x - this.player.x), Math.abs(z - this.player.z)) < 12) this.audio?.play('chest');
+  }
+
   setDoor(x, y, z, open) {
     const w = this.world;
     let by = y;
@@ -7522,10 +7524,17 @@ export class Game {
     crewHurt(this, c, by);
   }
 
-  onBlockChange(x, y, z, o, n) {
+  onBlockChange(x, y, z, o, n, om) {
     // (Round 80) The ground's pictures there drawn again (see
     // Renderer.groundStrip).
     this.renderer?.noteBlock?.(x, y, z);
+    // (Round 82) A door opened or shut (by anyone: you, a guard, a
+    // thief, the host's word): it swings.
+    if (o === -1 && om !== undefined && this.renderer && this.renderer.swing) {
+      const id = this.world.getBlock(x, y, z);
+      const meta = this.world.getMeta(x, y, z);
+      if (BLOCKS[id] && BLOCKS[id].render === 'door' && ((om ^ meta) & META_STATE)) this.renderer.swing(x, y, z, !!(meta & META_STATE));
+    }
     if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
     // (Inside one of the great ships: the same in her. See shiphold.js.)
     if (this.ships3d && this.ships3d.length && this.world.inInstance(x)) holdBlockChanged(this, x, y, z, o, n);

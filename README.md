@@ -6051,7 +6051,7 @@ into stairs when the world's brought up to date.)
   again (put away after a quiet spell), and the music's notes reuse their
   volumes and filters once they've rung out, instead of making new ones
   every time.
-- **Particles and effects a frame**: a cap on how many new sparks, puffs
+- **Particles and effects** (a frame): a cap on how many new sparks, puffs
   and effects anything can make in a frame, and how many can be about at
   once (Settings, Visuals: Many, Some or Few).
 - **The guild strip**: a line each (face, name, health), and only those of
@@ -6106,6 +6106,71 @@ into stairs when the world's brought up to date.)
 - **A seed typed in the game**: *New game from seed* (and a hosted world
   from a seed) asks in a window of the game's own, in place of the
   browser's little box (which the app hasn't got).
+
+## Round 82: Coaches on the roads, steeds in the round
+
+- **Coaches keep to the roads**: a coach now goes down its own town's
+  streets from the stand and out (through the gate, in a walled town),
+  along the road if one's finished (or the way the caravans take across
+  country, round lakes and the other towns), and in by the far town's
+  streets to its stand: never over the houses or straight across the
+  water. A long way is worked out while it waits at the stand ("setting
+  off"). Its stand is on the street by the town's sign, not in a house
+  beside it.
+- **The coach's map**: talking to a coach opens a map with the towns it
+  runs to ringed in gold (with a line to each, and the ones you've not
+  been to as "an unknown town": the driver knows the way), listed down the
+  side too. Click one, and it asks: *Take the coach to ...? how long, the
+  fare*, **Yes, climb in** (Enter) or **No** (Esc).
+- **Horses and wagons in the round**: they're little models now, drawn
+  turned to whatever way they're heading (lit from the upper left, so
+  their sides darken and brighten as they come round): a horse's legs
+  stepping, a wagon's spoked wheels turning, its canvas, bench and
+  shafts, the horse in them. The town's and the traders' turn smoothly
+  into the way they're going; the coach leans round its corners.
+- **Tank controls, riding or driving**: **A** and **D** turn your horse
+  or wagon (on the spot, or as it goes; a horse quicker than a wagon),
+  **W** drives it on the way it's heading, **S** backs it up, slower. It
+  goes along the line it's heading (a slant a square across now and then,
+  never across a wall's corner), drawn going evenly along it. Get down
+  and it stands the way you left it.
+- **Doors and chests open and shut**: a door swings on its hinge, and a
+  chest's lid lifts and drops, for you and for anyone else (a villager at
+  their chest at home, a thief at a chest).
+- **Snow no longer lies**: the settling snow (and its tracks and
+  sweeping) is gone; with it the stutter when it began to fall. Rain
+  still rings the puddles, and wagons still cut ruts in the mud.
+- **Talk that fits**: what people say over their heads wraps to a few
+  short lines (cut short with "…" if it's long), kept on the screen.
+- **A broom put away properly**: someone sweeping puts what's in their
+  hands away first, and only takes the broom out once they're at it.
+- **Guards' trust**: a guard only refuses to guard you if they actually
+  dislike you (Disliked or worse); a Neutral opinion, however it leans,
+  will do.
+- **Iron bars that join up**: jail bars are a grille now, running on into
+  the bars (or wall) beside them whichever way you look, with a post at
+  each corner and end, a rail along the top and foot.
+- **Carpets that stay one carpet**: rugs side by side join up whichever
+  way the camera's turned, their fringe kept at the same ends.
+- **As many saves as you like**: the save and load list shows every slot
+  you've used and always one more empty one past them, scrolled with the
+  wheel, the arrows (or Page Up and Down), or the bar down its side. As
+  many worlds to host as you like, too (scrolled the same way in
+  Multiplayer, and when converting a save).
+- **Waiting**: how long to wait is a slider (an hour a notch, 1 to 24):
+  click along it or drag it.
+- **Settings' squares**: clicking a square on a bar (music, brightness...)
+  sets it right there; clicking the first when it's the only one lit sets
+  none. The *Particles and effects* line isn't cut off any more.
+- **Landmarks found quietly**: coming across a landmark no longer names
+  it in your messages or pins it on your map: mark it yourself if you
+  like. One you're told of is still pinned for you. (Worlds brought up to
+  0.82 have the pins for found ones taken off.)
+- **Modding: the game's stories, on or off**: the Workshop's **Rules** tab
+  has a section listing every story the game starts with, by family, each
+  with a tick (and the whole family's): untick one and it never begins in
+  a world the mod is on in (one already under way plays out). Kept in the
+  mod as `rules.stories.off`.
 
 ## Command console
 

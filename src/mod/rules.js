@@ -3,7 +3,8 @@
 //   { breakSpeed, hearts, ... (the world's: see WORLD_RULES; percents,
 //     100 as the game has it), items: { key: { damage, armor, ... } },
 //     blocks: { key: { hardness, light, label } }, creatures: { key: {
-//     hp, dmg, speed, aggro, name } } }
+//     hp, dmg, speed, aggro, name } }, stories: { off: [the game's
+//     stories (motif ids) that never begin] } (Round 82) }
 // (a thing of the mod's own by its '@id'). Several mods' together: their
 // percents multiplied, their numbers the last one's.
 //
@@ -44,4 +45,11 @@ export function rule(k) {
   const v = R ? R[k] : undefined;
   if (v !== undefined) return v;
   return k === 'hearts' ? 10 : k === 'regen' ? 0 : 1;
+}
+
+// (Round 82) Whether one of the game's stories may begin: not if a mod on
+// in the world has it turned off (see ruleset.js, MODS.storiesOff).
+export function storyOn(id) {
+  const S = MODS.storiesOff;
+  return !S || !S.has(id);
 }

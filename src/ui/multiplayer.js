@@ -268,16 +268,30 @@ export class MultiplayerWindow extends Window {
     button(this, g, this.w - 26, 2, 24, a ? 'Account & friends' : 'Make an account', () => hooks.account(), { color: a ? C.fg : C.hi });
     let y = 6;
     g.text(2, y++, 'YOUR WORLDS', C.border);
-    const full = (saves || []).length >= 3;
-    button(this, g, 2, y, this.w - 4, 'New multiplayer world (random)', () => hooks.newWorld(), { off: !a || full, hint: full ? 'delete one first' : null });
+    // (Round 82: as many as you like.)
+    button(this, g, 2, y, this.w - 4, 'New multiplayer world (random)', () => hooks.newWorld(), { off: !a });
     y += 2;
-    button(this, g, 2, y, this.w - 4, 'New multiplayer world from seed...', () => hooks.seedWorld(), { off: !a || full });
+    button(this, g, 2, y, this.w - 4, 'New multiplayer world from seed...', () => hooks.seedWorld(), { off: !a });
     y += 2;
     // (Round 77) A world played alone, made a world to host (a copy: the
     // one you play alone is kept as it is).
-    button(this, g, 2, y, this.w - 4, 'Convert singleplayer save to multiplayer...', () => this.ui.open(new ConvertWindow(this.ui, this.ctx)), { off: !a || full || !(hooks.soloSaves && hooks.soloSaves().length), hint: full ? 'delete one first' : null });
+    button(this, g, 2, y, this.w - 4, 'Convert singleplayer save to multiplayer...', () => this.ui.open(new ConvertWindow(this.ui, this.ctx)), { off: !a || !(hooks.soloSaves && hooks.soloSaves().length) });
     y += 2;
-    (saves || []).slice(0, 3).forEach((s, i) => {
+    // (Round 82) Three at a time, scrolled through (the wheel over them, or
+    // the arrows) when there are more.
+    const all = saves || [];
+    this.wTop = Math.max(0, Math.min(this.wTop || 0, Math.max(0, all.length - 3)));
+    this.wArea = { y, h: 6 };
+    if (all.length > 3) {
+      const up = this.hovering(this.w - 2, y, 1, 1);
+      const dn = this.hovering(this.w - 2, y + 4, 1, 1);
+      g.text(this.w - 2, y, '▲', this.wTop > 0 ? (up ? C.white : C.hi) : C.faint);
+      g.text(this.w - 2, y + 4, '▼', this.wTop < all.length - 3 ? (dn ? C.white : C.hi) : C.faint);
+      g.text(this.w - 2, y + 2, String(all.length).slice(-1), C.faint);
+      this.hit(this.w - 2, y, 1, 1, () => this.onWheel(-1));
+      this.hit(this.w - 2, y + 4, 1, 1, () => this.onWheel(1));
+    }
+    all.slice(this.wTop, this.wTop + 3).forEach((s) => {
       const m = s.meta;
       // (What's in it, and updating or deleting it: picked, see
       // SaveDetailsWindow. Round 50: not from the list itself.)
@@ -316,6 +330,12 @@ export class MultiplayerWindow extends Window {
     g.text(24, this.h - 3, `Up to ${MAX_PLAYERS} players in a world.`, C.faint);
   }
 
+  // (Round 82) Your worlds, scrolled through.
+  onWheel(d) {
+    const n = (this.ctx.saves || []).length;
+    this.wTop = Math.max(0, Math.min(Math.max(0, n - 3), (this.wTop || 0) + Math.sign(d)));
+  }
+
   // One of your worlds, picked: what's in it, and hosting, updating or
   // deleting it.
   details(id) {
@@ -338,8 +358,8 @@ export class MultiplayerWindow extends Window {
     if (k.code === 'Escape') this.close();
     else if (k.code === 'KeyA') hooks.account();
     else if (!a) return true;
-    else if (k.code === 'KeyN' && !(saves && saves.length >= 3)) hooks.newWorld();
-    else if (k.code === 'KeyS' && !(saves && saves.length >= 3)) hooks.seedWorld();
+    else if (k.code === 'KeyN') hooks.newWorld();
+    else if (k.code === 'KeyS') hooks.seedWorld();
     else if (JOIN_KEYS.includes(k.code.replace(/^Key/, ''))) {
       const w = networkWorlds(this.ctx.lan)[JOIN_KEYS.indexOf(k.code.replace(/^Key/, ''))];
       if (w && w.players < w.max && !(w.v && w.v !== NET_VERSION)) {
@@ -853,7 +873,16 @@ export class ConvertWindow extends Window {
     g.text(2, 2, 'Pick a save to host as a multiplayer world. It is', C.dim);
     g.text(2, 3, 'copied: the one you play alone stays as it is.', C.dim);
     let y = 5;
-    for (const sv of hooks.soloSaves()) {
+    // (Round 82) As many as there are: scrolled through, four at a time.
+    const all = hooks.soloSaves();
+    this.top = Math.max(0, Math.min(this.top || 0, Math.max(0, all.length - 4)));
+    if (all.length > 4) {
+      g.text(this.w - 2, 5, '▲', this.top > 0 ? C.hi : C.faint);
+      g.text(this.w - 2, 11, '▼', this.top < all.length - 4 ? C.hi : C.faint);
+      this.hit(this.w - 2, 5, 1, 1, () => this.onWheel(-1));
+      this.hit(this.w - 2, 11, 1, 1, () => this.onWheel(1));
+    }
+    for (const sv of all.slice(this.top, this.top + 4)) {
       const m = sv.meta;
       const label = `${sv.id === 'auto' ? 'Autosave' : `Slot ${sv.id}`}: ${m.name || 'Wanderer'}, day ${m.day}`;
       button(this, g, 2, y, this.w - 4, label.slice(0, this.w - 8), () => {
@@ -867,6 +896,11 @@ export class ConvertWindow extends Window {
     }
     if (this.note) g.text(2, this.h - 4, this.note, C.orange);
     button(this, g, 2, this.h - 3, 16, 'Back', () => this.close());
+  }
+
+  onWheel(d) {
+    const n = this.ctx.hooks.soloSaves().length;
+    this.top = Math.max(0, Math.min(Math.max(0, n - 4), (this.top || 0) + Math.sign(d)));
   }
 
   onKey(k) {

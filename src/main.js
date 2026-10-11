@@ -894,7 +894,7 @@ async function convertSolo(id) {
   }
   const slot = store.freeWorld();
   if (!slot) {
-    ui.notify('You keep three worlds to host: delete one first.');
+    ui.notify('There was no room to keep another world.');
     return false;
   }
   try {
@@ -926,7 +926,7 @@ function newHosted(seed) {
   needAccount(() => {
     const slot = store.freeWorld();
     if (!slot) {
-      ui.notify('You keep three worlds to host: delete one first.');
+      ui.notify('There was no room to keep another world.');
       return;
     }
     refreshLan().then(() => ui.open(new HostWindow(ui, {

@@ -19,10 +19,10 @@ import { TIERS, townsfolk, promotionNeeds } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
-import { SLOTS, agoText, timeText } from '../game/saves.js';
+import { agoText, timeText } from '../game/saves.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
-import { SETTING_ROWS, SETTING_TABS, SETTING_ACTIONS, changeSetting } from '../game/settings.js';
+import { SETTING_ROWS, SETTING_TABS, SETTING_ACTIONS, changeSetting, setSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
@@ -1947,51 +1947,82 @@ export class PauseWindow extends Window {
 }
 
 // ---------------------------------------------------------------- saves
-// Save or load: five slots of your own plus the autosave. Click a slot (or
-// press its number) to save there or load it; X deletes the one you're on.
+// Save or load: the autosave and as many slots of your own as you like
+// (Round 82: scrolled through, the wheel or the arrows, when they don't
+// all fit). Click a slot (or press its number) to save there or load it;
+// X deletes the one you're on.
+const SLOT_ROWS = 6;
 export class SaveSlotsWindow extends Window {
   // (`then`: what to do once it's saved, as when saving before you go.)
   constructor(ui, mode, store, then = null) {
-    super(ui, 60, 22, { kind: 'saves' });
+    super(ui, 60, 23, { kind: 'saves' });
     this.mode = mode;
     this.store = store;
     this.then = then;
     this.sel = mode === 'load' ? Math.max(0, store.list().findIndex((q) => q.meta && q.id === store.latest()?.id)) : 1;
     this.confirm = null;
+    this.top = Math.max(0, this.sel - SLOT_ROWS + 1);
+  }
+  // (The one picked kept in view.)
+  keepInView(n) {
+    if (this.sel < this.top) this.top = this.sel;
+    if (this.sel >= this.top + SLOT_ROWS) this.top = this.sel - SLOT_ROWS + 1;
+    this.top = Math.max(0, Math.min(this.top, Math.max(0, n - SLOT_ROWS)));
   }
   draw(g, game) {
     const load = this.mode === 'load';
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
     g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: load ? 'LOAD GAME' : 'SAVE GAME' });
     const list = this.store.list();
-    list.forEach((q, i) => {
-      const y = 2 + i * 3;
+    this.top = Math.max(0, Math.min(this.top, Math.max(0, list.length - SLOT_ROWS)));
+    list.slice(this.top, this.top + SLOT_ROWS).forEach((q, k) => {
+      const i = this.top + k;
+      const y = 2 + k * 3;
       const auto = q.id === 'auto';
       const usable = load ? !!q.meta : !auto;
-      const hov = this.hovering(2, y, this.w - 4, 2);
+      const hov = this.hovering(2, y, this.w - 5, 2);
       const sel = this.sel === i;
-      g.fill(2, y, this.w - 4, 2, ' ', C.fg, sel ? C.bgHi : hov ? '#3a3250' : '#1a1622');
+      g.fill(2, y, this.w - 5, 2, ' ', C.fg, sel ? C.bgHi : hov ? '#3a3250' : '#1a1622');
       const key = auto ? 'A' : q.id;
       g.text(3, y, `[${key}]`, usable ? C.hi : C.faint);
+      const x0 = Math.max(8, 6 + key.length);
       if (q.meta) {
         const m = q.meta;
-        g.text(8, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
-        g.text(this.w - 4 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
+        g.text(x0, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
+        g.text(this.w - 5 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
         // (And the version it was made in: another one's marked. Updating
         // an older one is done from its details: pick it.)
         const ver = versionText(m.gv);
         const same = sameVersion(m.gv);
-        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length), C.dim);
-        g.text(this.w - 4 - ver.length, y + 1, ver, same ? C.faint : C.orange);
-      } else g.text(8, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
-      this.hit(2, y, this.w - 4, 2, () => {
+        g.text(x0, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 7 - x0 - ver.length), C.dim);
+        g.text(this.w - 5 - ver.length, y + 1, ver, same ? C.faint : C.orange);
+      } else g.text(x0, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
+      this.hit(2, y, this.w - 5, 2, () => {
         this.sel = i;
         this.pick(game);
       });
     });
+    // The bar down the side: where in the list you are.
+    const rows = SLOT_ROWS * 3 - 1;
+    if (list.length > SLOT_ROWS) {
+      const len = Math.max(2, Math.round((rows * SLOT_ROWS) / list.length));
+      const at = Math.round(((rows - len) * this.top) / Math.max(1, list.length - SLOT_ROWS));
+      for (let r = 0; r < rows; r++) g.text(this.w - 2, 2 + r, r >= at && r < at + len ? '█' : '│', r >= at && r < at + len ? C.dim : C.faint);
+      const up = this.hovering(this.w - 2, 1, 1, 1);
+      const dn = this.hovering(this.w - 2, 2 + rows, 1, 1);
+      g.text(this.w - 2, 1, '▲', this.top > 0 ? (up ? C.white : C.hi) : C.faint);
+      g.text(this.w - 2, 2 + rows, '▼', this.top < list.length - SLOT_ROWS ? (dn ? C.white : C.hi) : C.faint);
+      this.hit(this.w - 2, 1, 1, 1, () => this.onWheel(-1));
+      this.hit(this.w - 2, 2 + rows, 1, 1, () => this.onWheel(1));
+    }
     const y = this.h - 3;
     if (this.confirm) g.center(y, this.confirm.text, C.orange);
     else g.center(y, load ? 'Click a save to see it, and load it.' : 'Click a slot to save there.', C.dim);
+    if (list.length > SLOT_ROWS) g.center(y + 1, `${list.length - 1} slots · scroll for more`, C.faint);
+  }
+  onWheel(d) {
+    const n = this.store.list().length;
+    this.top = Math.max(0, Math.min(Math.max(0, n - SLOT_ROWS), this.top + Math.sign(d)));
   }
   pick(game) {
     const q = this.store.list()[this.sel];
@@ -2035,24 +2066,29 @@ export class SaveSlotsWindow extends Window {
     this.ui.audio?.play('break');
   }
   onKey(k, game) {
-    const n = SLOTS.length;
+    const list = this.store.list();
+    const n = list.length;
     if (k.code === 'Escape') {
       this.close();
       return true;
     }
     if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
     else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
+    else if (k.code === 'PageUp') this.sel = Math.max(0, this.sel - SLOT_ROWS);
+    else if (k.code === 'PageDown') this.sel = Math.min(n - 1, this.sel + SLOT_ROWS);
     else if (k.code === 'Enter' || k.code === 'Space') this.pick(game);
     else if ((k.code === 'KeyX' || k.code === 'Delete') && this.mode !== 'load') this.remove();
     else if (k.code === 'KeyA') {
       this.sel = 0;
       this.pick(game);
     } else {
-      const d = /^Digit([1-5])$/.exec(k.code);
-      if (!d) return true;
-      this.sel = SLOTS.indexOf(d[1]);
+      const d = /^Digit([1-9])$/.exec(k.code);
+      const i = d ? list.findIndex((q) => q.id === d[1]) : -1;
+      if (i < 0) return true;
+      this.sel = i;
       this.pick(game);
     }
+    this.keepInView(n);
     if (!['Enter', 'Space', 'KeyX', 'Delete'].includes(k.code)) this.confirm = this.confirm && this.confirm.id === this.store.list()[this.sel]?.id ? this.confirm : null;
     return true;
   }
@@ -2268,12 +2304,25 @@ export class WaitWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'WAIT' });
     const m = Math.floor((game.minute + this.hours * 60) % 1440);
     g.center(2, 'Wait for how long?', C.fg);
-    g.text(8, 4, '◄', C.hi);
-    g.center(4, `${this.hours} hour${this.hours > 1 ? 's' : ''}`, C.white);
-    g.text(this.w - 9, 4, '►', C.hi);
-    g.center(5, `(until ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')})`, C.dim);
-    this.hit(6, 4, 4, 1, () => this.change(-1));
-    this.hit(this.w - 10, 4, 4, 1, () => this.change(1));
+    // (Round 82) A slider, an hour a notch: click along it, or drag it.
+    const tx = 5;
+    const tw = 24;
+    const mc = this.ui.mouseCell;
+    if (this.dragging && this.ui.mouse && this.ui.mouse.down && mc) this.setHours(mc.x - this.x - tx + 1);
+    else this.dragging = false;
+    const hovT = this.hovering(tx, 4, tw, 1);
+    g.text(tx - 2, 4, '1', C.faint);
+    g.text(tx + tw + 1, 4, '24', C.faint);
+    for (let i = 0; i < tw; i++) {
+      const on = i < this.hours;
+      const knob = i === this.hours - 1;
+      g.text(tx + i, 4, knob ? '█' : on ? '▬' : '─', knob ? C.white : on ? C.hi : hovT ? C.dim : C.faint, knob ? '#3a3250' : undefined);
+    }
+    this.hit(tx, 4, tw, 1, (ck, gm, cx) => {
+      this.dragging = true;
+      this.setHours(cx - tx + 1);
+    });
+    g.center(5, `${this.hours} hour${this.hours > 1 ? 's' : ''} (until ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')})`, C.white);
     const hov = this.hovering(9, 7, 16, 1);
     g.fill(9, 7, 16, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
     g.center(7, 'Wait', hov ? C.white : C.hi);
@@ -2287,8 +2336,12 @@ export class WaitWindow extends Window {
     }
   }
   change(d) {
-    this.hours = Math.max(1, Math.min(24, this.hours + d));
-    this.ui.audio?.play('select');
+    this.setHours(this.hours + d);
+  }
+  setHours(h) {
+    const v = Math.max(1, Math.min(24, Math.round(h)));
+    if (v !== this.hours) this.ui.audio?.play('select');
+    this.hours = v;
   }
   go(hours = this.hours) {
     this.close();
@@ -2306,7 +2359,7 @@ export class WaitWindow extends Window {
     else if (k.code === 'KeyT' && this.ride) this.go(this.ride / 60 + 0.1);
     else {
       const d = /^Digit([1-9])$/.exec(k.code);
-      if (d) this.hours = Number(d[1]);
+      if (d) this.setHours(Number(d[1]));
     }
     return true;
   }
@@ -2396,11 +2449,19 @@ export class SettingsWindow extends Window {
     g.text(vx - 2, y, '◄', C.hi);
     if (r.kind === 'bool') g.text(vx, y, v ? 'On' : 'Off', v ? C.green : C.faint);
     else if (r.kind === 'choice') g.text(vx, y, String(r.opts[v] || r.opts[0]).slice(0, this.w - vx - 6), v ? C.cyan : C.fg);
-    else g.text(vx, y, `${'■'.repeat(v)}${'□'.repeat(r.max - v)}`, C.cyan);
+    else {
+      // (Round 82) Each square its own: the one clicked is where it's set
+      // (the first, clicked again when it's the only one lit, sets none).
+      for (let i = 0; i < r.max; i++) {
+        const hq = this.hovering(vx + i, y, 1, 1);
+        g.text(vx + i, y, i < v ? '■' : '□', hq ? C.white : C.cyan);
+      }
+    }
     g.text(this.w - 5, y, '►', C.hi);
     this.hit(2, y, vx - 3, 1, () => this.change(r.key, 1));
     this.hit(vx - 3, y, 2, 1, () => this.change(r.key, -1));
     this.hit(vx, y, this.w - vx - 6, 1, () => this.change(r.key, 1));
+    if (r.kind !== 'bool' && r.kind !== 'choice') for (let i = 0; i < r.max; i++) this.hit(vx + i, y, 1, 1, () => this.setTo(r.key, i === 0 && v === 1 ? 0 : i + 1));
     this.hit(this.w - 6, y, 3, 1, () => this.change(r.key, 1));
   }
   drawAction(g, a, y) {
@@ -2435,6 +2496,11 @@ export class SettingsWindow extends Window {
   }
   change(key, d) {
     changeSetting(this.s, key, d);
+    this.ui.hooks.settingsChanged && this.ui.hooks.settingsChanged(this.s);
+    this.ui.audio?.play('select');
+  }
+  setTo(key, v) {
+    setSetting(this.s, key, v);
     this.ui.hooks.settingsChanged && this.ui.hooks.settingsChanged(this.s);
     this.ui.audio?.play('select');
   }

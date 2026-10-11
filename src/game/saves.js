@@ -1,14 +1,37 @@
-// Save slots: five of your own plus an autosave, each kept under its own
-// key in browser storage, with a small index (who, where, when) so the
-// slot list can be shown without reading every save.
+// Save slots: as many of your own as you like plus an autosave, each kept
+// under its own key in browser storage, with a small index (who, where,
+// when) so the slot list can be shown without reading every save.
 import { GAME_VERSION } from '../version.js';
 import { appDb } from '../util/appstore.js';
+// (Round 82) The slots always shown (the autosave and five of your own);
+// past them, as many more as are used, and always one more empty one.
 export const SLOTS = ['auto', '1', '2', '3', '4', '5'];
-// Worlds you host for others, kept apart (see multiplayer.js).
+// Worlds you host for others, kept apart (see multiplayer.js): mp1, mp2...
+// (as many as you like, Round 82; these the first of them).
 export const MP_SLOTS = ['mp1', 'mp2', 'mp3'];
+export const isMpSlot = (id) => /^mp\d+$/.test(String(id));
+export const isSoloSlot = (id) => /^\d+$/.test(String(id));
 const INDEX_KEY = 'tessera-saves-v2';
 const LEGACY_KEY = 'tessera-save-v1';
 const slotKey = (id) => `tessera-save-${id}`;
+
+// The numbered slots of a kind (`mp` or not) in an index, in order: 1 up
+// to the highest used (at least 5 of your own), and (`spare`) one more if
+// they're all taken.
+export function slotIds(ix, mp = false, spare = true) {
+  const re = mp ? /^mp(\d+)$/ : /^(\d+)$/;
+  const at = ix || {};
+  const used = [];
+  for (const [k, m] of Object.entries(at)) {
+    const r = re.exec(k);
+    if (r && m) used.push(Number(r[1]));
+  }
+  const top = Math.max(mp ? 0 : 5, ...used);
+  const ids = [];
+  for (let i = 1; i <= top; i++) ids.push(mp ? `mp${i}` : String(i));
+  if (spare && ids.every((id) => at[id])) ids.push(mp ? `mp${top + 1}` : String(top + 1));
+  return ids;
+}
 
 // What the slot list shows for a game.
 export function metaOf(game) {
@@ -172,20 +195,23 @@ export class SaveStore {
     if (this.keptAt) this.keptAt.delete(id);
   }
 
-  list(slots = SLOTS) {
+  // (Round 82) Your slots: the autosave, then every numbered one there's a
+  // save in (at least 1 to 5), and one more empty one.
+  list(slots = null) {
     const ix = this.index();
-    return slots.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.kept(id)) ? ix[id] : null }));
+    const ids = slots || ['auto', ...slotIds(ix, false)];
+    return ids.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.kept(id)) ? ix[id] : null }));
   }
 
   // The worlds you host for others: those there are, newest first.
   worlds() {
-    return this.list(MP_SLOTS).filter((s) => s.meta).sort((a, b) => b.meta.savedAt - a.meta.savedAt);
+    return this.list(slotIds(this.index(), true, false)).filter((s) => s.meta).sort((a, b) => b.meta.savedAt - a.meta.savedAt);
   }
 
-  // A slot for a new world to host (null if they're all taken).
+  // A slot for a new world to host (there's always one: Round 82).
   freeWorld() {
-    const s = this.list(MP_SLOTS).find((q) => !q.meta);
-    return s ? s.id : null;
+    const ix = this.index();
+    for (let i = 1; ; i++) if (!ix[`mp${i}`]) return `mp${i}`;
   }
 
   has(id) {

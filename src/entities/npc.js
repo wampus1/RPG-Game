@@ -147,8 +147,15 @@ export class NPC extends Entity {
     return this.activity ? this.activity.entry.act : null;
   }
 
+  // (Round 82) A broom out (see idleanims.js, sweeping): what was in the
+  // hand put away first, and taken out again once the broom's gone.
+  sweeping() {
+    const a = this.idleAnim;
+    return !!(a && a.kind === 'sweep' && !this.moving);
+  }
+
   heldItem() {
-    if (this.sleeping) return null;
+    if (this.sleeping || this.sweeping()) return null;
     if (this.state === 'roadwork' || this.state === 'roadhome') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
     // (A prisoner on the work gang: a pick or an axe.)
     if (this.state === 'labor') return this.labor ? this.labor.tool : null;
@@ -176,6 +183,7 @@ export class NPC extends Entity {
   // A second blade in the off hand, shown when there's fighting to do; or,
   // out and about after dark, a torch.
   offhandItem() {
+    if (this.sweeping()) return null;
     const h = this.heldItem();
     const blade = !h || !ITEMS[h] || ITEMS[h].kind !== 'weapon' || ITEMS[h].ranged ? null : offhandOf(this);
     if (blade) return blade;

@@ -557,6 +557,8 @@ export class Bandits {
   lootChest(n, x, y, z, L) {
     const slots = this.game.world.getContainer(x, y, z);
     if (!slots) return 0;
+    // (Round 82: its lid up as they go through it.)
+    this.game.openChestLid?.(x, y, z, 2);
     const full = slots.map((q, i) => (q ? i : -1)).filter((i) => i >= 0);
     let took = 0;
     let worth = 0;

@@ -11,6 +11,10 @@ import { BLOCKS } from '../world/blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { THESSA_STYLES } from './isletrades.js';
 
+// (Round 82) The least a guard can think of you and still be hired as an
+// escort: Neutral and up (see sim.js, REP_LEVELS).
+export const HIRE_MIN_OPINION = -25;
+
 // The arms a guard may be issued.
 export const GUARD_ARMS = ['iron_sword', 'spear', 'mace', 'battle_axe', 'halberd', 'sabre', 'short_sword', 'flail', 'hand_axe', 'greatsword'];
 
@@ -740,7 +744,10 @@ export class Careers {
     if (this.escort) return { ok: false, reason: this.ent === guard ? 'already' : 'busy' };
     if (sim.justice.exiled.has(s.id) || sim.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
     const op = sim.opinion(guard);
-    if (op < -10) return { ok: false, reason: 'distrust' };
+    // (Round 82) Only one who dislikes you outright turns you down (as the
+    // opinion's shown: Disliked or Hated). Neutral, however it leans, will
+    // do the job for the fee.
+    if (op < HIRE_MIN_OPINION) return { ok: false, reason: 'distrust' };
     const others = L.npcs.filter((r) => r !== guard.rec && r.job === 'guard' && alive(r) && !r.away).length;
     if (!others) return { ok: false, reason: 'alone' };
     const rate = (s.condition === 'prosperous' ? 2 : 1.5) * (op >= 35 ? 0.8 : 1) * (sim.isCitizen(s.id) ? 0.9 : 1);

@@ -10,6 +10,8 @@ import { B, BLOCKS } from '../world/blocks.js';
 import { removeItem, countItem, addItem } from './inventory.js';
 import { letGo } from './leads.js';
 import { has as heroHas } from './hero.js';
+import { dirOf } from '../entities/raft.js';
+import { dirAngle } from '../render/steeds.js';
 
 // What a horse will come to you for.
 export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage', 'hay_bale']);
@@ -43,7 +45,7 @@ export class Riding {
     for (const w of this.wagons) {
       if ((riding && riding.wagonId === w.id) || away(w)) continue;
       const h = w.horse ? this.horse(w.horse) : null;
-      out.push({ key: `own:w${w.id}`, type: 'wagon', x: w.x, y: w.y, z: w.z, face: w.face ?? 1, own: w, hood: false, horse: h ? { coat: h.coat, saddle: h.saddled } : null });
+      out.push({ key: `own:w${w.id}`, type: 'wagon', x: w.x, y: w.y, z: w.z, face: w.face ?? 1, ang: w.ang, own: w, hood: false, horse: h ? { coat: h.coat, saddle: h.saddled } : null });
     }
     return out;
   }
@@ -167,8 +169,11 @@ export class Riding {
     const p = g.player;
     const h = c.own;
     p.sitting = null;
-    p.mount = { kind: 'horse', coat: h.coat, saddle: true, horseId: h.id, town: !!h.town };
+    // (Round 82: facing the way the horse was.)
+    p.mount = { kind: 'horse', coat: h.coat, saddle: true, horseId: h.id, town: !!h.town, ang: dirAngle(c.dir ?? 0) };
     p.teleport(c.x, c.y, c.z);
+    p.tankOff = null;
+    p.tankTo = null;
     this.remove(c);
     g.ui.msg('You swing up into the saddle. (F to get down.)', '#a0e0a0');
     g.audio?.play('step_grass');
@@ -267,8 +272,10 @@ export class Riding {
     const h = this.horse(w.horse);
     p.inWagon = null;
     p.sitting = null;
-    p.mount = { kind: 'wagon', coat: h ? h.coat : 0, saddle: !!(h && h.saddled), hood: false, wagonId: w.id, horseId: w.horse };
+    p.mount = { kind: 'wagon', coat: h ? h.coat : 0, saddle: !!(h && h.saddled), hood: false, wagonId: w.id, horseId: w.horse, ang: typeof w.ang === 'number' ? w.ang : dirAngle(w.face ?? 1) };
     p.teleport(w.x, w.y, w.z);
+    p.tankOff = null;
+    p.tankTo = null;
     g.ui.msg('You take up the reins. (F to get down.)', '#a0e0a0');
     return true;
   }
@@ -283,13 +290,16 @@ export class Riding {
     p.mount = null;
     if (m.kind === 'horse') {
       const h = this.horse(m.horseId);
-      if (h) Object.assign(h, { x: p.x, y: p.y, z: p.z });
+      if (h) Object.assign(h, { x: p.x, y: p.y, z: p.z, dir: dirOf(m.ang ?? 0) });
       // Ridden back to the stables: it goes back in.
       if (h && h.town) this.giveBack(h);
     } else {
       const w = this.wagon(m.wagonId);
-      if (w) Object.assign(w, { x: p.x, y: p.y, z: p.z, face: p.dir === 3 || p.sideLeft === false ? 3 : 1 });
+      // (Round 82: left standing the way it was heading.)
+      if (w) Object.assign(w, { x: p.x, y: p.y, z: p.z, face: dirOf(m.ang ?? 0), ang: m.ang ?? dirAngle(1) });
     }
+    p.tankOff = null;
+    p.tankTo = null;
     // Step down beside it.
     const spot = g.findFreeSpot(p.x + 1, p.z, p.y);
     if (spot) p.teleport(spot.x, spot.y, spot.z);
@@ -340,3 +350,78 @@ export class Riding {
   }
 }
 
+
+// ------------------------------------------------------------ tank controls
+// (Round 82) In the saddle, or on a wagon's bench, you steer it as it is:
+// A and D turn it (to its own left and right, whichever way the camera's
+// turned), W drives it on the way it's heading, S backs it up (slower).
+// It goes square by square still, but along the line it's heading (a
+// slant a step across now and then, as a line drawn on squares does), and
+// it's drawn going smoothly along that line, turned to it (see
+// Player.renderPos, render/steeds.js).
+const TAU = Math.PI * 2;
+// (How quickly each turns, a second: a horse on the spot, a wagon wider.)
+const TURN = { horse: 3.4, wagon: 2.1 };
+const keyDown = (input, ...ks) => ks.some((k) => input.isDown(k));
+
+export function turnMount(p, dt, input) {
+  const m = p.mount;
+  if (!m) return;
+  if (typeof m.ang !== 'number') m.ang = dirAngle(p.dir ?? 0);
+  const left = keyDown(input, 'KeyA', 'ArrowLeft');
+  const right = keyDown(input, 'KeyD', 'ArrowRight');
+  if (left === right) return;
+  const rate = (TURN[m.kind] || 2.6) * (p.moving ? 1 : 0.75) * (heroHas(p.game.hero, 'rider') ? 1.15 : 1);
+  m.ang += (left ? 1 : -1) * rate * dt;
+  m.ang = ((m.ang % TAU) + TAU) % TAU;
+  if (!p.bowDraw) p.dir = dirOf(m.ang);
+}
+
+// The next square along the heading (W on, S back), or null if neither's
+// held: { dx, dz, mul (how much longer the step takes), from, to (where
+// it's drawn, start and end), off }. Never a slant across a corner: only
+// where both ways round it are clear (else straight on, along the wall).
+export function mountStep(p, input) {
+  const m = p.mount;
+  if (!m) return null;
+  const fwd = keyDown(input, 'KeyW', 'ArrowUp');
+  const back = !fwd && keyDown(input, 'KeyS', 'ArrowDown');
+  if (!fwd && !back) return null;
+  if (typeof m.ang !== 'number') m.ang = dirAngle(p.dir ?? 0);
+  const sg = fwd ? 1 : -1;
+  const o = p.tankOff;
+  const off = o && p.tankTo && Math.abs(p.tankTo.x - o.x - p.x) < 0.01 && Math.abs(p.tankTo.z - o.z - p.z) < 0.01 ? o : { x: 0, z: 0 };
+  const ax = off.x + Math.sin(m.ang) * sg;
+  const az = off.z + Math.cos(m.ang) * sg;
+  let dx = Math.round(ax);
+  let dz = Math.round(az);
+  if (!dx && !dz) {
+    if (Math.abs(ax) > Math.abs(az)) dx = Math.sign(ax);
+    else dz = Math.sign(az) || 1;
+  }
+  if (dx && dz) {
+    const w = p.game.world;
+    const ok = (x, z) => {
+      const y = w.stepTarget(p.x, p.y, p.z, x, z, false, false);
+      return y >= 0 && !p.game.occupiedBySolid(x, y, z, p);
+    };
+    const okX = ok(p.x + dx, p.z);
+    const okZ = ok(p.x, p.z + dz);
+    if (!okX || !okZ) {
+      if (okX && !okZ) dz = 0;
+      else if (okZ && !okX) dx = 0;
+      else if (Math.abs(ax) >= Math.abs(az)) dz = 0;
+      else dx = 0;
+    }
+  }
+  const cl = (v) => Math.max(-0.5, Math.min(0.5, v));
+  const nOff = { x: cl(ax - dx), z: cl(az - dz) };
+  return {
+    dx,
+    dz,
+    mul: Math.hypot(dx, dz) * (back ? 1.7 : 1),
+    from: { x: p.x + off.x, z: p.z + off.z },
+    to: { x: p.x + dx + nOff.x, z: p.z + dz + nOff.z },
+    off: nOff,
+  };
+}

@@ -4,13 +4,14 @@
 // blows land, how many creatures roam, how long a day is, what things
 // cost; and any item, block or creature of the game's (or the mod's) with
 // its numbers changed.
-import { h, ic, clear, button, toast, slider, textInput } from './kit.js';
+import { h, ic, clear, button, toast, slider, textInput, check } from './kit.js';
 import { pickRef, refLabel, refThumb, vanillaIcon } from './common.js';
 import { pickBlock, blockLabel } from './pickers.js';
 import { WORLD_RULES, ITEM_FIELDS, BLOCK_FIELDS, CREATURE_FIELDS } from '../mod/rules.js';
 import { ITEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { SPECIES } from '../entities/creature.js';
+import { gameStories, human, loadAbout, ABOUT } from './story.js';
 
 // A thing's numbers as the game has them (to show what a change is from).
 function gameValue(kind, key, f) {
@@ -87,6 +88,7 @@ export default class RulesTool {
       if (o) for (const [ref, ch] of Object.entries(o)) if (!ch || !Object.keys(ch).length) delete o[ref];
       if (o && !Object.keys(o).length) delete m.rules[k];
     }
+    if (m.rules.stories && !(m.rules.stories.off || []).length) delete m.rules.stories;
     if (!Object.keys(m.rules).length) delete m.rules;
     app.touch('meta');
     if (redraw) this.draw();
@@ -98,6 +100,7 @@ export default class RulesTool {
     if (!r) return 0;
     let n = WORLD_RULES.filter((W) => typeof r[W.key] === 'number' && r[W.key] !== W.def).length;
     for (const K of KINDS) n += Object.keys(r[K.key] || {}).length;
+    n += (r.stories && r.stories.off ? r.stories.off.length : 0);
     return n;
   }
 
@@ -135,6 +138,8 @@ export default class RulesTool {
     wrap.append(h('h2', null, 'The world'), grid);
     // Things, changed.
     for (const K of KINDS) wrap.append(this.thingSection(K));
+    // (Round 82) The game's own stories, each on or off.
+    wrap.append(this.storySection());
     this.stage.append(wrap);
     wrap.scrollTop = top;
     this.drawCount();
@@ -157,6 +162,49 @@ export default class RulesTool {
     } });
     row.append(h('span', { class: 'rn' }, W.name), sl, h('span', { class: 'ru note' }, W.unit === '%' ? '%' : W.unit === 's' ? 'sec' : W.unit), reset);
     return row;
+  }
+
+  // (Round 82) The stories the game starts with, by family: each on (it
+  // begins in a world the mod's on in, as the game has it) or off (it
+  // never does; one already under way plays out).
+  storySection() {
+    const r = this.rules || {};
+    const off = new Set((r.stories && r.stories.off) || []);
+    const sec = h('div', { class: 'rules-things rules-stories' });
+    const setOff = (ids, on) => this.set((x) => {
+      const now = new Set((x.stories && x.stories.off) || []);
+      for (const id of ids) {
+        if (on) now.delete(id);
+        else now.add(id);
+      }
+      x.stories = { off: [...now].sort() };
+    }, true);
+    sec.append(h('h2', null, 'The game\'s stories', h('span', { class: 'note', style: { marginLeft: '10px', fontFamily: 'var(--mono)', fontSize: '12px' } }, 'Those the game starts with. Turned off, one never begins in a world the mod is on in (one already under way plays out).')),
+      h('div', { style: { display: 'flex', gap: '6px', margin: '4px 0 8px' } },
+        button('All on', { icon: 'check', small: true, onClick: () => setOff([...off], true) }),
+        button('All off', { icon: 'close', small: true, kind: 'ghost', onClick: () => setOff(gameStories().flatMap(([, ids]) => ids), false) })));
+    const grid = h('div', { class: 'rules-grid' });
+    for (const [fam, ids] of gameStories()) {
+      const on = ids.filter((id) => !off.has(id)).length;
+      const box = h('div', { class: 'rules-box' });
+      const head = h('h3', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('span', { class: 'grow' }, human(fam)), h('span', { class: 'note' }, `${on}/${ids.length} on`),
+        check(null, on === ids.length, (v) => setOff(ids, v), { tip: on === ids.length ? 'Turn all of these off' : 'Turn all of these on' }));
+      box.append(head);
+      for (const id of ids) {
+        const a = ABOUT.get(id);
+        const row = h('div', { class: `story-toggle${off.has(id) ? ' off' : ''}`, 'data-tip': a && a.own ? a.own.slice(0, 220) : null },
+          check(human(id), !off.has(id), (v) => setOff([id], v)));
+        box.append(row);
+      }
+      grid.append(box);
+    }
+    sec.append(grid);
+    // (What each is about, read from the game's own notes: shown once in.)
+    if (!this.aboutAsked) {
+      this.aboutAsked = true;
+      loadAbout().then(() => this.stage && this.stage.isConnected && this.draw()).catch(() => {});
+    }
+    return sec;
   }
 
   thingSection(K) {

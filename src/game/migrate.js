@@ -601,6 +601,22 @@ export const STEPS = [
       log.push('Tessera can be played as a desktop app now (Tessera.exe), keeping its worlds in a folder of its own on your computer; this world plays as it did.');
     },
   },
+  {
+    // (Round 82) Landmarks you come across aren't pinned on the map for
+    // you any more (only those you're told of are): the pins put there for
+    // ones found, taken off. (The snow no longer lies; there was none kept.)
+    to: '0.82.0',
+    data(d, log) {
+      const found = d.landmarksFound || {};
+      const pins = Array.isArray(d.pins) ? d.pins : [];
+      const keep = pins.filter((q) => !(q && q.landmark && found[q.landmark] && found[q.landmark].how === 'found'));
+      if (keep.length !== pins.length) {
+        log.push(`${pins.length - keep.length} landmark${pins.length - keep.length === 1 ? '' : 's'} you'd come across taken off your map (found ones aren't marked for you now: mark them yourself if you like).`);
+        d.pins = keep;
+      }
+      log.push('Coaches keep to the roads and streets now, and you pick where to go on a map; horses and wagons turn as they go (A and D to turn them, W and S to go).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

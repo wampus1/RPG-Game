@@ -32,7 +32,7 @@ export class World {
     this.regions = new Map();
     this.saved = new Map(); // serialized modified regions awaiting reload
     this.layouts = new Map();
-    this.onChange = null; // (x, y, z, oldId, newId) => void
+    this.onChange = null; // (x, y, z, oldId, newId, oldMeta?) => void
     this.onLayout = null; // (layout) => void, after a settlement is laid out
     this.onRegionLoad = null; // (region) => void
     this._lastKey = -1;
@@ -246,10 +246,13 @@ export class World {
   setMeta(x, y, z, meta) {
     const r = this.regionAt(x, z);
     if (!r || y < 0 || y >= WORLD_Y) return;
-    r.meta[((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y] = meta;
+    const i = ((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y;
+    // (Round 82: what it was, too, for whoever's told: a door's swing.)
+    const was = r.meta[i];
+    r.meta[i] = meta;
     r.modified = true;
     r.version++;
-    if (this.onChange) this.onChange(x, y, z, -1, -1);
+    if (this.onChange) this.onChange(x, y, z, -1, -1, was);
   }
 
   getState(x, y, z) {

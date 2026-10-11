@@ -646,7 +646,7 @@ export class MapWindow extends Window {
       const e = entries[i];
       if (e.kind !== lastKind) {
         lastKind = e.kind;
-        g.text(x, y++, { quest: 'QUESTS', mark: 'MARKERS', place: 'PLACES', landmark: 'LANDMARKS', old: 'OLD PLACES' }[e.kind], C.dim);
+        g.text(x, y++, { quest: 'QUESTS', mark: 'MARKERS', place: 'PLACES', landmark: 'LANDMARKS', old: 'OLD PLACES', dest: 'THE COACH GOES TO' }[e.kind], C.dim);
         if (y > bottom) break;
       }
       const hov = this.hovering(x, y, W, 1);

@@ -32,6 +32,7 @@ import { asSeat } from '../../game/party.js';
 import { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, seatOfPid, playerOf, playerName, townMid, directions, poss } from './refs.js';
 import { Director } from './director.js';
 import { rememberStory } from './memory.js';
+import { storyOn } from '../../mod/rules.js';
 
 export { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, playerOf, playerName, townMid, directions, poss };
 
@@ -362,6 +363,8 @@ export class Saga {
   begin(mid, o = {}) {
     const M = MOTIFS[mid];
     if (!M) return null;
+    // (Round 82) Turned off by a mod (its Rules): it never begins.
+    if (!storyOn(mid)) return null;
     // (One story of a kind about the same thing at once.)
     const key = M.key ? M.key(o, this) : null;
     if (key && this.live().some((t) => t.m === mid && t.key === key)) return null;

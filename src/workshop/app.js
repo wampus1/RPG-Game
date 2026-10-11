@@ -1288,7 +1288,7 @@ class OverviewTool {
     const counts = SECTIONS.map((S) => ({ ...S, n: Object.keys(m[S.key] || {}).length }));
     // (Round 66: the game's rules it changes, too.)
     const R = m.rules || {};
-    counts.push({ key: 'rules', name: 'Rules changed', icon: 'scales', color: '#9aa8d8', n: Object.keys(R).filter((k) => !['items', 'blocks', 'creatures'].includes(k)).length + ['items', 'blocks', 'creatures'].reduce((a, k) => a + Object.keys(R[k] || {}).length, 0) });
+    counts.push({ key: 'rules', name: 'Rules changed', icon: 'scales', color: '#9aa8d8', n: Object.keys(R).filter((k) => !['items', 'blocks', 'creatures', 'stories'].includes(k)).length + ['items', 'blocks', 'creatures'].reduce((a, k) => a + Object.keys(R[k] || {}).length, 0) + ((R.stories && R.stories.off) || []).length });
     const total = counts.reduce((a, c) => a + c.n, 0);
     const CELLS = 48;
     const bar = h('div', { class: 'mod-bar' });

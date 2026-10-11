@@ -123,21 +123,16 @@ test('swimming across water two deep (not deeper), on foot', () => {
   assert.ok(!w.canSwim(x, y - 1, z), 'deeper: no');
 });
 
-test('snow lies, is trodden and shovelled; rain rings the water', () => {
+test('rain rings the water (round 82: snow no longer lies)', () => {
   const game = makeGame(12345);
   const input = stubInput();
   for (let i = 0; i < 3; i++) game.update(0.1, input);
   const r = { emit() {}, particleK: 1, toView: (x, z) => [x, z] };
   const fx = new GroundFx(r);
   game.weather = { kind: 'snow', level: 1, t: 99 };
-  for (let i = 0; i < 200; i++) fx.tick(game, 0.5);
+  for (let i = 0; i < 20; i++) fx.tick(game, 0.5);
+  assert.equal(fx.snow, undefined);
   const p = game.player;
-  assert.ok(fx.depth(p.x, p.z) > 1, 'a layer lying');
-  assert.ok(fx.clear(p.x, p.z, 1));
-  assert.equal(fx.depth(p.x, p.z), 0);
-  game.weather = { kind: 'clear', level: 0, t: 99 };
-  for (let i = 0; i < 2000; i++) fx.tick(game, 0.5);
-  assert.equal(fx.snow.size, 0, 'melted');
   fx.ripple(p.x, p.y, p.z, false);
   assert.equal(fx.ripples.size, 1);
 });

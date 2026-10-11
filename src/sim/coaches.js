@@ -203,7 +203,26 @@ export function coachStand(L) {
   const sg = (L.signs || []).find((q) => q.kind === 'entrance' && q.x !== undefined);
   const e = sg || (L.entrances && L.entrances[0]);
   if (!e) return null;
-  return { key: `coach:${L.settlement.id}`, type: 'wagon', x: e.x + 2, z: e.z + 1, face: 1, hood: true, horse: { coat: L.settlement.id % 4, saddle: false }, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'coach', sid: L.settlement.id } };
+  // (Round 82) On the street by the sign (or open ground), never in a
+  // house or a yard beside it: the nearest spot that's clear.
+  let at = { x: e.x + 2, z: e.z + 1 };
+  if (L.mask && L.maskAt) {
+    const clear = (x, z) => [1, 5, 0].includes(L.maskAt(x, z)) && (!L.inside || L.inside(x, z));
+    if (!clear(at.x, at.z)) {
+      let best = null;
+      for (let dz = -4; dz <= 4; dz++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const x = e.x + dx;
+          const z = e.z + dz;
+          if (!clear(x, z)) continue;
+          const d = Math.abs(x - at.x) + Math.abs(z - at.z) + (L.maskAt(x, z) === 0 ? 0.5 : 0);
+          if (!best || d < best.d) best = { x, z, d };
+        }
+      }
+      if (best) at = { x: best.x, z: best.z };
+    }
+  }
+  return { key: `coach:${L.settlement.id}`, type: 'wagon', x: at.x, z: at.z, face: 1, hood: true, horse: { coat: L.settlement.id % 4, saddle: false }, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'coach', sid: L.settlement.id } };
 }
 
 // Where the ferry lies, off the end of the town's pier, or null.

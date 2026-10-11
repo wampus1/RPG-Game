@@ -9,7 +9,7 @@ import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
-import { humanoidSheet, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
+import { humanoidSheet, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, WAGON_SEAT, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -39,6 +39,7 @@ import { TUNNEL_DIG } from '../game/evolvedgear.js';
 import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
 import { GroundFx } from './groundfx.js';
+import { steedSprite, dirAngle, easeAngle } from './steeds.js';
 
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
@@ -46,6 +47,14 @@ const makeCanvas = (w, h) => {
   c.height = h;
   return c;
 };
+
+// (Round 82) Iron bars, and the cell doors hung in them: drawn as a grille
+// (see Renderer.drawBars), not a box.
+let BAR_IDS = null;
+const barIds = () => (BAR_IDS ||= new Set([B.iron_bars, B.cell_door, B.cell_door_top]));
+
+// (Round 82) Where passengers sit in a wagon's bed, back from the bench.
+const BED_F = [-0.75, -1.25, -1.75];
 
 const CULL_SAME = new Set();
 // (Round 80) Rows' layers of ground drawn again into their pictures (see
@@ -94,8 +103,21 @@ function thickLine(ctx, x0, y0, x1, y1) {
 
 // (Round 79) Which sides of a rug run on into the same rug (1 up, 2
 // right, 4 down, 8 left).
-function rugJoin(world, x, y, z, id) {
-  return (world.getBlock(x, y, z - 1) === id ? 1 : 0) | (world.getBlock(x + 1, y, z) === id ? 2 : 0) | (world.getBlock(x, y, z + 1) === id ? 4 : 0) | (world.getBlock(x - 1, y, z) === id ? 8 : 0);
+// (Round 82) Which of a rug's sides, as it's seen (up, right, down, left
+// on the screen, the camera turned however it is), run on into more of the
+// same; and its fringe kept at the same ends of it (its north and south)
+// whichever way you look: across the screen's top and bottom, or (turned a
+// quarter) down its sides (+16).
+const RUG_SIDES = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+export function rugJoin(world, x, y, z, id, view = 0) {
+  let m = 0;
+  for (let i = 0; i < 4; i++) {
+    const [u, v] = RUG_SIDES[i];
+    const dx = view === 1 ? v : view === 2 ? -u : view === 3 ? -v : u;
+    const dz = view === 1 ? -u : view === 2 ? -v : view === 3 ? u : v;
+    if (world.getBlock(x + dx, y, z + dz) === id) m |= 1 << i;
+  }
+  return m | (view & 1 ? 16 : 0);
 }
 
 function craftedId() {
@@ -150,6 +172,42 @@ function recolour(d, turn, sat) {
   }
 }
 
+// (Round 82) What's said, in lines short enough for a bubble: words kept
+// whole where they can be, at most three lines (the last cut short).
+const BUBBLE_CHARS = 30;
+// (How long a broom takes to come out, or go away: see drawBroom.)
+const SWEEP_STOW = 0.45;
+// (Round 82) How long a door takes to swing, and a chest's lid to lift.
+export const SWING_S = 0.24;
+export const LID_S = 0.3;
+const bubbleWrap = new Map();
+export function bubbleLines(text) {
+  let got = bubbleWrap.get(text);
+  if (got) return got;
+  const out = [];
+  let line = '';
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    let wd = word;
+    while (wd.length > BUBBLE_CHARS) {
+      if (line) out.push(line);
+      line = '';
+      out.push(wd.slice(0, BUBBLE_CHARS));
+      wd = wd.slice(BUBBLE_CHARS);
+    }
+    if (!line) line = wd;
+    else if (line.length + 1 + wd.length <= BUBBLE_CHARS) line += ` ${wd}`;
+    else {
+      out.push(line);
+      line = wd;
+    }
+  }
+  if (line || !out.length) out.push(line);
+  got = out.length > 3 ? [...out.slice(0, 2), `${out[2].slice(0, BUBBLE_CHARS - 1)}…`] : out;
+  if (bubbleWrap.size > 400) bubbleWrap.clear();
+  bubbleWrap.set(text, got);
+  return got;
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -169,6 +227,10 @@ export class Renderer {
     this.camY = 0;
     this.time = 0;
     this.wobbles = new Map();
+    // (Round 82) Doors swinging, chests' lids lifted (see swing, lidOpen).
+    this.swings = new Map();
+    this.lids = new Map();
+    this.lidHeld = new Map();
     this.particles = [];
     // (Round 77) Rain, snow and water on the ground (see groundfx.js).
     this.gfx = new GroundFx(this);
@@ -536,6 +598,7 @@ export class Renderer {
     this.fxLeft = cap.fx;
     this.game = game;
     this.time += dt;
+    this.tickHinges(game, dt);
     // (Round 62) The atlas grown (or cut back) for a world's mods.
     if (this.atlas !== TEX.atlas && TEX.atlas) {
       this.atlas = TEX.atlas;
@@ -1158,7 +1221,7 @@ export class Renderer {
     const hid = veil ? (x, y, z) => cutAway(x, y, z) || veil.veiled(x, y, z, world.getBlock(x, y, z)) : cutAway;
     this.cursorDrawList = null;
     const gfx = this.gfx;
-    const gfxOn = !!gfx && (gfx.snow.size > 0 || gfx.marks.size > 0 || gfx.ripples.size > 0 || !this.noWaterFx);
+    const gfxOn = !!gfx && (gfx.marks.size > 0 || gfx.ripples.size > 0 || !this.noWaterFx);
     // (Round 77) Indoors, the walls cut away a storey up shown as a faint
     // ghost of themselves, so the room's height still reads.
     const hint = this.wallHint !== false && hidden !== null && !this.underground;
@@ -1166,7 +1229,7 @@ export class Renderer {
     // (Round 80) The ground below your level comes from pictures kept of
     // each row's layers of it (see groundStrip): drawn again only when what
     // they show changes, not every frame. What moves or changes on it
-    // (water, plants, things set down, snow and tracks, the pointer) is
+    // (water, plants, things set down, ruts, the pointer) is
     // drawn over in its place, as ever. Not under a scene's veil; down in
     // the ground, not the layer at your feet (cut flat as a plan).
     const Lc = this.groundCache !== false && veil === null ? (this.underground ? pLayer - 1 : pLayer) : 0;
@@ -1214,7 +1277,14 @@ export class Renderer {
       const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
       const v = hash4(wx, y, wz) % VARIANTS;
       const render = b.render;
-      if (render === 'cube' || render === 'liquid' || (render === 'door' && !(metaAt(ci, y) & META_STATE))) {
+      // (Round 82) A door mid-swing: drawn turning (see drawSwing).
+      const swing = render === 'door' && this.swings.size ? this.swings.get(`${wx},${y},${wz}`) : null;
+      if (barIds().has(id)) {
+        // (Round 82) Iron bars: a grille joined up to its neighbours (see
+        // drawBars).
+        this.drawBars(ctx, world, wx, y, wz, sx, sy, id);
+        if (pickable && mouse.x >= sx && mouse.x < sx + 16 && mouse.y >= sy && mouse.y < sy + SPR_H) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq };
+      } else if (render === 'cube' || render === 'liquid' || (render === 'door' && !swing && !(metaAt(ci, y) & META_STATE))) {
         const rot = b.rotatable ? ((metaAt(ci, y) & META_ROT) + view) & 3 : 0;
         // Top face.
         const above = getAt(ci, y + 1);
@@ -1264,8 +1334,13 @@ export class Renderer {
       } else if (render === 'door') {
         const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
         const s = T.sprite[id * 4 + rot][0];
-        ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
-        if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+        if (swing) {
+          this.drawSwing(ctx, atl, T, id, rot, v, sx, sy, swing);
+          if (pickable && mouse.x >= sx && mouse.x < sx + 16 && mouse.y >= sy && mouse.y < sy + SPR_H) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+        } else {
+          ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+          if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+        }
       } else if (PIECE_IDS[id] === 1) {
         // A great thing on its square: drawn whole from the plinth
         // nearest you (below), or from here if it stands alone.
@@ -1312,6 +1387,11 @@ export class Renderer {
           ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
           ctx.restore();
         } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+        // (Round 82) A chest open (or opening, or shutting): its lid up.
+        if (id === B.chest && this.lids.size) {
+          const lk = this.lids.get(`${wx},${y},${wz}`);
+          if (lk) this.drawLid(ctx, atl, s, sx, sy + SPR_H - s.h, lk);
+        }
         if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
         // (Round 73) What's on a rack or a stand, and what a painting shows.
         if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
@@ -1337,7 +1417,7 @@ export class Renderer {
         const arr = TEX.sprite[id * 4];
         // (A glyph plate shows its own glyph.)
         // (Round 79: rugs side by side, one carpet.)
-        const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : BLOCKS[id].rug ? rugJoin(world, wx, y, wz, id) : v % arr.length];
+        const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : BLOCKS[id].rug ? rugJoin(world, wx, y, wz, id, this.view) : v % arr.length];
         const below = getAt(ci, y - 1);
         const oy = BLOCKS[below].liquid ? 3 : 0;
         ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
@@ -1442,7 +1522,7 @@ export class Renderer {
   // (`old`'s, if it's big enough). The picture holds the solid blocks
   // (closed doors among them) from the first column one's shown on to the
   // last; and with it, where each top and front shown is (for the
-  // pointer), the tops (for snow and tracks), the blocks (for the pointer's
+  // pointer), the tops (for ruts in the mud), the blocks (for the pointer's
   // own outline), and the columns of what's left to draw over it.
   buildStrip(game, v, y, u0, u1, kAt, old = null) {
     const world = game.world;
@@ -1495,7 +1575,7 @@ export class Renderer {
       if (id === 0) continue;
       const b = BLOCKS[id];
       const meta = reg.meta[lb[ci] + y];
-      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE)))) {
+      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE))) || barIds().has(id)) {
         dyn.push(u);
         continue;
       }
@@ -1576,14 +1656,14 @@ export class Renderer {
   }
 
   // A row's layer from its picture, and over it what's drawn square by
-  // square (in the order drawWorld would have): snow and tracks on its
+  // square (in the order drawWorld would have): ruts in the mud on its
   // tops, then the rest of the layer; the pointer, as if each block had
   // been drawn here.
   drawStrip(ctx, game, st, v, y, x0, x1, sy, drawAt, gfxOn) {
     const camX = this.camX;
     if (st.canvas) ctx.drawImage(st.canvas, st.cu0 * TILE - camX, sy);
     const gfx = this.gfx;
-    if (gfxOn && gfx && (gfx.snow.size > 0 || gfx.marks.size > 0)) {
+    if (gfxOn && gfx && gfx.marks.size > 0) {
       const T = st.tops;
       for (let k = 0; k < T.length; k += 4) {
         const u = T[k];
@@ -1615,6 +1695,101 @@ export class Renderer {
   // (Round 80) A block changed at (x, y, z): the pictures of its row, and
   // of the rows either side (whose faces and edges it touches), are drawn
   // again when next wanted.
+  // (Round 82) A door at (x, y, z) set swinging open (or shut): whoever
+  // did it, you or anyone (see Game.onBlockChange).
+  swing(x, y, z, open) {
+    this.swings.set(`${x},${y},${z}`, { t: 0, open, x, y, z });
+    this.noteBlock(x, y, z);
+  }
+
+  // A chest's lid held up a while by someone at it (yours stays up while
+  // its window's open).
+  lidOpen(x, y, z, secs = 2.5) {
+    this.lidHeld.set(`${x},${y},${z}`, this.time + secs);
+  }
+
+  // How open a chest's lid is (0 shut, 1 up), or 0.
+  lidAt(x, y, z) {
+    return this.lids.size ? this.lids.get(`${x},${y},${z}`) || 0 : 0;
+  }
+
+  tickHinges(game, dt) {
+    for (const [k, sw] of this.swings) {
+      sw.t += dt;
+      if (sw.t >= SWING_S) {
+        this.swings.delete(k);
+        this.noteBlock(sw.x, sw.y, sw.z);
+      }
+    }
+    const want = new Set();
+    const cw = game && game.ui && game.ui.find ? game.ui.find('container') : null;
+    if (cw && cw.pos) want.add(`${cw.pos.x},${cw.pos.y},${cw.pos.z}`);
+    for (const [k, until] of this.lidHeld) {
+      if (until > this.time) want.add(k);
+      else this.lidHeld.delete(k);
+    }
+    for (const k of want) if (!this.lids.has(k)) this.lids.set(k, 0);
+    for (const [k, v] of this.lids) {
+      const to = want.has(k) ? 1 : 0;
+      const nv = v + Math.sign(to - v) * Math.min(Math.abs(to - v), dt / LID_S);
+      if (nv <= 0 && !to) this.lids.delete(k);
+      else this.lids.set(k, nv);
+    }
+  }
+
+  // A door part-way through its swing: the shut leaf turning on its hinge
+  // (narrower as it turns edge-on to you, darker), the open one coming in.
+  drawSwing(ctx, atl, T, id, rot, v, sx, sy, sw) {
+    const k0 = Math.min(1, sw.t / SWING_S);
+    const k = sw.open ? k0 : 1 - k0;
+    const e = k * k * (3 - 2 * k);
+    const tops = T.top[id * 4 + rot];
+    const fronts = T.front[id * 4 + rot];
+    const st = tops[v % tops.length];
+    const sf = fronts[v % fronts.length];
+    const a0 = ctx.globalAlpha;
+    if (rot === 0 || rot === 2) {
+      const w = Math.max(3, Math.round(16 * (1 - e * 0.82)));
+      ctx.drawImage(atl, st.x, st.y, 16, 16, sx, sy, w, 16);
+      ctx.drawImage(atl, sf.x, sf.y, 16, LH, sx, sy + 16, w, LH);
+      ctx.fillStyle = `rgba(10,6,4,${0.4 * e})`;
+      ctx.fillRect(sx, sy, w, 16 + LH);
+    } else {
+      const h = Math.max(3, Math.round(16 * (1 - e * 0.82)));
+      const hf = Math.round(LH * (1 - e));
+      ctx.drawImage(atl, st.x, st.y, 16, 16, sx, sy, 16, h);
+      if (hf > 0) ctx.drawImage(atl, sf.x, sf.y, 16, LH, sx, sy + h, 16, hf);
+      ctx.fillStyle = `rgba(10,6,4,${0.4 * e})`;
+      ctx.fillRect(sx, sy, 16, h + hf);
+    }
+    if (e > 0.6) {
+      const s = T.sprite[id * 4 + rot][0];
+      ctx.globalAlpha = a0 * ((e - 0.6) / 0.4);
+      ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+      ctx.globalAlpha = a0;
+    }
+  }
+
+  // A chest's lid lifted `k` of the way (0..1) on its hinge at the back:
+  // the inside dark under it, the lid itself (its own picture, rows 11-16
+  // of the chest's) standing up behind as it opens.
+  drawLid(ctx, atl, s, sx, sy, k) {
+    const e = k * k * (3 - 2 * k);
+    if (e <= 0.02) return;
+    const inside = Math.round(5 * e);
+    ctx.fillStyle = '#140d07';
+    ctx.fillRect(sx + 2, sy + 17 - inside, 12, inside);
+    ctx.fillStyle = '#3a2614';
+    if (inside > 1) ctx.fillRect(sx + 2, sy + 16, 12, 1);
+    const lh = 6 + Math.round(2 * e);
+    const ly = sy + 11 - Math.round(7 * e);
+    ctx.drawImage(atl, s.x, s.y + 11, s.w, 6, sx, ly, s.w, lh);
+    if (e > 0.5) {
+      ctx.fillStyle = `rgba(30,18,8,${(e - 0.5) * 0.6})`;
+      ctx.fillRect(sx + 2, ly + 1, 12, lh - 2);
+    }
+  }
+
   noteBlock(x, y, z) {
     if (!this.rowVer) return;
     const v = this.toView(x, z)[1];
@@ -1699,62 +1874,86 @@ export class Renderer {
     ctx.restore();
   }
 
+  // (Round 82) Which way a horse or a wagon is heading in the world (see
+  // steeds.js): the rider's own, driven with tank controls (see
+  // riding.js); else eased round toward the way it's going (or facing),
+  // a turn at a time rather than all at once.
+  steedAngle(e, m = null) {
+    if (m && typeof m.ang === 'number') return m.ang;
+    if (e._angAt === this.time && e._ang !== undefined) return e._ang;
+    let target;
+    if (typeof e.ang === 'number') target = e.ang;
+    else if (e.moving && e.fx !== undefined && (e.x !== e.fx || e.z !== e.fz)) target = Math.atan2(e.x - e.fx, e.z - e.fz);
+    else if (e.kind === 'prop') target = dirAngle(e.face ?? 1);
+    else target = e._ang ?? dirAngle(e.dir ?? 0);
+    e._ang = e._ang === undefined ? target : easeAngle(e._ang, target, e.kind === 'prop' ? 2.4 : 5, Math.min(0.1, this.frameDt || 0.016));
+    e._angAt = this.time;
+    return e._ang;
+  }
+
+  // The way a rider (or someone sat in a wagon) faces on screen, from the
+  // heading on screen `a`: mostly side on.
+  seatDir(a) {
+    const u = Math.sin(a);
+    const v = Math.cos(a);
+    return Math.abs(u) > Math.abs(v) * 0.7 ? (u < 0 ? 1 : 3) : v < 0 ? 2 : 0;
+  }
+
   // Under a rider: a horse; under a driver: the wagon, its horse out in
-  // front. Returns how far up the rider sits.
+  // front, turned in the round to the way it's heading. Returns how far
+  // up the rider sits.
   drawMount(ctx, e, m, sx, feetY) {
-    const left = this.sideOf(e);
-    const moving = e.moving;
-    const f = moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
-    const horse = horseSprite(f, m.coat || 0, m.banner || null, !!m.saddle);
+    const a = this.steedAngle(e, m) - (this.view * Math.PI) / 2;
+    e._seat = this.seatDir(a);
+    const legs = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
     if (m.kind === 'horse') {
-      this.drawSide(ctx, horse, sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+      const S = steedSprite('horse', { coat: m.coat || 0, banner: m.banner || null, saddle: !!m.saddle, frame: legs }, a, makeCanvas);
+      ctx.drawImage(S.img, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
       return 12;
     }
-    // A wagon: the driver on the bench at the front, the horse ahead,
-    // anyone riding along sat in the back.
-    this.drawWagonAt(ctx, sx + 8, feetY, left, m, moving ? Math.floor(this.time * 5) : 0, horse);
+    this.drawWagonAt(ctx, sx + 8, feetY, a, m, e.moving ? Math.floor(this.time * 5) : 0, { coat: m.coat || 0, saddle: !!m.saddle }, legs);
     return WAGON_SEAT.lift;
   }
 
   // A wagon with its bench at screen x `cx` (so a driver sat there is
-  // centred on it), its horse in the shafts (if `horse`), and passengers.
-  drawWagonAt(ctx, cx, feetY, left, m, frame = 0, horse = null) {
-    const wx = left ? cx - WAGON_SEAT.x - 1 : cx - (WAGON_W - WAGON_SEAT.x) + 1;
-    const wy = feetY - WAGON_H + 1;
-    const hood = m.hood !== false;
-    if (horse) this.drawSide(ctx, horse, left ? wx - HORSE_W + 7 : wx + WAGON_W - 7, feetY - HORSE_H + 1, left);
-    // Passengers sat in the bed (a covered wagon's canvas rolled back on
-    // its hoops for them), whole, the bed's sides in front of their legs:
-    // seen from the waist up over the side. And someone sat up on the
-    // bench beside the driver's place.
+  // centred on it), heading `a` on screen, its horse in the shafts (if
+  // `horse`), and passengers: sat in the bed, seen from the waist up over
+  // its sides; someone up on the bench. (Heading away, they're drawn
+  // first, so the wagon's nearer parts hide what they should.) Returns
+  // the picture drawn.
+  drawWagonAt(ctx, cx, feetY, a, m, frame = 0, horse = null, legs = 0) {
     const riders = m.riders || [];
-    const seated = (look, x) => {
-      const sheet = humanoidSheet(look);
-      // (Sitting, the seat's 18 rows down the sprite, under its padding.)
-      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, SHEET_H, x - 8, wy + 13 - 18 - SPR_PAD, CHAR_W, SHEET_H);
+    const hood = m.hood !== false ? (riders.length ? 'open' : true) : false;
+    const S = steedSprite('wagon', { banner: m.banner || null, hood, frame: frame % 4, horse, legs }, a, makeCanvas);
+    const dir = this.seatDir(a);
+    const people = () => {
+      const seats = riders.map((look, i) => ({ look, p: S.at(BED_F[i % BED_F.length], 0, 0.55), crop: true }));
+      if (m.bench) seats.push({ look: m.bench, p: S.at(0.05, 0, 0.75), crop: false });
+      seats.sort((q, r) => q.p.y - r.p.y);
+      for (const q of seats) {
+        const sheet = humanoidSheet(q.look);
+        const x = Math.round(cx + q.p.x);
+        const y = Math.round(feetY + q.p.y);
+        // (Sitting, the seat's 18 rows down the sprite, under its padding.)
+        const hgt = q.crop ? SPR_PAD + 17 : SHEET_H;
+        ctx.drawImage(sheet, 4 * CHAR_W, dir * SHEET_H, CHAR_W, hgt, x - 8, y - 18 - SPR_PAD, CHAR_W, hgt);
+      }
     };
-    riders.forEach((look, i) => {
-      const seat = WAGON_BED[i % WAGON_BED.length];
-      seated(look, left ? wx + seat.x : wx + WAGON_W - 1 - seat.x);
-    });
-    this.drawSide(ctx, wagonSprite(m.banner || null, frame, hood ? (riders.length ? 'open' : true) : false), wx, wy, left);
-    if (m.bench) {
-      const sheet = humanoidSheet(m.bench);
-      const bx = left ? wx + WAGON_SEAT.x + 2 : wx + WAGON_W - 1 - WAGON_SEAT.x - 2;
-      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, SHEET_H, bx - 8, wy + 11 - 18 - SPR_PAD, CHAR_W, SHEET_H);
-    }
+    const away = Math.cos(a) < -0.2;
+    if (away) people();
+    ctx.drawImage(S.img, Math.round(cx - S.ox), Math.round(feetY - S.oy));
+    if (!away) people();
+    return { S, x: Math.round(cx - S.ox), y: Math.round(feetY - S.oy) };
   }
 
-  // Which part of a standing wagon drawn at `sx` the mouse is over: its
-  // bench at the front, or the bed at the back.
-  wagonPart(e, sx) {
+  // Which part of a standing wagon the mouse is over: its bench at the
+  // front, or the bed at the back (whichever's nearer, as it's turned).
+  wagonPart(e, cx, feetY, S) {
     const m = this.mouse;
-    if (!m) return 'back';
-    const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
-    const cx = sx + 8;
-    const wx = left ? cx - WAGON_SEAT.x - 1 : cx - (WAGON_W - WAGON_SEAT.x) + 1;
-    const lx = left ? m.x - wx : wx + WAGON_W - 1 - m.x;
-    return lx < 14 ? 'bench' : 'back';
+    if (!m || !S) return 'back';
+    const b = S.at(0, 0, 0.7);
+    const k = S.at(-1.1, 0, 0.7);
+    return Math.hypot(m.x - (cx + b.x), m.y - (feetY + b.y)) < Math.hypot(m.x - (cx + k.x), m.y - (feetY + k.y)) ? 'bench' : 'back';
   }
 
   // A windmill's sails, turning on their hub. They turn in the plane of the
@@ -1845,15 +2044,20 @@ export class Renderer {
     if (e.type === 'ship') return this.drawShip(ctx, e, sx, feetY);
     if (e.type === 'sails') return this.drawSails(ctx, e, sx, feetY);
     if (e.type !== 'wagon') return;
-    const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
-    const sh = TEX.misc.shadow;
-    ctx.globalAlpha = 0.6;
-    ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 10, feetY - 4, 36, 8);
-    ctx.globalAlpha = 1;
-    this.drawWagonAt(ctx, sx + 8, feetY, left, { banner: e.banner, riders: e.riders || [], bench: e.bench || null, hood: e.hood }, 0, e.horse ? horseSprite(0, e.horse.coat || 0, null, !!e.horse.saddle) : null);
+    // (Round 82: in the round, turned the way it's heading; its own shadow
+    // under it.)
+    const a = this.steedAngle(e) - (this.view * Math.PI) / 2;
+    const going = !!(e.moving && e.ride);
+    const legs = going ? 1 + (Math.floor(this.time * 6) % 2) : 0;
+    const D = this.drawWagonAt(ctx, sx + 8, feetY, a, { banner: e.banner, riders: e.riders || [], bench: e.bench || null, hood: e.hood }, going ? Math.floor(this.time * 5) : 0, e.horse ? { coat: e.horse.coat || 0, saddle: !!e.horse.saddle } : null, legs);
     // Under the mouse? (To climb in: on the bench, or into the back.)
     const m = this.mouse;
-    if (m && m.x >= sx - 10 && m.x < sx + 26 && m.y >= feetY - WAGON_H && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx) };
+    const S = D.S;
+    if (m && m.x >= D.x && m.x < D.x + S.img.width && m.y >= D.y && m.y < D.y + S.img.height) {
+      const ctxm = S.img.getContext('2d');
+      const px = ctxm.getImageData(m.x - D.x, m.y - D.y, 1, 1).data;
+      if (px[3] > 120) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx + 8, feetY, S) };
+    }
   }
 
   // A siege engine, side on, turned toward the enemy: a catapult's arm
@@ -1998,6 +2202,74 @@ export class Renderer {
     return hit;
   }
 
+  // (Round 82) Iron bars: a thin grille down the middle of the square, run
+  // on into the bars beside it (or the wall or door it meets), whichever
+  // way that is as you look; a post where it turns a corner, or ends. Its
+  // rail along the top only where there's nothing more of it above, its
+  // foot rail only where it stands on something else; a cell's door in it
+  // with its lock. (Rows 0-15 are the square's top; a face d pixels down
+  // it runs from row d to row d + 12.)
+  drawBars(ctx, world, x, y, z, sx, sy, id) {
+    const bar = (q) => q === B.iron_bars || q === B.cell_door || q === B.cell_door_top || q === B.cell_door_open;
+    const conn = (du, dv) => {
+      const [dx, dz] = this.toWorld(du, dv);
+      const q = world.getBlock(x + dx, y, z + dz);
+      const b = BLOCKS[q];
+      return bar(q) || (b.opaque && b.render === 'cube') || b.render === 'wall' || b.render === 'door';
+    };
+    const up = bar(world.getBlock(x, y + 1, z));
+    const down = bar(world.getBlock(x, y - 1, z));
+    const W = conn(-1, 0);
+    const E = conn(1, 0);
+    const N = conn(0, -1);
+    const S = conn(0, 1);
+    const LIT = '#b4b4c4';
+    const MID = '#6a6a78';
+    const DARK = '#3a3a46';
+    const TOP = '#9a9aa8';
+    const f = (x0, y0, w, h, c) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(sx + x0, sy + y0, w, h);
+    };
+    // Away up the screen, end on: a strip down the middle (its top, then
+    // the bars one behind another).
+    const endOn = (r0, r1) => {
+      f(7, r0, 2, r1 - r0, MID);
+      f(7, r0, 1, r1 - r0, LIT);
+      f(9, r0, 1, r1 - r0, DARK);
+      if (!up) f(7, r0, 2, Math.min(8, r1 - r0 - 12), TOP);
+    };
+    if (N) endOn(0, 20);
+    // Across the screen: bars every four pixels (on from one square to the
+    // next), a rail at the top and foot and one across the middle.
+    const across = (x0, x1) => {
+      for (let bx = x0 === 0 ? 3 : 11; bx < x1; bx += 4) {
+        f(bx, 8, 1, 12, LIT);
+        if (bx + 1 < 16) f(bx + 1, 8, 1, 12, DARK);
+      }
+      if (!up) {
+        f(x0, 7, x1 - x0, 1, TOP);
+        f(x0, 8, x1 - x0, 1, DARK);
+      }
+      f(x0, 14, x1 - x0, 1, DARK);
+      if (!down) f(x0, 19, x1 - x0, 1, DARK);
+    };
+    if (W) across(0, 7);
+    if (E) across(9, 16);
+    // The post (a corner, or an end).
+    f(6, 8, 3, 12, MID);
+    f(6, 8, 1, 12, LIT);
+    f(8, 8, 1, 12, DARK);
+    if (!up) f(6, 6, 3, 2, TOP);
+    if (id === B.cell_door && (W || E || !(N || S))) {
+      f(10, 11, 4, 4, '#2a2a34');
+      f(10, 11, 4, 1, '#8a8a98');
+      f(11, 12, 1, 2, '#e0c040');
+    }
+    // Toward you, end on: in front of the post.
+    if (S) endOn(8, 28);
+  }
+
   // ------------------------------------------------------------------ entities
   // Blinded by a kraken's ink: black all round, but for a little way about
   // you (thinning out as it wears off).
@@ -2088,7 +2360,7 @@ export class Renderer {
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
     } else if (master) {
       if (!e.burrowed) drawBossUnder(this, ctx, e, sx, feetY);
-    } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
+    } else if (!e.sleeping && !inWater && !(e.mount && !e.mount.creature) && !(e.kind === 'creature' && e.species === 'horse')) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     // (A master coming apart: see scenes.js, bossDefeat. Round 71: one
     // drawn from its texture staggers, falls and comes apart into motes of
     // itself: see bossanim.js. Only its light rises in it here.)
@@ -2108,10 +2380,12 @@ export class Renderer {
     const rolling = (e.kind === 'player' || e.kind === 'creature' || (e.kind === 'npc' && e.wing)) && e.rollT > 0 && !e.mount && !e.raft;
     if (!rolling && e.rollTrail) e.rollTrail = null;
     if (e.kind === 'creature' && e.species === 'horse') {
-      // A horse, bigger than the rest: side on, turned the way it's going.
-      const left = this.sideOf(e);
+      // A horse, bigger than the rest: in the round (Round 82), turning
+      // the way it's going.
+      const a = this.steedAngle(e) - (this.view * Math.PI) / 2;
       const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
-      this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null, !!e.saddled), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+      const S = steedSprite('horse', { coat: e.variant || 0, banner: e.banner || null, saddle: !!e.saddled, frame: f }, a, makeCanvas);
+      ctx.drawImage(S.img, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
     } else if (master && drawBossArt(this, ctx, e, sx, feetY)) {
       // (Painted, one to one, moving: see bossbody.js.)
     } else if (master && e.kind === 'creature' && drawBossBody(this, ctx, e, sx, feetY, game, (q) => creatureSheet(q.species, q.variant || 0))) {
@@ -2191,7 +2465,7 @@ export class Renderer {
         // (Down on one knee, a bout lost: low, as if sitting on nothing.)
         const kneel = e.kneelT > 0 && !mount && !e.moving;
         const frame = e.actionTimer > 0 && !mount && !kneel && !e.sitting ? 3 : e.raft || mount || kneel ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
-        const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
+        const dir = mount ? (e._seat ?? 1) : this.viewDir(e.dir);
         // Guard up: the shield comes off the arm and up in front of them
         // (see drawRaisedShield); the blade's held across instead.
         if (e.guardT > 0) e.guardT -= this.frameDt || 0.016;
@@ -2301,7 +2575,10 @@ export class Renderer {
           }
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
           if (lean) ctx.restore();
-          if (ia && ia.kind === 'sweep' && !mount) this.drawBroom(ctx, sx, top, feetY, dir);
+          // (Round 82) The broom only once what was in the hand's away, and
+          // away again a moment before it's taken back out: see
+          // NPC.sweeping.)
+          if (ia && ia.kind === 'sweep' && !mount && ia.t > SWEEP_STOW && ia.t < ia.dur - SWEEP_STOW) this.drawBroom(ctx, sx, top, feetY, dir);
           if (ia && (ia.kind === 'gesture' || ia.kind === 'stretch') && !mount) this.drawIdleHands(ctx, e, ia, sx, top, dir);
         }
         if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
@@ -2737,21 +3014,29 @@ export class Renderer {
     return { x: 0, y: 0 };
   }
 
+  // (Round 82) A long line said wraps, three lines at most (cut short with
+  // "…" past that), and the bubble's kept on the screen, its tail still at
+  // whoever's saying it.
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
     color ||= '#f4ecd8';
-    const w = textWidth(text) + 4;
-    const x = Math.round(cx - w / 2);
-    const y = Math.round(by - 10);
+    const lines = bubbleLines(String(text));
+    const w = Math.max(...lines.map((l) => textWidth(l))) + 4;
+    const h = lines.length * 8 + 2;
+    const vw = this.vw || ctx.canvas.width;
+    const tx = Math.round(cx);
+    const x = Math.max(2, Math.min(vw - w - 2, Math.round(cx - w / 2)));
+    const y = Math.max(2, Math.round(by - h));
     ctx.fillStyle = '#12101a';
-    ctx.fillRect(x - 1, y - 1, w + 2, 12);
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
     ctx.fillStyle = '#f4ecd8';
-    ctx.fillRect(x, y, w, 10);
+    ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#12101a';
-    ctx.fillRect(x + 1, y + 1, w - 2, 8);
-    ctx.fillRect(Math.round(cx) - 1, y + 10, 3, 2);
+    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+    const t = Math.max(x + 1, Math.min(x + w - 2, tx));
+    ctx.fillRect(t - 1, y + h, 3, 2);
     ctx.fillStyle = '#f4ecd8';
-    ctx.fillRect(Math.round(cx), y + 11, 1, 2);
-    drawText(ctx, text, x + 2, y + 1, color);
+    ctx.fillRect(t, y + h + 1, 1, 2);
+    lines.forEach((l, i) => drawText(ctx, l, x + 2, y + 1 + i * 8, color));
   }
 
   headFor(e) {
