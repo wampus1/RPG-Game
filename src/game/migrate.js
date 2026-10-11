@@ -679,6 +679,13 @@ export const STEPS = [
       log.push('With a curfew on, the watch won\'t open the town gates till dawn unless something\'s chasing you; each guard remembers if they\'ve warned you before.');
     },
   },
+  {
+    // (Round 88) Talk and beds: nothing in a save needs changing.
+    to: '0.88.0',
+    data(d, log) {
+      log.push('Asking around about trouble tells you who to see: only the one asking hands out their task. Nobody sleeps where there\'s no bed, and breaking a bed with someone in it wakes them, angry.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -6468,6 +6468,25 @@ into stairs when the world's brought up to date.)
   warned you on another night, they say they remember you. A different
   guard doesn't know either way.
 
+## Round 88: Asking around, beds, and quieter weather
+
+- **"Heard of any trouble round here?"** now passes on what the person
+  has heard and sends you to whoever is asking (or to the notice board).
+  Before, they offered you the task as if it were their own, so you could
+  take on anyone's quest from anyone. Only the one asking hands out their
+  task. A task that nobody in particular is asking for can still be taken
+  on from whoever tells you about it.
+- **Nobody sleeps where there's no bed**: someone sent to bed only lies
+  down if there's actually a bed (or a tent) there, so nobody ends up
+  asleep in the grass by a house that isn't finished or whose bed is
+  gone. Anyone whose bed disappears from under them gets up.
+- **Breaking someone's bed while they're in it** wakes them at once, and
+  they're angry about it (a child cries out for their parents). It counts
+  against you with them.
+- **No weather messages**: the "It starts to rain", "The snow stops
+  falling" and storm messages are gone. You can see and hear the weather
+  change.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

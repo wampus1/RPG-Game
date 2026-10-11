@@ -118,7 +118,19 @@ export function sagaRespond(npc, game, id, arg) {
       if (!t || t.status !== 'open') return { lines: ['Oh, never mind. It\'s been seen to.'] };
       S.hear(pid, t);
       S.touch(th, pid);
-      const lines = [t.pitch || `${t.title}.`];
+      // (Round 88) Asked of someone it isn't theirs to ask: what they've
+      // heard of it, and who to go to; never offered as if their own.
+      if (t.giver && !isGiver(t, npc)) {
+        const sid = townOf(npc);
+        const here = t.giver.t === 'rec' && t.giver.sid === sid;
+        const who = t.giverName || 'someone';
+        const lines = [`${pickOf(rng, ['From what I hear', 'Word is', 'So they say'])}: ${lcFirst(t.rumour || t.title)}.`];
+        lines.push(t.board ? 'It\'s up on the notice board, if you want to take it on.' : here ? `It's ${who} who's asking. Talk to them, not me.` : `${who} of ${game.world.ow.settlements[t.giver.sid]?.name || 'elsewhere'} is the one asking. You'd have to go and see them.`);
+        return { lines, back: 'Thanks.' };
+      }
+      // (Nobody in particular asking: what's heard of it, then it's yours to
+      // take on; the one who's asking speaks for themselves.)
+      const lines = [isGiver(t, npc) ? t.pitch || `${t.title}.` : `${pickOf(rng, ['From what I hear', 'Word is', 'So they say'])}: ${lcFirst(t.rumour || t.title)}.`];
       if (h && h.offer) lines.push(...[].concat(h.offer(th, t, pid, S) || []));
       const others = t.claims.filter((c) => !(c.who.t === 'pl' && c.who.pid === pid)).map((c) => c.name);
       if (others.length) lines.push(`${others.slice(0, 2).join(' and ')} ${others.length > 1 ? 'are' : 'is'} already on it, but the more the better.`);
@@ -196,7 +208,9 @@ export function sagaRespond(npc, game, id, arg) {
       }
       return {
         lines,
-        choices: list.filter((q) => !q.giver || q.board).slice(0, 3).map((q) => ({ id: 'sg_offer', arg: String(q.id), label: `Tell me more: ${lcFirst(q.title)}` })),
+        // (Round 88: more of it, as they heard it; taken on only where it's
+        // nobody's in particular to ask: see sg_offer.)
+        choices: list.slice(0, 3).map((q) => ({ id: 'sg_offer', arg: String(q.id), label: `Tell me more: ${lcFirst(q.title)}` })),
         back: 'Thanks for telling me.',
       };
     }

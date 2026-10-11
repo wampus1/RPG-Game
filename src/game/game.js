@@ -3887,6 +3887,9 @@ export class Game {
     const id = w.getBlock(x, y, z);
     const b = BLOCKS[id];
     if (id === B.air || !isFinite(b.hardness)) return;
+    // (Round 88) A bed broken out from under whoever's asleep in it: they're
+    // up at once, and they know who did it.
+    if (id === B.bed) for (const n of this.npcs) if (n.sleeping && !n.dead && n.x === x && n.z === z && Math.abs(n.y - y) <= 1) n.bedGone?.(byPlayer ? this.player : null);
     const rand = Math.random;
     const drops = [];
     if (b.render === 'door') {
@@ -6062,14 +6065,10 @@ export class Game {
       if (w.stormRain && near > 0.3) severe = 'thunder';
       if (severe && STORMS[severe].base !== 'clear' && STORMS[severe].base !== kind) severe = null;
       const was = w.severe || null;
-      if (kind !== w.kind) {
-        if (w.seen && kind !== 'clear' && !severe) this.ui.msg(kind === 'rain' ? 'It starts to rain.' : kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
-        else if (w.seen && w.kind !== 'fog' && w.kind !== 'clear' && !was) this.ui.msg(w.kind === 'rain' ? 'The rain stops.' : 'The snow stops falling.', '#a0b8d0');
-        w.kind = kind;
-      }
+      // (Round 88: no word of it in the messages: the weather's there to
+      // be seen and heard.)
+      if (kind !== w.kind) w.kind = kind;
       if (severe !== was) {
-        if (w.seen && severe) this.ui.msg(STORMS[severe].start, '#c0d0ff');
-        else if (w.seen && was) this.ui.msg(STORMS[was].end, '#a0b8d0');
         w.severe = severe;
         // (The wind gets up, and drops, over half a minute or so.)
       }

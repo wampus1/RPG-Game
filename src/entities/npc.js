@@ -281,7 +281,7 @@ export class NPC extends Entity {
     const goal = this.pickGoal(act.entry);
     this.goal = goal;
     let t = goal ? { x: goal.x, y: goal.y, z: goal.z } : this.homeTile();
-    if (goal && goal.bed) {
+    if (goal && goal.bed && this.bedThere(goal.bed, goal.y)) {
       this.teleport(goal.bed.x, goal.y, goal.bed.z);
       this.sleeping = true;
       this.bedTile = goal.bed;
@@ -295,6 +295,33 @@ export class NPC extends Entity {
     const ty = w.findStandY(t.x, t.z, t.y ?? GROUND);
     this.teleport(t.x, ty > 0 ? ty : GROUND, t.z);
     this.atGoal = goal ? this.x === goal.x && this.z === goal.z : false;
+  }
+
+  // (Round 88) Is there a bed (or a tent) to lie in there? Not slept on
+  // where one isn't: in the grass by a house not finished, or one whose
+  // bed is gone.
+  bedThere(bed, y = this.y) {
+    if (!bed) return false;
+    if (bed.tent) return true;
+    const w = this.game.world;
+    for (const yy of new Set([bed.y ?? y, y, y - 1, y + 1])) if (w.getBlock(bed.x, yy, bed.z) === B.bed) return true;
+    return false;
+  }
+
+  // (Round 88) Abed, and the bed's gone from under them (broken, or never
+  // there): up, and not pleased about it if someone took it.
+  bedGone(by = null) {
+    if (!this.sleeping) return;
+    this.wake();
+    this.goal = null;
+    this.atGoal = false;
+    this.path = null;
+    this.emoteShow?.('!', '#ff8060', 1.5);
+    if (by && by.kind === 'player') {
+      this.face(by.x, by.z);
+      this.say(this.rng.pick(this.rec.age === 'child' ? ['Hey! That\'s my bed!', 'Mum! Someone broke my bed!', 'Waaah! My bed!'] : ['What in the... my BED?!', 'Have you lost your mind? That was my bed!', 'Get out of my house!', 'Who breaks a bed with someone asleep in it?!']), 3.5, '#ff9070');
+      this.game.sim?.changeRep?.(this, -10, 'insult');
+    } else this.say(this.rng.pick(['Oof! What happened to my bed?', 'Huh? The bed\'s... gone?']), 3);
   }
 
   homeTile() {
@@ -1099,6 +1126,14 @@ export class NPC extends Entity {
       return;
     }
     if (this.shoveCd > 0) this.shoveCd -= dt;
+    // (Round 88) Abed with no bed under them any more: up.
+    if (this.sleeping && this.bedTile && !this.bedTile.tent) {
+      this.bedCheckT = (this.bedCheckT ?? 1) - dt;
+      if (this.bedCheckT <= 0) {
+        this.bedCheckT = 1.5;
+        if (!this.bedThere(this.bedTile, this.y)) this.bedGone();
+      }
+    }
     // (Round 83) A chair pulled out to sit on, pushed in again after.
     if (this.layout) npcChair(this, dt);
     // (Round 73) Hurt, out of town and not fighting: something from the
@@ -1953,7 +1988,7 @@ export class NPC extends Entity {
     if (this.followPath(this.goal, this.goal.near || 0)) {
       this.atGoal = true;
       this.idleT = this.rng.float(6, 20);
-      if (this.goal.bed) {
+      if (this.goal.bed && this.bedThere(this.goal.bed, this.y)) {
         this.fromTile = { x: this.x, y: this.y, z: this.z };
         this.teleport(this.goal.bed.x, this.y, this.goal.bed.z);
         this.sleeping = true;
