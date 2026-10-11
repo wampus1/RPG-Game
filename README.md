@@ -6529,6 +6529,11 @@ into stairs when the world's brought up to date.)
 - **No boss attack starts in silence.** Many bosses (most of those on Kharos, Myrrow, in the grove and in the far lands) started some or all of their attacks without a sound. Every far-land move now has a sound for its kind (a roar for a breath, thunder for lightning, a rumble for a quake, and so on). For any other boss, an attack that starts without a sound gets a wind-up that suits it: a growl or bite for beasts, a swing for armed fighters, a roar or stomp for great things, wingbeats for flyers, magic for casters.
 - **Sounds the synth never had now play.** Some sounds were asked for by names the synth never had (`fire`, `zap`, `steam`, `lava` and a few more), so they were silent. Each is now mapped to the nearest real sound. Fire hazards, for one, now crackle when they land.
 
+## Round 94: The stairs wait for everyone, and roomier Kavorent halls
+
+- **No one's pulled across the floor.** Everyone in a dungeon shares one floor at a time. Before, when one player took the stairs (or a lift), everyone else on that floor, wherever they were, was teleported along with them. Now, if anyone else is more than 5 tiles from the player taking the stairs, that player waits by the stairs instead. They're told the others are still about, and everyone else is told who's waiting by which stairs. Once everyone's gathered within 5 tiles, the floor changes and they all go together. Walking away from the stairs cancels the wait. A floor that gives way under someone still takes everyone, since that can't be put off.
+- **Roomier Kavorent halls.** Some Kavorent floors, the Archives and the rooms full of rubble most of all, had rooms with a third to a half of their floor taken up by solid decorations. Now, once a floor's laid out, each of its rooms is thinned until no more than 15% of its floor is solid. The most crowded clumps go first. Only show pieces are taken up (debris, monoliths, conduits, holograms, husks, statues, glow lamps, vents, and fallen walls in rubble rooms); never consoles, caches, nodes, chests, lifts, the stairs or anything a puzzle uses. Boss halls, vaults and hidden rooms are left as they are.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

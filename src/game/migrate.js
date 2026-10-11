@@ -722,6 +722,13 @@ export const STEPS = [
     data(d, log) {
       log.push('A fallen pack bursts open when clicked, spilling all it held; a time crystal used again after its warning about a pack goes ahead; and every master\'s attacks have their sounds.');
     },
+  },  {
+    // (Round 94) The way on waits for all of you; a Kavorent hall's floors
+    // made afresh are less crowded (the ones already been on are kept).
+    to: '0.94.0',
+    data(d, log) {
+      log.push('Taking the stairs below ground waits for everyone on the floor now, and Kavorent floors not yet visited are less crowded.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

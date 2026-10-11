@@ -40,6 +40,9 @@ import { seatField } from './party.js';
 import { applyTier, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
 
+// (Round 94) How near the way on the rest of you must be to go on together.
+export const GATHER_R = 5;
+
 // (Round 91) A floor as it's laid out (a mod's as it builds it): for the
 // map, on a guest's screen too.
 export function planFloor(rec, n, rx0) {
@@ -576,12 +579,53 @@ export class DungeonRun {
     if (game.fireTiles) for (const k of [...game.fireTiles.keys()]) if (mine(Math.floor(k / 65536))) game.fireTiles.delete(k);
   }
 
+  // (Round 94) Down or up the way (`dir`), with others playing down here:
+  // only once all of you are by it. True if it's to go now; otherwise the
+  // rest are told who's waiting, and where, and it goes when they come
+  // (see waitTick). (Never anyone pulled off the floor from across it.)
+  readyToGo(dir, how = 'stairs') {
+    const game = this.game;
+    const p = game.player;
+    const away = this.players().filter((q) => q !== p && !q.dead && Math.max(Math.abs(q.x - p.x), Math.abs(q.z - p.z)) > GATHER_R);
+    if (!away.length) return true;
+    const w = this.waitFor;
+    if (w && w.p === p && w.dir === dir) return false;
+    this.waitFor = { p, dir, how, x: p.x, z: p.z, t: 0 };
+    const who = ownerName(game, p);
+    const way = how === 'lift' ? `the lift ${dir > 0 ? 'down' : 'up'}` : `the stairs ${dir > 0 ? 'down' : 'up'}`;
+    game.ui.msg(`The others are still about this floor. You wait by ${way}: on when they're all here with you.`, '#e0c890');
+    for (const q of away) game.asPlayer(q, () => game.ui.msg(`${who} waits by ${way}. Join them there to go on together.`, '#e0c890'));
+    return false;
+  }
+
+  // (Round 94) Someone waiting by the way on: gone off from it, they've
+  // changed their mind; all of you there, on you all go.
+  waitTick(dt) {
+    const w = this.waitFor;
+    if (!w) return;
+    const game = this.game;
+    w.t += dt;
+    const p = w.p;
+    if (!p || p.dead || (game.runs && game.runs.get(this.rec.id)) !== this || !this.players().includes(p) || Math.max(Math.abs(p.x - w.x), Math.abs(p.z - w.z)) > GATHER_R) {
+      this.waitFor = null;
+      return;
+    }
+    const here = this.players().every((q) => q.dead || Math.max(Math.abs(q.x - p.x), Math.abs(q.z - p.z)) <= GATHER_R);
+    if (!here) return;
+    this.waitFor = null;
+    game.asPlayer(p, () => this.changeFloor(w.dir, null, true));
+  }
+
   // To another floor (`dir` +1 down, -1 up): this one kept, that one made.
-  changeFloor(dir, arrive = null) {
+  // (`now`: whoever's still about, they're all taken: a floor that gave
+  // way, or everyone gathered.)
+  changeFloor(dir, arrive = null, now = false) {
     const game = this.game;
     const to = this.floor + dir;
     if (to < 0) return this.leave();
     if (to >= this.rec.depth) return false;
+    if (!now && !this.readyToGo(dir)) return false;
+    this.waitFor = null;
     this.saveFloor();
     this.clearFloor();
     this.open(to, arrive || (dir > 0 ? 'top' : 'bottom'));
@@ -699,6 +743,8 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     const party = this.partyHere();
+    // (Round 94) Someone waiting by the way on for the rest of you.
+    this.waitTick(dt);
     // (Round 73) What you've seen of the floor, for its map (Round 91: each
     // of you, so the record has what guests have seen too).
     party.forEach((q, i) => noteSeen(this, q, i ? 0 : dt));
@@ -1126,7 +1172,7 @@ export class DungeonRun {
     if (this.floor + 1 >= this.rec.depth) return false;
     game.ui.msg('The floor gives way!', '#ff9060');
     game.audio?.play('crumble');
-    this.changeFloor(1, { x, z });
+    this.changeFloor(1, { x, z }, true);
     game.damage(game.player, 3, null);
     game.shake = 1;
     return true;
@@ -1212,8 +1258,8 @@ export class DungeonRun {
         const n = this.rec.depth;
         if (d.up && d.up.x === x && d.up.z === z) {
           if (this.floor === 0) game.scene = liftRide(game, -1, () => this.leave(), 'To the surface');
-          else game.scene = liftRide(game, -1, () => this.changeFloor(-1), `Floor ${this.floor} of ${n}`);
-        } else if (d.down && d.down.x === x && d.down.z === z) game.scene = liftRide(game, 1, () => this.changeFloor(1), `Floor ${this.floor + 2} of ${n}`);
+          else if (this.readyToGo(-1, 'lift')) game.scene = liftRide(game, -1, () => this.changeFloor(-1, null, true), `Floor ${this.floor} of ${n}`);
+        } else if (d.down && d.down.x === x && d.down.z === z && this.readyToGo(1, 'lift')) game.scene = liftRide(game, 1, () => this.changeFloor(1, null, true), `Floor ${this.floor + 2} of ${n}`);
         return true;
       }
       case 'lever': {

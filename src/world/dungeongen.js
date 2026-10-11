@@ -1211,6 +1211,9 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
     const rooms = R.filter((r) => !['entry', 'boss', 'vault', 'exit'].includes(r.kit) && !r.sealed);
     if (rooms.length) placeIn(ctx, rng.pick(rooms), B.idol, META_STATE, true);
   }
+  // (Round 94) A Kavorent hall never so crowded with its things there's no
+  // getting about it.
+  if (big) for (const r of R) thinKav(ctx, r);
   // (Dig through it or go round: there's always a way between a room's doors.)
   for (const r of R) ensureWays(ctx, r);
   passageDecor(ctx);
@@ -2677,6 +2680,59 @@ function stairSpot(ctx, r, up) {
   reserved.add(best.front.z * W + best.front.x);
   r.stairs = best;
   return best;
+}
+
+// (Round 94) What a Kavorent room's dressed with that's only for show (and
+// gets in the way): taken up, the most crowded first, till no more than
+// KAV_CROWD of its floor's taken up by anything solid. (Never anything that
+// does something: a console, a cache, a node, a chest, a lift; nor the
+// stairs' ways.)
+export const KAV_CROWD = 0.15;
+const KAV_SHOW = new Set(['kav_debris', 'kav_monolith', 'kav_conduit', 'kav_holo', 'kav_husk', 'kav_statue', 'kav_glow', 'kav_vent']);
+function thinKav(ctx, r) {
+  const { b, plan, rng, out } = ctx;
+  const W = plan.W;
+  if (['boss', 'vault', 'hidden'].includes(r.kit) || r.sealed) return;
+  const show = (id) => KAV_SHOW.has(BLOCKS[id] && BLOCKS[id].name) || (id === B.kav_wall && r.kit === 'collapse_k');
+  const solid = (x, z) => {
+    const id = b.get(x, FY, z);
+    return !!(BLOCKS[id] && BLOCKS[id].solid);
+  };
+  // (What the floor's own works are found by: never taken up.)
+  const kept = new Set();
+  for (const v of Object.values(out)) {
+    if (!Array.isArray(v)) continue;
+    for (const q of v) if (q && typeof q.x === 'number' && typeof q.z === 'number') kept.add(q.z * W + (q.x - b.x0));
+  }
+  let n = 0;
+  let taken = 0;
+  const loose = [];
+  for (let z = r.z0; z <= r.z1; z++) {
+    for (let x = r.x0; x <= r.x1; x++) {
+      const i = z * W + x;
+      if (!plan.open[i] || plan.room[i] !== r.id) continue;
+      n++;
+      if (!solid(x, z)) continue;
+      taken++;
+      if (show(b.get(x, FY, z)) && !kept.has(i)) loose.push({ x, z });
+    }
+  }
+  const cap = Math.floor(n * KAV_CROWD);
+  if (taken <= cap) return;
+  // (The most hemmed in first: what stands in a clump.)
+  const crowd = (q) => (solid(q.x - 1, q.z) ? 1 : 0) + (solid(q.x + 1, q.z) ? 1 : 0) + (solid(q.x, q.z - 1) ? 1 : 0) + (solid(q.x, q.z + 1) ? 1 : 0);
+  rng.shuffle(loose);
+  while (taken > cap && loose.length) {
+    loose.sort((a, c) => crowd(c) - crowd(a));
+    const q = loose.shift();
+    const id = b.get(q.x, FY, q.z);
+    for (let y = FY; y < FY + 4; y++) {
+      const at = b.get(q.x, y, q.z);
+      if (at === id || (y > FY && KAV_SHOW.has(BLOCKS[at] && BLOCKS[at].name))) b.set(q.x, y, q.z, B.air);
+      else break;
+    }
+    taken--;
+  }
 }
 
 const KEEP = new Set(['chest', 'coffin', 'sarcophagus', 'kav_cache', 'altar', 'lever', 'relic', 'brazier', 'kav_node', 'kav_console', 'gong', 'idol']);
