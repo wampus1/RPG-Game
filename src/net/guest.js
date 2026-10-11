@@ -14,6 +14,7 @@ import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYiel
 import { starfallScene } from '../game/starfall.js';
 import { introFrom } from '../game/intros.js';
 import { wallFall } from '../game/wallfall.js';
+import { timeTurn } from '../game/timecrystal.js';
 import { eruptionScene } from '../game/eruption.js';
 import { DungeonRun, planFloor } from '../game/dungeon.js';
 import { noteSeen, mergeSeen } from '../ui/dungeonmap.js';
@@ -502,6 +503,10 @@ export class GuestNet {
       } else if (s.kind === 'spire') {
         const rec = game.sim.dungeons.get(s.rec);
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);
+      } else if (s.kind === 'timeturn') {
+        // (Round 92) A place turned back, seen here; the host does it.
+        const rec = game.sim.dungeons.get(s.rec);
+        if (rec) sc = timeTurn(game, rec, s.tier, s.color, { witness: !!s.witness, by: s.by, shown: true, holder: s.witness ? find(s.holder) : null });
       } else if (s.kind === 'wall') sc = wallFall(game);
       else if (s.kind === 'erupt') sc = eruptionScene(game, { here: !!s.here });
       else if (s.kind === 'starfall') sc = starfallScene(game, { village: s.village, first: s.first });

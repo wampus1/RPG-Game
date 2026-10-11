@@ -707,6 +707,14 @@ export const STEPS = [
       log.push('Guests see the map below ground now, with what everyone down there has seen.');
     },
   },
+  {
+    // (Round 92) A time crystal's scene, seen by everyone about the way
+    // in: nothing kept changes.
+    to: '0.92.0',
+    data(d, log) {
+      log.push('A time crystal used at a way in is seen by every player near it now.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

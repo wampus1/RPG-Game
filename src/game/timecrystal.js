@@ -68,9 +68,22 @@ export function useTimeCrystal(game, def, rec = null) {
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
   }
-  game.scene = timeTurn(game, rec, tier, def.color || CRYSTAL_COLORS[def.tier] || '#c8a0ff');
+  const color = def.color || CRYSTAL_COLORS[def.tier] || '#c8a0ff';
+  game.scene = timeTurn(game, rec, tier, color);
+  // (Round 92) Everyone else about the way in sees it too (each on their
+  // own screen; only the one who held it up turns the place back).
+  const by = game.playerName || 'Someone';
+  for (const q of game.everyone ? game.everyone() : []) {
+    if (q === p || q.dead || Math.max(Math.abs(q.x - rec.x), Math.abs(q.z - rec.z)) > WITNESS_R) continue;
+    game.asPlayer(q, () => {
+      if (!game.scene && !game.dungeon) game.scene = timeTurn(game, rec, tier, color, { witness: true, by, holder: p });
+    });
+  }
   return true;
 }
+
+// (How near the way in another player must be to see it turned back.)
+export const WITNESS_R = 48;
 
 // The place as it was before anyone went down: open, its floors to be
 // made afresh, its master waiting, at `tier`.
@@ -109,14 +122,19 @@ export function restoreDungeon(game, rec, tier) {
 }
 
 // The scene: about seven seconds, everyone else held still.
-export function timeTurn(game, rec, tier, color) {
+// (`witness`: another player's, watching; `shown`: a guest's screen's copy
+// of the host's. Neither turns the place back: only the one who held it up
+// does, on the host.)
+export function timeTurn(game, rec, tier, color, { witness = false, by = null, shown = false, holder = null } = {}) {
   const p = game.player;
+  // (Whoever's holding it up: you, or the one you're watching.)
+  const hold = holder || p;
   const site = game.sim.dungeons.site(rec);
   const h = (site && site.h) || p.y - 1;
   const at = { x: rec.x, y: h + 1, z: rec.z };
   const tint = CRYSTAL_COLORS[tier] || color;
   return {
-    kind: 'timeturn', rec, tier, t: 0, dur: 7.2, lock: true,
+    kind: 'timeturn', rec, tier, color, witness, by, shown, holder: hold, t: 0, dur: 7.2, lock: true,
     SNAP: 4.7,
     z0: game.renderer ? game.renderer.zoom || 1 : 1,
     get zoom() {
@@ -128,16 +146,27 @@ export function timeTurn(game, rec, tier, color) {
       return { x: lerp(p.x, at.x, k), y: lerp(p.y, at.y, k), z: lerp(p.z, at.z, k) };
     },
     update(g, dt) {
+      // (Every screen plays its own copy: on the host, nothing of it is
+      // sent on to anyone else's as well.)
+      if (g.net && !g.remote) g.net.mute++;
+      try {
+        this.play(g, dt);
+      } finally {
+        if (g.net && !g.remote) g.net.mute--;
+      }
+    },
+    play(g, dt) {
       const r = g.renderer;
       if (!this.started) {
         this.started = true;
-        g.ui.msg('You hold the crystal up. It stops ticking. Then it starts again, backwards.', color);
+        if (this.witness) g.ui.msg(`${by || 'Someone'} holds a crystal up at the way in. It stops ticking. Then it starts again, backwards.`, color);
+        else g.ui.msg('You hold the crystal up. It stops ticking. Then it starts again, backwards.', color);
         g.audio?.play('riser');
         g.audio?.play('rune');
       }
       // The crystal held up, burning brighter.
       if (this.t < this.SNAP) {
-        if (Math.random() < dt * 30) r.emit(p.x, p.y + 2.6, p.z, { n: 1, color: [color, '#ffffff', tint], up: 10, speed: 14, life: 0.6, glow: true, gravity: -8, shape: 'star' });
+        if (Math.random() < dt * 30) r.emit(hold.x, hold.y + 2.6, hold.z, { n: 1, color: [color, '#ffffff', tint], up: 10, speed: 14, life: 0.6, glow: true, gravity: -8, shape: 'star' });
         // (Ticking, quicker and quicker, as it runs back.)
         this.tick = (this.tick ?? 0) - dt;
         if (this.tick <= 0) {
@@ -166,7 +195,7 @@ export function timeTurn(game, rec, tier, color) {
       // The snap: the place as it was.
       if (this.t >= this.SNAP && !this.done) {
         this.done = true;
-        restoreDungeon(g, rec, tier);
+        if (!this.witness && !this.shown) restoreDungeon(g, rec, tier);
         r.flashScreen?.('#ffffff', 0.8);
         g.shake = 1.3;
         g.hitStop = Math.max(g.hitStop || 0, 0.15);

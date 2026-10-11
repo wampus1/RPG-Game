@@ -870,6 +870,13 @@ export class HostNet {
       // (A painted opening: what's told in it, for their screen to paint.
       // See game/intros.js.)
       info: sc.kind === 'home_intro' || sc.kind === 'wreck_intro' ? sc.info : undefined,
+      // (Round 92) A place turned back: to what height, in what light, and
+      // whether it's theirs or they're watching (and whose it is).
+      tier: sc.kind === 'timeturn' ? sc.tier : undefined,
+      color: sc.kind === 'timeturn' ? sc.color : undefined,
+      witness: sc.kind === 'timeturn' ? !!sc.witness : undefined,
+      by: sc.kind === 'timeturn' ? sc.by : undefined,
+      holder: sc.kind === 'timeturn' && sc.holder ? sc.holder.id : undefined,
     };
   }
 

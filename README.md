@@ -6516,6 +6516,12 @@ into stairs when the world's brought up to date.)
 - **Shared fog.** What every player down there has seen is noted on the dungeon's record, not just what the host has seen, so it's kept in the save. Each guest's map gets that shared fog whenever it changes, on top of what they've seen themselves.
 - What's been seen is now kept separately for each world's copy of a dungeon, so another world loaded in the same session never shares it.
 
+## Round 92: A time crystal, seen by everyone
+
+- **Everyone near sees it.** When a time crystal is used at a dungeon entrance, every player within 48 tiles of it (and not below ground or already in a scene) gets the scene too. That includes the slow-down, the clock, the rings and the snap. Their camera drifts over to the entrance and back, and they're told who held the crystal up. The sparks rise from the holder's hand, not the watcher's.
+- **On guests' screens.** The scene is now sent to guests, so a guest who uses a crystal (or watches one being used) sees the whole thing. Before, a guest saw nothing of it.
+- **Turned back once.** Only the player who held the crystal up restores the place, on the host. The copies watchers and guests see only show it. On the host, the scene's particles and sounds aren't also relayed to guests, since each screen plays its own copy, so nothing doubles up.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
