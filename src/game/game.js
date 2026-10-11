@@ -2087,6 +2087,8 @@ export class Game {
     this.updateDummy(dt);
     this.updateGates(dt);
     this.syncStanding(dt);
+    // (Round 90) Players sat in a player's wagon, carried with it.
+    this.riding.carry();
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     updateHazards(this, dt);
@@ -4494,7 +4496,11 @@ export class Game {
     for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k) && !k.startsWith('ride:')) this.props.delete(k);
     // You, sat in the back of one.
     for (const q of this.props.values()) this.riding.seatShown(q);
-    if (p.inWagon && !this.props.has([...this.props].find(([, q]) => q === p.inWagon)?.[0])) p.inWagon = null;
+    // (Round 90: anyone's, not only yours; one of a player's wagons is
+    // seen to by riding.carry.)
+    for (const q of this.everyone ? this.everyone() : [p]) {
+      if (q && q.inWagon && (q.inWagonId === null || q.inWagonId === undefined) && ![...this.props.values()].includes(q.inWagon)) q.inWagon = null;
+    }
     for (const [k, c] of [...this.tied]) {
       if (want.has(k) && !c.dead) continue;
       if (!c.dead) {

@@ -6503,6 +6503,13 @@ into stairs when the world's brought up to date.)
   beyond about 24 paces. That includes a guest hearing their own
   playing, which never reached them before, and the host hearing guests.
 
+## Round 90: Riding in another player's wagon
+
+- **Only a wagon's owner takes the reins.** Anyone else who climbs onto the bench sits beside the driver; anyone in the back rides in the back. Wagons placed before this version have no owner, so anyone can drive them.
+- **Passengers are carried along.** When the owner drives off, everyone sitting in the wagon moves with it and is drawn on the driver's wagon: on the bench beside them, or in the back. When it stops, they're back in the standing wagon where they were.
+- **Never two at the reins.** Trying to drive a wagon someone's already driving says "Someone's driving it." A horse anyone is riding counts as busy for every player, and so does a wagon being driven, so no duplicates appear in the world.
+- If the wagon is taken away entirely, anyone left in it is put down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

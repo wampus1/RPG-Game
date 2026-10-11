@@ -691,6 +691,13 @@ export const STEPS = [
     data(d, log) {
       log.push('Chairs tuck right in under their tables, and are easier to click. Instruments are heard by everyone nearby, in a world with others too.');
     },
+  },  {
+    // (Round 90) Wagons shared between players: a wagon set down before
+    // now has no owner noted, and anyone may take up its reins as before.
+    to: '0.90.0',
+    data(d, log) {
+      log.push('Riding in another player\'s wagon works now: only its owner drives, and whoever\'s sat in it is carried along.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

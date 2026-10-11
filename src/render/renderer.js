@@ -2054,6 +2054,8 @@ export class Renderer {
     const people = () => {
       const seats = riders.map((look, i) => ({ look, p: S.at(BED_F[i % BED_F.length], 0, 0.55), crop: true }));
       if (m.bench) seats.push({ look: m.bench, p: S.at(0.05, 0, 0.75), crop: false });
+      // (Round 90) Another player up on the bench beside whoever's driving.
+      if (m.benchMate) seats.push({ look: m.benchMate, p: S.at(0.05, 0.38, 0.75), crop: false });
       seats.sort((q, r) => q.p.y - r.p.y);
       for (const q of seats) {
         const sheet = humanoidSheet(q.look);

@@ -12,6 +12,7 @@ import { letGo } from './leads.js';
 import { has as heroHas } from './hero.js';
 import { dirOf } from '../entities/raft.js';
 import { dirAngle } from '../render/steeds.js';
+import { pidOf } from '../sim/saga/refs.js';
 
 // What a horse will come to you for.
 export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage', 'hay_bale']);
@@ -37,13 +38,16 @@ export class Riding {
   standing() {
     const out = [];
     const hitched = new Set(this.wagons.map((w) => w.horse).filter((h) => h !== null && h !== undefined));
-    const riding = this.game.player.mount;
-    const busy = (id) => riding && (riding.horseId === id);
+    // (Round 90: whoever's up on it, in a world with others in it: not
+    // only you.)
+    const mounts = this.everyone().map((q) => q.mount).filter(Boolean);
+    const busy = (id) => mounts.some((m) => m.horseId === id);
+    const driven = (id) => mounts.some((m) => m.kind === 'wagon' && m.wagonId === id);
     // (Round 78: not one aboard a ship, or on the ferry: see stalls.js.)
     const away = (q) => (q.aboard !== undefined && q.aboard !== null) || q.ferried;
     for (const h of this.horses) if (!hitched.has(h.id) && !busy(h.id) && !away(h)) out.push({ key: `own:h${h.id}`, type: 'horse', x: h.x, y: h.y, z: h.z, coat: h.coat, own: h, saddled: h.saddled });
     for (const w of this.wagons) {
-      if ((riding && riding.wagonId === w.id) || away(w)) continue;
+      if (driven(w.id) || away(w)) continue;
       const h = w.horse ? this.horse(w.horse) : null;
       out.push({ key: `own:w${w.id}`, type: 'wagon', x: w.x, y: w.y, z: w.z, face: w.face ?? 1, ang: w.ang, own: w, hood: false, horse: h ? { coat: h.coat, saddle: h.saddled } : null });
     }
@@ -201,7 +205,8 @@ export class Riding {
       return false;
     }
     removeItem(p.inv, 'wagon', 1);
-    this.wagons.push({ id: this.next++, x, y, z, face: p.dir === 3 ? 3 : 1, horse: null });
+    // (Round 90: whose it is, so only they take up its reins.)
+    this.wagons.push({ id: this.next++, x, y, z, face: p.dir === 3 ? 3 : 1, horse: null, owner: pidOf(p) });
     g.ui.msg('Your wagon stands ready. Hitch a horse of yours to it to drive it.', '#a0e0a0');
     g.audio?.play('place');
     return true;
@@ -225,7 +230,11 @@ export class Riding {
     const say = (t, col = '#c8c8c8') => g.ui.msg(t, col, true);
     if (Math.max(Math.abs(prop.x - p.x), Math.abs(prop.z - p.z)) > 3) return say('Get a little closer.');
     const w = prop.own || null;
-    if (w && part === 'bench') {
+    // (Round 90) Someone else's (another player's): up beside them on the
+    // bench, or in the back, but not at the reins.
+    const theirs = w && w.owner !== undefined && w.owner !== null && w.owner !== pidOf(p);
+    if (w && this.everyone().some((q) => q !== p && q.mount && q.mount.kind === 'wagon' && q.mount.wagonId === w.id)) return say('Someone\'s driving it.');
+    if (w && part === 'bench' && !theirs) {
       // Riding up on a horse of yours: into the shafts with it.
       if (p.mount && p.mount.kind === 'horse' && !w.horse) {
         const h = this.horse(p.mount.horseId);
@@ -244,7 +253,10 @@ export class Riding {
     // back, and sit a while.
     p.mount = null;
     p.inWagon = prop;
-    p.wagonSeat = part === 'bench' ? 'bench' : 'back';
+    // (Round 90: one of a player's own, by its own id: carried along with
+    // it when it's driven, wherever it goes.)
+    p.inWagonId = w ? w.id : null;
+    p.wagonSeat = part === 'bench' && !(theirs && this.everyone().some((q) => q !== p && q.inWagonId === w.id && q.wagonSeat === 'bench')) ? 'bench' : 'back';
     p.sitting = null;
     p.teleport(prop.x, prop.y, prop.z);
     this.seatShown(prop);
@@ -260,10 +272,55 @@ export class Riding {
       prop.riders = prop.rideOwner && prop.rideOwner.look ? [prop.rideOwner.look] : [];
       return;
     }
-    const p = this.game.player;
-    const here = p && p.inWagon === prop;
-    prop.bench = here && p.wagonSeat === 'bench' ? p.look : null;
-    prop.riders = here && p.wagonSeat !== 'bench' ? [p.look] : [];
+    // (Round 90: everyone sat in it, not only you.)
+    const inIt = this.everyone().filter((q) => q.inWagon === prop || (prop.own && q.inWagonId === prop.own.id));
+    const bench = inIt.find((q) => q.wagonSeat === 'bench');
+    prop.bench = bench ? bench.look : null;
+    prop.riders = inIt.filter((q) => q !== bench).map((q) => q.look);
+  }
+
+  // Everyone playing (or just you).
+  everyone() {
+    const g = this.game;
+    return (g.everyone ? g.everyone() : [g.player]).filter((q) => q && !q.dead);
+  }
+
+  // (Round 90) Each frame: whoever's sat in a player's wagon, carried along
+  // with it while it's driven (and shown sat in it, on the driver's
+  // wagon); put back in it where it stands when it's stopped; and out of
+  // it if it's gone.
+  carry() {
+    const g = this.game;
+    const all = this.everyone();
+    const drivers = new Map();
+    for (const q of all) if (q.mount && q.mount.kind === 'wagon') drivers.set(q.mount.wagonId, q);
+    for (const d of drivers.values()) {
+      const inIt = all.filter((q) => q.inWagonId === d.mount.wagonId);
+      const bench = inIt.find((q) => q.wagonSeat === 'bench');
+      d.mount.riders = inIt.filter((q) => q !== bench).map((q) => q.look);
+      d.mount.benchMate = bench ? bench.look : null;
+    }
+    for (const q of all) {
+      if (q.inWagonId === null || q.inWagonId === undefined) continue;
+      const d = drivers.get(q.inWagonId);
+      if (d) {
+        if (q.x !== d.x || q.z !== d.z || q.y !== d.y) {
+          if (Math.abs(q.x - d.x) + Math.abs(q.z - d.z) > 2 || q.moving) q.teleport(d.x, d.y, d.z);
+          else q.startMove(d.x, d.y, d.z, 0.12);
+        }
+        continue;
+      }
+      // (Stopped: the one standing there now.)
+      const prop = [...g.props.values()].find((o) => o.own && o.own.id === q.inWagonId);
+      if (prop) {
+        q.inWagon = prop;
+        if (q.x !== prop.x || q.z !== prop.z) q.teleport(prop.x, prop.y, prop.z);
+      } else if (!this.wagons.some((w) => w.id === q.inWagonId)) {
+        q.inWagon = null;
+        q.inWagonId = null;
+        q.wagonSeat = null;
+      }
+    }
   }
 
   drive(w) {
@@ -316,6 +373,7 @@ export class Riding {
     if (!p.inWagon) return false;
     const prop = p.inWagon;
     p.inWagon = null;
+    p.inWagonId = null;
     p.wagonSeat = null;
     this.seatShown(prop);
     const spot = g.findFreeSpot(p.x, p.z + 1, p.y);
