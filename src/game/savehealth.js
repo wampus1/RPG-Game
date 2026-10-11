@@ -9,8 +9,6 @@
 //     none (a temple, a jail, a barn): taken down (the wall put back).
 //   - A door with no top half (or a top half with no door): mended, or
 //     the stray half taken away.
-//   - A chest (barrel, crate) with nothing to hold things in: given its
-//     slots back.
 //   - A two-storey house's old plank steps: made over into stairs of its
 //     own floor, as houses are built now.
 // Whatever's put right is counted, and said once (see Game: `health`).
@@ -19,8 +17,6 @@
 // yet is left till it can be judged.
 import { REGION_W, REGION_D, WORLD_Y, SURFACE } from '../config.js';
 import { BLOCKS, B, stairFor, CANOPY_STYLE_SHIFT, CANOPY_STYLES } from '../world/blocks.js';
-import { CONTAINER_SIZE } from '../world/loot.js';
-import { makeSlots } from './inventory.js';
 import { NO_PAINTINGS } from '../world/settlement.js';
 import { WALL_DIRS } from './displays.js';
 
@@ -122,13 +118,11 @@ export function checkRegion(game, r) {
             tally(game, 'canopy');
           }
         }
-        // A chest with nothing in it to hold things.
-        if (b.interact === 'container' && !r.containers.has(col + y)) {
-          r.containers.set(col + y, makeSlots(CONTAINER_SIZE[b.name] || b.modSlots || 9));
-          r.modified = true;
-          n++;
-          tally(game, 'chest');
-        }
+        // (Round 84: no longer is a chest with nothing kept for it given
+        // empty slots. That's a chest nobody's opened yet, filled as it's
+        // first opened (see World.getContainer): this emptied every one in
+        // a part of the world come back from the save. A chest you put down
+        // has its slots from the first: see Game.placeBlock.)
       }
     }
   }

@@ -567,8 +567,8 @@ export function musicMood(game) {
   const s = game.currentSettlement;
   if (s) {
     const L = game.active.get(s.id)?.layout;
-    const gy = L && L.graveyard;
-    if (gy) {
+    // (Round 84: any of a city's graveyards.)
+    for (const gy of L ? (L.graveyards && L.graveyards.length ? L.graveyards : L.graveyard ? [L.graveyard] : []) : []) {
       const d = Math.max(gy.x - 3 - p.x, p.x - (gy.x + gy.W + 2), gy.z - 3 - p.z, p.z - (gy.z + 2 * gy.maxRows + 3));
       if (d <= 0) return 'graveyard';
     }

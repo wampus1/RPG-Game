@@ -1,6 +1,7 @@
 // Overworld generation: the world map. Biomes are splotches (stretched,
 // rotated ellipses) evaluated with a domain-warped distance field, so they can
 // be sampled continuously at tile resolution and on the coarse map alike.
+import { makeProvinces, provinceBiome, provinceAt, PROVINCE_LANDS } from './provinces.js';
 import {
   MAP_W, MAP_H, REGION_W, REGION_D, WORLD_TILES_W, WORLD_TILES_D,
 } from '../config.js';
@@ -57,7 +58,9 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // sim/coaches.js). (Round 79) 7, the lie of the land beyond its biomes:
 // landforms, rivers with character, blended edges, landmarks and small
 // things in the country (see landforms.js, landmarks.js, features.js).
-export const WORLD_GEN = 7;
+// (Round 84: 8, the great continents parted into provinces: see
+// provinces.js.)
+export const WORLD_GEN = 8;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
@@ -193,6 +196,15 @@ export class Overworld {
     return best;
   }
 
+  // (Round 84) The province of a great continent (x, z) is in, if it's on
+  // one that has them: { p, q, edge } (see provinces.js).
+  provinceAt(x, z) {
+    if (!this.provinces || !this.provinces.length) return null;
+    const L = this.landAt(x, z);
+    if (!L || L.kind !== 'continent' || !PROVINCE_LANDS.includes(L.key) || landValue(L, x, z, this.nCont) <= 0) return null;
+    return provinceAt(this, x, z, L.key);
+  }
+
   // The landmass (x, z) is on, or nearest (null far out at sea).
   landAt(x, z) {
     return landmassAt(this.lands, x, z, this.nCont);
@@ -283,6 +295,8 @@ export class Overworld {
     this.sgD = gd;
     this.splotchGrid = new Array(gw * gd);
     this.splotches = [];
+    // (Round 84) The great continents' provinces, in a world made since.
+    this.provinces = this.wg >= 8 && !this.plan ? makeProvinces(this) : [];
     for (let gz = 0; gz < gd; gz++) {
       for (let gx = 0; gx < gw; gx++) {
         const x = (gx + 0.5 + rng.float(-0.42, 0.42)) * SPLOTCH_STEP_X - SPLOTCH_STEP_X / 2;
@@ -298,7 +312,10 @@ export class Overworld {
         }
         const temp = clamp(lat + this.nClimate(x / 500, z / 500) * 0.18 + rng.float(-0.08, 0.08), 0, 1);
         const moist = clamp(rng.float(0, 1) * 0.7 + (this.nClimate(x / 300 + 50, z / 300) * 0.5 + 0.5) * 0.3, 0, 1);
-        let biome = this.pickBiome(L, temp, moist, L ? landValue(L, x, z, this.nCont) : -1, rng);
+        const inland = L ? landValue(L, x, z, this.nCont) : -1;
+        let biome = this.provinces.length && L && L.kind === 'continent' && PROVINCE_LANDS.includes(L.key)
+          ? provinceBiome(this, L, x, z, rng, () => this.pickBiome(L, temp, moist, inland, rng))
+          : this.pickBiome(L, temp, moist, inland, rng);
         // (Round 63) One of a mod's instead, where its rules say (or, on a
         // landmass that takes only some, the nearest of those).
         if (this.biomeRules.length || (L && L.allow)) biome = modBiomeFor(biome, L, temp, moist, (salt) => (hash4(this.seed, gx, gz, salt) % 10007) / 10007, this.biomeRules, L ? L.allow : null);

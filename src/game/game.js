@@ -33,7 +33,7 @@ import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
 import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard, shipGhostTick, holdViewTick, holdTurnKey, helmView } from './shipgame.js';
-import { holdBlockChanged, holdUse } from './shiphold.js';
+import { holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { crewHurt } from './shipcrew.js';
 import { updateLabor } from '../sim/labor.js';
@@ -70,7 +70,8 @@ import { wallTick } from './wallfall.js';
 import { eruptTick } from './eruption.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
-import { weatherAt, townWeather } from '../world/weather.js';
+import { weatherAt, townWeather, stormAt, townStorm, STORMS } from '../world/weather.js';
+import { stormFx, stormTick } from './storms.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
@@ -382,7 +383,8 @@ export class Game {
     const a = this.audio;
     if (!a) return;
     const b = this.buildingAtPlayer ? this.buildingAtPlayer() : null;
-    const indoors = !!b && !b.underConstruction;
+    // (Round 84: below a ship's decks, too.)
+    const indoors = (!!b && !b.underConstruction) || !!this.player?.deck?.below;
     const w = this.weather;
     // (Round 77) Rain as long as it falls: on the roof over you, muffled,
     // indoors (or under a roof of rock), a hiss all round you outdoors;
@@ -2199,7 +2201,7 @@ export class Game {
     this.ownAfterPhase(dt, input);
     // (The sky over each of you, wherever you are.)
     if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => {
-      this.updateWeather(dt);
+      this.updateWeather(dt, false);
       this.ownAfterPhase(dt, s.input);
     });
     // What each of you has done lately, worth an achievement (see
@@ -5464,7 +5466,8 @@ export class Game {
       };
     }
     if (sg && sg.kind === 'graveyard') {
-      const g = L.graveyard;
+      // (Round 84: whichever of a city's graveyards it stands by.)
+      const g = (sg.yard !== undefined && L.graveyards && L.graveyards[sg.yard]) || L.graveyard;
       const n = g ? g.slots.filter((q) => q.grave).length : 0;
       const recent = g ? g.slots.filter((q) => q.grave && !q.grave.ancestor).sort((a, b) => b.grave.died - a.grave.died).slice(0, 3) : [];
       return { title: 'GRAVEYARD', lines: [`THE RESTING PLACE OF ${s.name.toUpperCase()}`, '', `${n} souls rest here.`, ...(recent.length ? ['', 'Recently laid to rest:', ...recent.map((q) => `${q.grave.name} (day ${q.grave.died})`)] : [])] };
@@ -5554,6 +5557,27 @@ export class Game {
     this.audio?.play('select');
   }
 
+  // (Round 84) A night in a bunk or hammock of a ship's, below her decks:
+  // as in any bed, but you stay where you are on her (she carries you as
+  // you sleep), and you wake there.
+  trySleepAboard(p, S, bed) {
+    if (p !== this.player || this.sleep) return;
+    const h = this.minute / 60;
+    if (!(h >= 20 || h < 5)) {
+      this.ui.msg('You can only sleep at night.', '#c8d8ff');
+      return;
+    }
+    const now = this.day * DAY + this.minute;
+    const wake = h >= 20 ? (this.day + 1) * DAY + 420 : this.day * DAY + 420;
+    this.sleep = { phase: 'in', t: 0, bed, from: null, wake, start: now, hp0: p.hp, jail: false, deck: S.id };
+    this.audio?.play('sleep');
+    this.stopPlayerActions();
+    p.sitting = null;
+    p.sleeping = true;
+    p.dir = 0;
+    this.ui.msg(`You turn in, below decks on ${S.name || 'her'}...`, '#c8d8ff');
+  }
+
   updateSleep(dt, pressed) {
     const sl = this.sleep;
     const p = this.player;
@@ -5583,6 +5607,8 @@ export class Game {
         this.sleep = null;
         p.sleeping = false;
         const f = sl.from;
+        // (Aboard a ship: up where you lay, on her.)
+        if (sl.deck !== undefined || !f) return;
         if (!this.occupiedBySolid(f.x, f.y, f.z, p) && this.world.canStand(f.x, f.y, f.z)) p.teleport(f.x, f.y, f.z);
         else {
           const spot = this.findFreeSpot(sl.bed.x, sl.bed.z, sl.bed.y);
@@ -5954,7 +5980,7 @@ export class Game {
 
   // Weather drifts between clear skies, rain, snow (in cold places) and fog;
   // it's the same weather the towns around you are having.
-  updateWeather(dt) {
+  updateWeather(dt, local = true) {
     // (An opening scene brings its own.)
     if (this.cutscene && this.cutscene.weather) {
       this.weather = this.cutscene.weather;
@@ -5977,9 +6003,17 @@ export class Game {
         const col = this.world.terrain.column(p.x, p.z, this.world.terrain.context(p.x, p.z, p.x, p.z), {});
         this.biomeCache = { x: p.x, z: p.z, biome: col.biome };
       }
-      let kind = weatherAt(this.seed, p.x, p.z, this.day * DAY + this.minute, this.biomeCache.biome);
+      const abs = this.day * DAY + this.minute;
+      let kind = weatherAt(this.seed, p.x, p.z, abs, this.biomeCache.biome);
+      // (Round 84) And a storm in it, now and then: see world/weather.js.
+      let severe = stormAt(this.seed, p.x, p.z, abs, this.biomeCache.biome, kind);
       // (Round 64) Weather a mod has called down, for a while.
-      if (this.modWeather && this.modWeather.until > this.day * DAY + this.minute) kind = this.modWeather.kind;
+      // (Round 84: a storm, too: its own weather under it.)
+      if (this.modWeather && this.modWeather.until > abs) {
+        const S = STORMS[this.modWeather.kind];
+        kind = S ? S.base : this.modWeather.kind;
+        severe = S ? this.modWeather.kind : null;
+      }
       // (Near the storm round the islands it's raining whatever the sky's
       // doing elsewhere; and coming and going at its edge doesn't make the
       // rain stop and start over and over.)
@@ -5987,12 +6021,29 @@ export class Game {
       const near = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0, this.spireStorm || 0, this.dishStorm && this.dishStorm.until > this.sim.abs ? 0.6 : 0);
       w.stormRain = near > (w.stormRain ? 0.06 : 0.12);
       if (w.stormRain) kind = 'rain';
+      // (The great storm round the islands: thunder in it, the nearer the more.)
+      if (w.stormRain && near > 0.3) severe = 'thunder';
+      if (severe && STORMS[severe].base !== 'clear' && STORMS[severe].base !== kind) severe = null;
+      const was = w.severe || null;
       if (kind !== w.kind) {
-        if (w.seen && kind !== 'clear') this.ui.msg(kind === 'rain' ? 'It starts to rain.' : kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
-        else if (w.seen && w.kind !== 'fog') this.ui.msg(w.kind === 'rain' ? 'The rain stops.' : 'The snow stops falling.', '#a0b8d0');
+        if (w.seen && kind !== 'clear' && !severe) this.ui.msg(kind === 'rain' ? 'It starts to rain.' : kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
+        else if (w.seen && w.kind !== 'fog' && w.kind !== 'clear' && !was) this.ui.msg(w.kind === 'rain' ? 'The rain stops.' : 'The snow stops falling.', '#a0b8d0');
         w.kind = kind;
       }
+      if (severe !== was) {
+        if (w.seen && severe) this.ui.msg(STORMS[severe].start, '#c0d0ff');
+        else if (w.seen && was) this.ui.msg(STORMS[was].end, '#a0b8d0');
+        w.severe = severe;
+        // (The wind gets up, and drops, over half a minute or so.)
+      }
       w.seen = true;
+      // (Round 84) Into another province of a great continent: said.
+      const pv = this.world.ow.provinceAt ? this.world.ow.provinceAt(p.x, p.z) : null;
+      const pk = pv ? (pv.edge > 0.03 || p.province === undefined ? pv.p.i : p.province) : null;
+      if (pk !== (p.province ?? null)) {
+        if (pv && pk === pv.p.i && !this.currentSettlement && p.province !== undefined) this.ui.msg(`${pv.p.name[0].toUpperCase()}${pv.p.name.slice(1)}: ${pv.p.theme.about}.`, '#c8e0a0');
+        p.province = pk;
+      }
     }
     // Near the storm round the islands: it's always raining there, harder
     // and windier the nearer you come, with lightning.
@@ -6000,10 +6051,23 @@ export class Game {
     const sn = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0, (this.spireStorm || 0) * 0.6, this.dishStorm && this.dishStorm.until > this.sim.abs ? 0.55 : 0);
     w.storm = sn;
     if (w.stormRain && w.kind !== 'rain') w.kind = 'rain';
-    w.wind = sn > 0 ? 1 + sn * 2.6 : undefined;
-    const target = w.kind === 'clear' ? 0 : Math.max(1, sn * 1.5);
+    // (Round 84) A storm's wind: getting up and dropping slowly, and
+    // gusting as it blows (w.gust, 0 to 1: see Renderer.windSway).
+    const SV = w.severe ? STORMS[w.severe] : null;
+    const b0 = w.blowRaw ?? w.blow ?? 0;
+    w.blowRaw = b0 + Math.sign((SV ? 1 : 0) - b0) * Math.min(Math.abs((SV ? 1 : 0) - b0), (dt * fast) / 20);
+    // (Kept to twentieths, the wind and its gusts: what's drawn, and sent
+    // to whoever else is playing, changes only as much as it's seen to.)
+    w.blow = Math.round(w.blowRaw * 20) / 20;
+    this.gustClock = (this.gustClock || 0) + dt;
+    w.gust = Math.round(20 * w.blow * (0.55 + 0.45 * Math.max(0, Math.sin(this.gustClock * 0.9) * Math.sin(this.gustClock * 0.37 + 1.3)))) / 20;
+    const sw = SV ? 1 + (SV.wind - 1) * w.blow * (0.7 + 0.3 * w.gust) : w.blow > 0 ? 1 + w.blow : 0;
+    w.wind = sn > 0 || sw > 0 ? Math.max(sn > 0 ? 1 + sn * 2.6 : 0, sw) : undefined;
+    const target = w.kind === 'clear' && !(SV && SV.base === 'clear') ? 0 : Math.max(SV ? 1 + (SV.level - 1) * w.blow : 1, sn * 1.5);
     w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / (sn > 0.12 ? 2 : 8));
-    if (sn > 0.45) {
+    // (Round 84: on this screen only, the lightning and thunder, not for
+    // each of you playing: theirs is on their own screens.)
+    if (sn > 0.45 && local) {
       this.boltT = (this.boltT ?? 4) - dt;
       if (this.boltT <= 0) {
         this.boltT = 3 + Math.random() * 9 * (1.4 - sn);
@@ -6011,6 +6075,15 @@ export class Game {
         this.audio?.play('thunder');
       }
     }
+    // (Round 84) A storm's hail on you; and, here, its lightning and its
+    // gusts (see storms.js).
+    stormTick(this, dt);
+    if (local) stormFx(this, dt);
+  }
+
+  // (Round 84) The storm over a town right now (or here), if there's one.
+  stormIn(s) {
+    return s ? townStorm(this.seed, s, this.day * DAY + this.minute) : this.weather?.severe || null;
   }
 
   // The weather over a town right now.
@@ -7570,8 +7643,6 @@ export class Game {
       else if (id === B.chair && ((om ^ meta) & META_STATE)) this.renderer.chairMove?.(x, y, z);
     }
     if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
-    // (Inside one of the great ships: the same in her. See shiphold.js.)
-    if (this.ships3d && this.ships3d.length && this.world.inInstance(x)) holdBlockChanged(this, x, y, z, o, n);
     // (Round 80: a block's state changed only matters to the light if the
     // block's a light that's lit by it, a lantern hung or a brazier.)
     if (o === -1) {

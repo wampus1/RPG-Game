@@ -124,7 +124,16 @@ export class TechWindow extends Window {
   }
   // A press on the map: the start of a drag (or, if it hardly moves, a
   // click on a step).
-  onClick(ck) {
+  onClick(ck, cx, cy, game) {
+    // (Round 84) Its buttons first (the Ancient Technology's, below): they
+    // were never reached, the press taken for a drag.
+    for (let i = this.hits.length - 1; i >= 0; i--) {
+      const h = this.hits[i];
+      if (cx >= h.x && cy >= h.y && cx < h.x + h.w && cy < h.y + h.h) {
+        if (ck.type === 'down' || ck.type === undefined) h.fn(ck, game, cx, cy);
+        return true;
+      }
+    }
     const a = this.area();
     if (ck.button === 0 && ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cy: this.cam.y, moved: 0 };
     return true;

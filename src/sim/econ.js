@@ -13,7 +13,7 @@ import { ITEMS, GEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { planShopping, buyAt, setUpMerchants, tierOf, rollTier, tierGoods, MERCHANT_TIERS, restockStall } from './shops.js';
-import { townWeather, rainedRecently } from '../world/weather.js';
+import { townWeather, rainedRecently, STORMS } from '../world/weather.js';
 import { dishesOf, forbiddenFood } from './culture.js';
 import { npcCook, marketRun, stockPantry } from '../game/cooking.js';
 
@@ -466,6 +466,8 @@ export function weatherQuits(rec, kind) {
   if (tr.includes('cheerful') || tr.includes('patient')) w -= 0.1;
   if (kind === 'snow') w += 0.1;
   if (kind === 'fog') w -= 0.3;
+  // (Round 84) A storm sends all but the hardiest in.
+  if (STORMS[kind]) w += 0.45;
   return w > 0.12;
 }
 

@@ -209,6 +209,9 @@ function build(type) {
       for (let k = 1; k <= n; k++) {
         const z = z1 + dir * k;
         for (let y = to + 1; y <= from - k; y++) set(x, y, z, B.deck_planks);
+        // (Round 84) The top of each step a stair, climbing toward the
+        // castle: -z for one aft of the main deck, +z for one forward.
+        if (from - k >= to + 1) set(x, from - k, z, B.deck_planks_stairs, dir > 0 ? 2 : 0);
       }
       gaps.add(gk(x, z1));
     }
@@ -263,6 +266,9 @@ function build(type) {
     for (let j = 1; j <= n; j++) {
       const z = zs + j - 1;
       for (let y = D + 1; y <= D + j; y++) set(x, y, z, B.deck_planks);
+      // (Round 84) The top of each a stair, climbing up toward the deck
+      // (+z, the way the steps rise).
+      set(x, D + j, z, B.deck_planks_stairs, 0);
       set(x, U, z, B.air);
     }
     hatches.push({ x, z: zs, n, U, D, top: U === T.deck });
@@ -479,7 +485,7 @@ function build(type) {
   let total = 0;
   for (let i = 0; i < N; i++) {
     const id = vox[i];
-    if (id === B.hull_planks || id === B.deck_planks || id === B.ship_rail || id === B.copper_sheath || id === B.gunport || id === B.stern_window || id === B.gilt_trim || id === B.ship_mast) {
+    if (id === B.hull_planks || id === B.deck_planks || id === B.deck_planks_stairs || id === B.ship_rail || id === B.copper_sheath || id === B.gunport || id === B.stern_window || id === B.gilt_trim || id === B.ship_mast) {
       struct[i] = 1;
       total++;
     }
@@ -602,13 +608,21 @@ export function standOn(m, vox, x, y, z) {
 // (a step up, level, or a drop of up to two), or -1.
 export function stepOn(m, vox, fx, fy, fz, x, z) {
   if (standOn(m, vox, x, fy, z)) return fy;
+  // (Round 84) Up or down a flight of stairs (between her decks, under a
+  // deck's edge), the head goes up or down with the feet: no more room
+  // over the step it's left than over the one it's on.
+  const stair = (sx, sy, sz) => {
+    const id = vAt(m, vox, sx, sy - 1, sz);
+    return !!id && !!BLOCKS[id].stair;
+  };
   const above = vAt(m, vox, fx, fy + 2, fz);
-  if (standOn(m, vox, x, fy + 1, z) && !(above && BLOCKS[above].solid)) return fy + 1;
+  if (standOn(m, vox, x, fy + 1, z) && (!(above && BLOCKS[above].solid) || stair(x, fy + 1, z) || stair(fx, fy, fz))) return fy + 1;
   for (const d of [1, 2, 3]) {
     if (standOn(m, vox, x, fy - d, z)) {
       // (Nothing in the way on the way down.)
       let clear = true;
-      for (let y = fy - d + 1; y <= fy + 1; y++) {
+      const top = d === 1 && (stair(fx, fy, fz) || stair(x, fy - d, z)) ? fy : fy + 1;
+      for (let y = fy - d + 1; y <= top; y++) {
         const id = vAt(m, vox, x, y, z);
         if (id && BLOCKS[id].solid) clear = false;
       }

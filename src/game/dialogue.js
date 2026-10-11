@@ -22,7 +22,7 @@ import { hash4, RNG } from '../util/rng.js';
 import { authority, rulerTitle } from '../sim/realms.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
-import { rainedRecently } from '../world/weather.js';
+import { rainedRecently, weatherWord } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
 import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
@@ -465,7 +465,8 @@ function topicsRaw(npc, game) {
   if (rec.job === 'guard' && !npc.hired && !npc.visit) add('hire', 'I\'d like to hire you as an escort.');
   else if (!npc.hired && !npc.visit && rec.age === 'adult' && rep >= 60 && !car.escort) add('companion', 'Come travel with me for a while?');
   // (Round 78) The town's vote coming up (see sim/causes.js).
-  const cq = sim.causes && s && sim.causes.of(s.id);
+  // (Round 84: the town's own business: only to one of its citizens.)
+  const cq = sim.causes && s && sim.isCitizen(s.id) && sim.causes.of(s.id);
   if (cq && rec.age !== 'child' && !npc.visit && !rec.visitor && rec.sid === s.id) {
     const ci = cq.champ.indexOf(rec.idx);
     if (ci >= 0) {
@@ -1655,7 +1656,7 @@ function respondRaw(npc, game, id, arg) {
       else if (act.act === 'poster') lines.push(act.mode === 'down' ? 'Taking the posters down. It was a grand day.' : 'Putting up posters, so nobody misses it. Here, have a look at one!');
       else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? (sim.citizen.native ? `Building your own place, ${name.split(' ')[0]}! Leaving the nest at last, eh?` : `Building a house for our newest citizen: you, ${name}!`) : 'Building. Mind the planks.');
       else if (act.act === 'repair') lines.push('Patching up the jail. Someone made a right mess of it.');
-      else if (act.act === 'home' && act.weather) lines.push(pick(rng, [`No sense working out in the ${act.weather === 'snow' ? 'snow' : act.weather === 'fog' ? 'fog' : 'rain'}. I'll catch up tomorrow.`, 'Staying dry. The work will keep.']));
+      else if (act.act === 'home' && act.weather) lines.push(pick(rng, [`No sense working out in the ${weatherWord(act.weather)}. I'll catch up tomorrow.`, 'Staying dry. The work will keep.']));
       else if (act.act === 'forage') lines.push(rec.age === 'child' ? 'Looking for berries. We\'ve got nothing to eat at home...' : 'Out looking for food. Times are lean.');
       else if (act.act === 'trial') lines.push('There\'s to be a hearing at the jail.');
       else if (act.act === 'travel') {
@@ -2503,6 +2504,7 @@ function causeTalk(npc, game, id, arg) {
   const L = npc.layout;
   const q = C0 && C0.of(npc.settlement.id);
   if (!q) return { lines: ['The vote? That\'s all done with now.'] };
+  if (!game.sim.isCitizen(npc.settlement.id)) return { lines: ['That\'s for the folk of this town to settle among ourselves.'] };
   const rec = npc.rec;
   const champ = (i) => L.npcs.find((r) => r.idx === q.champ[i]);
   if (id === 'cause_ask') {

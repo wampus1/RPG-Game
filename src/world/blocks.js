@@ -700,6 +700,10 @@ def('ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable
 // (Round 78) A shipwright's bench: ships of your own design drawn up and
 // built on it (see ui/shipdesign.js).
 def('shipwright_bench', { ...sprite, solid: true, interact: 'shipdesign', tool: 'axe', hardness: 2, support: false, label: 'Shipwright\'s Bench' });
+// (Round 84) A ship's stairs between her decks and up to her castles: a
+// plank step turned the way it climbs (see world/shipmodels.js). Last of
+// all, so no block before it changes its number.
+def('deck_planks_stairs', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'deck_planks', rotatable: true, standable: true, tool: 'axe', hardness: 1.1, drop: 'planks', label: 'Deck Stairs' });
 // The stair for a floor of `id` (wood's own plank stair if there's none).
 export function stairFor(id) {
   const n = BLOCKS[id] && BLOCKS[id].name;

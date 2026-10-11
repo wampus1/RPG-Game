@@ -1,11 +1,12 @@
 // World renderer: draws the voxel grid in an oblique 3/4 projection using
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
+import { LOOKED, LOOK_OF } from './lookart.js';
 import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT, LEAVES } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
@@ -119,6 +120,16 @@ export function rugJoin(world, x, y, z, id, view = 0) {
     if (world.getBlock(x + dx, y, z + dz) === id) m |= 1 << i;
   }
   return m | (view & 1 ? 16 : 0);
+}
+
+// (Round 84) What's drawn in its people's own look (see lookart.js).
+let lookedIds = null;
+function lookedId() {
+  if (!lookedIds) {
+    lookedIds = new Uint8Array(BLOCKS.length);
+    for (const b of BLOCKS) if (LOOKED.has(b.name)) lookedIds[b.id] = 1;
+  }
+  return lookedIds;
 }
 
 function craftedId() {
@@ -1105,6 +1116,10 @@ export class Renderer {
   drawWorld(game) {
     const ctx = this.ctx;
     const world = game.world;
+    // (Round 84) A storm's wind in the plants and the trees (see windSway).
+    const wt = game.weather;
+    this.swayAmp = wt && !game.dungeon && !this.noEnvFx ? Math.min(2.2, ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * (0.65 + 0.35 * (wt.gust || 0))) : 0;
+    this.swayLean = wt ? wt.gust || 0 : 0;
     const atlas = this.atlas;
     const camX = this.camX;
     const camY = this.camY;
@@ -1275,7 +1290,9 @@ export class Renderer {
       const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
       // (Furniture, doors and windows in the craft of the people whose
       // town they're in: see textures.CRAFTS.)
-      const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
+      // (Round 84: and what's put up about town in their own look.)
+      const lk = lookedId()[id] === 1 ? this.lookAt(game, wx, wz) : 0;
+      const T = lk ? TEX.look[lk] || TEX : craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
       const sx = x * TILE - camX;
       let alpha = 1;
       // (Round 83: never the water, which hides nothing of you: it went
@@ -1305,7 +1322,9 @@ export class Renderer {
           const tops = T.top[id * 4 + rot];
           const s = liquid ? tops[waterFrame] : tops[v % tops.length];
           const oy = liquid ? 3 : 0;
-          ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
+          // (Round 84: a tree's leaves rustling in a storm's wind.)
+          if (this.swayAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, 16, sx, sy, this.windSway(wx, wz + y, 0.8));
+          else ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
           if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
           if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
           // Higher ground is a touch brighter so terraces read as height.
@@ -1329,7 +1348,8 @@ export class Renderer {
         if (showFront && !(liquid && fb.solid)) {
           const fronts = T.front[id * 4 + rot];
           const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
-          ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
+          if (this.swayAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, LH, sx, sy + 16, this.windSway(wx, wz + y, 0.8));
+          else ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
           if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
         }
         // (Round 77) Snow lying, tracks, ruts; foam and rings on water.
@@ -1409,7 +1429,8 @@ export class Renderer {
           ctx.rotate(a);
           ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
           ctx.restore();
-        } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
+        } else if (render === 'plant' && this.swayAmp) this.drawSwaying(ctx, atl, s, csx, csy + SPR_H - s.h, this.windSway(wx, wz));
+        else ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
         // (Round 82) A chest open (or opening, or shutting): its lid up.
         if (id === B.chest && this.lids.size) {
           const lk = this.lids.get(`${wx},${y},${wz}`);
@@ -1652,7 +1673,8 @@ export class Renderer {
       const wz = lwz[ci];
       const b = BLOCKS[id];
       const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
-      const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
+      const lk = lookedId()[id] === 1 ? this.lookAt(game, wx, wz) : 0;
+      const T = lk ? TEX.look[lk] || TEX : craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
       const sx = (u - cu0) * TILE;
       const vr = hash4(wx, y, wz) % VARIANTS;
       const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
@@ -1971,7 +1993,7 @@ export class Renderer {
   drawWagonAt(ctx, cx, feetY, a, m, frame = 0, horse = null, legs = 0) {
     const riders = m.riders || [];
     const hood = m.hood !== false ? (riders.length ? 'open' : true) : false;
-    const S = steedSprite('wagon', { banner: m.banner || null, hood, frame: frame % 4, horse, legs }, a, makeCanvas);
+    const S = steedSprite('wagon', { banner: m.banner || null, hood, frame: frame % 4, horse, legs, look: m.look || 0 }, a, makeCanvas);
     const dir = this.seatDir(a);
     const people = () => {
       const seats = riders.map((look, i) => ({ look, p: S.at(BED_F[i % BED_F.length], 0, 0.55), crop: true }));
@@ -2101,7 +2123,10 @@ export class Renderer {
     const a = this.steedAngle(e) - (this.view * Math.PI) / 2;
     const going = !!(e.moving && e.ride);
     const legs = going ? 1 + (Math.floor(this.time * 6) % 2) : 0;
-    const D = this.drawWagonAt(ctx, sx + 8, feetY, a, { banner: e.banner, riders: e.riders || [], bench: e.bench || null, hood: e.hood }, going ? Math.floor(this.time * 5) : 0, e.horse ? { coat: e.horse.coat || 0, saddle: !!e.horse.saddle } : null, legs);
+    // (Round 84) In the look of the people it was made among (the town it
+    // was first seen in, or is still kept by).
+    if (e.wagonLook === undefined) e.wagonLook = this.lookAt(this.game, Math.round(e.x), Math.round(e.z));
+    const D = this.drawWagonAt(ctx, sx + 8, feetY, a, { banner: e.banner, riders: e.riders || [], bench: e.bench || null, hood: e.hood, look: e.wagonLook }, going ? Math.floor(this.time * 5) : 0, e.horse ? { coat: e.horse.coat || 0, saddle: !!e.horse.saddle } : null, legs);
     // Under the mouse? (To climb in: on the bench, or into the back.)
     const m = this.mouse;
     const S = D.S;
@@ -2201,6 +2226,29 @@ export class Renderer {
 
   // A fence post with rails to its neighbours (in view directions). Returns
   // whether any drawn part is under the mouse, when asked.
+  // (Round 84) Whose look what's put up at (x, z) is in (see lookart.js):
+  // the people of the town it's in (0, the Valeborn's, out of town). Kept
+  // by four-pace patches, like the craft.
+  lookAt(game, x, z) {
+    const ow = game && game.world && game.world.ow;
+    if (!ow || game.dungeon) return 0;
+    const hour = Math.floor((game.minute || 0) / 60);
+    if (this.lookOw !== ow || this.lookHour !== hour) {
+      this.lookOw = ow;
+      this.lookHour = hour;
+      this.lookCache = new Map();
+    }
+    const k = (x >> 2) * 65536 + (z >> 2);
+    let c = this.lookCache.get(k);
+    if (c === undefined) {
+      const s = ow.settlementAt((x >> 2) * 4 + 2, (z >> 2) * 4 + 2) || ow.settlementAt(x, z);
+      c = s ? LOOK_OF[s.style] ?? LOOK_OF[s.culture] ?? 0 : 0;
+      if (this.lookCache.size > 20000) this.lookCache.clear();
+      this.lookCache.set(k, c);
+    }
+    return c;
+  }
+
   // Whose craft the furniture at (x, z) is made in (see textures.CRAFTS):
   // the people of the town it stands in, or, out of town, the island's
   // own (0, the old oak, on Thessa and beyond). Kept by four-pace patches,
@@ -2618,7 +2666,8 @@ export class Renderer {
         else {
           // (Round 77) Leaning on a wall: tipped back against it.
           const ia = e.idleAnim && !e.moving ? e.idleAnim : null;
-          const lean = ia && ia.kind === 'lean' ? this.leanOf(ia) : 0;
+          // (Round 84: only where they leant, still about their day.)
+          const lean = ia && ia.kind === 'lean' && (ia.x === undefined || (ia.x === e.x && ia.z === e.z && ia.y === e.y)) && (!e.state || e.state === 'routine') ? this.leanOf(ia) : 0;
           if (lean) {
             ctx.save();
             ctx.translate(sx + 8, feetY);
@@ -3527,29 +3576,88 @@ export class Renderer {
     const w = game.weather;
     if (!w || w.level <= 0.01) return;
     const ctx = this.ctx;
-    const indoor = this.hidden !== null;
+    // (Round 84: or below a ship's decks.)
+    const indoor = this.hidden !== null || !!game.player?.deck?.below;
     // (A storm at sea drives twice the rain, slanting with the wind.)
     if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 440 }, () => ({ x: Math.random() * this.vw, y: Math.random() * this.vh, s: 0.6 + Math.random() * 0.8 }));
     const n = Math.min(this.weatherDrops.length, Math.floor(220 * w.level * (indoor ? 0.25 : 1)));
     const wind = w.wind || 1;
+    // (Round 84) A storm: what's in the air, and how hard it blows.
+    const sv = w.severe || null;
+    const blow = w.blow || 0;
     // (Round 83) What's falling, as it eases off: the rain (or snow) that
     // was, never snow because the sky's cleared. (Fog doesn't fall.)
     if (w.kind === 'rain' || w.kind === 'snow' || w.kind === 'fog') this.lastFall = w.kind;
-    const kind = w.kind === 'rain' || w.kind === 'snow' || w.kind === 'fog' ? w.kind : this.lastFall || 'rain';
+    const dry = (sv === 'sandstorm' || sv === 'gale') && w.kind === 'clear';
+    const kind = dry ? sv : w.kind === 'rain' || w.kind === 'snow' || w.kind === 'fog' ? w.kind : this.lastFall || 'rain';
     const rain = kind === 'rain';
     if (part !== 'drops') {
-      ctx.fillStyle = kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(0.34, 0.18 * w.level)})` : `rgba(200,210,230,${0.1 * w.level})`;
+      ctx.fillStyle = kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(sv === 'thunder' ? 0.42 : 0.34, 0.18 * w.level)})` : kind === 'snow' ? `rgba(200,210,230,${0.1 * w.level})` : 'rgba(0,0,0,0)';
       ctx.fillRect(0, 0, this.vw, this.vh);
+      // (A blizzard whites the world out; a sandstorm browns it, thick.)
+      if (blow > 0 && !indoor) {
+        if (sv === 'blizzard') {
+          ctx.fillStyle = `rgba(228,234,244,${0.26 * blow})`;
+          ctx.fillRect(0, 0, this.vw, this.vh);
+        } else if (sv === 'sandstorm') {
+          ctx.fillStyle = `rgba(178,128,70,${0.34 * blow})`;
+          ctx.fillRect(0, 0, this.vw, this.vh);
+          // (Bands of it, rolling through.)
+          for (let k = 0; k < 4; k++) {
+            const y = ((this.time * 30 + k * 97) % (this.vh + 60)) - 30;
+            ctx.fillStyle = `rgba(200,150,90,${0.1 * blow})`;
+            ctx.fillRect(0, Math.round(y), this.vw, 18 + k * 6);
+          }
+        }
+      }
     }
     if (part === 'tint' || kind === 'fog') return;
     const lit = part === 'drops' ? skyLight(game.minute) : [1, 1, 1];
     const tone = (r, g, b, a) => `rgba(${Math.round(r * Math.max(0.25, lit[0]))},${Math.round(g * Math.max(0.25, lit[1]))},${Math.round(b * Math.max(0.3, lit[2]))},${a})`;
+    if (dry) {
+      // Sand (or, in a gale, dust and leaves) driven across.
+      if (indoor) return;
+      const m = Math.floor((kind === 'sandstorm' ? 300 : 70) * blow);
+      for (let i = 0; i < Math.min(m, this.weatherDrops.length); i++) {
+        const d = this.weatherDrops[i];
+        d.x += dt * (kind === 'sandstorm' ? 320 : 220) * d.s * (0.6 + (w.gust || 0) * 0.6);
+        d.y += dt * (Math.sin(this.time * 2 + i) * 18 + 10) * d.s;
+        if (kind === 'sandstorm') {
+          ctx.fillStyle = tone(i % 3 ? 214 : 186, i % 3 ? 170 : 136, i % 3 ? 112 : 84, 0.75);
+          ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s > 1 ? 3 : 2, 1);
+        } else {
+          ctx.fillStyle = i % 4 === 0 ? tone(120, 150, 60, 0.9) : i % 4 === 1 ? tone(170, 130, 60, 0.9) : tone(200, 196, 180, 0.5);
+          const lf = i % 4 < 2;
+          ctx.fillRect(Math.round(d.x), Math.round(d.y + (lf ? Math.sin(this.time * 9 + i) * 1.5 : 0)), lf ? 2 : 1, 1);
+        }
+        if (d.x > this.vw + 4) {
+          d.x = -4;
+          d.y = Math.random() * this.vh;
+        }
+        if (d.y > this.vh) d.y = -2;
+      }
+      return;
+    }
     // (Round 83: the rain a little brighter, a little longer: it was hard
     // to see at all.)
     ctx.fillStyle = rain ? tone(190, 208, 242, 0.72) : tone(245, 248, 255, 0.9);
+    const hail = sv === 'hail' && rain;
+    const blizz = sv === 'blizzard' && !rain;
     for (let i = 0; i < n; i++) {
       const d = this.weatherDrops[i];
-      if (rain) {
+      if (hail && i % 3 === 0) {
+        // Hailstones: white, quick, bouncing where they land.
+        d.y += dt * 300 * d.s;
+        d.x -= dt * 40 * d.s * wind;
+        ctx.fillStyle = tone(240, 246, 255, 0.95);
+        ctx.fillRect(Math.round(d.x), Math.round(d.y), 2, 2);
+        if (d.y > this.vh * (0.3 + d.s * 0.5) && Math.random() < 0.1) {
+          ctx.fillRect(Math.round(d.x) - 2, Math.round(d.y) - 2, 1, 1);
+          ctx.fillRect(Math.round(d.x) + 3, Math.round(d.y) - 1, 1, 1);
+          d.y = -4;
+        }
+        ctx.fillStyle = tone(190, 208, 242, 0.72);
+      } else if (rain) {
         d.y += dt * 260 * d.s;
         d.x -= dt * 60 * d.s * wind;
         if (wind > 1.5) {
@@ -3561,6 +3669,11 @@ export class Renderer {
           ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 4, 3, 1);
           d.y = -4;
         }
+      } else if (blizz) {
+        // (Driven near level, in swirls.)
+        d.y += dt * 50 * d.s;
+        d.x -= dt * (140 + 90 * (w.gust || 0)) * d.s * blow + Math.sin(this.time * 3 + i) * dt * 20;
+        ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s > 1.1 ? 2 : 1, d.s > 1.1 ? 2 : 1);
       } else {
         d.y += dt * 30 * d.s;
         d.x += Math.sin(this.time * 1.5 + i) * dt * 12;
@@ -3573,6 +3686,44 @@ export class Renderer {
       if (d.x < -4) d.x += this.vw + 4;
       if (d.x > this.vw + 4) d.x -= this.vw + 4;
     }
+  }
+
+  // (Round 84) A plant blown over by `off` pixels at its top, bending
+  // from its root (drawn in bands, each over a little more than the one
+  // under it).
+  drawSwaying(ctx, atl, s, x, y, off) {
+    if (!off) {
+      ctx.drawImage(atl, s.x, s.y, s.w, s.h, x, y, s.w, s.h);
+      return;
+    }
+    const h = s.h;
+    for (let r = 0; r < h; r += 3) {
+      const bh = Math.min(3, h - r);
+      const k = (h - r - bh / 2) / h;
+      ctx.drawImage(atl, s.x, s.y + r, s.w, bh, x + Math.round(off * k * k), y + r, s.w, bh);
+    }
+  }
+
+  // (Round 84) A face of leaves, its leaves shifted `off` pixels across
+  // within it (wrapping round), its edges where they were: rustling.
+  drawRustle(ctx, atl, ax, ay, w, h, x, y, off) {
+    const o = ((Math.round(off) % w) + w) % w;
+    if (!o) {
+      ctx.drawImage(atl, ax, ay, w, h, x, y, w, h);
+      return;
+    }
+    ctx.drawImage(atl, ax, ay, w - o, h, x + o, y, w - o, h);
+    ctx.drawImage(atl, ax + w - o, ay, o, h, x, y, o, h);
+  }
+
+  // (Round 84) How far a plant (or a tree's leaves) at (wx, wz) is blown
+  // over just now, in pixels across the screen: nothing, out of a storm.
+  windSway(wx, wz, k = 1) {
+    const a = this.swayAmp;
+    if (!a) return 0;
+    const t = this.time;
+    const ph = wx * 0.61 + wz * 0.37;
+    return Math.round((Math.sin(t * 3.1 + ph) * 0.6 + Math.sin(t * 7.3 + ph * 1.7) * 0.25 + 0.5 * this.swayLean) * a * k);
   }
 
   // Ash from the mountain on Kharos coming down after it's gone up: a

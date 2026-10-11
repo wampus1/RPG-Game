@@ -629,7 +629,8 @@ export class UI {
     drawGrid(ctx, g, Math.floor((COLS - 34) / 2), ROWS - 12, Math.min(1, (k - 0.3) / 0.4), 77, this.time);
     // Drifting Z's above the bed.
     const r = game.renderer;
-    const b = sl.bed;
+    // (Aboard a ship, she carries you: over you, wherever she is now.)
+    const b = sl.deck !== undefined ? game.player : sl.bed;
     const bs = r.worldToScreen ? r.worldToScreen(b.x, b.y, b.z) : { x: b.x * TILE - r.camX, y: b.z * TILE - b.y * LH - r.camY };
     const sx = bs.x + 10;
     const sy = bs.y;

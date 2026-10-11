@@ -149,15 +149,43 @@ motif({
           ? S.post(th, { role: 'visit', kind: 'visit', title: th.vars.title, sid: th.sid, giver, at: { x: lm.x, z: lm.z }, r: A.visit, pitch: th.vars.pitch, days: 10, reward: { coins: 30, from: giver, rep: 10, fame: 1 } })
           : S.post(th, { role: 'bring', kind: 'fetch', item: A.item, n: A.n, title: th.vars.title, sid: th.sid, giver, pitch: th.vars.pitch, days: 12, reward: { coins: 45, from: giver, rep: 12, fame: 1 } });
         t.rumour = `${th.vars.who} of ${S.game.world.ow.settlements[th.sid]?.name || 'a town'} wants something from ${lm.name}`;
-        S.tell(th.vars.pid, `Word of ${lm.name} reaches ${S.game.world.ow.settlements[th.sid]?.name || 'the nearest town'}: ${th.vars.who} there would like a word with whoever found it.`, '#e8d8a8');
+        // (Round 84: not told you out of the air as you find it. It's
+        // heard in the town, from them, or from whoever's heard of it: see
+        // townTalk, and the board.)
       },
       fade: 16,
     },
+  },
+  // (Round 84) In the town, once word of it's got about: the one who wants
+  // it asks you themselves, and others mention it.
+  townTalk(th, npc, pid, S) {
+    if (th.sid !== npc.settlement?.id || isRec(npc, th.cast.giver)) return [];
+    const t = th.tasks.find((q) => q.status === 'open');
+    if (!t || S.claimedBy(t, pid) || S.heardOf(pid, t)) return [];
+    return [{ id: 'sglq_hear', arg: tid(th), label: `Has anyone been out to ${th.vars.lm.name}?` }];
+  },
+  respond(th, npc, pid, id, arg, S) {
+    if (id !== 'sglq_hear') return null;
+    const t = th.tasks.find((q) => q.status === 'open');
+    if (t) S.hear(pid, t);
+    return { lines: [`${th.vars.lm.name}? ${th.vars.who} was asking after whoever found it. Wants something from there, I think. Go and ask them.`] };
   },
   tasks: {
     visit: {
       reach(th, t, pid, S) {
         const k = th.vars.lm.kind;
+        // (Round 84) The arch at dusk, as asked: any other time of day,
+        // the wind's only the wind. Said once, while you wait.
+        if (k === 'arch') {
+          const m = S.game.minute;
+          if (m < 17 * 60 + 30 || m > 21 * 60 + 30) {
+            if (th.vars.toldWait !== S.game.day) {
+              th.vars.toldWait = S.game.day;
+              S.tell(pid, `The wind only whistles through ${th.vars.lm.name}. It's at dusk the tales say to listen: wait here till the sun goes down.`, '#c8c8e8');
+            }
+            return;
+          }
+        }
         S.complete(t, R.pl(pid));
         if (k === 'spring') {
           S.asPid(pid, (p) => {

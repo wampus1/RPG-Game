@@ -8,12 +8,12 @@ import { B, BLOCKS } from '../world/blocks.js';
 import { REACH, NPC_STEP_TIME, SURFACE, TILE, LH, VIEW_W, VIEW_H } from '../config.js';
 import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck, sailable, Ship } from './ships3d.js';
 import { holeAt, cellScreen } from '../render/shipvox.js';
-import { SHIP_TYPES, shipModel } from '../world/shipmodels.js';
+import { SHIP_TYPES, shipModel, onPlan, standOn } from '../world/shipmodels.js';
 import { bottledKey } from '../world/items.js';
 import { makeCrew, addHand } from './shipcrew.js';
 import { fleetsSave, fleetsLoad } from './shipfleets.js';
 import { designsSave, designsLoad, designOfType } from './shipdesign.js';
-import { enterHold, holdShipAt, holdLocal, closeHold } from './shiphold.js';
+import { insideFitting, nearFitting, useInside, boardBelow } from './shiphold.js';
 import { addItem, removeItem } from './inventory.js';
 
 // A key aboard (or beside) a ship: true if it was hers to handle.
@@ -105,39 +105,23 @@ export function helmView(game) {
 // follow her heading (as near as a quarter turn can), so what's forward
 // in her is the way her bow points on deck. Back up on deck, the view's
 // what it was. (Q and E still turn it, below, from there.)
+//   (Round 84: no longer. Her inside is part of her, drawn turned with
+// her, and going below leaves the view as it was. Only a view turned for
+// her before is put back.)
 export function holdViewTick(game) {
   const r = game.renderer;
-  const p = game.player;
-  if (!r || !r.turn || !p) return;
-  const S = p.deck ? null : holdShipAt(game, p.x);
-  if (!S) {
-    if (r.holdBase !== undefined && r.holdBase !== null && !r.spin) {
-      const d = turnBy(r.view, r.holdBase);
-      r.holdBase = null;
-      if (d) {
-        r.turn(d);
-        r.spin = null;
-      }
-    }
-    return;
+  if (!r || !r.turn || r.holdBase === undefined || r.holdBase === null || r.spin) return;
+  const d = turnBy(r.view, r.holdBase);
+  r.holdBase = null;
+  if (d) {
+    r.turn(d);
+    r.spin = null;
   }
-  if (r.holdBase === undefined || r.holdBase === null) r.holdBase = r.view;
-  if (r.spin) return;
-  // (How far round she is, in quarter turns of the view; turned only past
-  // the halfway, and a little more, so she doesn't flick to and fro.)
-  const f = r.holdBase - S.yaw / (Math.PI / 2);
-  let off = (((f - r.view) % 4) + 4) % 4;
-  if (off > 2) off -= 4;
-  if (Math.abs(off) < 0.62) return;
-  r.turn(off > 0 ? 1 : -1);
 }
 
 // Q and E, below decks: from her heading, not the world's.
-export function holdTurnKey(game, d) {
-  const r = game.renderer;
-  if (!r || r.holdBase === undefined || r.holdBase === null) return false;
-  r.holdBase = (r.holdBase + d + 4) & 3;
-  return true;
+export function holdTurnKey() {
+  return false;
 }
 
 function turnBy(from, to) {
@@ -222,7 +206,7 @@ function openWaterNear(game, type, x, z) {
 // shrinks into it, her crew, whoever came aboard with you, her stores and
 // every hole in her with her. (Kept with the world: game.shipBottles.)
 function bottleShip(game, p, held) {
-  const S = p.deck ? shipById(game, p.deck.s) : holdShipAt(game, p.x) || nearShip(game, p, 5);
+  const S = p.deck ? shipById(game, p.deck.s) : nearShip(game, p, 5);
   if (!S || S.owner !== ownerId(game, p)) {
     game.ui.msg('Beside a ship of your own, or aboard her, to put her in the bottle.', '#ffb080', true);
     return true;
@@ -235,7 +219,7 @@ function bottleShip(game, p, held) {
     game.ui.msg('Only the world\'s host can bottle a ship.', '#ffb080', true);
     return true;
   }
-  const aboard = (q) => q && ((q.deck && q.deck.s === S.id) || (S.hold && S.hold.has(q)));
+  const aboard = (q) => !!(q && q.deck && q.deck.s === S.id);
   if ((game.everyone ? game.everyone() : []).some((q) => q !== p && aboard(q))) {
     game.ui.msg('Not with anyone else aboard her.', '#ffb080', true);
     return true;
@@ -246,7 +230,6 @@ function bottleShip(game, p, held) {
   const youAboard = aboard(p);
   if (youAboard) {
     if (p.deck) leaveDeck(game, p);
-    p.belowShip = null;
     const spot = shoreNear(game, S) || seaBeside(game, S);
     p.teleport(spot.x, spot.y, spot.z);
     if (!game.seat || game.seat.host) game.renderer && (game.renderer.camInit = false);
@@ -264,11 +247,9 @@ function bottleShip(game, p, held) {
       folk.push({ escort: true, name: q.rec.name });
     } else folk.push({ name: q.rec.name, sid: q.settlement && q.settlement.id, idx: q.rec.idx });
     if (q.deck) leaveDeck(game, q);
-    q.belowShip = null;
     q.rec.away = true;
     game.despawnNpc(q);
   }
-  if (S.hold) closeHold(game, S, false);
   for (const c of game.sailors || []) if (c.shipId === S.id) game.removeOcc?.(c);
   game.sailors = (game.sailors || []).filter((c) => c.shipId !== S.id);
   const rec = S.save();
@@ -369,8 +350,8 @@ function seaBeside(game, S) {
 // when you are. True if it was theirs to see to (see NPC.hiredDuty).
 export function npcAboard(game, n, dt) {
   const p = game.player;
-  const pS = p.deck ? shipById(game, p.deck.s) : holdShipAt(game, p.x);
-  const nS = n.deck ? shipById(game, n.deck.s) : holdShipAt(game, n.x);
+  const pS = p.deck ? shipById(game, p.deck.s) : null;
+  const nS = n.deck ? shipById(game, n.deck.s) : null;
   if (!pS && !nS) return false;
   n.aboardT = (n.aboardT || 0) + dt;
   // You've gone ashore (or aboard another): after you, in a moment.
@@ -379,7 +360,6 @@ export function npcAboard(game, n, dt) {
     n.aboardT = 0;
     n.task = null;
     if (n.deck) leaveDeck(game, n);
-    n.belowShip = null;
     if (pS) return putNear(game, pS, n, p);
     const spot = besideYou(game, p);
     n.teleport(spot.x, spot.y, spot.z);
@@ -393,14 +373,6 @@ export function npcAboard(game, n, dt) {
     return putNear(game, pS, n, p);
   }
   const S = pS;
-  // Both below: they follow you about her as anywhere.
-  if (!n.deck && !p.deck) return false;
-  // Below, and you've gone up: up after you.
-  if (!n.deck && p.deck) {
-    if (n.aboardT < 1.6) return true;
-    n.aboardT = 0;
-    return putNear(game, S, n, p);
-  }
   const d = n.deck;
   if (d.mv) return true;
   const t = n.task;
@@ -411,26 +383,15 @@ export function npcAboard(game, n, dt) {
     return true;
   }
   n.task = null;
-  // You've gone below: to the way down nearest where you are, and down.
-  if (!p.deck) {
-    if (n.aboardT < 0.8) return true;
-    n.aboardT = 0;
-    const [lx, , lz] = holdLocal(S, p.x, p.y, p.z);
-    const E = entrances(S.m).slice().sort((a, b) => Math.hypot(a.inX - lx, a.inZ - lz) - Math.hypot(b.inX - lx, b.inZ - lz))[0];
-    const path = E && deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: E.x, y: E.y, z: E.z });
-    if (path) {
-      path.push([E.x + E.dx, E.y, E.z + E.dz]);
-      n.task = { kind: 'go', path };
-    } else putNear(game, S, n, p);
-    return true;
-  }
-  // About her deck at your heels.
+  // About her at your heels: on deck, or below after you (round 84: down
+  // her stairs, as you went; her inside is part of her now).
   const gap = Math.max(Math.abs(d.cx - p.deck.cx), Math.abs(d.cz - p.deck.cz));
-  if (gap > 2 || Math.abs(d.y - p.deck.y) > 2) {
+  if (gap > 2 || Math.abs(d.y - p.deck.y) > 1) {
     if (n.aboardT < 0.5) return true;
     n.aboardT = 0;
-    const path = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: p.deck.cx, y: p.deck.y, z: p.deck.cz });
+    const path = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: p.deck.cx, y: p.deck.y, z: p.deck.cz }, 2500);
     if (path && path.length > 1) n.task = { kind: 'go', path: path.slice(0, -1) };
+    else if (!path && gap > 6) putNear(game, S, n, p);
   } else if (Math.random() < dt * 0.3) n.face(p.x, p.z);
   return true;
 }
@@ -445,19 +406,23 @@ function besideYou(game, p) {
   return { x: p.x, y: p.y, z: p.z };
 }
 
-// Put `n` aboard S beside `p` (on her deck, or below with them).
+// Put `n` aboard S beside `p` (on her deck, or below with them: a place
+// to stand a step from them, on their level).
 function putNear(game, S, n, p) {
   n.path = null;
-  if (p.deck) {
-    const spot = deckSpotNear(S, p.deck.cx + 0.5, p.deck.cz + 0.5, 3, p.deck.y);
-    if (!spot) return true;
-    putAboard(game, S, n, spot.cx, spot.y, spot.cz);
-  } else {
-    const spot = besideYou(game, p);
-    if (n.deck) leaveDeck(game, n);
-    n.teleport(spot.x, spot.y, spot.z);
-    n.belowShip = S.id;
+  if (!p.deck) return true;
+  const d = p.deck;
+  const m = S.m;
+  for (const [dx, dz] of [[0, -1], [1, 0], [-1, 0], [0, 1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+    const x = d.cx + dx;
+    const z = d.cz + dz;
+    if (onPlan(m, x, z) && standOn(m, S.vox, x, d.y, z)) {
+      putAboard(game, S, n, x, d.y, z);
+      return true;
+    }
   }
+  const spot = deckSpotNear(S, d.cx + 0.5, d.cz + 0.5, 3, d.y);
+  if (spot) putAboard(game, S, n, spot.cx, spot.y, spot.cz);
   return true;
 }
 
@@ -516,6 +481,10 @@ export function fittingAt(S, vi) {
     if (gi >= 0) return { kind: 'gun', gi };
   }
   if (id === B.capstan) return { kind: 'capstan' };
+  // (Round 84) What's in her to use, below (or on deck): her pump, her
+  // stores, her blueprint table, a bunk, a gun at its port, the stove.
+  const inner = insideFitting(S, vi);
+  if (inner) return { kind: 'inside', f: inner };
   for (const E of entrances(m)) {
     if (E.kind === 'hatch') {
       const h = m.hatches.find((q) => q.top && q.x === E.x);
@@ -523,6 +492,24 @@ export function fittingAt(S, vi) {
     } else if (x === E.inX && z === E.inZ && y >= E.y - 1 && y <= E.y + 2) return { kind: 'below', E };
   }
   return null;
+}
+
+// (Round 84) A place to stand a step from fitting F of hers, on its level,
+// the nearest to `d` (where someone is on her).
+function standBeside(S, F, d) {
+  const m = S.m;
+  let best = null;
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const x = F.x + dx;
+    const z = F.z + dz;
+    for (const y of [F.y, F.y + 1, F.y - 1]) {
+      if (!onPlan(m, x, z) || !standOn(m, S.vox, x, y, z)) continue;
+      const dd = Math.hypot(x - d.cx, z - d.cz) + Math.abs(y - d.y);
+      if (!best || dd < best.dd) best = { x, y, z, dd };
+      break;
+    }
+  }
+  return best;
 }
 
 // (Round 69) Pointing near her wheel (its spokes stand up over its cell)
@@ -553,7 +540,7 @@ function fittingNear(game, S, mx, my) {
 
 // A fitting of hers clicked: walked to, and used (climbing aboard first,
 // from beside her).
-function useFitting(game, p, S, f) {
+export function useFitting(game, p, S, f) {
   const m = S.m;
   if (!p.deck || p.deck.s !== S.id) {
     if (p.deck || !boardAt(game, S, p, p.x, p.z)) return false;
@@ -584,6 +571,14 @@ function useFitting(game, p, S, f) {
     if (S.anchor) S.sailGoal = 0;
     game.ui.msg(S.anchor ? 'You let go the anchor: the cable runs out.' : 'You heave at the capstan: the anchor\'s aweigh!', '#a0d8ff', true);
     game.audio?.play(S.anchor ? 'chain' : 'select');
+    return true;
+  }
+  if (f.kind === 'inside') {
+    const F = f.f;
+    if (nearFitting(p, F)) return useInside(game, p, S, F);
+    // (Walked over to it first, round whatever's in the way, then used.)
+    const to = standBeside(S, F, d);
+    if (!to || !walkAboard(game, p, S, to, { kind: 'use', f: F })) game.ui.msg('No way to that from here.', '#c8c8c8', true);
     return true;
   }
   if (f.kind === 'below') {
@@ -801,13 +796,8 @@ export function sailorTalk(game, c) {
 // Saved with the world: the ships, and where you were aboard one.
 export function shipSave(game) {
   const p = game.player;
-  let below = null;
-  const S = holdShipAt(game, p.x);
-  if (S) {
-    const [lx, ly, lz] = holdLocal(S, p.x, p.y, p.z);
-    below = { s: S.id, lx, ly, lz };
-  }
-  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game), bottles: game.shipBottles || {}, bseq: game.shipBottleSeq || 0, designs: designsSave(game) };
+  // (Below her decks or on them: either way, where on her. Round 84.)
+  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below: null, seq: game.shipSeq || 0, fleets: fleetsSave(game), bottles: game.shipBottles || {}, bseq: game.shipBottleSeq || 0, designs: designsSave(game) };
 }
 
 export function shipLoad(game, data) {
@@ -823,10 +813,10 @@ export function shipLoad(game, data) {
   const at = data.deck || data.below;
   const S = at ? shipById(game, at.s) : null;
   if (!S) return;
-  if (data.deck) {
-    const spot = deckSpotNear(S, data.deck.cx + 0.5, data.deck.cz + 0.5, 4, data.deck.y);
-    if (spot) putAboard(game, S, p, spot.cx, spot.y, spot.cz);
-  } else enterHold(game, S, p, data.below.lx, data.below.ly, data.below.lz);
+  // (Round 84: where they were on her, below her decks too; saved below
+  // in her old place apart before 0.84, put at that cell of hers.)
+  if (data.deck) boardBelow(game, S, p, data.deck.cx, data.deck.y, data.deck.cz);
+  else boardBelow(game, S, p, data.below.lx, data.below.ly, data.below.lz);
 }
 
 // A ship of yours to launch (from what you're holding): on the open water

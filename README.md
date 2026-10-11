@@ -6262,6 +6262,70 @@ into stairs when the world's brought up to date.)
   what they trade in, they've all they can use, they can't afford it), and
   their purse shakes and flashes red when it's the money.
 
+## Round 84: Storms, provinces, and a ship's decks all one
+
+- **Storms**: thunderstorms (lightning striking where you can see it, the
+  thunder after), hail storms (hail stings anyone out in it with nothing
+  on their head and no roof or tree over them), blizzards in the cold,
+  sandstorms in the deserts and salt flats under a clear sky, and gales.
+  Each comes on and passes over a couple of hours, more often where the
+  land is stormy, and says so as it starts and ends. The wind gusts
+  through them: leaves rustle, and plants, bushes and crops sway with
+  each gust. Townsfolk talk about it and head home from work sooner, and
+  fewer people come to market. `weather <kind> [hours]` calls one down
+  (or `off` to let the weather be).
+- **Provinces** (worlds made from 0.84 on): Velmarch and Ostria are each
+  split into large regions with their own ground. Velmarch has a frozen
+  rimewood in the north, pine forest and grey moors in the middle, and
+  olive hills and dry grassland along its warm south. Ostria has bamboo
+  groves and jungle where it's wet, mangroves along its shores, and red
+  mesas, desert and salt flats in its dry heart. Borders between them
+  wander, some have a mountain range along them, and each region is
+  named: you're told as you cross into one, and the world map shows its
+  name when you hover over it or zoom in.
+- **A ship's lower decks are part of her**: going down a hatch's stairs
+  (real stair blocks now) takes you below on the ship herself, not to a
+  separate space. While you're below, the decks above you are hidden so
+  you can see where you are, and they come back as you climb up again.
+  The view doesn't shift as you go down. The pump, stores, chests, beds,
+  guns, blueprint table and stove below all work there, and the crew,
+  companions, the flooding, holes, repairs, sleeping aboard, sounds and
+  multiplayer all work with it. Anyone saved below in an older world is
+  put back on the ship at the same spot.
+- **Each people's own look**: signs, hanging signs, notice boards,
+  posters, lanterns, banners, wedding arches and aisle rugs, awnings,
+  wagons and chimneys are drawn in the style of the people where they
+  stand (Valeborn, Mistfolk, Tidefolk, Jadeborn, the desert peoples, the
+  northern peoples, the Velari and the Ashborn each have their own).
+- **Graveyards**: cities have a second graveyard and empire capitals
+  have three (in worlds made from 0.84 on). Burials, mourners and the
+  music use all of them.
+- **Empire market**: the stall pile under one canopy (tables, crates and
+  barrels) is replaced with two rows of proper stalls facing each other
+  across an aisle, each with its posts, cloth, counters and goods.
+- **Empty houses in empires**: an empire capital had more houses than
+  people, and many showed "empty" signs. A household now moves into each
+  empty one (in old worlds too).
+- **The Ashborn square** on Kharos: the clashing red and black sun is
+  replaced with black basalt brick framed in red kiln brick, a kiln-tile
+  sun at the centre and lines of brick quartering it (old squares are
+  re-laid).
+- **Locked doors stay shut**: walking into a locked door no longer opens
+  it; it says it's locked.
+- **Ancient Technology button**: clicking it in the tech tree works (the
+  click was taken as the start of a drag).
+- **The vote**: only a town's citizens are asked about its vote or can
+  take a side in it.
+- **Bunting**: no longer strung over plots where a building is planned
+  but not built yet.
+- **Leaning**: townsfolk only lean on full blocks (not gravestones,
+  fences or torches), and only while they're still where they started
+  leaning.
+- **The arch**: you only hear of the arch's secret from someone who
+  tells you, not by finding it, and it happens at dusk.
+- **Save check**: no longer "fixes" unopened chests, which emptied them
+  (they're filled when first opened).
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -6281,6 +6345,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `street [town]` | the builders lay out a new street with lots |
 | `finish [town]` | everything under construction there is finished at once |
 | `time <hh:mm>` / `time +<hours>` | waits until then (any key stops it) |
+| `weather <kind> [hours]` / `weather off` | calls down clear, rain, snow, fog, or a storm (thunder, hail, blizzard, sandstorm, gale) for two hours or as many as you say; `off` lets it be |
 | `give <item> [count]`, `coins <n>`, `heal` | items, money, health |
 | `god [on\|off]` | nothing can hurt you (the console no longer does this by itself) |
 | `skip <days>` (or `ff`) | fast-forwards that many days (1–120), the whole world living them |

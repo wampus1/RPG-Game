@@ -11,13 +11,11 @@
 // broadside on.
 import { NPC_STEP_TIME } from '../config.js';
 import { B } from '../world/blocks.js';
-import { standOn } from '../world/shipmodels.js';
+import { standOn, isInside, onPlan } from '../world/shipmodels.js';
 import { Sailor } from '../entities/sailor.js';
-import { findPath } from '../entities/pathfind.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
 import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel, roomFor } from './ships3d.js';
-import { holdOf, holdPos, holdLocal } from './shiphold.js';
 
 const TAU = Math.PI * 2;
 const NEAR = 70;
@@ -60,7 +58,6 @@ export function crewTick(game, S, dt) {
     // pirates.js).
     else if (c.deck && c.deck.s !== S.id) boarderBrain(game, c);
     else if (c.deck) deckBrain(game, S, c, dt);
-    else if (S.hold && S.hold.has(c)) holdBrain(game, S, c, dt);
   }
   // Fighting whoever's struck one of them.
   if (S.crewHere && crew.some((c) => c.angry)) crewFight(game, S, dt);
@@ -115,7 +112,7 @@ function playersNear(game, S, r) {
   for (const q of game.everyone ? game.everyone() : [game.player]) {
     if (!q || q.limbo) continue;
     if (Math.hypot(q.x - S.x, q.z - S.z) < r) return true;
-    if (S.hold && S.hold.has(q)) return true;
+    if (q.deck && q.deck.s === S.id) return true;
   }
   return false;
 }
@@ -209,6 +206,8 @@ function deckBrain(game, S, c, dt) {
     if (!c.deck) return;
     return;
   }
+  // (Round 84) Below her decks: at the pump, or about, and back up.
+  if (c.below && belowBrain(game, S, c, dt)) return;
   // At the wheel: stays there.
   if (t && t.kind === 'helm' && S.helmBy === c.id) {
     c.dir = facingTo(S, 0, -1);
@@ -257,7 +256,7 @@ function deckBrain(game, S, c, dt) {
     }
   }
   // (Round 69) Ordered below to the pump: there till told otherwise.
-  if (c.order === 'pump') {
+  if (c.order === 'pump' && !c.below) {
     if (goBelow(game, S, c, 'pump')) return;
   }
   // A fight (or their captain's orders): the gunners to their guns.
@@ -277,7 +276,7 @@ function deckBrain(game, S, c, dt) {
     }
   }
   // Taking water: below to the pumps.
-  if (S.flood > 0.06 && c.role !== 'captain' && R < 0.5) {
+  if (S.flood > 0.06 && c.role !== 'captain' && R < 0.5 && !c.below) {
     if (goBelow(game, S, c, 'pump')) return;
   }
   if (c.task && c.task.then) {
@@ -313,78 +312,83 @@ function deckBrain(game, S, c, dt) {
   }
 }
 
-// Down the nearest hatch (to the pumps, or for a while).
+// Down below (round 84: down her stairs as anyone goes, her inside being
+// part of her): to the pump, or about for a while.
 function goBelow(game, S, c, why) {
-  const m = S.m;
-  const top = m.hatches.find((h) => h.top);
-  if (!top) return false;
   const d = c.deck;
-  // The deck cell at the head of the stairs, then down them.
-  const to = { x: top.x, y: m.deck + 1, z: top.z + top.n };
-  const path = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, to);
+  const to = why === 'pump' ? besidePump(S) : insideSpot(S);
+  if (!to) return false;
+  const path = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, to, 3000);
   if (!path) return false;
-  // (On down the steps.)
-  path.push([top.x, top.D + top.n, top.z + top.n - 1]);
   c.task = { kind: 'go', path };
   c.below = { why, t: c.order === 'pump' ? 1e9 : why === 'pump' ? 60 : 12 + Math.random() * 20 };
-  holdOf(game, S);
   return true;
 }
 
-// Below decks: to the pump, or about; and back up.
-function holdBrain(game, S, c, dt) {
-  if (c.moving) return;
-  const b = c.below || (c.below = { why: 'visit', t: 10 });
+// A place to stand at her pump.
+function besidePump(S) {
   const m = S.m;
-  if (c.hpath && c.hpath.length) {
-    const [x, y, z] = c.hpath.shift();
-    if (Math.abs(x - c.x) + Math.abs(z - c.z) <= 2 && game.world.canStand(x, y, z, true)) {
-      c.face(x, z);
-      c.startMove(x, y, z, NPC_STEP_TIME);
-    } else c.hpath = null;
-    return;
+  const p = m.pump;
+  if (!p) return null;
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    for (const y of [p.y, p.y + 1]) if (onPlan(m, p.x + dx, p.z + dz) && standOn(m, S.vox, p.x + dx, y, p.z + dz)) return { x: p.x + dx, y, z: p.z + dz };
   }
+  return null;
+}
+
+// Somewhere to stand below her decks.
+function insideSpot(S) {
+  const m = S.m;
+  for (let k = 0; k < 30; k++) {
+    const x = 1 + Math.floor(Math.random() * (m.W - 2));
+    const z = 1 + Math.floor(Math.random() * (m.L - 2));
+    for (let y = m.deck; y >= 1; y--) if (isInside(m, x, y, z) && standOn(m, S.vox, x, y, z)) return { x, y, z };
+  }
+  return null;
+}
+
+// Below decks: working the pump (if that's what they came for: as long as
+// she's taking water, or for good if they were ordered to), or about for a
+// while; then back up on deck. True if they were seen to.
+function belowBrain(game, S, c, dt) {
+  const b = c.below;
+  const m = S.m;
+  const d = c.deck;
+  if (c.task && c.task.path && c.task.path.length) return false;
   b.t -= dt;
-  if (b.why === 'pump') {
-    const [px, py, pz] = holdPos(S, m.pump.x, m.pump.y, m.pump.z);
-    // (Beside it, square or cornerwise: round 69.)
-    if (Math.max(Math.abs(c.x - px), Math.abs(c.z - pz)) <= 1 && Math.abs(c.y - py) <= 1) {
+  const here = { x: d.cx, y: d.y, z: d.cz };
+  if (b.why === 'pump' && m.pump) {
+    const p = m.pump;
+    if (Math.max(Math.abs(d.cx - p.x), Math.abs(d.cz - p.z)) <= 1 && Math.abs(d.y - p.y) <= 1) {
       S.pumpers = (S.pumpers || 0) + 1;
+      c.dir = facingTo(S, p.x - d.cx, p.z - d.cz);
       if (Math.random() < dt * 3) c.actionTimer = 0.25;
-      if ((S.flood > 0.01 || c.order === 'pump') && b.t > 0 && (c.order === 'pump' || b.t < 1e8)) return;
-    } else if (!c.hpathTried || (c.order === 'pump' && Math.random() < dt * 0.5)) {
-      c.hpathTried = true;
-      c.hpath = findPath(game.world, c.x, c.y, c.z, px, py, pz, { near: 1, maxNodes: 2500 }) || [];
-      return;
-    } else if (c.order === 'pump') return;
+      if ((S.flood > 0.01 || c.order === 'pump') && b.t > 0) return true;
+    } else if (!b.tried || (c.order === 'pump' && Math.random() < dt * 0.5)) {
+      b.tried = true;
+      const to = besidePump(S);
+      const path = to && deckPath(S, here, to, 3000);
+      if (path) c.task = { kind: 'go', path };
+      return true;
+    } else if (c.order === 'pump') return true;
   }
   if (b.t > 0 && b.why !== 'pump') {
-    if (!c.hpath && Math.random() < dt * 0.5) {
-      const x = c.x + Math.round((Math.random() - 0.5) * 8);
-      const z = c.z + Math.round((Math.random() - 0.5) * 8);
-      const y = game.world.findStandY(x, z, c.y);
-      if (y >= 0) c.hpath = findPath(game.world, c.x, c.y, c.z, x, y, z, { maxNodes: 800 }) || null;
+    if (Math.random() < dt * 0.25) {
+      const to = insideSpot(S);
+      const path = to && deckPath(S, here, to, 2000);
+      if (path) c.task = { kind: 'go', path };
     }
-    return;
+    return true;
   }
-  // Back up on deck, up the stairs.
-  const top = m.hatches.find((h) => h.top);
-  if (!top) return;
-  const [tx, ty, tz] = holdPos(S, top.x, m.deck + 1, top.z + top.n);
-  if (!c.upTried || (c.upTried && Math.random() < dt * 0.2)) {
-    c.upTried = true;
-    c.hpath = findPath(game.world, c.x, c.y, c.z, tx, ty, tz, { maxNodes: 3000 }) || null;
-    c.hpathTried = false;
-    if (!c.hpath) {
-      // (Can't find the way up: straight up the nearest stairs.)
-      const [lx, , lz] = holdLocal(S, c.x, c.y, c.z);
-      const spot = deckSpotNear(S, lx + 0.5, lz + 0.5, 8, null);
-      if (spot) {
-        c.below = null;
-        putAboard(game, S, c, spot.cx, spot.y, spot.cz);
-      }
-    }
+  // Back up on deck, up her stairs.
+  c.below = null;
+  const up = deckSpotNear(S, d.cx + 0.5, d.cz + 0.5, 8, null);
+  if (up) {
+    const path = deckPath(S, here, { x: up.cx, y: up.y, z: up.cz }, 3000);
+    if (path) c.task = { kind: 'go', path };
+    else putAboard(game, S, c, up.cx, up.y, up.cz);
   }
+  return true;
 }
 
 // Does gun gi of hers bear on her foe?

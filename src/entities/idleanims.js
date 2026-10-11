@@ -23,13 +23,16 @@ const LOOSE = new Set(['home', 'wander', 'social', 'visit', 'hobby', 'work', 'pl
 const SWEEPERS = new Set(['merchant', 'shopkeeper', 'innkeeper', 'tavernkeeper', 'baker', 'tailor', 'herbalist', 'jeweler', 'carpenter', 'barkeep', 'cook', 'farmer', 'priest', 'scholar']);
 
 function wallBeside(n) {
-  const w = n.game.world;
-  for (let d = 0; d < 4; d++) {
-    const b = BLOCKS[w.getBlock(n.x + DX[d], n.y, n.z + DZ[d])];
-    const up = BLOCKS[w.getBlock(n.x + DX[d], n.y + 1, n.z + DZ[d])];
-    if (b && b.solid && b.render === 'cube' && up && up.solid) return d;
-  }
+  for (let d = 0; d < 4; d++) if (wallAt(n, d)) return d;
   return -1;
+}
+
+// (Round 84) A whole wall there, both blocks of it: never a gravestone, a
+// fence, a torch, a sign or a half-block.
+function wallAt(n, d) {
+  const w = n.game.world;
+  const full = (b) => !!b && b.solid && b.render === 'cube' && !b.liquid && b.opaque !== false;
+  return full(BLOCKS[w.getBlock(n.x + DX[d], n.y, n.z + DZ[d])]) && full(BLOCKS[w.getBlock(n.x + DX[d], n.y + 1, n.z + DZ[d])]);
 }
 
 // (Round 82) A chest beside them (or in front), at their own level.
@@ -100,7 +103,7 @@ export function idleTick(n, act, g, dt) {
   if (wd >= 0 && !busy && (r < 0.75 || job === 'guard')) {
     // (Back to the wall.)
     n.dir = (wd + 2) % 4;
-    n.idleAnim = { kind: 'lean', t: 0, dur: n.rng.float(8, 16), wall: wd };
+    n.idleAnim = { kind: 'lean', t: 0, dur: n.rng.float(8, 16), wall: wd, x: n.x, y: n.y, z: n.z };
     return true;
   }
   // (Nothing to lean on, nobody to talk to: a stretch, or a look about.)
@@ -164,6 +167,12 @@ function step(n, a, dt) {
     a.k = ((a.k || 0) + 1) % 4;
     n.dir = a.k === 1 ? (a.from + 1) % 4 : a.k === 3 ? (a.from + 3) % 4 : a.from;
     return true;
+  }
+  // (Round 84) Leaning: only while they're still where they leant, and the
+  // wall's still there.
+  if (a.kind === 'lean' && (n.x !== a.x || n.z !== a.z || n.y !== a.y || !wallAt(n, a.wall))) {
+    n.idleAnim = null;
+    return false;
   }
   return a.kind === 'lean' || a.kind === 'stretch';
 }

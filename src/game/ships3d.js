@@ -27,7 +27,7 @@ import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { shipModel, SHIP_TYPES, standOn, stepOn, onPlan, isInside, vAt } from '../world/shipmodels.js';
 import { hash4 } from '../util/rng.js';
 import { STORM_WALL } from '../entities/raft.js';
-import { enterHold, holdTick, holdVoxel, closeHold, holdFlood } from './shiphold.js';
+import { belowTick, floodLevel, noteBelow, useInside, insideFitting } from './shiphold.js';
 import { crewTick } from './shipcrew.js';
 import { washAshore } from './stormsea.js';
 
@@ -340,7 +340,7 @@ export function updateShips3d(game, dt) {
   }
   tickBalls(game, dt);
   syncWalkers(game, dt);
-  holdTick(game, dt);
+  belowTick(game, dt);
 }
 
 function sail(game, S, W, dt) {
@@ -601,7 +601,7 @@ function flooding(game, S, dt) {
   const f = S.flood;
   const goal = -f * (m.deck - m.wl) * 0.8 - (S.sinking ? S.sinking * 0.7 : 0);
   S.yOff += (goal - S.yOff) * Math.min(1, dt * 0.8);
-  holdFlood(game, S);
+  floodLevel(S);
   if (!S.sinking && (f >= 0.98 || S.whole < 0.45)) {
     S.sinking = 0.001;
     for (const e of aboardOf(game, S)) if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`${theShip(S, true)} is going down! Over the side!`, '#ff8060'));
@@ -616,8 +616,8 @@ function sinkTick(game, S, dt) {
   S.v *= Math.max(0, 1 - dt);
   if (S.sinking < 2.5) return;
   // (Everyone off her as her deck goes under.)
+  // (Below decks too: there's no other place below her now. Round 84.)
   for (const e of aboardOf(game, S)) overboard(game, S, e, true);
-  closeHold(game, S, true);
   if (S.sinking > 7) {
     // What floats up from her hold.
     const r = game.renderer;
@@ -643,10 +643,8 @@ function sinkTick(game, S, dt) {
 
 function shakeAboard(game, S, k) {
   S.shakeT = Math.max(S.shakeT, 0.4);
-  const hold = S.hold;
   for (const q of game.everyone ? game.everyone() : [game.player]) {
-    const aboard = (q.deck && q.deck.s === S.id) || (hold && hold.has(q));
-    if (!aboard) continue;
+    if (!(q.deck && q.deck.s === S.id)) continue;
     game.asPlayer(q, () => {
       game.shake = Math.min(1.5, (game.shake || 0) + k);
     });
@@ -671,7 +669,6 @@ export function breakVoxel(game, S, vi, why = null) {
     if (mi >= 0) S.sailHp[mi] = 0;
   }
   S.recount();
-  holdVoxel(game, S, vi);
   game.net?.shipChanged?.(S, vi);
   // Splinters (round 69: of what she was made of there, flung and
   // falling; dust; the sea spouting in at a hole low in her side; the
@@ -740,7 +737,6 @@ export function mendVoxel(game, S, vi) {
     if (mi >= 0 && S.sailHp[mi] === 0) S.sailHp[mi] = 0.3;
   }
   S.recount();
-  holdVoxel(game, S, vi);
   game.net?.shipChanged?.(S, vi);
   // (Round 69) Hammered home: the knocks, sawdust, a gleam of new wood.
   const r = game.renderer;
@@ -994,8 +990,10 @@ function advanceStep(game, S, e, dt) {
   e.walking = false;
   d.x = d.cx + 0.5;
   d.z = d.cz + 0.5;
-  // Down a hatch, through a door, through a hole in her deck: below.
-  if (isInside(S.m, d.cx, d.y, d.cz)) enterHold(game, S, e, d.cx, d.y, d.cz);
+  // (Round 84) Down a hatch, through a door, through a hole in her deck:
+  // below, in her, as she is (no other place apart now: see shiphold.js);
+  // and up again.
+  noteBelow(game, S, e);
 }
 
 // Take a step on her deck, `dx`/`dz` cells of hers (each -1, 0 or 1).
@@ -1288,6 +1286,7 @@ function entryStep(game, S, p, ang, dur) {
 // unless that's where it's going.
 export function deckPath(S, from, to, maxN = 1500, avoid = null) {
   const m = S.m;
+  const allowIn = isInside(m, from.x, from.y, from.z) || isInside(m, to.x, to.y, to.z);
   const key = (x, y, z) => (y * m.L + z) * m.W + x;
   const prev = new Map([[key(from.x, from.y, from.z), null]]);
   const q = [[from.x, from.y, from.z]];
@@ -1312,7 +1311,8 @@ export function deckPath(S, from, to, maxN = 1500, avoid = null) {
       if (!onPlan(m, nx, nz)) continue;
       const ny = stepOn(m, S.vox, x, y, z, nx, nz);
       if (ny < 0) continue;
-      if (isInside(m, nx, ny, nz) && !(nx === to.x && nz === to.z)) continue;
+      // (Round 84: through her inside only to go there, or from there.)
+      if (!allowIn && isInside(m, nx, ny, nz) && !(nx === to.x && nz === to.z)) continue;
       // (Round 69: round whoever's standing there, if asked.)
       if (avoid && !(nx === to.x && nz === to.z) && avoid(nx, ny, nz)) continue;
       const k = key(nx, ny, nz);
@@ -1366,6 +1366,8 @@ function autoWalk(game, S, p) {
   const t = A.then;
   if (!t) return;
   if (t.kind === 'helm' || t.kind === 'gun') deckInteract(game, p, t.kind === 'gun' ? t.gi : null);
+  // (Round 84) Something of hers inside her, walked to: used.
+  else if (t.kind === 'use' && t.f) useInside(game, p, S, t.f);
   else if (t.kind === 'below' && t.E) {
     if (d.cx === t.E.x && d.cz === t.E.z) deckStep(game, S, p, t.E.dx, t.E.dz, PLAYER_STEP_TIME);
   }
@@ -1500,6 +1502,18 @@ export function deckInteract(game, p, wantGun = null) {
     d.gi = gi;
     game.ui.msg('You man the gun. Point to aim, W/S to raise and lower it, click to fire (a cannonball a shot). F to leave it.', '#a0d8ff');
     return true;
+  }
+  // (Round 84) Something of hers in reach, on deck or below: her pump, a
+  // chest of her stores, a bunk, a gun at its port, the stove.
+  if (wantGun === null) {
+    for (const dy of [0, -1, 1]) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const x = d.cx + dx;
+      const z = d.cz + dz;
+      const y = d.y + dy;
+      if (x < 0 || z < 0 || y < 0 || x >= m.W || z >= m.L || y >= m.H) continue;
+      const f = insideFitting(S, (y * m.L + z) * m.W + x);
+      if (f) return useInside(game, p, S, f);
+    }
   }
   return false;
 }

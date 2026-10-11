@@ -73,6 +73,9 @@ const PROPS = {
   bookshelf: { w: 0.9, h: 0.95, top: '#6a4a2a', side: '#5a3a20', band: '#a03a2a', bands: [0.3, 0.6] },
   furnace: { w: 0.86, h: 0.86, top: '#6a6a72', side: '#4e4e56', band: '#e07a2a', bands: [0.35] },
   blueprint_table: { w: 0.86, h: 0.6, top: '#9ab8d8', side: '#5a3e22', band: '#2a4a8a', bands: [0.85] },
+  // (Round 84: seen below, cut away.)
+  lantern: { w: 0.3, h: 0.5, top: '#ffe8a0', side: '#f0b050', band: '#3a3a42', bands: [0.15, 0.85] },
+  hammock: { w: 0.8, h: 0.42, top: '#d8ccb0', side: '#a89878', band: '#6a5a40', bands: [0.5] },
 };
 const DYNAMIC = new Set(['ship_cannon', 'helm', 'lantern', 'hammock']);
 
@@ -100,7 +103,11 @@ function makeBuf(ox, oy, w, h) {
 // --------------------------------------------------- her cubes, turned
 // Everything that doesn't move on her, at heading bucket q (`sink`: how
 // far below her mark she's settled, in pixels).
-function rasterStatic(S, q, sink) {
+// (Round 84) `cut`: someone looking on is below her decks with their feet
+// at layer `cut`: everything of hers above that's left out (her decks over
+// them, her upper works), and what's inside her drawn as plainly as what's
+// out on deck, so they can see where they are.
+function rasterStatic(S, q, sink, cut = null) {
   const m = S.m;
   const vox = S.vox;
   const a = (q / BUCKETS) * TAU;
@@ -140,8 +147,12 @@ function rasterStatic(S, q, sink) {
   const covers = (id) => id !== 0 && id !== B.ship_mast && BLOCKS[id].render === 'cube' && BLOCKS[id].opaque;
   const insideAir = (x, y, zz) => x >= 0 && y >= 0 && zz >= 0 && x < W && y < H && zz < L && m.inside[idx(x, y, zz)] === 1;
   // What of her inside can be seen from out of her at all: through her
-  // hatches, her doors, her holes (a few cells in).
-  const seen = seenInside(S);
+  // hatches, her doors, her holes (a few cells in). (From below, cut
+  // away: all of it.)
+  const seenAll = seenInside(S);
+  const seen = cut === null ? seenAll : null;
+  const hidden = (vi) => !!seen && seen[vi] === 2;
+  const dimIn = cut === null ? 0.5 : 0.84;
   // (Light from the upper left of the screen, a little toward you.)
   const LU = -0.55;
   const LV = 0.62;
@@ -153,25 +164,37 @@ function rasterStatic(S, q, sink) {
   for (let y = 0; y < H; y++) {
     for (let zz = 0; zz < L; zz++) {
       for (let x = 0; x < W; x++) {
+        if (cut !== null && y > cut) continue;
         const vi = idx(x, y, zz);
         const id = vox[vi];
         if (id === 0) continue;
         const b = BLOCKS[id];
-        if (DYNAMIC.has(b.name)) continue;
-        if (id === mast && y > m.deckLevel[zz * W + x]) continue;
         const row = rowOf(x + 0.5, zz + 0.5);
+        if (DYNAMIC.has(b.name)) {
+          // (Round 84: below, cut away, her lanterns and hammocks show.)
+          if (cut !== null && (b.name === 'lantern' || b.name === 'hammock')) rasterProp(R, T, PROPS[b.name], x, y, zz, row, vi, waterH, sea);
+          continue;
+        }
+        if (id === mast && y > m.deckLevel[zz * W + x]) continue;
         const variant = hash4(x, y, zz + 77) & 3;
+        // (Round 84) A stair: two steps, the way it climbs.
+        if (b.stair) {
+          if (hidden(vi)) continue;
+          rasterStair(R, T, S, x, y, zz, row, vi, waterH, sea);
+          continue;
+        }
         if (b.render !== 'cube') {
-          if (seen[vi] === 2) continue;
+          if (hidden(vi)) continue;
           rasterProp(R, T, PROPS[b.name] || PROPS.crate, x, y, zz, row, vi, waterH, sea);
           continue;
         }
         const tex = texOf(id, variant);
         if (!tex) continue;
         // The top.
-        if (!covers(at(x, y + 1, zz)) && !(y + 1 < H && seen[idx(x, y + 1, zz)] === 2)) {
+        const capped = cut === null || y + 1 <= cut;
+        if (!(capped && covers(at(x, y + 1, zz))) && !(y + 1 < H && hidden(idx(x, y + 1, zz)))) {
           let f = 1.02 + ((hash4(x, y, zz) & 7) - 3.5) * 0.012;
-          if (insideAir(x, y + 1, zz)) f *= 0.5;
+          if (insideAir(x, y + 1, zz)) f *= dimIn;
           faceTop(R, T, x, y, zz, tex.top, f, row, vi, waterH, sea);
         }
         // The sides that face the camera.
@@ -182,12 +205,12 @@ function rasterStatic(S, q, sink) {
           if (nv <= 0.03) continue;
           const nb = at(x + nx, y, zz + nz);
           if (covers(nb)) continue;
-          if (x + nx >= 0 && x + nx < W && zz + nz >= 0 && zz + nz < L && seen[idx(x + nx, y, zz + nz)] === 2) continue;
+          if (x + nx >= 0 && x + nx < W && zz + nz >= 0 && zz + nz < L && hidden(idx(x + nx, y, zz + nz))) continue;
           const nu = nx * c + nz * s;
           let f = 0.74 + 0.3 * Math.max(0, nu * LU + nv * LV);
           let tint = null;
           const inner = insideAir(x + nx, y, zz + nz);
-          if (inner) f *= 0.5;
+          if (inner) f *= dimIn;
           // (Her paint: a band of her colour under the rail, a dark band
           // at the waterline.)
           else if (id === hullP && m.hull[idx(x, y, zz)] && !(x + nx >= 0 && x + nx < W && zz + nz >= 0 && zz + nz < L && m.hull[idx(x + nx, y, zz + nz)])) {
@@ -199,9 +222,42 @@ function rasterStatic(S, q, sink) {
       }
     }
   }
+  // (Round 84) Below and cut away: the water she's taken on, lying in
+  // her as high as it's risen (or up to where she's cut, if higher).
+  const wt = S.waterTop ?? -1;
+  if (cut !== null && wt >= 0) {
+    const top = Math.min(wt, cut);
+    for (let zz = 0; zz < L; zz++) for (let x = 0; x < W; x++) {
+      for (let y = top; y >= 0; y--) {
+        const vi = idx(x, y, zz);
+        if (!m.inside[vi] || vox[vi]) continue;
+        const ripple = (hash4(x, y, zz + 31) & 3) * 3;
+        box(R, T, x + 0.5, zz + 0.5, 0.5, 0.5, 0, y - 1, y - 0.18, (face) => (face === 0 ? pack(52 + ripple, 108 + ripple, 150 + ripple) : pack(36, 80, 120)), rowOf(x + 0.5, zz + 0.5), vi * 8 + 7, waterH, null);
+        break;
+      }
+    }
+  }
   // Into a picture.
   R.canvas = toCanvas(R.col, w, h);
   return R;
+}
+
+// (Round 84) A stair of hers (see world/shipmodels.js): a full low step
+// and, on the side it climbs toward, a half-depth high one, in her deck's
+// planking.
+const STAIR_DIR = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+function rasterStair(R, T, S, x, y, zz, row, vi, waterH, sea) {
+  const [dx, dz] = STAIR_DIR[(S.m.meta[vi] || 0) & 3];
+  const tex = texOf(B.deck_planks, 0);
+  const paint = (face, fs, ft) => {
+    if (!tex) return face === 0 ? pack(160, 122, 74) : pack(120, 88, 52);
+    if (face === 0) return tex.top[((ft * 15.99) | 0) * 16 + ((fs * 15.99) | 0)];
+    return tex.side[((ft * (LH - 0.01)) | 0) * 16 + ((fs * 15.99) | 0)];
+  };
+  const cx = x + 0.5;
+  const cz = zz + 0.5;
+  box(R, T, cx, cz, 0.5, 0.5, 0, y - 1, y - 0.5, paint, row, vi * 8 + 6, waterH, sea);
+  box(R, T, cx + dx * 0.25, cz + dz * 0.25, dx ? 0.25 : 0.5, dz ? 0.25 : 0.5, 0, y - 0.5, y, paint, row, vi * 8 + 6, waterH, sea);
 }
 
 // Which of her inside cells can be seen from outside her (1), and which
@@ -500,20 +556,21 @@ function toCanvas(col, w, h) {
 
 // Her picture at heading bucket q: kept (a few headings' worth, the
 // latest), made again once she's been holed or mended or has settled.
-export function staticFor(S, q) {
+export function staticFor(S, q, cut = null) {
   const sink = Math.round(-(S.yOff || 0) * LH);
-  const ver = `${S.ver || 0}|${sink}|${S.paint}|${S.paint2}`;
+  const ver = `${S.ver || 0}|${sink}|${S.paint}|${S.paint2}|${S.waterTop ?? -1}`;
   S.rcache ||= new Map();
   if (S.rcacheVer !== ver) {
     S.rcache.clear();
     S.rcacheVer = ver;
   }
-  let R = S.rcache.get(q);
+  const ck = cut === null ? q : `${q}|${cut}`;
+  let R = S.rcache.get(ck);
   if (!R) {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-    R = rasterStatic(S, q, sink);
+    R = rasterStatic(S, q, sink, cut);
     R.ms = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
-    S.rcache.set(q, R);
+    S.rcache.set(ck, R);
     if (S.rcache.size > 10) S.rcache.delete(S.rcache.keys().next().value);
   }
   return R;
@@ -992,13 +1049,15 @@ function rigFor(S, T, D, low, time) {
 }
 
 // What's low on her deck and moves: the guns, the wheel.
-function deckWorks(S, T, D, time) {
+function deckWorks(S, T, D, time, cut = null) {
   const m = S.m;
   const rowAt = (lx, lz) => Math.floor(T.v(lx, lz) + 0.5) + 200;
+  // (Round 84: cut away below, only what's at or under the cut.)
+  const shown = (y) => cut === null || y <= cut;
   // The wheel, turning as she's steered.
   {
     const hl = m.helm;
-    if (S.vox[(hl.y * m.L + hl.z) * m.W + hl.x] === B.helm) {
+    if (shown(hl.y) && S.vox[(hl.y * m.L + hl.z) * m.W + hl.x] === B.helm) {
       const cx = hl.x + 0.5;
       const cz = hl.z + 0.5;
       const hy = hl.y - 1;
@@ -1032,7 +1091,10 @@ function deckWorks(S, T, D, time) {
     const aim = st.aim || 0;
     const elev = st.elev || 0;
     const rec = st.recoil || 0;
-    if (g.deck) {
+    if (!shown(g.y)) return;
+    // (Round 84) A gun below her deck, seen from inside her, cut away: its
+    // carriage and barrel at its port, as one on deck is drawn.
+    if (g.deck || cut !== null) {
       const row = rowAt(cx, cz);
       const hy = g.y - 1;
       box(D, T, cx - out * 0.1 * (1 + rec), cz, 0.36, 0.3, 0, hy, hy + 0.36, (face) => (face === 0 ? pack(122, 82, 46) : pack(96, 62, 34)), row, 0);
@@ -1053,6 +1115,7 @@ function deckWorks(S, T, D, time) {
   });
   // Her stern lanterns.
   for (const L of m.sternLights) {
+    if (!shown(L.y)) continue;
     const row = rowAt(L.x + 0.5, L.z + 0.3);
     const lit = S.night;
     box(D, T, L.x + 0.5, L.z + 0.25, 0.18, 0.18, 0, L.y - 1, L.y - 0.4, (face) => (lit ? (face === 0 ? pack(255, 240, 180) : pack(255, 200, 90)) : pack(70, 70, 80)), row, 0);
@@ -1145,10 +1208,26 @@ export function deckView(r, S, lx, lz, fy, O = shipOrigin(r, S)) {
 
 // Draw her, and everyone aboard (the deco of her frontmost row: see
 // Renderer.drawWorld).
+// (Round 84) Where her cut is for whoever's looking on: the layer of
+// their feet if they're below her decks (null if they're not, or not on
+// her at all).
+export function cutOf(game, S) {
+  const p = game && game.player;
+  const d = p && p.deck;
+  if (!d || d.s !== S.id) return null;
+  return isBelow(S.m, d.cx, d.y, d.cz) ? d.y : null;
+}
+function isBelow(m, x, y, z) {
+  if (x < 0 || z < 0 || x >= m.W || z >= m.L) return false;
+  const dl = m.deckLevel[z * m.W + x];
+  return dl >= 0 && y <= dl;
+}
+
 export function drawShip(r, game, S, aboard) {
   const ctx = r.ctx;
   const q = viewBucket(r, S);
-  const Rs = staticFor(S, q);
+  const cut = cutOf(game, S);
+  const Rs = staticFor(S, q, cut);
   const O = shipOrigin(r, S);
   if (O.X + Rs.ox + Rs.w < -400 || O.X + Rs.ox > r.vw + 400 || O.Y + Rs.oy - 500 > r.vh || O.Y + Rs.oy + Rs.h < -60) {
     S.drawn = null;
@@ -1162,16 +1241,17 @@ export function drawShip(r, game, S, aboard) {
   const gk = (S.guns || []).map((g) => `${Math.round((g.aim || 0) * 20)}:${Math.round((g.elev || 0) * 20)}:${Math.round((g.recoil || 0) * 10)}`).join(';');
   const key = [q, S.noRig ? 1 : 0, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
     Math.round((S.wheel || 0) * 12), gk, S.runOut ? 1 : 0, (S.sailHp || []).map((h) => Math.round(h * 20)).join(':'), S.night ? 1 : 0, tq,
-    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem, S.sailCloth || ''].join(',');
+    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem, S.sailCloth || '', cut ?? ''].join(',');
   if (!S.dyn || S.dyn.k !== key) {
     const low = pooled(S, 'low', Rs.ox - 24, Rs.oy - 24, Rs.ox + Rs.w + 24, Rs.oy + Rs.h + 8, Rs);
-    deckWorks(S, T, low, tq);
-    // (Still building: no masts yet.)
-    if (!S.noRig) rigFor(S, T, low, true, tq);
+    deckWorks(S, T, low, tq, cut);
+    // (Still building: no masts yet. Below, cut away: none to see.)
+    const rig = !S.noRig && cut === null;
+    if (rig) rigFor(S, T, low, true, tq);
     const hb = rigBox(S, T);
     const high = pooled(S, 'high', hb[0], hb[1], hb[2], hb[3], Rs);
     mergeDepth(high, low);
-    if (!S.noRig) rigFor(S, T, high, false, tq);
+    if (rig) rigFor(S, T, high, false, tq);
     S.dyn = { k: key, low, lowCv: shipCanvas(S, 'low', low), hiCv: shipCanvas(S, 'high', high), high };
   }
   const { low, lowCv, hiCv, high } = S.dyn;
@@ -1194,9 +1274,18 @@ export function drawShip(r, game, S, aboard) {
   // Who's aboard, in order, each with whatever of her is in front of them
   // drawn back over them.
   const list = [];
+  // (Round 84) Below, cut away: those on the decks over you aren't seen;
+  // from outside her, those below are only seen where she's open to them
+  // (under a hatch, through a hole).
+  const seenIn = cut === null ? seenInside(S) : null;
   for (const e of aboard) {
     const d = e.deck;
     if (!d || d.s !== S.id) continue;
+    if (cut !== null && d.y > cut) continue;
+    if (cut === null && isBelow(S.m, d.cx, d.y, d.cz)) {
+      const vi = (d.y * S.m.L + d.cz) * S.m.W + d.cx;
+      if (d.y >= S.m.H || seenIn[vi] !== 1) continue;
+    }
     list.push({ e, dv: deckView(r, S, d.x, d.z, d.y, O) });
   }
   list.sort((a, b) => a.dv.row - b.dv.row || a.dv.y - b.dv.y);

@@ -128,11 +128,26 @@ function wheel(parts, f, r0, r1, R, turn) {
   }
 }
 
+// (Round 84) A wagon in its people's look (see lookart.js): its wood, its
+// canvas, and how the canvas is worked.
+const WAGON_LOOKS = [
+  { wood: '#7a5430', cloth: '#c8bc9c' },
+  { wood: '#4e4a34', cloth: '#9aa278', band: '#6a7a42' },
+  { wood: '#a89c84', cloth: '#dcdccc', patch: '#b8c4cc' },
+  { wood: '#8a2a22', cloth: '#d8b860', band: '#a82a24', rim: '#e8c050' },
+  { wood: '#9a6a3a', cloth: '#ecd6a4', stripe: '#c86a3a' },
+  { wood: '#4a3a2a', cloth: '#9a7a5a', band: '#5a4632' },
+  { wood: '#8a6a4a', cloth: '#f0ece0', band: '#6a3a8a', rim: '#c8a040' },
+  { wood: '#3a3034', cloth: '#5a3a30', band: '#b84a2a', rim: '#c88a30' },
+];
+
 function wagonParts(o) {
-  const wood = col('#7a5430');
+  const W = WAGON_LOOKS[o.look || 0] || WAGON_LOOKS[0];
+  const wood = col(W.wood);
   const woodD = shade(wood, 0.7);
   const woodL = shade(wood, 1.2);
-  const cloth = o.banner ? col('#ece4cc') : col('#c8bc9c');
+  const cloth = o.banner && !o.look ? col('#ece4cc') : col(W.cloth);
+  const rim = W.rim ? col(W.rim) : null;
   const parts = [];
   // The bed: a floor of planks, low sides (a rail, open), boards fore and
   // aft.
@@ -162,7 +177,12 @@ function wagonParts(o) {
       const h1 = arch((r0 + r1) / 2);
       parts.push(box(-2.02, -0.24, r0, r1, 0.82, h1, (p, face) => {
         // (A seam between each strip of the canvas.)
-        const seam = Math.floor((p.f + 3) * 3.4) % 2 === 0 && face === 'top' ? shade(cloth, 0.9) : cloth;
+        let seam = Math.floor((p.f + 3) * 3.4) % 2 === 0 && face === 'top' ? shade(cloth, 0.9) : cloth;
+        // (Its people's way with it: stripes, a band, patches, a gilt hem.)
+        if (W.stripe && Math.floor((p.f + 3) * 2.5) % 2 === 0) seam = col(W.stripe);
+        if (W.band && p.h > 1.05 && p.h < 1.2 && face !== 'top') seam = col(W.band);
+        if (W.patch && Math.floor((p.f + 3) * 4) % 5 === 2 && Math.floor(p.h * 9) % 3 === 1) seam = col(W.patch);
+        if (rim && p.h < 0.9) seam = rim;
         if (b && face === 'r' && p.f > -1.75 && p.f < -0.5 && p.h > 0.92 && p.h < 1.3) {
           if (Math.abs(p.h - 1.2) < 0.03 && p.f > -1.4 && p.f < -0.85) return col('#f0d040');
           if (Math.abs(p.f - -1.12) < 0.03 && p.h > 1.0 && p.h < 1.22) return col('#f0d040');
@@ -319,7 +339,7 @@ const CACHE_MAX = 700;
 // point of it falls from there.
 export function steedSprite(kind, o, a, makeCanvas) {
   const k = ((Math.round((a / TAU) * TURNS) % TURNS) + TURNS) % TURNS;
-  const key = `${kind}|${k}|${o.coat || 0}|${o.banner || ''}|${o.saddle ? 1 : 0}|${o.hood === true ? 1 : o.hood === 'open' ? 2 : 0}|${o.frame || 0}|${o.legs || 0}|${o.horse ? `${o.horse.coat || 0}${o.horse.saddle ? 's' : ''}` : '-'}`;
+  const key = `${kind}|${k}|${o.coat || 0}|${o.banner || ''}|${o.saddle ? 1 : 0}|${o.hood === true ? 1 : o.hood === 'open' ? 2 : 0}|${o.frame || 0}|${o.legs || 0}|${o.horse ? `${o.horse.coat || 0}${o.horse.saddle ? 's' : ''}` : '-'}|${o.look || 0}`;
   let got = cache.get(key);
   if (got) {
     // (Kept as the most recently wanted.)

@@ -882,8 +882,8 @@ box('deco.clear', {
 });
 
 act('act.weather', {
-  title: 'Change the weather', help: 'Rain, snow, fog or clear skies, for so many minutes of the game\'s time (or back to how it would be).',
-  in: [n('mins', 'For (game minutes)', 120, { min: 1, max: 24 * 60 * 7, show: { kind: { not: ['as it would be'] } } })], props: [pick('kind', 'Weather', ['rain', 'snow', 'fog', 'clear', 'as it would be'])],
+  title: 'Change the weather', help: 'Rain, snow, fog or clear skies, or a storm (thunder, hail, a blizzard, a sandstorm, a gale), for so many minutes of the game\'s time (or back to how it would be).',
+  in: [n('mins', 'For (game minutes)', 120, { min: 1, max: 24 * 60 * 7, show: { kind: { not: ['as it would be'] } } })], props: [pick('kind', 'Weather', ['rain', 'snow', 'fog', 'clear', 'thunder', 'hail', 'blizzard', 'sandstorm', 'gale', 'as it would be'])],
   run: (x, nn, api) => {
     SVC.weather(x, api.prop('kind'), num(api.in('mins'), 120));
     return 'then';

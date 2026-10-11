@@ -389,6 +389,36 @@ export function bear(sim, L, a, b, day, seed) {
   return r;
 }
 
+// (Round 84) An empire's capital was built out with houses for more
+// people than lived in it, and too many of them stood empty (their signs
+// said so). Once, as it's laid out (in a world new or old): a household
+// moves into each empty one, a single soul or a couple, people who came to
+// the capital to make their way. (They're kept as newcomers are, after the
+// town's own: see Sim.saveSettlement.)
+export function settleEmpire(sim, L) {
+  const s = L.settlement;
+  if (!s.empire || s.condition === 'abandoned' || L.econ.housed84) return 0;
+  L.econ.housed84 = true;
+  const rng = new RNG(hash4(s.seed, 0x40e5, 84));
+  const lives = (h) => L.npcs.some((q) => q.home === h.id && alive(q) && !q.migrated);
+  let n = 0;
+  for (const h of L.buildings) {
+    if (!h || !h.residential || h.playerHome || h.underConstruction || h.type === 'palace' || lives(h)) continue;
+    const a = newcomer(sim, L, { house: h, why: 'came to the capital' });
+    a.household = `e${h.id}`;
+    n++;
+    if (rng.chance(0.5) && h.beds.length > 1) {
+      const b = newcomer(sim, L, { house: h, household: a.household, name: { last: a.name.last }, why: 'came to the capital' });
+      a.partner = b.idx;
+      b.partner = a.idx;
+      n++;
+    }
+    h.family ||= a.name.last;
+    if (!h.homeName) h.homeName = h.type === 'house_s' ? `${a.name.last} Cottage` : `The ${a.name.last} House`;
+  }
+  return n;
+}
+
 // (Round 54) Someone new who makes their home in a town (a story's: one
 // come home, a stranger who stays): a record of their own, a bed where
 // there's room, and work the town has for them. `o`: { name, look,
@@ -408,7 +438,8 @@ export function newcomer(sim, L, o = {}) {
   const used = (h) => L.npcs.filter((q) => q.home === h.id && alive(q) && !q.migrated).length;
   const kin = o.kin || null;
   const kh = kin && kin.home !== null && kin.home !== undefined ? L.buildings[kin.home] : null;
-  const house = kh && kh.beds.length > used(kh) ? kh : kh || L.buildings.find((h) => h.residential && !h.playerHome && !h.underConstruction && h.beds.length > used(h)) || null;
+  // (Round 84: or the house they're given.)
+  const house = o.house || (kh && kh.beds.length > used(kh) ? kh : kh || L.buildings.find((h) => h.residential && !h.playerHome && !h.underConstruction && h.beds.length > used(h)) || null);
   r.idx = L.npcs.length;
   r.id = `${s.id}:${r.idx}`;
   r.sid = s.id;

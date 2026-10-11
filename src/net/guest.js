@@ -21,6 +21,7 @@ import { restamp } from '../world/sites.js';
 import { GAME_VERSION, versionText } from '../version.js';
 import { applyShips, driftShips } from '../game/ships3d.js';
 import { registerDesign } from '../game/shipdesign.js';
+import { stormFx } from '../game/storms.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -587,6 +588,8 @@ export class GuestNet {
     try {
       game.wildlife?.update(dt);
       game.ambientSounds(dt);
+      // (Round 84) A storm's gusts and lightning, on this screen.
+      stormFx(game, dt);
     } catch {
       // (Not here.)
     }

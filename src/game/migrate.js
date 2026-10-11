@@ -629,6 +629,23 @@ export const STEPS = [
       log.push('Notice boards list the town\'s positions, and more varied odd jobs; most peoples bar their doors at night; you walk a quarter slower (horses and wagons as quick as ever).');
     },
   },
+  {
+    // (Round 84) A great ship's lower decks are part of her now, not a
+    // place apart: whoever was saved below is put back aboard her at that
+    // spot as the ship's loaded (see shipgame.shipLoad: `below`). An
+    // empire's empty houses get their people the next time it's laid out
+    // (see civic.settleEmpire), and an Ashborn square in the old mosaic is
+    // laid again the new way (see tech.emberMosaic). A world made before
+    // keeps its continents' ground as it was (provinces, and a city's
+    // other graveyards, are for worlds made from 0.84 on: world gen 8).
+    to: '0.84.0',
+    data(d, log) {
+      log.push('Ships\' lower decks are part of the ship now: walk down the stairs and the decks above are cut away, nothing moves you elsewhere (anyone saved below is back aboard where they were).');
+      log.push('Storms: thunderstorms, hail, blizzards, sandstorms and gales, with the wind in the trees and plants.');
+      log.push('Empires\' empty houses are lived in now, from the next time you\'re there; and Kharos\'s kiln-tiled squares are laid in a calmer pattern.');
+      if ((d.wg || 1) < 8) log.push('This world keeps its continents as they were made: a new world has Velmarch and Ostria parted into provinces of their own country, and more than one graveyard in each city.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

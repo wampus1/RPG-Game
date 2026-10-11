@@ -687,8 +687,7 @@ export class HostNet {
     g.sent.shipVer ||= new Map();
     for (const S of game.ships3d || []) {
       const mine = p.deck && p.deck.s === S.id;
-      const below = S.hold && S.hold.has(p);
-      if (!mine && !below && Math.hypot(S.x - p.x, S.z - p.z) > VIEW + S.m.L + 40) continue;
+      if (!mine && Math.hypot(S.x - p.x, S.z - p.z) > VIEW + S.m.L + 40) continue;
       const cells = g.sent.shipVer.get(S.id) !== S.ver;
       if (cells) g.sent.shipVer.set(S.id, S.ver);
       ships.push(packShip(S, cells));

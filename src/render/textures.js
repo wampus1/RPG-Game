@@ -9,6 +9,7 @@ import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } f
 import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
 import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES, FAR_ANIM } from './farart.js';
 import { shipTop, shipFront, SHIP_SPRITES, SHIP_ANIM } from './shipart.js';
+import { LOOKED, LOOKS, lookSprite, awningTop, awningFront } from './lookart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -2339,8 +2340,49 @@ export function buildTextures() {
   P.planks = oak.planks;
   P.planks_dark = oak.planks_dark;
   FIT = FIT_OAK;
+  // (Round 84) Each people's own look for what they put up about town
+  // (see lookart.js): TEX.look[k], as TEX.craft is.
+  TEX.look = [null];
+  for (let k = 1; k < LOOKS; k++) {
+    const T = { top: [], front: [], sprite: [] };
+    for (const b of BLOCKS) if (LOOKED.has(b.name)) buildLook(b, T, k);
+    TEX.look.push(T);
+  }
   finishTextures();
   return TEX;
+}
+
+const AWNING_COL = { awning_red: '#c83a32', awning_blue: '#3264c0', awning_yellow: '#e0b030', awning_green: '#3c9a48' };
+
+// A block in look `k`, laid out as buildBlock lays out the old one (so the
+// renderer picks a picture from it the same way).
+function buildLook(b, T, k) {
+  const id = b.id;
+  const name = b.name;
+  if (AWNING_COL[name]) {
+    const top = [addImage(awningTop(k, AWNING_COL[name]))];
+    const front = [addImage(awningFront(k, AWNING_COL[name]))];
+    for (let rot = 0; rot < 4; rot++) {
+      T.top[id * 4 + rot] = top;
+      T.front[id * 4 + rot] = front;
+    }
+    return;
+  }
+  for (let rot = 0; rot < 4; rot++) {
+    if (rot > 0 && !b.rotatable) {
+      T.sprite[id * 4 + rot] = T.sprite[id * 4];
+      continue;
+    }
+    const frames = ANIM[name] || 1;
+    const arr = [];
+    for (let st = 0; st < 2; st++) {
+      for (let f = 0; f < 4; f++) {
+        if (name === 'festival_banner') arr.push(addImage(lookSprite(name, k, rot, st, 0, f)));
+        else arr.push(f < frames ? addImage(lookSprite(name, k, rot, st, f)) : arr[st * 4]);
+      }
+    }
+    T.sprite[id * 4 + rot] = arr;
+  }
 }
 
 // (Round 68) A cube block's faces as pixels, the same as in the atlas

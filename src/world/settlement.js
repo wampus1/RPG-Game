@@ -36,6 +36,14 @@ const SHOW_TASTE = {
   wyrd: { paint: 0.18, stand: 0.04, hook: 0.1 },
   skerry: { paint: 0.08, stand: 0.01, hook: 0.09 },
 };
+// (Round 84) Each people's chimneys: [stone, cap] (see Layout.chimney).
+const CHIMNEYS = {
+  vale: [B.bricks, null], high: [B.cobblestone, B.stone_bricks], north: [B.cobblestone, null], sun: [B.sandstone, B.adobe_red],
+  ember: [B.basalt_bricks, B.kiln_brick], mist: [B.mossy_bricks, null], tide: [B.drystone, null],
+  velari: [B.travertine, B.marble], rime: [B.drystone, B.cobblestone], jade: [B.stone_bricks, B.turquoise_tile], kesh: [B.adobe_red, B.sandstone],
+  corrow: [B.drystone, null], salt: [B.salt_brick, null], hollow: [B.mossy_bricks, B.cob], wyrd: [B.drystone, B.stone_bricks], skerry: [B.drystone, null],
+};
+
 // (Round 73) More shapes of home (see sizesFor).
 const HOUSE_SHAPES = {
   house_s: [[5, 6], [6, 6], [7, 5]],
@@ -210,6 +218,10 @@ export function adoptLayout(world, s, data) {
   L.outCols = null;
   L.local = null;
   L.sums = null;
+  // (Round 84) The town's own graveyard and the first of its graveyards
+  // are one and the same (sent over as two copies).
+  if (L.graveyard && L.graveyards && L.graveyards.length && !L.graveyards[0].extra) L.graveyards[0] = L.graveyard;
+  if (!L.graveyards) L.graveyards = L.graveyard ? [L.graveyard] : [];
   return L;
 }
 
@@ -237,6 +249,9 @@ class Layout {
     this.wells = []; // where townsfolk draw water
     this.bells = []; // alarm bells the watch rings at night
     this.graveyard = null;
+    // (Round 84) Every graveyard the town has, the first its own (the one
+    // above); a city's (or an empire's) more, in a world made since.
+    this.graveyards = [];
     this.jail = null;
     this.prisonCells = []; // cells for prisoners of war
     this.plaza = null;
@@ -1099,6 +1114,11 @@ class Layout {
     }
     // The graveyard, then the remaining trades, then fields on the outskirts.
     if (!this.graveyard && !this.cemetery(rng.fork('cemetery')) && this.growLane(rng)) this.cemetery(rng.fork('cemetery2'));
+    // (Round 84) A city has more than one: another across town, and an
+    // empire's capital two more (in a world made from 0.84 on).
+    if (this.graveyard && s.type === 'city' && s.condition !== 'abandoned' && (this.world.ow.wg || 1) >= 8) {
+      for (let i = 0; i < (s.empire ? 2 : 1); i++) this.cemetery(rng.fork(`cemetery_more${i}`), true);
+    }
     yield;
     for (const t of late) {
       // (Round 77, worlds made from 0.77 on) A trade up over another's
@@ -3466,8 +3486,12 @@ class Layout {
 
   chimney(b, t) {
     // Chimney column rising through the roof above a hearth.
+    // (Round 84) In its people's own stone, its top in another where they
+    // finish it so: the Ashborn's basalt capped in red kiln brick, the
+    // Jade folk's stone under a lip of tile, the sun peoples' adobe.
     const top = roofTopAt(b, t.z) + 1;
-    for (let y = b.roofBase; y <= top; y++) this.put(t.x, y, t.z, B.bricks);
+    const [body, cap] = CHIMNEYS[this.settlement.style] || CHIMNEYS.vale;
+    for (let y = b.roofBase; y <= top; y++) this.put(t.x, y, t.z, y === top && cap ? cap : body);
     if (this.settlement.condition !== 'abandoned') this.chimneys.push({ x: t.x, y: top + 1, z: t.z });
   }
 
@@ -3680,7 +3704,7 @@ class Layout {
   // A fenced graveyard with room to grow: rows of graves separated by
   // walkways, a central aisle and a gate on the south side. Space for extra
   // rows is reserved so the yard can expand as people die.
-  cemetery(rng) {
+  cemetery(rng, extra = false) {
     const s = this.settlement;
     const b = this.bounds;
     const temple = this.buildings.find((q) => q.type === 'temple');
@@ -3722,12 +3746,15 @@ class Layout {
           const cx = x + W / 2;
           const cz = z + D / 2;
           let score = temple ? Math.hypot(cx - (temple.x0 + temple.x1) / 2, cz - (temple.z0 + temple.z1) / 2) : -Math.hypot((cx - p.cx) / this.W, (cz - p.cz) / this.D) * 40;
+          // (Another of a city's: as far across town from the others as it
+          // can be.)
+          if (extra) score = -Math.min(...this.graveyards.map((q) => Math.hypot(cx - (q.x + q.W / 2), cz - (q.z + q.maxRows + 1))));
           score += rng.float(0, 4);
           if (!best || score < best.score) best = { x, z, score };
         }
       }
       // Last resort: just outside the edge, on the flattened fringe.
-      if (!best && W === 5 && maxRows === 2) {
+      if (!best && W === 5 && maxRows === 2 && !extra) {
         const tileOk = (x, z) => {
           if (this.inside(x, z)) {
             const m = this.maskAt(x, z);
@@ -3756,7 +3783,9 @@ class Layout {
         for (let dz = 0; dz < D; dz++) for (let dx = 0; dx < W; dx++) this.setMask(x + dx, z + dz, M.DECOR);
         const g = { x, z, W, maxRows, rows: 2, gateDx, y: Y0, slots: [] };
         for (let k = 0; k < maxRows; k++) for (const dx of cols) g.slots.push({ x: x + dx, z: z + 1 + 2 * k, row: k, grave: null });
-        this.graveyard = g;
+        if (extra) g.extra = true;
+        else this.graveyard = g;
+        this.graveyards.push(g);
         for (const [px, pz, id] of graveyardFence(g)) this.put(px, Y0, pz, id);
         // A few old graves of the settlement's ancestors.
         const old = s.condition === 'abandoned' ? rng.int(5, 8) : rng.int(2, 5);
@@ -3772,7 +3801,7 @@ class Layout {
         if (this.maskAt(sx, sz) === M.FREE || this.maskAt(sx, sz) === M.YARD) {
           this.put(sx, Y0, sz, B.sign, 0);
           this.setMask(sx, sz, M.DECOR);
-          this.signs.push({ x: sx, y: Y0, z: sz, kind: 'graveyard' });
+          this.signs.push({ x: sx, y: Y0, z: sz, kind: 'graveyard', yard: this.graveyards.length - 1 });
         }
         return g;
       }

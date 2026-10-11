@@ -486,10 +486,16 @@ function make(game, v, pos, d) {
   return S;
 }
 
+// (Round 84) Any player aboard her, on deck or below (she isn't let go
+// from under them).
+function peopleAboard(game, S) {
+  return (game.everyone ? game.everyone() : [game.player]).some((q) => q && q.deck && q.deck.s === S.id);
+}
+
 function unmake(game, v, S) {
   for (const c of crewOf(game, S)) game.removeOcc?.(c);
   game.sailors = (game.sailors || []).filter((c) => c.shipId !== S.id);
-  if (S.hold) return;
+  if (peopleAboard(game, S)) return;
   const list = shipsOf(game);
   const i = list.indexOf(S);
   if (i >= 0) list.splice(i, 1);
@@ -574,7 +580,7 @@ export function idleShipsTick(game, dt) {
       }
       for (const c of crewOf(game, S)) game.removeOcc?.(c);
       game.sailors = (game.sailors || []).filter((c) => c.shipId !== S.id);
-      if (S.hold) continue;
+      if (peopleAboard(game, S)) continue;
       const list = shipsOf(game);
       const i = list.indexOf(S);
       if (i >= 0) list.splice(i, 1);

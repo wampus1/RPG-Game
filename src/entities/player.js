@@ -6,7 +6,8 @@ import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandOk, offhandLight } from '../world/items.js';
 import { offhandOf } from '../game/combat.js';
-import { BLOCKS, LEAVES } from '../world/blocks.js';
+import { B, BLOCKS, LEAVES } from '../world/blocks.js';
+import { doorLocked } from '../game/doorlocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
 import { turnMount, mountStep } from '../game/riding.js';
@@ -445,6 +446,14 @@ export class Player extends Entity {
       const id = w.getBlock(nx, yy, nz);
       if (BLOCKS[id].interact === 'door' && id !== undefined && BLOCKS[id].solid && !w.getState(nx, yy, nz)) {
         if (this.bumpT <= 0) {
+          // (Round 84) Not someone's front door that's locked to you:
+          // that's knocked at, or picked (use it), never walked through.
+          const by = id === B.door_top ? yy - 1 : yy;
+          if (doorLocked(this.game, nx, by, nz, this)) {
+            this.bumpT = 1.2;
+            this.game.asPlayer(this, () => this.game.ui.msg('Locked. Knock (use the door), or pick the lock with a lockpick in hand.', '#c8c8c8', true));
+            return;
+          }
           this.game.setDoor(nx, yy, nz, true);
           this.bumpT = 0.25;
         }

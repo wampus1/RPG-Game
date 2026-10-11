@@ -24,7 +24,7 @@ import { Press } from './press.js';
 import { Events } from './events.js';
 import { Roads } from './roads.js';
 import { tierOf, MERCHANT_TIERS, buyAt } from './shops.js';
-import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
+import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted, settleEmpire } from './civic.js';
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
@@ -83,8 +83,17 @@ export function repLevel(v) {
 // Where people stand at a funeral: the foot of the grave first (for whoever
 // says the words), then spots along the graveyard's paths and out past its
 // gate, each with a clear pace round it where there's room.
+// (Round 84) A town's graveyards (a city has more than one), and the one
+// a spot's in.
+export function yardsOf(L) {
+  return L.graveyards && L.graveyards.length ? L.graveyards : L.graveyard ? [L.graveyard] : [];
+}
+export function yardAt(L, x, z) {
+  return yardsOf(L).find((g) => x >= g.x - 1 && x <= g.x + g.W && z >= g.z - 1 && z <= g.z + 2 * g.maxRows + 2) || null;
+}
+
 export function funeralSpots(L, gx, gz, n, ok = () => true) {
-  const g = L.graveyard;
+  const g = yardAt(L, gx, gz) || L.graveyard;
   if (!g) return [{ x: gx, z: gz + 1 }];
   const south = g.z + 2 * g.rows + 1;
   const graves = new Set(g.slots.map((q) => q.x * 65536 + q.z));
@@ -249,6 +258,8 @@ export class Sim {
         if (c.done) this.completeHouse(L, bp, true);
       }
     }
+    // (Round 84) An empire's empty houses lived in at last.
+    settleEmpire(this, L);
   }
 
   layoutOf(sid) {
@@ -1062,7 +1073,7 @@ export class Sim {
 
   // The stone goes in.
   placeGrave(L, x, z, by = null) {
-    const g = L.graveyard;
+    const g = yardAt(L, x, z) || L.graveyard;
     const slot = g && g.slots.find((q) => q.x === x && q.z === z);
     const b = (L.econ.burials || []).find((q) => q.x === x && q.z === z && !q.done);
     if (!slot || !slot.grave || !b) return false;
@@ -1117,8 +1128,15 @@ export class Sim {
   }
 
   addGrave(L, rec, cause, day, place = true) {
-    const g = L.graveyard;
-    if (!g) return null;
+    // (Round 84) In the graveyard nearest their home that has room (or
+    // can be made to have it).
+    const yards = yardsOf(L);
+    if (!yards.length) return null;
+    const home = rec.home !== null && rec.home !== undefined ? L.buildings[rec.home] : null;
+    const hx = home ? (home.x0 + home.x1) / 2 : L.plaza ? L.plaza.cx : yards[0].x;
+    const hz = home ? (home.z0 + home.z1) / 2 : L.plaza ? L.plaza.cz : yards[0].z;
+    const room = (q) => q.slots.some((sl) => sl.row < q.rows && !sl.grave) || q.rows < q.maxRows;
+    const g = yards.filter(room).sort((a, b) => Math.hypot(a.x - hx, a.z - hz) - Math.hypot(b.x - hx, b.z - hz))[0] || yards[0];
     let slot = g.slots.find((q) => q.row < g.rows && !q.grave);
     if (!slot && g.rows < g.maxRows) {
       const prev = g.rows;
@@ -1138,7 +1156,7 @@ export class Sim {
     const w = this.game.world;
     for (const s of w.ow.settlementsNear(x, z)) {
       const L = w.layouts.get(s.id);
-      const g = L && L.graveyard;
+      const g = L && yardAt(L, x, z);
       if (!g) continue;
       const slot = g.slots.find((q) => q.x === x && q.z === z);
       if (!slot || !slot.grave) continue;
@@ -2442,6 +2460,8 @@ export class Sim {
       // People who moved here from elsewhere: whole records.
       extra: L.npcs.slice(L.baseN ?? L.npcs.length).map(({ ent, ...r }) => (void ent, r)),
       graves: L.graveyard ? { rows: L.graveyard.rows, slots: L.graveyard.slots.map((s) => s.grave) } : null,
+      // (Round 84) A city's other graveyards.
+      ...(L.graveyards && L.graveyards.length > 1 ? { graves2: L.graveyards.filter((g) => g !== L.graveyard).map((g) => ({ rows: g.rows, slots: g.slots.map((q) => q.grave) })) } : {}),
       plots: L.plots.map((p) => !!(p && p.taken)),
     };
   }
@@ -2460,6 +2480,15 @@ export class Sim {
         if (L.graveyard.slots[i]) L.graveyard.slots[i].grave = gr;
       });
     }
+    const more = (L.graveyards || []).filter((g) => g !== L.graveyard);
+    (sv.graves2 || []).forEach((d, k) => {
+      const g = more[k];
+      if (!g || !d) return;
+      g.rows = d.rows;
+      d.slots.forEach((gr, i) => {
+        if (g.slots[i]) g.slots[i].grave = gr;
+      });
+    });
     (sv.plots || []).forEach((t, i) => {
       if (L.plots[i]) L.plots[i].taken = t;
     });

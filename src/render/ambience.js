@@ -77,6 +77,7 @@ export function drawAmbience(r, game, dt, part) {
     for (const q of ['fog', 'wind', 'heat']) A[q] += (A.want[q] - A[q]) * k;
   }
   if (r.hidden !== null && r.hidden !== undefined) return;
+  if (game.player?.deck?.below) return;
   // (Round 83: all of it one setting, Environmental VFX.)
   if (r.noEnvFx && part === 'under') return;
   const ctx = r.ctx;

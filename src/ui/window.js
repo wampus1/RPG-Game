@@ -1,6 +1,7 @@
 // Base class for UI windows (split out to avoid circular imports).
 import { COLS, ROWS } from '../config.js';
 import { Grid } from './ascii.js';
+import { weatherWord } from '../world/weather.js';
 
 export class Window {
   constructor(ui, w, h, opts = {}) {
@@ -67,7 +68,7 @@ export function describeActivity(e) {
     case 'play': return 'playing';
     case 'help': return 'helping out';
     case 'study': return 'at lessons';
-    case 'home': return e.weather ? `home out of the ${e.weather === 'snow' ? 'snow' : e.weather === 'fog' ? 'fog' : 'rain'}` : 'at home';
+    case 'home': return e.weather ? `home out of the ${weatherWord(e.weather)}` : 'at home';
     case 'mourn': return 'mourning at a grave';
     case 'funeral': return 'at a funeral';
     case 'event': return e.role === 'couple' ? 'getting married' : e.kind === 'wedding' ? 'at a wedding' : e.role === 'dance' ? 'dancing' : e.kind === 'fete' ? 'at the celebration' : 'at the feast';

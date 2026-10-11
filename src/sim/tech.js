@@ -956,6 +956,9 @@ export class Tech {
       e.shown.push(id);
       if (!arriving && LOOKS[id].news) ledger(L, day, LOOKS[id].news(s));
     }
+    // (Round 84) An Ashborn square laid before 0.84 in the old mosaic:
+    // laid again, the new way, next time anyone's there to see it.
+    if (s.style === 'ember' && active && e.shown.includes('masonry') && !e.mosaic84) emberMosaic(this, L);
   }
 
   // A better-fitted study: another shelf, a lamp, a desk.
@@ -1093,6 +1096,34 @@ function besideStreets(T, L, gap, want, max) {
   return out;
 }
 const ISLE_STYLES = new Set(['ember', 'mist', 'tide']);
+
+// (Round 84) The Ashborn's square, laid by their kilnmasters: black basalt
+// brick, framed in red kiln brick, a sun of kiln tile at its heart under
+// the fire, a ring of brick round that, and lines of it out to the frame
+// either way, quartering the square. (It was a sun with twenty-four rays,
+// red and black by turns: on a square that size, a clash of blotches.)
+// Laid over the plain paving or the old mosaic alike.
+function emberMosaic(T, L) {
+  const w = T.game.world;
+  const P = L.plaza;
+  if (!P) return;
+  const ours = new Set([B.basalt_bricks, B.kiln_tile, B.kiln_brick, L.mats && L.mats.plaza].filter((q) => q !== undefined));
+  const ops = [];
+  for (const [x, z] of squareTiles(L)) {
+    if (!w.regionAt(x, z) || !ours.has(w.getBlock(x, SURFACE, z))) continue;
+    const dx = x - P.cx;
+    const dz = z - P.cz;
+    const d = Math.hypot(dx, dz);
+    let id = B.basalt_bricks;
+    if (x === P.x0 || x === P.x1 || z === P.z0 || z === P.z1) id = B.kiln_brick;
+    else if (d < 1.6) id = B.kiln_tile;
+    else if (Math.abs(d - 3.2) < 0.55) id = B.kiln_brick;
+    else if ((dx === 0 || dz === 0) && d > 3.7) id = B.kiln_brick;
+    if (w.getBlock(x, SURFACE, z) !== id) ops.push([x, SURFACE, z, id, 0]);
+  }
+  if (ops.length) T.sim.setBlocks(ops);
+  L.econ.mosaic84 = true;
+}
 const LOOKS = {
   // Masonry: the square paved in dressed stone. (The Ashborn's kilnwork
   // lays theirs in a mosaic: a sun of red kiln tile on black basalt, its
@@ -1106,18 +1137,8 @@ const LOOKS = {
       if (!P || !was) return;
       const ops = [];
       if (L.settlement.style === 'ember') {
-        for (const [x, z] of squareTiles(L)) {
-          if (!w.regionAt(x, z) || w.getBlock(x, SURFACE, z) !== was) continue;
-          const dx = x - P.cx;
-          const dz = z - P.cz;
-          const d = Math.hypot(dx, dz);
-          let id;
-          if (x === P.x0 || x === P.x1 || z === P.z0 || z === P.z1) id = B.kiln_brick;
-          else if (d < 2.2) id = B.kiln_tile;
-          else if (d > 3.4 && d < 4.4) id = B.kiln_brick;
-          else id = Math.floor(((Math.atan2(dz, dx) / (Math.PI * 2)) + 1) * 12 + 0.5) % 2 ? B.kiln_tile : B.basalt_bricks;
-          ops.push([x, SURFACE, z, id, 0]);
-        }
+        emberMosaic(T, L);
+        return;
       } else {
         if (was === B.stone_bricks) return;
         for (const [x, z] of squareTiles(L)) if (w.regionAt(x, z) && w.getBlock(x, SURFACE, z) === was) ops.push([x, SURFACE, z, B.stone_bricks, 0]);

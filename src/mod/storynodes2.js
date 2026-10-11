@@ -225,8 +225,8 @@ town('st.dungeon', {
 });
 town('st.weather', {
   title: 'The weather turns',
-  help: 'Rain, snow, fog, or clear skies, for so many hours (or the weather as it would be, again).',
-  props: [pick('kind', 'To', ['rain', 'snow', 'fog', 'clear', 'as it would be'], 'rain'), P('hours', 'number', 'For (hours)', 6, { min: 1, max: 96 })],
+  help: 'Rain, snow, fog, or clear skies, or a storm (thunder, hail, a blizzard, a sandstorm, a gale), for so many hours (or the weather as it would be, again).',
+  props: [pick('kind', 'To', ['rain', 'snow', 'fog', 'clear', 'thunder', 'hail', 'blizzard', 'sandstorm', 'gale', 'as it would be'], 'rain'), P('hours', 'number', 'For (hours)', 6, { min: 1, max: 96 })],
   out: [out('next', 'Then')],
 });
 town('st.pin', {

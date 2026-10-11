@@ -41,8 +41,15 @@ for (const [k, L] of Object.entries(farTable('feastLook'))) {
   FAR_STYLES[k] = { ...L, centre: L.centre.map(([b, lit]) => (lit ? [b, LIT_] : [b])), light: [L.light[0], LIT_] };
 }
 export const WEDDING_PALETTE = 5;
+// (Round 84) The aisle a couple walk down, in each people's colour.
+const AISLE = {
+  north: 'rug_blue', high: 'rug_green', mist: 'rug_green', tide: 'rug_blue', velari: 'rug_blue', rime: 'rug_blue',
+  skerry: 'rug_blue', corrow: 'rug_green', salt: 'rug_blue', hollow: 'rug_green', wyrd: 'rug_green',
+};
 export function styleOf(s) {
-  return STYLES[s && s.style] || FAR_STYLES[s && s.style] || STYLES.vale;
+  const L = STYLES[s && s.style] || FAR_STYLES[s && s.style] || STYLES.vale;
+  const aisle = AISLE[s && s.style];
+  return aisle ? { ...L, aisle } : L;
 }
 // A colour for bunting or a banner (rotation kept for bunting).
 export function decorMeta(palette, rot = 0) {
@@ -736,6 +743,7 @@ export class Events {
       if (k === 'maypole') look.centre.forEach(([ck, cm = 0], i) => out.push([dx, dy + i, dz, ck, cm]));
       else if (k === 'lantern') out.push([dx, dy, dz, look.light[0], look.light[1] ?? 0]);
       else if (k === 'bunting') out.push([dx, dy, dz, 'bunting', decorMeta(palette, meta)]);
+      else if (k === 'rug_red' && look.aisle) out.push([dx, dy, dz, look.aisle, meta]);
       else out.push([dx, dy, dz, k, meta]);
     }
     // Rugs laid round the dancers in the south; flowers where people
@@ -761,7 +769,11 @@ export class Events {
     const air = (x, y, z) => !w.regionAt(x, z) || w.getBlock(x, y, z) === B.air;
     // (Nothing set down on the ways across the square: see Layout.isLane.)
     const open = (x, z, high = false) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && !used.has(x * 65536 + z) && (high ? air(x, GROUND + 2, z) : air(x, GROUND, z) && air(x, GROUND + 1, z) && !(L.isLane && L.isLane(x, z)));
-    const wallAt = (x, z) => L.maskAt(x, z) === M.BUILD && (!w.regionAt(x, z) || (BLOCKS[w.getBlock(x, GROUND + 2, z)] || {}).solid);
+    // (Round 84) A house that's there, built: never a plot that's still
+    // to be built on, or going up (its walls not yet there, or not yet
+    // loaded to be seen).
+    const builtAt = (x, z) => L.buildings.find((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && !b.underConstruction && !b.ruined);
+    const wallAt = (x, z) => L.maskAt(x, z) === M.BUILD && !!builtAt(x, z) && (!w.regionAt(x, z) || (BLOCKS[w.getBlock(x, GROUND + 2, z)] || {}).solid);
     const out = [];
     // Strings across the street: a straight run of open air at head
     // height with a house wall at each end.

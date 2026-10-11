@@ -519,7 +519,11 @@ export class MapWindow extends Window {
     const cell = ow.cell(cx, cz);
     const here = hf !== null && cell.halves ? cell.halves[hf] : cell.biome;
     let info = BIOMES[here]?.name || cap(here);
-    if (onLand) info = `${cap(L.name)} · ${info}`;
+    if (onLand) {
+      // (Round 84) And which of a great continent's provinces.
+      const pv = ow.provinceAt ? ow.provinceAt(x, z) : null;
+      info = `${cap(L.name)}${pv ? ` · ${cap(pv.p.name)}` : ''} · ${info}`;
+    }
     else if (storm > 0) info = 'The storm · wild water no raft gets through';
     else if (cell.biome === 'ocean') info = ow.insideStorm(x, z) ? `The sea between ${ARCHIPELAGO}` : 'The open sea';
     if (cell.river && hf !== 0) info += ' · river';
@@ -1414,6 +1418,13 @@ export class MapWindow extends Window {
       const big = L.kind === 'continent';
       if (!big && this.z <= 1.5 && L.kind === 'isle') continue;
       label(big ? L.name.toUpperCase() : L.name, L.x, L.z - (L.kind === 'dagoni' && this.z > 4.5 ? L.trz * 0.6 : 0), L.kind === 'dagoni' ? '#fff0c8' : '#c8a878');
+    }
+    // (Round 84) A great continent's provinces, nearer in, once seen.
+    if (this.z >= 2.5) {
+      for (const P of ow.provinces || []) {
+        const k = Math.floor(P.z / REGION_D) * MAP_W + Math.floor(P.x / REGION_W);
+        if (game.revealMap || ow.explored[k]) label(P.name, P.x, P.z, '#a8b890');
+      }
     }
     if (this.z <= 4.5) label(ARCHIPELAGO.toUpperCase().replace(/^THE /, 'THE '), (STORM.cx + 0.5) * REGION_W, (STORM.cz - STORM.rz - STORM.band - 2) * REGION_D, '#e8e0c8');
     if (this.z <= 6 && !ow.wallDown) label('the storm', (STORM.cx + 0.5) * REGION_W, (STORM.cz + STORM.rz + STORM.band / 2) * REGION_D, '#b8c8d8');

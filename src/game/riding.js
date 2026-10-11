@@ -272,7 +272,7 @@ export class Riding {
     const h = this.horse(w.horse);
     p.inWagon = null;
     p.sitting = null;
-    p.mount = { kind: 'wagon', coat: h ? h.coat : 0, saddle: !!(h && h.saddled), hood: false, wagonId: w.id, horseId: w.horse, ang: typeof w.ang === 'number' ? w.ang : dirAngle(w.face ?? 1) };
+    p.mount = { kind: 'wagon', coat: h ? h.coat : 0, saddle: !!(h && h.saddled), hood: false, wagonId: w.id, horseId: w.horse, ang: typeof w.ang === 'number' ? w.ang : dirAngle(w.face ?? 1), look: w.wagonLook };
     p.teleport(w.x, w.y, w.z);
     p.tankOff = null;
     p.tankTo = null;

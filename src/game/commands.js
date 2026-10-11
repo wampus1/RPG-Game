@@ -25,6 +25,7 @@ export const COMMANDS = {
   street: { args: '[town]', about: 'The builders lay out a new street with lots along it.' },
   finish: { args: '[town]', about: 'Everything under construction in the town is finished at once.' },
   time: { args: '<hh:mm> | +<hours>', about: 'Wait until a time of day, or for so many hours (the world carries on).' },
+  weather: { args: '<clear|rain|snow|fog|thunder|hail|blizzard|sandstorm|gale|off> [hours]', about: 'Call down the weather for a while (two hours, or as many as you say): a storm too. "off" lets it be as it would.' },
   give: { args: '<item> [count]', about: 'Put something in your pack (by its key or name).' },
   coins: { args: '<count>', about: 'Add coins to your purse.' },
   heal: { args: '', about: 'Restore your health.' },
@@ -268,6 +269,21 @@ export function runCommand(game, text) {
       if (!(hours > 0) || hours > 72) return ['Between a minute and three days, please.'];
       game.startWait(hours, true);
       return [`Waiting until ${hod(game.minute + hours * 60)}${game.minute + hours * 60 >= DAY_MINUTES ? ` on day ${game.day + Math.floor((game.minute + hours * 60) / DAY_MINUTES)}` : ''}... (press any key to stop)`];
+    }
+    case 'weather': {
+      const kinds = ['clear', 'rain', 'snow', 'fog', 'thunder', 'hail', 'blizzard', 'sandstorm', 'gale'];
+      const k = (words[0] || '').toLowerCase();
+      const now = game.day * DAY_MINUTES + game.minute;
+      if (k === 'off') {
+        game.modWeather = null;
+        if (game.weather) game.weather.t = 0;
+        return ['The weather is left to itself again.'];
+      }
+      if (!kinds.includes(k)) return [`It's ${game.weather?.severe || game.weather?.kind || 'clear'}. (weather <${kinds.join('|')}|off> [hours])`];
+      const h = Math.max(0.25, Math.min(72, Number(words[1]) || 2));
+      game.modWeather = { kind: k, until: now + h * 60 };
+      if (game.weather) game.weather.t = 0;
+      return [`${k[0].toUpperCase()}${k.slice(1)} for ${h} hour${h === 1 ? '' : 's'}.`];
     }
     case 'give': {
       if (!words.length) return ['give <item> [count]'];

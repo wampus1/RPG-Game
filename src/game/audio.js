@@ -9,7 +9,7 @@ const GROUP_OF = {};
 for (const [g, names] of Object.entries({
   ui: 'ui_open ui_close select error tag save star_ding reveal_great reveal_good reveal_poor reveal_bad cook_build',
   blocks: 'step step_grass step_stone step_wood step_sand step_snow dig break place door chop stone crop pour fill chest lever gate crumble locked unlock knock pick_tick pick_bind pick_set pick_strain pick_snap plank_break plank_mend glass creak torch thud',
-  world: 'splash chirp hoot bird cricket owl howl gull wave wind frog thunder eruption rumble drip wind_low sail_flap ship_creak water_rush ship_bell crackle hiss drone whisper puff bell salt_song sea_bell',
+  world: 'splash chirp hoot bird cricket owl howl gull wave wind gust hail frog thunder eruption rumble drip wind_low sail_flap ship_creak water_rush ship_bell crackle hiss drone whisper puff bell salt_song sea_bell',
   creatures: 'hurt death growl baa scream shout voices skitter bones flap',
   bosses: 'roar sting gate_slam victory',
 })) for (const n of names.split(' ')) GROUP_OF[n] = g;
@@ -391,6 +391,10 @@ export class Audio {
       case 'gull': this.tone(1500, 0.18, 'sawtooth', 0.015, -500); this.tone(1400, 0.2, 'sawtooth', 0.012, -500, 0.22); break;
       case 'wave': this.noise(1.2, 0.05, 500); break;
       case 'wind': this.noise(1.6, 0.04, 350); break;
+      // (Round 84) A storm's gust, rising and falling away; hail on the
+      // ground about you, a rattle of little hard ticks.
+      case 'gust': this.noise(2.2, 0.07, 420); this.noise(1.4, 0.03, 900, 0.4); break;
+      case 'hail': for (let i = 0; i < 5; i++) this.noise(0.025, 0.035 + Math.random() * 0.03, 3200 + Math.random() * 2400, i * 0.04 + Math.random() * 0.03); break;
       case 'frog': this.tone(180, 0.08, 'square', 0.03, 60); this.tone(170, 0.08, 'square', 0.03, 60, 0.12); break;
       // Siege engines: a heavy thud (a stone landing, a ram on a wall), the
       // creak and whip of a catapult's arm.

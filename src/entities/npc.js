@@ -1845,11 +1845,20 @@ export class NPC extends Entity {
       }
     }
     // Rain or snow sends the less dedicated home early.
-    if (act.entry.act === 'work' && !this.visit && !this.nomad && this.rng.chance(dt * 0.04)) {
-      const sky = game.weatherIn(this.settlement);
+    // (Round 84: and a storm sends almost everyone, and soon.)
+    const storm = act.entry.act === 'work' && game.stormIn ? game.stormIn(this.settlement) : null;
+    if (act.entry.act === 'work' && !this.visit && !this.nomad && this.rng.chance(dt * (storm ? 0.3 : 0.04))) {
+      const sky = storm || game.weatherIn(this.settlement);
       if (sky !== 'clear' && weatherBreak(this.rec, sky, game.day, game.minute)) {
         this.activity = null;
-        const lines = sky === 'snow' ? ['Too cold for this. I\'m going home.', 'My fingers are frozen. That\'s it for today.'] : sky === 'fog' ? ['Can\'t see my own hands in this fog. I\'m off home.'] : ['It\'s pouring! I\'m calling it a day.', 'Soaked through. Home, I think.', 'Nobody works in this rain. Not me, anyway.'];
+        const STORM_LINES = {
+          thunder: ['That thunder\'s right on top of us. I\'m going in!', 'Not out here with lightning about. Home!', 'Listen to that sky. I\'m off.'],
+          hail: ['Ow! Hail! I\'m getting under a roof.', 'It\'s hailing stones the size of peas. Home!', 'My poor head. That\'s it for today.'],
+          blizzard: ['Can\'t see a thing in this blizzard. Home, now.', 'This wind\'ll freeze the ears off you. I\'m going in.'],
+          sandstorm: ['Sand in my teeth, sand in my eyes. Home!', 'Cover your face! I\'m getting indoors.'],
+          gale: ['This wind\'ll have the roof off. I\'m going home.', 'Can barely stand in this gale. Enough for today.'],
+        };
+        const lines = STORM_LINES[sky] || (sky === 'snow' ? ['Too cold for this. I\'m going home.', 'My fingers are frozen. That\'s it for today.'] : sky === 'fog' ? ['Can\'t see my own hands in this fog. I\'m off home.'] : ['It\'s pouring! I\'m calling it a day.', 'Soaked through. Home, I think.', 'Nobody works in this rain. Not me, anyway.']);
         this.say(this.rng.pick(lines), 3, '#a0b8d0');
         return;
       }
@@ -2092,6 +2101,8 @@ export class NPC extends Entity {
       const em = EMOTES[tag];
       if (em && !g.wander) this.emoteShow(em[0], em[1], 2.2);
     }
+    // (Round 84: whatever they were idly about before, done with.)
+    if ((act.act === 'mourn' || act.act === 'funeral' || act.act === 'event') && this.idleAnim) this.idleAnim = null;
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
     // (Round 77) A broom, a wall to lean on, a word with whoever's by.

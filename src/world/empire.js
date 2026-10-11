@@ -355,13 +355,52 @@ function pens(L, lot, rng, mark) {
 function market(L, lot, rng, mark) {
   const { x, z, W, D } = lot;
   floor(L, lot, B.flagstone ?? B.cobblestone);
-  for (let pz = z + 1; pz <= z + D - 2; pz += 3) {
-    for (let px = x + 1; px <= x + W - 2; px += 3) {
-      L.put(px, Y0, pz, rng.pick([B.crate, B.barrel, B.table]));
-      // (Round 79: in the empire's own way, a gilt-hemmed cloth.)
-      L.put(px, Y0 + 1, pz, B.canopy, rng.int(0, 3) | (rng.int(0, 3) << CANOPY_SHIFT) | ((CANOPY_STYLES[L.settlement.style] ?? 6) << CANOPY_STYLE_SHIFT));
-      if (pz + 1 <= z + D - 1) L.addSpot(px, pz + 1, 2, ['market', 'shop', 'social', 'stroll']);
+  // (Round 84) Two rows of proper stalls facing each other across an
+  // aisle: each a pair of posts carrying its cloth (in the empire's own
+  // way, a gilt hem) over the stallholder, two counters in front, and its
+  // goods stacked behind. (It was crates, barrels and tables dotted about
+  // under cloths of their own.) The same throws of the dice as before,
+  // and as many places to stand, so whatever's laid out after it is
+  // where it always was.
+  const draws = [];
+  for (let pz = z + 1; pz <= z + D - 2; pz += 3) for (let px = x + 1; px <= x + W - 2; px += 3) draws.push([rng.next(), rng.next(), rng.next()]);
+  const style = (CANOPY_STYLES[L.settlement.style] ?? 6) << CANOPY_STYLE_SHIFT;
+  const per = Math.floor((W - 1) / 3);
+  const x0 = x + Math.floor((W - 1 - per * 3) / 2);
+  const rows = [{ back: z + 1, dz: 1 }, { back: z + D - 2, dz: -1 }];
+  const holders = [];
+  const shoppers = [];
+  let k = 0;
+  for (const r of rows) {
+    const front = r.back + r.dz;
+    for (let i = 0; i < per; i++) {
+      const sx = x0 + i * 3;
+      const d = draws[k++ % draws.length];
+      const colour = Math.floor(d[1] * 4) & 3;
+      for (let dx = 0; dx <= 3; dx++) L.put(sx + dx, Y0 + 2, r.back, B.canopy, (r.dz > 0 ? 0 : 2) | (colour << CANOPY_SHIFT) | style);
+      for (const dx of [0, 3]) for (let y = Y0; y < Y0 + 2; y++) L.put(sx + dx, y, r.back, B.fence);
+      L.put(sx + 2, Y0, r.back, d[0] < 0.5 ? B.crate : B.barrel);
+      if (d[2] < 0.5) L.put(sx + 2, Y0 + 1, r.back, B.crate);
+      for (const dx of [1, 2]) L.put(sx + dx, Y0, front, B.counter);
+      holders.push([sx + 1, r.back, r.dz > 0 ? 0 : 2]);
+      shoppers.push([sx + 1 + (i % 2), front + r.dz, r.dz > 0 ? 2 : 0]);
     }
+  }
+  // (A lamp in the middle of the aisle, where it's wide enough.)
+  if (D >= 9) {
+    const mx = x + Math.floor(W / 2);
+    const mz = z + Math.floor(D / 2);
+    lamp(L, mx, mz);
+  }
+  const want = draws.length;
+  const all = [];
+  for (let i = 0; i < Math.max(holders.length, shoppers.length); i++) {
+    if (holders[i]) all.push(holders[i]);
+    if (shoppers[i]) all.push(shoppers[i]);
+  }
+  for (let i = 0; i < want; i++) {
+    const [sx, sz, face] = all[i % all.length];
+    L.addSpot(sx, sz, face, ['market', 'shop', 'social', 'stroll']);
   }
   lamp(L, x, z);
   lamp(L, x + W - 1, z + D - 1);
