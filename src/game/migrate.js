@@ -685,6 +685,12 @@ export const STEPS = [
     data(d, log) {
       log.push('Asking around about trouble tells you who to see: only the one asking hands out their task. Nobody sleeps where there\'s no bed, and breaking a bed with someone in it wakes them, angry.');
     },
+  },  {
+    // (Round 89) Chairs and music: nothing in a save needs changing.
+    to: '0.89.0',
+    data(d, log) {
+      log.push('Chairs tuck right in under their tables, and are easier to click. Instruments are heard by everyone nearby, in a world with others too.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

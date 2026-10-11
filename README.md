@@ -6487,6 +6487,22 @@ into stairs when the world's brought up to date.)
   falling" and storm messages are gone. You can see and hear the weather
   change.
 
+## Round 89: Chairs tucked in, and music everyone can hear
+
+- **Chairs tucked right in**: a chair at a table now slides all the way
+  in under it when nobody's using it. With the table nearer you, the
+  table covers it. With the table beside it, only the part sticking out
+  past the table's edge shows. With the table further away, its back
+  stands at the table's edge. Pull one out and it slides back out.
+- **Chairs easier to click**: anywhere on a chair's square counts, tucked
+  in or not. The table drawn over it doesn't take the click.
+  Right-click to pull it out and sit; Shift+right-click pulls it out or
+  pushes it in without sitting.
+- **Music in multiplayer**: a note played on an instrument is now heard
+  by everyone nearby, fainter the further away they are, and not at all
+  beyond about 24 paces. That includes a guest hearing their own
+  playing, which never reached them before, and the host hearing guests.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

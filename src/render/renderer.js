@@ -3,6 +3,7 @@
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { LOOKED, LOOK_OF } from './lookart.js';
 import { drawSpyRing } from '../game/spyglass.js';
+import { InstrumentVoice } from '../game/instruments.js';
 import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
@@ -220,6 +221,9 @@ export function bubbleLines(text) {
   bubbleWrap.set(text, got);
   return got;
 }
+
+// (Round 88) How far off an instrument's still heard, in paces.
+const NOTE_EARSHOT = 24;
 
 export class Renderer {
   constructor(canvas) {
@@ -1445,13 +1449,18 @@ export class Renderer {
         // been pulled out), slid there as it's moved.
         let csx = sx;
         let csy = sy;
+        // (Round 87/88: right in under it. Toward you, its table's drawn over
+        // it; beside it, only what sticks out past the table's edge shows;
+        // away from you, its back stands at the table's near edge.)
+        let clip = null;
         if (id === B.chair) {
           const tb = chairTable(world, wx, y, wz);
           if (tb) {
             const k = this.chairTuck(wx, y, wz, !(meta & META_STATE));
             const [du, dv] = this.toViewDir(tb.dx, tb.dz);
-            csx += Math.round(du * 6 * k);
-            csy += Math.round(dv * 5 * k);
+            csx += Math.round(du * 11 * k);
+            csy += Math.round(dv * (dv > 0 ? 11 : 7) * k);
+            if (du && k > 0) clip = du > 0 ? { x0: -1e4, x1: sx + TILE } : { x0: sx, x1: 1e4 };
           }
         }
         // (A training dummy just struck rocks on its post.)
@@ -1465,13 +1474,25 @@ export class Renderer {
           ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
           ctx.restore();
         } else if (render === 'plant' && this.swayAmp) this.drawSwaying(ctx, atl, s, csx, csy + SPR_H - s.h, this.windSway(wx, wz));
-        else ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
+        else if (clip) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(clip.x0, -1e4, clip.x1 - clip.x0, 2e4);
+          ctx.clip();
+          ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
+          ctx.restore();
+        } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
         // (Round 82) A chest open (or opening, or shutting): its lid up.
         if (id === B.chest && this.lids.size) {
           const lk = this.lids.get(`${wx},${y},${wz}`);
           if (lk) this.drawLid(ctx, atl, s, sx, sy + SPR_H - s.h, lk);
         }
-        if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+        // (Round 88: a chair, by anywhere on its square or on it where it's
+        // drawn, tucked in or not: easy to get hold of to pull out.)
+        const chairHit = id === B.chair && pickable && (this.under(s, csx, csy + SPR_H - s.h) || (mouse.x >= sx && mouse.x < sx + TILE && mouse.y >= sy && mouse.y < sy + SPR_H));
+        // (Its table, drawn over the near part of it, doesn't take the pointer
+        // from a chair already under it.)
+        if (chairHit || (pickable && this.under(s, sx, sy + SPR_H - s.h) && !(id === B.table && this.pick && this.pick.chair))) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true, chair: id === B.chair };
         // (Round 73) What's on a rack or a stand, and what a painting shows.
         if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
         // Hanging signs show what the building is.
@@ -2434,6 +2455,20 @@ export class Renderer {
       ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.6), 3, 2);
     }
     ctx.restore();
+  }
+
+  // (Round 88) A note played on an instrument at (x, y, z), heard on this
+  // screen: fainter the further off, not at all past earshot. (In a world
+  // with others in it, sent to every screen near it as it's played: see
+  // net/host.js hook; so you hear your own playing as a guest, and theirs.)
+  instrumentNote(x, y, z, key, i) {
+    const g = this.game;
+    if (!g || !g.ui || !g.ui.music) return;
+    const L = (g.audio && g.audio.listener) || g.player;
+    const d = L ? Math.hypot(L.x - x, L.z - z) : 0;
+    if (d > NOTE_EARSHOT) return;
+    this.noteVoice ||= new InstrumentVoice(g.ui.music);
+    this.noteVoice.play(key, i, Math.max(0.12, 1 - d / NOTE_EARSHOT));
   }
 
   // (Round 87) You, faint, over whatever's built in front of you (see

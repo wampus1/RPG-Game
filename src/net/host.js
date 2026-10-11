@@ -488,6 +488,8 @@ export class HostNet {
     wrap('emit', (a) => at(a[0], a[2]));
     wrap('floatText', (a) => at(a[0], a[2]));
     wrap('wobble', (a) => at(a[0], a[2]));
+    // (Round 88) Instruments played: heard by whoever's near, guests too.
+    wrap('instrumentNote', (a) => at(a[0], a[2]));
     wrap('effect', (a) => (a[0] ? at(a[0].wx, a[0].wz) : null));
     wrap('flashScreen', () => null, true);
     // (Round 66) A mod's music, for the player it's put on for.

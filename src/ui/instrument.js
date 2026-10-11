@@ -68,7 +68,10 @@ export class InstrumentWindow extends Window {
   play(i) {
     const g = this.game;
     const p = g.player;
-    this.voice.play(this.key, i);
+    // (Round 88: through the world, so everyone near hears it, you as a
+    // guest included: see Renderer.instrumentNote.)
+    if (g.renderer && g.renderer.instrumentNote) g.renderer.instrumentNote(p.x, p.y, p.z, this.key, i);
+    else this.voice.play(this.key, i);
     this.lit[i] = 0.18;
     this.notes++;
     p.doAction?.(0.12);
