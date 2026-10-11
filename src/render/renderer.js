@@ -7,7 +7,7 @@ import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT, LEAVES } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT, LEAVES, LOGS } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
@@ -41,7 +41,7 @@ import { TUNNEL_DIG } from '../game/evolvedgear.js';
 import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
 import { GroundFx } from './groundfx.js';
-import { steedSprite, dirAngle, easeAngle } from './steeds.js';
+import { steedSprite, dirAngle, easeAngle, steedSlices, steedRows } from './steeds.js';
 import { chairTable } from '../game/chairs.js';
 
 const makeCanvas = (w, h) => {
@@ -431,7 +431,10 @@ export class Renderer {
     this.pickEnt = null;
     this.shipPick = null;
     this.pickSeq = 0;
+    this.playerBehind = false;
     this.drawWorld(game);
+    // (Round 87) Behind a building: a ghost of you over it.
+    if (this.playerBehind) this.drawPlayerGhost(ctx, game);
     this.drawProjectiles(game);
     drawCannonballs(this, game);
     // (Round 78) A pirate's grapnels (see render/seafx.js).
@@ -1190,6 +1193,26 @@ export class Renderer {
       // drawn with that row (over a sign hung there), when that's the row
       // nearer you.
       if (e.kind === 'prop' && e.type === 'sails' && this.toViewDir(e.nx || 0, e.nz || 0)[1] > 0) row++;
+      // (Round 87) A horse or a wagon, longer than a pace: drawn a row at a
+      // time, each part with the row of the world it stands over (see
+      // steeds.steedSlices), so what's in front of each part hides it and
+      // it hides only what's behind. Whoever's on it, with the row its seat
+      // is in.
+      const sp = this.steedSpan(e);
+      if (sp) {
+        const base = Math.floor(rp.z);
+        const q = Math.round((rp.z - base) * 16) / 16;
+        const [k0, k1] = steedRows(sp.kind, sp.horse, sp.a, q);
+        const anchor = Math.ceil(q - 0.001);
+        for (let k = Math.min(k0, anchor); k <= Math.max(k1, anchor); k++) {
+          const rr = base + k;
+          if (rr < zMin || rr > zMax) continue;
+          let arr = buckets.get(rr);
+          if (!arr) buckets.set(rr, (arr = []));
+          arr.push({ e, rp, layer: Math.ceil(rp.y - 0.001) + 1, slice: { k, q, anchor: k === anchor } });
+        }
+        continue;
+      }
       if (row < zMin || row > zMax) continue;
       let arr = buckets.get(row);
       if (!arr) buckets.set(row, (arr = []));
@@ -1300,7 +1323,16 @@ export class Renderer {
       let alpha = 1;
       // (Round 83: never the water, which hides nothing of you: it went
       // thin under you as you swam up the screen.)
-      if (fadeLayer && !b.liquid && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
+      if (fadeLayer && !b.liquid && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) {
+        alpha = this.fadeFor(sx, sy, psx, psy);
+        // (Round 87) Something built (a house's roof, its wall) isn't
+        // faded to show you behind it: that showed what's inside it. It's
+        // drawn whole, and you a ghost over it (see drawScene).
+        if (alpha < 1 && !NATURAL.has(id) && !LEAVES.has(id) && !LOGS.has(id)) {
+          alpha = 1;
+          this.playerBehind = true;
+        }
+      }
       if (alpha < 1) ctx.globalAlpha = alpha;
       // Blocks faded out because they hide the player can be clicked through.
       const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
@@ -1503,7 +1535,7 @@ export class Renderer {
           while (ei < ents.length && ents[ei].layer <= y) {
             const q = ents[ei++];
             if (q.deco) q.deco();
-            else this.drawEntity(ctx, q.e, q.rp, game);
+            else this.drawQueued(ctx, q, game);
           }
         }
       }
@@ -1511,7 +1543,7 @@ export class Renderer {
         while (ei < ents.length) {
           const q = ents[ei++];
           if (q.deco) q.deco();
-          else this.drawEntity(ctx, q.e, q.rp, game);
+          else this.drawQueued(ctx, q, game);
         }
       }
     }
@@ -1980,7 +2012,7 @@ export class Renderer {
     const legs = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
     if (m.kind === 'horse') {
       const S = steedSprite('horse', { coat: m.coat || 0, banner: m.banner || null, saddle: !!m.saddle, frame: legs }, a, makeCanvas);
-      ctx.drawImage(S.img, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
+      this.steedImg(ctx, S, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
       return 12;
     }
     this.drawWagonAt(ctx, sx + 8, feetY, a, m, e.moving ? Math.floor(this.time * 5) : 0, { coat: m.coat || 0, saddle: !!m.saddle }, legs);
@@ -2012,9 +2044,11 @@ export class Renderer {
       }
     };
     const away = Math.cos(a) < -0.2;
-    if (away) people();
-    ctx.drawImage(S.img, Math.round(cx - S.ox), Math.round(feetY - S.oy));
-    if (!away) people();
+    // (Round 87: those in it, with the part of it their seats are over.)
+    const seated = !this.slice || this.slice.anchor;
+    if (away && seated) people();
+    this.steedImg(ctx, S, Math.round(cx - S.ox), Math.round(feetY - S.oy));
+    if (!away && seated) people();
     return { S, x: Math.round(cx - S.ox), y: Math.round(feetY - S.oy) };
   }
 
@@ -2402,6 +2436,58 @@ export class Renderer {
     ctx.restore();
   }
 
+  // (Round 87) You, faint, over whatever's built in front of you (see
+  // drawWorld): no speech, name or pointer of you twice.
+  drawPlayerGhost(ctx, game) {
+    const p = game.player;
+    if (!p || p.dead || p.deck) return;
+    const wp = p.renderPos();
+    const [u, v] = this.toView(wp.x, wp.z);
+    const nb = this.bubbles.length;
+    const nt = this.tags.length;
+    const pe = this.pickEnt;
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    try {
+      this.drawEntity(ctx, p, { x: u, y: wp.y, z: v }, game);
+    } finally {
+      ctx.restore();
+      this.bubbles.length = nb;
+      this.tags.length = nt;
+      this.pickEnt = pe;
+    }
+  }
+
+  // (Round 87) One queued in a row: the whole of it, or (a horse or a
+  // wagon) the part of it over that row.
+  drawQueued(ctx, q, game) {
+    this.slice = q.slice || null;
+    try {
+      this.drawEntity(ctx, q.e, q.rp, game);
+    } finally {
+      this.slice = null;
+    }
+  }
+
+  // A horse, a wagon, or someone on one: what to cut it by (its kind,
+  // whether there's a horse in the shafts, its heading on screen); else
+  // null.
+  steedSpan(e) {
+    if (e.kind === 'prop') return e.type === 'wagon' ? { kind: 'wagon', horse: !!e.horse, a: this.steedAngle(e) - (this.view * Math.PI) / 2 } : null;
+    const m = e.mount;
+    if (m && !e.sleeping && (m.kind === 'horse' || m.kind === 'wagon')) return { kind: m.kind, horse: true, a: this.steedAngle(e, m) - (this.view * Math.PI) / 2 };
+    if (e.kind === 'creature' && e.species === 'horse' && !drawnAsMaster(e)) return { kind: 'horse', horse: true, a: this.steedAngle(e) - (this.view * Math.PI) / 2 };
+    return null;
+  }
+
+  // A horse's or wagon's picture: all of it, or the row's part of it.
+  steedImg(ctx, S, x, y) {
+    const s = this.slice;
+    if (!s) return ctx.drawImage(S.img, x, y);
+    const img = steedSlices(S, s.q, makeCanvas).get(s.k);
+    if (img) ctx.drawImage(img, x, y);
+  }
+
   drawEntity(ctx, e, rp, game) {
     // (Swallowed: out of sight, inside it.)
     if (e.kind === 'player' && e.swallowed) return;
@@ -2433,11 +2519,25 @@ export class Renderer {
     let sx = Math.round(rp.x * TILE - this.camX);
     const floorY = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY); // top of floor face
     const feetY = floorY + 10 - (e.hop || 0);
-    if (sx < -32 || sx > this.vw + 32 || feetY < -40 || feetY > this.vh + 40) return;
+    const cull = this.slice ? 72 : 32;
+    if (sx < -cull || sx > this.vw + cull || feetY < -40 || feetY > this.vh + 40) return;
     const sh = TEX.misc.shadow;
     const inWater = e.inWater;
     // Sat in the back of a wagon: drawn with it (see drawProp).
     if (e.inWagon) return;
+    // (Round 87) A part of a horse or wagon over a row of its own: that
+    // part alone (the rest, and whoever's on it, with its seat's row).
+    if (this.slice && !this.slice.anchor) {
+      if (e.kind === 'prop') this.drawProp(ctx, e, sx, feetY);
+      else if (e.mount) this.drawMount(ctx, e, e.mount, sx, feetY);
+      else {
+        const a = this.steedAngle(e) - (this.view * Math.PI) / 2;
+        const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
+        const S = steedSprite('horse', { coat: e.variant || 0, banner: e.banner || null, saddle: !!e.saddled, frame: f }, a, makeCanvas);
+        this.steedImg(ctx, S, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
+      }
+      return;
+    }
     if (e.kind === 'item') {
       const bob = Math.sin(this.time * 4 + e.id) * 1.5;
       ctx.globalAlpha = 0.7;
@@ -2488,7 +2588,7 @@ export class Renderer {
       const a = this.steedAngle(e) - (this.view * Math.PI) / 2;
       const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
       const S = steedSprite('horse', { coat: e.variant || 0, banner: e.banner || null, saddle: !!e.saddled, frame: f }, a, makeCanvas);
-      ctx.drawImage(S.img, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
+      this.steedImg(ctx, S, Math.round(sx + 8 - S.ox), Math.round(feetY - S.oy));
     } else if (master && drawBossArt(this, ctx, e, sx, feetY)) {
       // (Painted, one to one, moving: see bossbody.js.)
     } else if (master && e.kind === 'creature' && drawBossBody(this, ctx, e, sx, feetY, game, (q) => creatureSheet(q.species, q.variant || 0))) {

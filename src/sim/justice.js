@@ -1161,7 +1161,10 @@ export class Justice {
     guard.threat = null;
     guard.path = null;
     guard.releaseSpot();
-    this.guardBeside(guard);
+    guard.curfewHold = 0;
+    // (Round 87: they're stood right there, waiting on your answer (see
+    // CurfewWindow): led off from where they are, not put beside you.)
+    if (guard.distTo(p) > 6) this.guardBeside(guard);
     guard.face(p.x, p.z);
     guard.say('Hands out. This way: and no trouble.', 3);
     game.ui.msg(`${guard.name} ties a rope round your wrists and walks you out of ${L.settlement.name}.`, '#ffb080');
@@ -1229,7 +1232,21 @@ export class Justice {
           ct.warned = true;
           ct.stage = 1;
           ct.t = 0;
-          if (away) tell(guard.rng.pick(['Evening, stranger. There\'s a curfew here: nobody on the streets after ten. Find a bed, or head out of town and come back by day.', 'You\'re not from here, are you? Curfew\'s on. Off the streets: out of town, or into a room at the tavern.']), `${s.name} keeps a curfew. Get indoors (a room at the tavern), or leave town till morning.`);
+          // (Round 87) This guard's own memory of warning you (not the
+          // watch's: another guard doesn't know): earlier tonight, or on
+          // some night before.
+          const pid = pidOf(p);
+          const night = game.minute < 300 ? (game.day || 0) - 1 : game.day || 0;
+          const mem = (guard.rec.curfewWarned ||= {});
+          const last = mem[pid];
+          mem[pid] = night;
+          if (last === night) {
+            // (Told already tonight: less patience this time.)
+            ct.t = 9;
+            tell(guard.rng.pick(['You again? I told you already tonight: get off the streets!', 'Didn\'t I just send you indoors? Go. Now.', 'Back out again? I\'ve warned you once tonight.']), `This guard already warned you tonight: get indoors${away ? ' or out of town' : ''}, quickly.`);
+          } else if (last !== undefined) {
+            tell(guard.rng.pick([`You again, out after curfew? Same as the other night: ${away ? 'out of town, or into a room' : 'indoors'}.`, 'I remember you. Out past curfew last time too. Indoors with you.', 'Making a habit of this, are we? Curfew. Off the streets.']), `This guard remembers warning you on another night. ${s.name} keeps a curfew: get indoors${away ? ' or leave town till morning' : ''}.`);
+          } else if (away) tell(guard.rng.pick(['Evening, stranger. There\'s a curfew here: nobody on the streets after ten. Find a bed, or head out of town and come back by day.', 'You\'re not from here, are you? Curfew\'s on. Off the streets: out of town, or into a room at the tavern.']), `${s.name} keeps a curfew. Get indoors (a room at the tavern), or leave town till morning.`);
           else tell(guard.rng.pick(['It\'s past curfew! Get indoors, or I\'ll have to fine you.', 'Curfew! Off the streets, now.', 'You there! Home with you. It\'s past ten.']), `Curfew in ${s.name}: get indoors, or you'll be fined.`);
         } else if (ct.stage === 1 && (ct.t += 1) >= 18 && d <= 8) {
           ct.stage = 2;
@@ -1241,6 +1258,8 @@ export class Justice {
           if (guard.rec.override && guard.rec.override.curfew) guard.rec.override = null;
           if (away && !back && !game.ui.modal && game.ui.openCurfew) {
             tell(guard.rng.pick(['Right. You\'re coming with me: I\'ll walk you out myself.', 'That\'s it. Out you go: on a rope, if need be.']), null, '#ffb080');
+            guard.curfewHold = 0.6;
+            guard.path = null;
             game.ui.openCurfew(guard, s.id);
           } else {
             guard.say(back ? 'I told you not to come back tonight.' : 'I warned you.', 2.5, '#ffb080');

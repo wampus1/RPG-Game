@@ -98,7 +98,63 @@ export function knock(game, x, y, z, by = game.player) {
   const inn = inside(game, H);
   const who = inn.awake.length && Math.random() < 0.75 ? inn.awake[0] : inn.asleep.length && Math.random() < 0.25 ? inn.asleep[0] : null;
   if (!who) return false;
-  (game.knocks ||= []).push({ x, y, z, n: who, t: 1.6 + Math.random() * 1.4, by });
+  (game.knocks ||= []).push({ x, y, z, n: who, t: 1.6 + Math.random() * 1.4, by, b: H.b });
+  return true;
+}
+
+// (Round 87) Where to stand to open a door from inside: the cell beside it
+// within the house, that can be stood in; null if none.
+function insideOf(game, k) {
+  const b = k.b;
+  const w = game.world;
+  for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    const x = k.x + dx;
+    const z = k.z + dz;
+    if (b && (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1)) continue;
+    if (w.canStand(x, k.y, z)) return { x, y: k.y, z };
+  }
+  return null;
+}
+
+// The door opened (by whoever came to it).
+function openUp(game, n, a) {
+  unlockFor(game, a.door.x, a.door.y, a.door.z);
+  game.setDoor(a.door.x, a.door.y, a.door.z, true);
+  n.face?.(a.door.x, a.door.z);
+  n.say?.(n.rng.pick(a.woke ? ['Well? What is it?', 'This had better be good.'] : ['Yes? Who is it?', 'Oh! Hello there.', 'Can I help you?', 'Yes?']), 3);
+}
+
+// (Round 87) Someone going to answer the door, each frame (from their own
+// update): across the house to the door, then it opened, and a moment
+// there in it. True while they're about it (nothing else to do).
+export function answerTick(n, dt) {
+  const a = n.answer;
+  if (!a) return false;
+  const game = n.game;
+  if (n.dead || n.down || (n.state !== 'routine' && n.state !== 'home')) {
+    n.answer = null;
+    return false;
+  }
+  a.t -= dt;
+  if (a.opened) {
+    a.hold -= dt;
+    if (a.hold <= 0) {
+      n.answer = null;
+      // (Back to whatever they were about: its way worked out afresh.)
+      n.path = null;
+    }
+    else if (a.by && !a.by.dead) n.face?.(a.by.x, a.by.z);
+    return !!n.answer;
+  }
+  if (n.sitting) n.sitting = false;
+  const there = Math.max(Math.abs(n.x - a.spot.x), Math.abs(n.z - a.spot.z)) <= 0 || n.followPath(a.spot, 0);
+  // (Taking too long about it (the way's blocked): it's opened all the
+  // same, whoever's nearest calling through it.)
+  if (there || a.t <= 0) {
+    a.opened = true;
+    a.hold = 6;
+    openUp(game, n, a);
+  }
   return true;
 }
 
@@ -112,13 +168,22 @@ export function updateKnocks(game, dt) {
     k.done = true;
     const n = k.n;
     if (!n || n.dead) continue;
+    const woke = !!n.sleeping;
     if (n.sleeping) {
-      n.sleeping = false;
+      if (n.wake) n.wake();
+      else n.sleeping = false;
       n.say?.(n.rng.pick(['*grumbles* Who\'s there, at this hour?', 'Mmh? Coming, coming...']), 3);
-    } else n.say?.(n.rng.pick(['Yes? Who is it?', 'Coming!', 'Hold on, I\'m coming.', 'Who\'s knocking?']), 3);
-    unlockFor(game, k.x, k.y, k.z);
-    game.setDoor(k.x, k.y, k.z, true);
-    n.face?.(k.x, k.z);
+    } else n.say?.(n.rng.pick(['Coming!', 'Hold on, I\'m coming.', 'Who\'s knocking?', 'Just a moment!']), 3);
+    // (Round 87) Over to the door to open it, not opened from wherever
+    // they were (see answerTick).
+    const a = { door: { x: k.x, y: k.y, z: k.z }, spot: insideOf(game, k), t: 25, by: k.by, woke };
+    if (a.spot && n.followPath) {
+      n.answer = a;
+      n.path = null;
+    } else {
+      a.opened = true;
+      openUp(game, n, a);
+    }
   }
   game.knocks = L.filter((k) => !k.done);
 }

@@ -1143,7 +1143,16 @@ export class CurfewWindow extends Window {
   }
   update(dt, game) {
     if (this.guard.dead) this.close();
-    else for (const g of game.guardsOf(this.sid)) g.haltT = Math.max(g.haltT, 2);
+    else {
+      for (const g of game.guardsOf(this.sid)) g.haltT = Math.max(g.haltT, 2);
+      // (Round 87) The guard waits there on your answer, not off about
+      // their rounds.
+      this.guard.curfewHold = 0.6;
+    }
+  }
+  close() {
+    if (!this.answered) this.guard.curfewHold = 0;
+    super.close();
   }
 }
 
@@ -2460,7 +2469,8 @@ export class WaitWindow extends Window {
     for (let i = 0; i < tw; i++) {
       const on = i < this.hours;
       const knob = i === this.hours - 1;
-      g.text(tx + i, 4, knob ? '█' : on ? '▬' : '─', knob ? C.white : on ? C.hi : hovT ? C.dim : C.faint, knob ? '#3a3250' : undefined);
+      // (Round 87: filled with whole blocks; '▬' isn't in the font.)
+      g.text(tx + i, 4, on ? '█' : '─', knob ? C.white : on ? C.hi : hovT ? C.dim : C.faint);
     }
     this.hit(tx, 4, tw, 1, (ck, gm, cx) => {
       this.dragging = true;

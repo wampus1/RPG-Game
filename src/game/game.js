@@ -4559,6 +4559,25 @@ export class Game {
     const b = L ? L.econ.wallRect || L.bounds : null;
     const p = this.player;
     const inside = b && p.x > b.x0 && p.x < b.x1 && p.z > b.z0 && p.z < b.z1;
+    // (Round 87) A curfew on: nobody in or out by the gate till dawn, by
+    // the watch's leave or by your own hand under their nose; unless
+    // something's after you, when they'll have you through and shut it
+    // behind you.
+    const m = this.minute;
+    const curfew = !!(L && lawOn(L, 'curfew') && (m >= 1320 || m < 300));
+    if (curfew && g && !(s && this.isWanted(s.id))) {
+      if (this.chasedAt(p)) {
+        g.face(x, z);
+        g.say(g.rng.pick(['Quick, through! We\'ll deal with it!', 'In, in! Get behind the gate!', 'Hurry! Through you go!']), 3, '#ffe070');
+        this.setGate(x, z, true);
+        return true;
+      }
+      g.face(p.x, p.z);
+      g.say(g.rng.pick(inside ? ['Curfew\'s on. Nobody leaves till the morning.', 'Not tonight. The gates stay shut till dawn.', 'Back indoors with you. Nobody goes out after curfew.'] : ['Curfew\'s on. Nobody comes in till dawn.', 'Gates are shut for the night. Come back in the morning.', 'Not after curfew. You\'ll have to wait for dawn.']), 3.5, '#ffb080');
+      this.ui.msg(`${s ? s.name : 'The town'} keeps a curfew: the watch won't open the gate till dawn (unless something's chasing you).`, '#ffb080', true);
+      this.audio?.play('error');
+      return false;
+    }
     if (g && !(s && this.isWanted(s.id))) {
       g.face(x, z);
       g.say(g.rng.pick(['Hold on, I\'ll let you through.', 'Late to be out. In you come.', 'Opening up! Mind the gap.']), 3);
@@ -4573,6 +4592,13 @@ export class Game {
     this.ui.msg('The gate is barred for the night, and there\'s nobody on watch to open it.', '#ffb080', true);
     this.audio?.play('error');
     return false;
+  }
+
+  // (Round 87) Something hostile after `p` (a beast close by on the hunt,
+  // or someone fighting them): the watch would let them in from it.
+  chasedAt(p) {
+    const near = (e) => !e.dead && Math.hypot(e.x - p.x, e.z - p.z) <= 14;
+    return (this.creatures || []).some((c) => near(c) && (c.hostileNow || c.target === p)) || (this.npcs || []).some((n) => near(n) && (((n.state === 'fight' || n.state === 'warband') && n.threat === p) || n.hostileNow));
   }
 
   // Once a second: gates open at dawn; at night the watch shuts them (and

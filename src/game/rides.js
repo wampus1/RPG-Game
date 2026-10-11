@@ -16,7 +16,7 @@ import { seaOff, seaRoute } from './shipfleets.js';
 import { countItem, removeItem, addItem } from './inventory.js';
 import { shippable, FERRY_CARRIES } from './stalls.js';
 import { notePlaced } from './invtools.js';
-import { BLOCKS, B } from '../world/blocks.js';
+import { BLOCKS, B, LOGS, LEAVES } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { MinHeap } from '../util/heap.js';
 
@@ -555,7 +555,8 @@ export function tick(game, p, dt) {
   let y = prop.y;
   if (R.kind === 'ferry') y = GROUND;
   else if (w.regionAt && w.regionAt(tx, tz)) {
-    const sy = w.findStandY(tx, tz, prop.y || GROUND);
+    // (Round 87: on the ground under the trees, never up on them.)
+    const sy = coachY(w, tx, tz, prop.y || GROUND);
     if (sy > 0) y = sy;
   }
   prop.x = at.x;
@@ -600,6 +601,29 @@ export function tick(game, p, dt) {
     game.audio?.play(R.kind === 'ferry' ? 'ship_creak' : 'step_wood', prop);
   }
   if (d >= R.len) endRide(game, p, 'there');
+}
+
+// (Round 87) The height of the ground under the coach's wheels at (x, z),
+// near `near`: a tree in the way (its trunk, its leaves) is ridden through
+// as if it weren't there, never up onto, as the old way (any place to
+// stand, up to three up) did; -1 if there's nowhere.
+const treeId = (id) => LOGS.has(id) || LEAVES.has(id);
+export function coachY(w, x, z, near) {
+  const clear = (y) => {
+    const id = w.getBlock(x, y, z);
+    const b = BLOCKS[id];
+    return !b || !b.solid || b.replaceable || treeId(id);
+  };
+  const ground = (y) => {
+    const id = w.getBlock(x, y - 1, z);
+    const b = BLOCKS[id];
+    return !!b && b.standable && !b.liquid && !treeId(id);
+  };
+  for (const d of [0, -1, 1, -2, 2, -3, 3]) {
+    const y = near + d;
+    if (y >= 1 && y < WORLD_Y - 2 && ground(y) && clear(y) && clear(y + 1)) return y;
+  }
+  return -1;
 }
 
 // T, riding (Round 79): the wait window, as when sat down anywhere, with

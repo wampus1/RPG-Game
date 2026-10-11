@@ -22,7 +22,7 @@ import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weathe
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
 import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch, npcWingWatch, starborn } from '../game/combat.js';
-import { doorLocked, knock as knockDoor } from '../game/doorlocks.js';
+import { doorLocked, knock as knockDoor, answerTick } from '../game/doorlocks.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk, storyTick } from './sagaman.js';
@@ -1133,6 +1133,17 @@ export class NPC extends Entity {
       if (w.t <= 0 || this.state !== 'routine' || this.followPath(w, 1)) this.walkOff = null;
       else return;
     }
+    // (Round 87) Waiting on your answer, out after curfew (see
+    // CurfewWindow): stood where they are, facing you.
+    if (this.curfewHold > 0) {
+      this.curfewHold -= dt;
+      this.path = null;
+      const pl = this.game.player;
+      if (pl) this.face(pl.x, pl.z);
+      return;
+    }
+    // (Round 87) Gone to answer the door.
+    if (this.answer && answerTick(this, dt)) return;
     // Ridden in to camp: down off the horse (or the wagon) once there.
     if (this.mount && this.state !== 'caravan' && this.state !== 'warband') {
       const camp = this.myCamp();

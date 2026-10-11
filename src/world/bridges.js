@@ -15,6 +15,8 @@
 import { B } from './blocks.js';
 import { hash4 } from '../util/rng.js';
 import { landValue } from './geography.js';
+import { BLOCKS } from './blocks.js';
+import { REGION_W, REGION_D } from '../config.js';
 
 export const DECK_Y = 6;
 
@@ -178,7 +180,10 @@ function bandOf(b, x, z) {
   const t = ((x - b.x0) * dx + (z - b.z0) * dz) / l2;
   const len = Math.sqrt(l2);
   const side = ((x - b.x0) * -dz + (z - b.z0) * dx) / len;
-  return { t, len, side, on: t >= 0 && t <= 1 && Math.abs(side) <= b.hw + 0.5, slant: Math.max(Math.abs(dx), Math.abs(dz)) / len };
+  // (Round 87: \`span\`, half the width across the line of a cell, the way
+  // the bridge runs: a cell its middle line passes through is no further
+  // off it than that.)
+  return { t, len, side, on: t >= 0 && t <= 1 && Math.abs(side) <= b.hw + 0.5, slant: Math.max(Math.abs(dx), Math.abs(dz)) / len, span: (Math.abs(dx) + Math.abs(dz)) / (2 * len) };
 }
 export function onBridge(bridges, x, z) {
   for (const b of bridges) {
@@ -188,7 +193,7 @@ export function onBridge(bridges, x, z) {
     // (Round 70: and the exact distance off its line, and how far a pace
     // across the world moves you off it, so its parapet runs unbroken on a
     // slant: see regiongen.stampBridge.)
-    if (q.on) return { b, along: q.t * q.len, side: Math.round(q.side), sideF: q.side, slant: q.slant, len: q.len };
+    if (q.on) return { b, along: q.t * q.len, side: Math.round(q.side), sideF: q.side, slant: q.slant, span: q.span, len: q.len };
     // (Just off it on a slant, in the corner of its staircase of an edge:
     // a cell of parapet there, so a wall that only joins side to side runs
     // on unbroken, and the deck's no narrower.)
@@ -196,8 +201,44 @@ export function onBridge(bridges, x, z) {
     const on = (ax, az) => bandOf(b, ax, az).on;
     if ((on(x - 1, z) || on(x + 1, z)) && (on(x, z - 1) || on(x, z + 1))) {
       const s = Math.sign(q.side) * (b.hw + 1);
-      return { b, along: q.t * q.len, side: s, sideF: q.side, slant: q.slant, len: q.len, rim: true };
+      return { b, along: q.t * q.len, side: s, sideF: q.side, slant: q.slant, span: q.span, len: q.len, rim: true };
     }
   }
   return null;
+}
+
+// (Round 87) Is this cell of a bridge on its way over (see
+// regiongen.stampBridge): never a post or a parapet on it.
+export function bridgeWalk(c) {
+  return !!c && c.sideF !== undefined && c.span !== undefined && Math.abs(c.sideF) <= c.b.hw - 1 + c.span + 0.02;
+}
+
+// (Round 87) A region kept from a save made before the fix: any parapet,
+// post, tower or lamp standing on a bridge's way over taken off it, so
+// it can be crossed. True if anything was.
+export function clearBridgeWalk(region, bridges) {
+  if (!bridges || !bridges.length) return false;
+  const x0 = region.rx * REGION_W;
+  const z0 = region.rz * REGION_D;
+  if (!bridges.some((b) => b.bx1 >= x0 && b.bx0 < x0 + REGION_W && b.bz1 >= z0 && b.bz0 < z0 + REGION_D)) return false;
+  let changed = false;
+  for (let lz = 0; lz < REGION_D; lz++) {
+    for (let lx = 0; lx < REGION_W; lx++) {
+      const c = onBridge(bridges, x0 + lx, z0 + lz);
+      if (!bridgeWalk(c)) continue;
+      const M = bridgeMats(c.b.land, c.b.kind);
+      const built = new Set([M.rail, M.pier, M.lamp]);
+      for (let y = DECK_Y + 1; y <= DECK_Y + 4; y++) {
+        const id = region.get(lx, y, lz);
+        if (!id || !built.has(id)) continue;
+        // (Only what blocks the way: a lamp left on the deck's no harm, but
+        // it went with its post.)
+        if (BLOCKS[id] && (BLOCKS[id].solid || y > DECK_Y + 1)) {
+          region.set(lx, y, lz, 0);
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
 }

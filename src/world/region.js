@@ -64,7 +64,8 @@ export class Region {
     }
     const containers = [];
     for (const [k, v] of this.containers) containers.push([k, v]);
-    return { rx: this.rx, rz: this.rz, rle: out, containers };
+    // (Round 87: `bc`, its bridges' ways over cleared: see bridges.clearBridgeWalk.)
+    return { rx: this.rx, rz: this.rz, rle: out, containers, ...(this.bridgesClear ? { bc: 1 } : {}) };
   }
 
   static deserialize(data) {
@@ -78,6 +79,7 @@ export class Region {
       i += run;
     }
     for (const [k, v] of data.containers || []) r.containers.set(k, v);
+    r.bridgesClear = !!data.bc;
     r.modified = true;
     r.recomputeTops();
     return r;

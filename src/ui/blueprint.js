@@ -158,13 +158,13 @@ export class BlueprintWindow extends Window {
     });
   }
 
-  // ◂ a name ▸, turned either way.
+  // ◄ a name ►, turned either way.
   cycler(g, x, y, text, fn) {
     const l = this.hovering(x, y, 2, 1);
     const r = this.hovering(x + 3 + 12, y, 2, 1);
-    g.text(x, y, '◂', l ? C.white : C.hi);
+    g.text(x, y, '◄', l ? C.white : C.hi);
     g.text(x + 2, y, text.padEnd(12).slice(0, 12), C.fg);
-    g.text(x + 3 + 12, y, '▸', r ? C.white : C.hi);
+    g.text(x + 3 + 12, y, '►', r ? C.white : C.hi);
     this.hit(x, y, 2, 1, () => fn(-1));
     this.hit(x + 2, y, 13, 1, () => fn(1));
     this.hit(x + 3 + 12, y, 2, 1, () => fn(1));
@@ -176,7 +176,7 @@ export class BlueprintWindow extends Window {
     const L = i < 0 ? null : this.flagLayers[i];
     const on = this.sel === i;
     const hv = this.hovering(4, y, 24, 1);
-    g.text(4, y, on ? '▶' : ' ', C.hi);
+    g.text(4, y, on ? '►' : ' ', C.hi);
     g.text(6, y, L ? `${i + 1}. ${L.shape}` : 'field', on ? C.hi : hv ? C.white : C.fg);
     g.text(22, y, '██', L ? L.color : this.flag);
     this.hit(4, y, 24, 1, () => {

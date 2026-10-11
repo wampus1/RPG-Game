@@ -669,6 +669,16 @@ export const STEPS = [
       log.push('Sink ships that never fired on you and you turn pirate: their realm hunts you, honest crew mutiny, and the pirate coves (three guilds now) let you in to swear to them. Ports sell a spyglass.');
     },
   },
+  {
+    // (Round 87) Bridges walkable end to end (any already built in a part of
+    // the world kept in the save are cleared as it loads: see
+    // bridges.clearBridgeWalk); nothing else in a save needs changing.
+    to: '0.87.0',
+    data(d, log) {
+      log.push('Bridges always have a clear way across now (any you\'d found blocked are cleared as you get near them). Coaches keep to the ground under trees.');
+      log.push('With a curfew on, the watch won\'t open the town gates till dawn unless something\'s chasing you; each guard remembers if they\'ve warned you before.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

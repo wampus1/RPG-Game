@@ -6427,6 +6427,47 @@ into stairs when the world's brought up to date.)
   to turn it, with you as the pivot, and scroll to look further out (up
   to 84 tiles) or nearer. Right-click again, or put it away, to lower it.
 
+## Round 87: Bridges, wagons, doors and the curfew watch
+
+- **Bridges you can cross**: on bridges built at an angle, the railing
+  could close the way over to a diagonal squeeze between two posts that
+  you couldn't get through. Every bridge now has a clear path a pace wide
+  (three on a causeway) from end to end at any angle, with no gaps in its
+  railing. Bridges in parts of the world kept in an older save are cleared
+  the first time you go near them.
+- **Wagons and horses drawn in the right order**: a wagon (or a horse)
+  is longer than a tile, but it used to be drawn as if it stood on one
+  row. That painted it over taller things behind it and under things on
+  the same level in front of it. Now each part is drawn with the row it
+  stands on, so what's in front hides it and it hides only what's behind.
+- **Coaches stay on the ground**: a coach's way through trees no longer
+  lifts it up onto a trunk or the leaves; it rolls along the ground
+  under them.
+- **The wait slider** fills with solid blocks instead of "?" (the
+  character it used isn't in the game's font). The blueprint table's
+  arrows and hull ends show properly too.
+- **No seeing into houses from behind them**: standing on the far side
+  of a house from the camera used to fade its roof and walls to show you,
+  which showed the rooms inside as well. Buildings now stay solid and you
+  show as a faint ghost over them. Trees and rock still fade as before.
+- **Answering the door**: whoever comes to a knock now calls out, walks
+  over to the door from inside, opens it, and stands there a moment
+  facing you, instead of the door just opening on its own.
+- **Gates after curfew**: in a town with a curfew, the watch won't open
+  the gate between ten at night and five in the morning, to let you in or
+  out, and won't let you lift the bar yourself under their nose. If
+  something's chasing you (a beast on the hunt, someone fighting you),
+  they hurry you through.
+- **The curfew guard waits for your answer**: when you're asked to be led
+  out of town or resist, the guard stays where they are, facing you,
+  until you choose. They no longer wander off and then snap back to your
+  side.
+- **Guards remember warning you**: each guard remembers warning you about
+  the curfew, and when. If they warned you earlier the same night, they're
+  shorter with you and quicker to move on to a final warning. If they
+  warned you on another night, they say they remember you. A different
+  guard doesn't know either way.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -207,6 +207,9 @@ const SHADES = {
   '▐': (x) => x >= 3,
   // (Round 69: the red mesas' stepped rock.)
   '▙': (x, y) => x < 3 || y >= 4,
+  // (Round 87: a hull's ends, on the blueprint table.)
+  '▛': (x, y) => x < 3 || y < 4,
+  '▜': (x, y) => x >= 3 || y < 4,
 };
 
 export const CHARSET = [];

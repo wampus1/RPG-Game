@@ -7,7 +7,7 @@ import { BIOMES } from './biomes.js';
 import { TREE_BUILDERS, TREE_MARGIN } from './trees.js';
 import { Region } from './region.js';
 import { stampSites } from './sites.js';
-import { BRIDGE_KINDS, bridgeMats, DECK_Y } from './bridges.js';
+import { BRIDGE_KINDS, bridgeMats, DECK_Y, bridgeWalk } from './bridges.js';
 import { landmarkCells, cacheSpot } from './landmarks.js';
 import { featuresIn, featureOps } from './features.js';
 
@@ -250,7 +250,13 @@ function stampBridge(region, lx, lz, c) {
   // it; on a slant that's a staircase of cells, and the corners of it
   // filled (rim: see bridges.onBridge), so the parapet along it is one
   // wall.)
-  const edge = c.bridge.rim || Math.abs(side) === b.hw || (c.bridge.sideF !== undefined && Math.abs(c.bridge.sideF) + c.bridge.slant > b.hw + 0.5);
+  // (Round 87: never across the way over. Every cell its middle line runs
+  // through (and as many more either side as it's wide) is deck, so there's
+  // always a path a pace wide (three on a causeway) from end to end that
+  // you can walk without cutting a corner between two posts. At some
+  // slants the parapet used to close it to a corner-to-corner squeeze.)
+  const walk = bridgeWalk(c.bridge);
+  const edge = !walk && (c.bridge.rim || Math.abs(side) === b.hw || (c.bridge.sideF !== undefined && Math.abs(c.bridge.sideF) + c.bridge.slant > b.hw + 0.5));
   const a = Math.round(along);
   const deck = b.kind === 'causeway' && side === 0 && M.mid !== undefined ? M.mid : M.deck;
   if (c.water < 0) {

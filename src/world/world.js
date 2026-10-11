@@ -7,6 +7,7 @@ import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
 import { generateRegion } from './regiongen.js';
 import { Region } from './region.js';
+import { clearBridgeWalk } from './bridges.js';
 import { layoutJob, adoptLayout } from './settlement.js';
 import { layAway } from './laywork.js';
 import { rollContainerLoot } from './loot.js';
@@ -171,6 +172,10 @@ export class World {
     r = saved ? Region.deserialize(saved) : generateRegion(this, rx, rz);
     // (Round 78: so it's looked over as it comes in: see game/savehealth.js.)
     if (saved) r.fromSave = true;
+    // (Round 87: a bridge in it laid before its way over was kept clear:
+    // cleared now. Once: then saved as it is.)
+    if (saved && !r.bridgesClear && clearBridgeWalk(r, this.ow && this.ow.bridges)) r.modified = true;
+    r.bridgesClear = true;
     this.regions.set(key, r);
     if (this.onRegionLoad) this.onRegionLoad(r);
     return r;

@@ -271,6 +271,10 @@ function raster(parts, a) {
   const h = Math.ceil(y1 - y0) + 6;
   const px = new Uint32Array(w * h);
   const depth = new Float32Array(w * h).fill(-1e9);
+  // (Round 87) How far down the view each pixel's ground point is from the
+  // origin, in tiles: which row of the world it's drawn with (see
+  // steedSlices).
+  const dv = new Float32Array(w * h).fill(NaN);
   for (const F of faces) {
     const { P, E1, E2, det, o, e1, e2, b, kind, lit } = F;
     const qx0 = Math.max(0, Math.floor(Math.min(P[0], P[0] + E1[0], P[0] + E2[0], P[0] + E1[0] + E2[0]) + ox));
@@ -291,10 +295,11 @@ function raster(parts, a) {
         if (!c) continue;
         depth[i] = p.h;
         px[i] = shade(c, lit);
+        dv[i] = p.f * ca + p.r * sa;
       }
     }
   }
-  return { px, w, h, ox, oy, sx, sy };
+  return { px, w, h, ox, oy, sx, sy, dv };
 }
 
 // A dark line round it, as the world's sprites have; and its shadow on
@@ -306,7 +311,11 @@ function finish(R, foot) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (px[i]) continue;
-      if ((x > 0 && px[i - 1]) || (x < w - 1 && px[i + 1]) || (y > 0 && px[i - w]) || (y < h - 1 && px[i + w])) out[i] = OUTLINE;
+      const nb = x > 0 && px[i - 1] ? i - 1 : x < w - 1 && px[i + 1] ? i + 1 : y > 0 && px[i - w] ? i - w : y < h - 1 && px[i + w] ? i + w : -1;
+      if (nb >= 0) {
+        out[i] = OUTLINE;
+        if (R.dv) R.dv[i] = R.dv[nb];
+      }
     }
   }
   if (foot) {
@@ -322,7 +331,10 @@ function finish(R, foot) {
         const ca = R.ca;
         const f = u * sa + v * ca;
         const r = -u * ca + v * sa;
-        if (f >= f0 && f <= f1 && r >= r0 && r <= r1) out[i] = SHADOW;
+        if (f >= f0 && f <= f1 && r >= r0 && r <= r1) {
+          out[i] = SHADOW;
+          if (R.dv) R.dv[i] = v;
+        }
       }
     }
   }
@@ -359,10 +371,59 @@ export function steedSprite(kind, o, a, makeCanvas) {
   const id = ctx.createImageData(R.w, R.h);
   new Uint32Array(id.data.buffer).set(out);
   ctx.putImageData(id, 0, 0);
-  got = { img, ox: R.ox, oy: R.oy, at: (f, r, h) => ({ x: R.sx(f, r), y: R.sy(f, r, h) }), ang };
+  got = { img, ox: R.ox, oy: R.oy, at: (f, r, h) => ({ x: R.sx(f, r), y: R.sy(f, r, h) }), ang, px: out, dv: R.dv, w: R.w, h: R.h, slices: new Map() };
   cache.set(key, got);
   if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
   return got;
+}
+
+// (Round 87) The picture cut by the world's rows it stands over: with its
+// origin `fr` (0 to 1) of a row down the view, which row (from the
+// origin's, 0) each pixel's ground is in, and a picture of just those for
+// each. Drawn each with its own row (see Renderer), a long wagon is hidden
+// by what's in front of each part of it, and hides only what's behind.
+export function steedSlices(S, fr, makeCanvas) {
+  const q = Math.round(fr * 16) / 16;
+  let got = S.slices.get(q);
+  if (got) return got;
+  const rows = new Map();
+  for (let i = 0; i < S.px.length; i++) {
+    if (!S.px[i]) continue;
+    const d = Number.isNaN(S.dv[i]) ? 0 : S.dv[i];
+    const k = Math.ceil(q + d - 0.001);
+    let a = rows.get(k);
+    if (!a) rows.set(k, (a = new Uint32Array(S.px.length)));
+    a[i] = S.px[i];
+  }
+  got = new Map();
+  for (const [k, a] of rows) {
+    const img = makeCanvas(S.w, S.h);
+    const c = img.getContext('2d');
+    const id = c.createImageData(S.w, S.h);
+    new Uint32Array(id.data.buffer).set(a);
+    c.putImageData(id, 0, 0);
+    got.set(k, img);
+  }
+  S.slices.set(q, got);
+  return got;
+}
+
+// The rows (from the origin's) a horse, or a wagon with or without its
+// horse, stands over, turned to `a` with its origin `fr` of a row down.
+export function steedRows(kind, horse, a, fr) {
+  const foot = kind === 'horse' ? [-0.95, 1.05, -0.36, 0.36] : [-2.25, horse ? 2.3 : 0.45, -0.72, 0.72];
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const f of [foot[0], foot[1]]) {
+    for (const r of [foot[2], foot[3]]) {
+      const d = f * ca + r * sa;
+      lo = Math.min(lo, d);
+      hi = Math.max(hi, d);
+    }
+  }
+  return [Math.ceil(fr + lo - 0.001), Math.ceil(fr + hi - 0.001)];
 }
 
 // (For the tests: the pixels of one, without a canvas.)
