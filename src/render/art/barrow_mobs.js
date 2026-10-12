@@ -1,0 +1,200 @@
+// (Round 95) The barrow's own, painted by hand (see render/pixart.js): its
+// silhouette first, then its colours, its texture, its light and shade, its
+// outline and highlights, frame by frame. Each faces left (the renderer
+// flips it); its groups are which frames it walks, stands, strikes,
+// flinches and rests with (see sprites.lookFrame).
+
+// The Hearthguard: a spectacle helm with one cold eye in it, a quartered
+// shield forward, a spear upright behind; levels it behind the shield's rim,
+// then thrusts it over. Sits at the feast with its spear on its shoulder.
+export const HEARTHGUARD = {
+  size: 24,
+  pal: { a: '#191a20', b: '#1d1f24', c: '#f2f6fa', d: '#c4cad2', e: '#949aa4', f: '#dce2ea', g: '#5e646e', h: '#363a42', i: '#747a88', j: '#464a56', k: '#131419', l: '#1f1707', m: '#94702a', n: '#160e07', o: '#5c4026', p: '#281d09', q: '#644818', r: '#15161a', s: '#363942', t: '#86eeff', u: '#6e5c44', v: '#9a9ea8', w: '#555966', x: '#111216', y: '#2e261c', z: '#373a44', A: '#202229', B: '#ecd274', C: '#c09840', D: '#201a13', E: '#c4bca6', F: '#c09640', G: '#a24028', H: '#a09884', I: '#76705e', J: '#16171c', K: '#0b0c07', L: '#7e2c1c', M: '#4e4a40', N: '#787c88', O: '#14160e', P: '#9c762e', Q: '#b4b8c0', R: '#281a0e', S: '#585c66', T: '#828690', U: '#6c4c1c', V: '#363822', W: '#ac9670', X: '#19140f', Y: '#3a2a0e', Z: '#4a1a10', '0': '#483222', '1': '#4a4c30', '2': '#36100a', '3': '#232518', '4': '#561a10', '5': '#4a3214', '6': '#16130e', '7': '#8e8464', '8': '#5a523e', '9': '#606242', '!': '#746a50', '#': '#403a2c', '$': '#28241a', '%': '#0f0a06', '&': '#7c5c44', '*': '#614530', '+': '#302117', '-': '#1c130b', '=': '#785634', '?': '#36332c', '@': '#25282e', '^': '#ffffff', '_': '#24262e', '~': '#1c1209', '(': '#dcb85c', ')': '#281b0b', '[': '#1d0805' },
+  rows: [
+    '...........aa...bcdeb...',
+    '..........affa..bcghb...',
+    '.........afijia..bhb....',
+    '........afjjjjjk.lml....',
+    '........aijjjjjjknon....',
+    '.......pqmmmmmmqlnon....',
+    '........rstsuvwwxnon....',
+    '.....ppprssuywzAxnon....',
+    '...ppBCCpDyEuwAx.non....',
+    '..pBBFGGmmHIyDJxKnon....',
+    '..pBFFGLLmAMNNwwOnon....',
+    '.pBFFFLLLLmNwzwAwnon....',
+    '.pCFFPQLLLqNzwzwAARn....',
+    '.pCGLSTsPUqwzAzAVWuX....',
+    '.lCLLLsPUUYwAzAAVuyX....',
+    '.lmLLLPUUZY0000C1Von....',
+    '..lmLLUU2YNNwNww13on....',
+    '..lmm4U5YYNAzAzA13on....',
+    '...llqYYzwAzAzAA13on....',
+    '.....lll6786678933On....',
+    '........6!#66!#V3Oon....',
+    '........68$668$6Knon....',
+    '.......%&*0%%&*0%nRn....',
+    '.......%0+-%%0+-%.n.....',
+  ],
+  frames: [
+    {},
+    { 0: '.................bcb....', 1: '...........aa...bcgeb...', 2: '..........affa..bcghb...', 3: '.........afijia..bhb....', 4: '........afjjjjjk.lml....', 5: '........aijjjjjjknon....', 6: '.......pqmmmmmmqlnon....', 7: '........rstsuNNzxnon....', 8: '.....ppprssuyNAAxnon....', 9: '...ppBCCpDyEuzAx.non....', 10: '..pBBFGGmmHIyDJxKnon....', 11: '..pBFFGLLmAMvwNzOnon....', 12: '.pBFFFLLLLmvzwzzznon....', 13: '.pCFFPQLLLqwwzwzzARn....', 14: '.lCGLSTsPUqNAzAzVWuX....', 15: '.lCLLLsPUUYzzAzAVuyX....', 16: '.lmLLLPUUZY0000C1Von....', 17: '..lmLLUU2YvwNwNz13on....', 18: '..lmm4U5YYzzAzAA13on....', 19: '...llqYY6786678933On....', 20: '.....lll6!#66!#V3Oon....' },
+    { 19: '.....lllx67!!8V133On....', 20: '.........6!###KV3Oon....', 21: '.........68##$6KKnon....', 22: '........%&****0%.nRn....', 23: '........%0++++-%..n.....' },
+    { 0: '.................bcb....', 1: '...........aa...bcgeb...', 2: '..........affa..bcghb...', 3: '.........afijia..bhb....', 4: '........afjjjjjk.lml....', 5: '........aijjjjjjknon....', 6: '.......pqmmmmmmqlnon....', 7: '........rstsuNNzxnon....', 8: '.....ppprssuyNAAxnon....', 9: '...ppBCCpDyEuzAx.non....', 10: '..pBBFGGmmHIyDJxKnon....', 11: '..pBFFGLLmAMvwNzOnon....', 12: '.pBFFFLLLLmvzwzzznon....', 13: '.pCFFPQLLLqwwzwzzARn....', 14: '.lCGLSTsPUqNAzAzVWuX....', 15: '.lCLLLsPUUYzzAzAVuyX....', 16: '.lmLLLPUUZY0000C1Von....', 17: '..lmLLUU2YvwNwNz13on....', 18: '..lmm4U5YYzzAzAA13on....', 19: '...llqYY6786678933On....', 20: '.....lll6!#66!#V3Oon....' },
+    { 19: '.....ll6786xx67813On....', 20: '.......6!#6..6!#VOon....', 21: '.......68$6..68$6non....', 22: '......%&*0%..%&*0nRn....', 23: '......%0+-%..%0+-%n.....' },
+    { 0: '.................bcb....', 1: '...........aa...bcgeb...', 2: '..........affa..bcghb...', 3: '.........afijia..bhb....', 4: '........afjjjjjk.lml....', 5: '........aijjjjjjknon....', 6: '.......pqmmmmmmqlnon....', 7: '........rstsuNNzxnon....', 8: '.....ppprssuyNAAxnon....', 9: '...ppBCCpDyEuzAx.non....', 10: '..pBBFGGmmHIyDJxKnon....', 11: '..pBFFGLLmAMvwNzOnon....', 12: '.pBFFFLLLLmvzwzzznon....', 13: '.pCFFPQLLLqwwzwzzARn....', 14: '.lCGLSTsPUqNAzAzVWuX....', 15: '.lCLLLsPUUYzzAzAVuyX....', 16: '.lmLLLPUUZY0000C1Von....', 17: '..lmLLUU2YvwNwNz13on....', 18: '..lmm4U5YYzzAzAA13on....', 19: '...llqYY6786678933On....', 20: '.....lll6!#66!#V3Oon....' },
+    { 0: '........................', 1: '............aa..........', 2: '...........affa.........', 3: '..........afijik........', 4: '.........afjjjjjk.......', 5: '.........aijjjjjjk......', 6: '........pqmmmmmmql......', 7: '.........rstsuvwwx......', 8: '......ppprssuywzAx......', 9: '....ppBCCpDyEuwAx.......', 10: '...pBBFGGmmHIyDxxK......', 11: '...pBFFGLccAMzwzAOKnnnnn', 12: '..pBFFFLcggem===Wu======', 13: '..pCFFPQLeghmRRRuyRRRRRR', 14: '..lCGLSTsPhqNNwNz9VKnnnn', 15: '..lCLLLsPUUYwAzAA13K....', 16: '..lmLLLPUUZY0000C13K....', 17: '...lmLLUU2YNNwNww13K....', 18: '...lmm4U5YYwAzAzA13K....', 19: '....llqYY786678V133OK...', 20: '......ll6!#66!#KV3OK....', 21: '........68$668$6KKK.....', 22: '.......%&*0%%&*0%.......', 23: '.......%0+-%%0+-%.......' },
+    { 0: '..........aa............', 1: '.........affa...........', 2: '........afijia..........', 3: '.......afjjjjja.........', 4: '.......aijjjjjjk........', 5: '......pqmmmmmmql........', 6: '.......rstsuNNzx........', 7: '...ppp.rssuyNAAx........', 8: '.ppBCCppDyEuzAJ.........', 9: 'pBBFGGmm?HIyDJJK........', 10: 'pBFFGLLmzwMvwNzVK.......', 11: 'ccFFLLLLmzwAzAAVK.......', 12: 'dgem======Wu===VK.......', 13: 'eghmRRRRRRuyRRR1VK......', 14: 'ChLLsPUUYwzwzwA13K......', 15: 'mLLLPUUZY00000C13K......', 16: 'lmLLUU2YNNwNwNz13K......', 17: 'lmm4U5YYNAzAzAz13K......', 18: '.llqYYxwAzAzAzA13K......', 19: '...lll.x678667813OK.....', 20: '........6!#66!#VOK......', 21: '........68$668$6K.......', 22: '.......%&*0%%&*0%.......', 23: '.......%0+-%%0+-%.......' },
+    { 0: '........................', 1: '..........aa............', 2: '.........affa...........', 3: '........afijia..........', 4: '.......afjjjjja.........', 5: '.......aijjjjjjk........', 6: '......pqmmmmmmql........', 7: '.......rstsuvwwx........', 8: '....ppprssuywzAx........', 9: '..ppBCCpDyEuwAJ.........', 10: '.pBBFGGmmHIyDJJK........', 11: '@pBFFGLLmAMNNwwVK.......', 12: 'ccFFFLLLLmzzAzAVK.......', 13: 'dgem======Wu===VK.......', 14: 'eghmRRRRRRuyRRR1VK......', 15: 'bhLLLsPUUYwzwzA13K......', 16: 'lmLLLPUUZY0000C13K......', 17: '.lmLLUU2YNNwNww13K......', 18: '.lmm4U5YYwAzAzA13K......', 19: '..llqYYl678667813OK.....', 20: '....lll.6!#66!#VOK......', 21: '........68$668$6K.......', 22: '.......%&*0%%&*0%.......', 23: '.......%0+-%%0+-%.......' },
+    { 0: '..................bcb...', 1: '............aa...bcgeb..', 2: '...........affa..bcghb..', 3: '..........afijik..bhb...', 4: '.........afjjjjjk.lml...', 5: '.........aijjjjjjknon...', 6: '........pqmmmmmmqlnon...', 7: '.........rs^suvwwxnon...', 8: '......ppprssuywzAxnon...', 9: '....ppBCCpDyEuwAx.non...', 10: '...pBBFGGmmHIyDxxKnon...', 11: '...pBFFGLLmAMNNwwOnon...', 12: '..pBFFFLLLLmNwzwAwnon...', 13: '..pCFFPQLLLqNzwzwAARn...', 14: '..lCGLSTsPUqwzAzAVWuX...', 15: '..lCLLLsPUUYwAzAAVuyX...', 16: '..lmLLLPUUZY0000C1Von...', 17: '...lmLLUU2YNNwNww13on...', 18: '...lmm4U5YYwAzAzA13on...', 19: '....llqYY786678V133On...', 20: '......ll6!#66!#KV3Oon...', 21: '........68$668$6KKnon...', 22: '.......%&*0%%&*0%.nRn...', 23: '.......%0+-%%0+-%..n....' },
+    { 0: '........................', 1: '........................', 2: '............@...........', 3: '..........a@c@..........', 4: '.........afcge@.........', 5: '........afjieh@.........', 6: '.......afjjjimp.........', 7: '.......aijjj_ojk........', 8: '......pqmmmmYRql........', 9: '.......rstsuvzon........', 10: '.......rssuywzRn........', 11: '........DyEuNA~on.......', 12: '.......JzHIywzzRn.......', 13: '....pppJNzMNwzzzon......', 14: '...lBBCxwwwwzwAzRn......', 15: '..lB(GGmNAzAzAzAVon.....', 16: '..)(FGLwAzAzAzAAVRn.....', 17: '.lBFFQLLq000000C1Von....', 18: '.lCGSTsUqvwNwNww13Rn....', 19: '.lCLLsUUYzzAzAzA13Oon...', 20: '..[LLUU586786K9133VRn...', 21: '..lm4U5Y86!#6KVOKVOnon..', 22: '...lqYY8$68$6.KK.KKnRn..', 23: '....%000000-%.......n...' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 3, 0.5], hurt: [9, 1, 0.2], rest: [10, 1, 2.6] },
+};
+
+// The Bone Thrall: gaunt, grey, its hair over its face, the iron collar
+// and its broken chain; a rusted seax. Sits slumped till it's called.
+export const BONE_THRALL = {
+  size: 16,
+  pal: { a: '#282721', b: '#b4b2a4', c: '#5e5c52', d: '#8a887c', e: '#1f1e1a', f: '#6e685a', g: '#524e44', h: '#36332c', i: '#c8f8d0', j: '#151310', k: '#1e1c18', l: '#121216', m: '#4c4f58', n: '#9ea2aa', o: '#72757e', p: '#0e0e11', q: '#100f0d', r: '#625139', s: '#4a3c29', t: '#33281b', u: '#100c08', v: '#d8d0c4', w: '#b0a496', x: '#1f1812', y: '#281e17', z: '#ffffff' },
+  rows: [
+    '................',
+    '.....aaaa.......',
+    '....abcdda......',
+    '...adbcddbe.....',
+    '...adfgghbe.....',
+    '...adigghbe.....',
+    '...adfghhbe.....',
+    '...adjkhabe.....',
+    '....lmnmmop.....',
+    '...qfrssstop....',
+    '..qfgurssstop...',
+    '.qfhqusststgq...',
+    'qfhq.utssttqgq..',
+    'vgq...qghqghq...',
+    'wx....qgq.qgq...',
+    'x....qfgqqfgq...',
+  ],
+  frames: [
+    {},
+    { 1: '................', 2: '.....aaaa.......', 3: '....abcdda......', 4: '...adbcddbe.....', 5: '...adfgghbe.....', 6: '...adigghbe.....', 7: '...adfghhbep....', 8: '...adjkmnmmop...', 9: '...qfrssstpop...' },
+    { 13: 'vgq..qghquqghq..', 14: 'wx..qgqq...qgq..', 15: 'x..qfgq....qggq.' },
+    { 1: '................', 2: '....aaaa........', 3: '...adbcda.......', 4: '..addbcdda......', 5: '..adfgghda......', 6: '..adigghda......', 7: '..adfghhdap.....', 8: '..adjkmnmmop....', 9: '..qfrssstupop...', 10: '.qfgurssstop....', 11: 'qfhqusststgq....', 12: 'vhq.utssttqgq...', 13: 'wx...uqghgqq....', 14: 'x.....qgqgq.....', 15: '.....qfgqfgq....' },
+    { 13: 'vgq...uqhgqhq...', 14: 'wx....qhqqqgq...', 15: 'x....qhhq.qfgq..' },
+    { 1: '................', 2: '....aaaa........', 3: '...adbcda.......', 4: '..addbcdda......', 5: '..adfgghda......', 6: '..adigghda......', 7: '..adfghhdap.....', 8: '..adjkmnmmop....', 9: '..qfrssstupop...', 10: '.qfgurssstop....', 11: 'qfhqusststgq....', 12: 'vhq.utssttqgq...', 13: 'wx...uqghgqq....', 14: 'x.....qgqgq.....', 15: '.....qfgqfgq....' },
+    { 0: '.....aaaayvwx...', 1: '....abcddywfq...', 2: '...adbcddbfq....', 3: '...adfgghbgq....', 4: '...adigghbgq....', 5: '...adfghhfq.....', 6: '...adjkhfbe.....', 7: '....lmnmmop.....', 8: '...jfrssstop....', 9: '...qgurssstop...', 10: '....qusststu....', 11: '.....utssttu....', 12: '......qghqghq...', 13: '......qgq.qgq...', 14: '.....qfgqqfgq...', 15: '......qq..qq....' },
+    { 1: '................', 2: '...aaaa.........', 3: '..addbca........', 4: '.acddbcda.......', 5: '.acfgghda.......', 6: '.acigghda.......', 7: '.acfghhdal......', 8: 'yacjkmnmmop.....', 9: 'vwffrssstpop....', 10: 'xwxqfrssstop....', 11: '.x..usststgq....', 12: '....utssttqgq...', 13: '.....uqghqghq...', 14: '......qgq.qgq...', 15: '.....qfgqqfgq...' },
+    { 1: '................', 2: '....aaaa........', 3: '...adbcda.......', 4: '..addbcdda......', 5: '..adfgghda......', 6: '..adigghda......', 7: '..adfghhdap.....', 8: '..adjkmnmmop....', 9: '..qfrssstupop...', 10: '.qfgurssstop....', 11: 'qfhqusststgq....', 12: 'vhq.utssttqgq...', 13: 'wx...uqghqghq...', 14: 'x.....qgq.qgq...', 15: '.....qfgqqfgq...' },
+    { 1: '......aaaa......', 2: '.....acddbe.....', 3: '....abcddbce....', 4: '....abfgghce....', 5: '....abzgghce....', 6: '....abfghhce....', 7: '....abjkhace....', 8: '.....lmnmmop....', 9: '....qfrssstop...', 10: '...qfgurssstop..', 11: '..qfhqusststgq..', 12: '.xvhq.utssttqgq.', 13: '.xwx...qghqghq..', 14: '..x....qgq.qgq..', 15: '......qfgqqfgq..' },
+    { 1: '................', 2: '................', 3: '................', 4: '....aaaa........', 5: '...adbcda.......', 6: '..addbcdda......', 7: '..addgghdop.....', 8: '..adighmnmop....', 9: '..eddkhssstop...', 10: '...qfrsssstu....', 11: '..qfgurssstu....', 12: '.qfgggggtstu....', 13: '.qgqfhqquuu.....', 14: 'xvgqqgq.........', 15: 'xwgqfgq.........' },
+    { 1: '................', 2: '................', 3: '................', 4: '................', 5: '....aaaa........', 6: '...adbcdal......', 7: '..addbcddop.....', 8: '..addggmnmop....', 9: '..edighhsstop...', 10: '...qkrsssstu....', 11: '..qfgurssstu....', 12: '.qfgggggtstu....', 13: '.qgqfhqquuu.....', 14: 'xvgqqgq.........', 15: 'xwgqfgq.........' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 3, 0.5], hurt: [9, 1, 0.2], rest: [10, 2, 2.6] },
+};
+
+// The Corpse-Light: a cold flame with a hollow face; it flares to call
+// the dead up.
+export const CORPSE_LIGHT = {
+  size: 16,
+  pal: { a: ['#2a7a9a', 110], b: '#2e88a8', c: '#5ad0e0', d: '#b0f6ff', e: '#14303a', f: '#ffffff' },
+  rows: [
+    '........a.......',
+    '.......ab.......',
+    '......abb.a.....',
+    '......abca.b....',
+    '.....abccbcba...',
+    '.....bccdccba...',
+    '....abccdcba....',
+    '....bceedeecb...',
+    '...abcedddecba..',
+    '...abcdddddcba..',
+    '...abcddeddcb...',
+    '...abcddefdcba..',
+    '....bcddfddcb...',
+    '....abcdfdcba...',
+    '.....abccba.....',
+    '......a.........',
+  ],
+  frames: [
+    {},
+    { 0: '.......a........', 1: '......ab....a...', 2: '......abb..ab...', 3: '.....abcbaabb...', 15: '.........a......' },
+    { 0: '.........a......', 1: '..a......ba.....', 2: '..ba....abb.....', 3: '...ba..abcba....', 4: '....abbccbcba...', 15: '.......a........' },
+    { 0: '................', 1: '........a.......', 2: '.......aba......', 3: '......abcba.....', 4: '.....abccbba....', 15: '................' },
+    { 0: '...a....a....a..', 1: '...ba..aba..ab..', 2: '....bbabcbabb...', 3: '....abccdccba...', 4: '...abccdddccba..', 5: '...bcddddddcbb..', 6: '..abceeddeedcba.', 7: '..abceeddeedcba.', 8: '..abcdddddddcba.', 9: '..abcddfefddcba.', 10: '..abcddfefddcb..', 11: '...bcddfefddcb..', 12: '...abcddfddcba..', 13: '....abcdddcba...', 14: '.....abcccba....', 15: '......aaaaa.....' },
+    { 0: '.a.....aa....a..', 1: '.ba...abba..ab..', 2: '..bb.abccba.bb..', 3: '...abccddccbba..', 4: '..abccddddccba..', 5: '..bcddddddddcb..', 6: '.abceedddeeddcba', 7: '.abceedddeeddcba', 8: '.abcddddddddddcb', 9: '.abcdddfeffdddcb', 10: '.abcdddfeffdddcb', 11: '..bcdddfeffddcb.', 12: '..abcdddffddcba.', 13: '...abcddddddba..', 14: '....abccccccba..', 15: '.....aaaaaaaa...' },
+    { 0: '................', 1: '................', 2: '........a.......', 3: '.......afa......', 4: '......afffa.....', 5: '.....afddffa....', 6: '.....fdededf....', 7: '....afddddddfa..', 8: '....afddedddf...', 9: '....afddefddf...', 10: '.....fddffddf...', 11: '.....afffffa....', 12: '......aaaaa.....', 13: '................', 14: '................', 15: '................' },
+  ],
+  groups: { walk: [0, 4, 0.62], attack: [4, 2, 0.5], hurt: [6, 1, 0.2], idle: [0, 4, 0.62] },
+};
+
+// The Tomb Rat: fat, mangy, milk-eyed, a naked tail.
+export const TOMB_RAT = {
+  size: 16,
+  pal: { a: '#15120f', b: '#100e0c', c: '#331d1d', d: '#6e6456', e: '#8a806e', f: '#a86a64', g: '#7a4644', h: '#524a40', i: '#363029', j: '#c88c84', k: '#c8cec0', l: '#281717', m: '#ffffff', n: '#1e1a16' },
+  rows: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......aaab.....',
+    '..cc.aaddedbb...',
+    '.cfgadeddhdhib..',
+    'cjhddhjjdhhhiib.',
+    'fhkhddjdhhhhhibl',
+    'bdhhhddhhhhhiigg',
+    '.biihhhhhhiiiblg',
+    '..bibihhiiibb.lg',
+    '..lflbbblfl..lgl',
+    '.lffl..lffl...l.',
+    '..ll....ll......',
+  ],
+  frames: [
+    {},
+    { 6: '.cc..aaddedbb...', 7: 'cfgcadeddhdhib..', 8: 'jhdddhjjdhhhiib.', 9: 'hkhdddjdhhhhhibl', 10: 'fhhhddhhhhhhiigg', 11: 'lbiihhhhhhiiiblg', 12: '..bibihhiiibblgl', 13: '..lflbbblfl.lgl.', 14: '.lffl..lffl..l..' },
+    {},
+    { 5: '................', 6: '.......aaab.....', 7: '..cc.aaddedbb...', 8: '.cfgadeddhdhibll', 9: 'ljhddhjjdhhhiigg', 10: 'fhkhddjdhhhhhilg', 11: 'bdhhhddhhhhhiilg', 12: '.biihhhhhhiiilgl', 13: '..bilfhhiibbb.l.', 14: '...lfflfgl......', 15: '....ll.ll.......' },
+    { 8: 'cjhddhjjdhhhiibl', 9: 'fhkhddjdhhhhhilg', 10: 'bdhhhddhhhhhiigl', 11: '.biihhhhhhiiilgl', 12: '.lfibihhiiibb.lg', 13: '.lfl.bbbblfl..lg', 14: 'lffl.....lffl..l', 15: '.ll.......ll....' },
+    { 5: '................', 6: '.......aaab.....', 7: '..cc.aaddedbb...', 8: '.cfgadeddhdhibll', 9: 'ljhddhjjdhhhiigg', 10: 'fhkhddjdhhhhhilg', 11: 'bdhhhddhhhhhiilg', 12: '.biihhhhhhiiilgl', 13: '..bilfhhiibbb.l.', 14: '...lfflfgl......', 15: '....ll.ll.......' },
+    { 4: '.....cc.........', 5: '....cfgcaab.....', 6: '...cjhdddedbb...', 7: '..cfhkdedhdhib..', 8: '..adhhddjdhhiib.', 9: '...bihhjjhhhhibl', 10: '....bihdhhhhiigg', 11: '.....bihhhhiiblg', 12: '.....lfihiiib.lg', 13: '....lfflblfl.lgl', 14: '.....ll..lffl.l.', 15: '..........ll....' },
+    { 5: '................', 6: 'cc....aaaab.....', 7: 'fgcaaadddedb....', 8: 'jhdddeddhdhibb..', 9: 'khddjjdhhhhhiibl', 10: 'mndddjdhhhhhhigg', 11: 'fbihhhhhhhhiiblg', 12: 'l.biiihhiiibblgl', 13: '.lfflbbbbblfl.l.', 14: '..ll......lffl..', 15: '...........ll...' },
+    { 5: '........aabb....', 6: '...cc.aaddedbb..', 7: '..cfgadeddhdhib.', 8: '.cjhddhjjdhhhiib', 9: 'lfhmhddjdhhhhhib', 10: '.bdhhhddhhhhhiig', 11: '..biihhhhhhiiilg', 12: '...bibihhiiibblg', 13: '...lflbbblfl.lgl', 14: '..lffl..lffl..l.', 15: '...ll....ll.....' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Old Hound: the chief's hound, a ghost, see-through.
+export const OLD_HOUND = {
+  size: 16,
+  pal: { a: ['#98c0dc', 170], b: ['#c8e6fa', 200], c: ['#6a92b4', 170], d: ['#3e5c7a', 170], e: ['#22344a', 170], f: '#ffffff' },
+  rows: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '..ab............',
+    '.acad...........',
+    'eacfcd..........',
+    '.ecacdd....d....',
+    '...accaaaacd.d..',
+    '...accccccccdd..',
+    '...dcccccccdd...',
+    '...dc.dd..cd....',
+    '...dc.d...cd....',
+    '...dc.d...dc....',
+    '...da.d...da....',
+    '..aa.aa..aa.....',
+  ],
+  frames: [
+    {},
+    { 7: '.ecacdd.........', 8: '...accaaaacd....', 9: '...accccccccddd.' },
+    { 7: '.ecacdd.........', 8: '...accaaaacd....', 9: '...accccccccddd.', 11: '..dc..dd..cd....', 12: '.dc....d...cd...', 13: '.c.....d....c...', 14: 'aa.....da...aa..', 15: '................' },
+    { 4: '................', 5: '..ab............', 6: '.acad...........', 7: 'eacfcd..........', 8: '.ecacdd.........', 9: '...accaaaacd....', 10: '...accccccccddd.', 11: '...dcccccccdd...', 12: '....dc.d.cd.....', 13: '....dc.dcd......', 14: '...aa.aaa.......', 15: '................' },
+    { 7: '.ecacdd.........', 8: '...accaaaacd....', 9: '...accccccccddd.', 11: '....dcdd.cd.....', 12: '.....dcd..dc....', 13: '.....cd.....cd..', 14: '....aa.......aa.', 15: '................' },
+    { 4: '................', 5: '..ab............', 6: '.acad...........', 7: 'eacfcd..........', 8: '.ecacdd.........', 9: '...accaaaacd....', 10: '...accccccccddd.', 11: '...dcccccccdd...', 12: '....dc.d.cd.....', 13: '....dc.dcd......', 14: '...aa.aaa.......', 15: '................' },
+    { 4: '................', 5: '................', 6: '................', 7: '................', 8: '................', 9: '..ab............', 10: '.acad...........', 11: 'eacdcaaaacd.....', 12: '.ecacccccccd....', 13: '..dccccccccdd...', 14: 'aaaacdddccddddd.', 15: '................' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], rest: [6, 1, 2.6] },
+};
+
+export const BARROW_MOBS = { hearthguard: HEARTHGUARD, bone_thrall: BONE_THRALL, corpse_light: CORPSE_LIGHT, tomb_rat: TOMB_RAT, old_hound: OLD_HOUND };

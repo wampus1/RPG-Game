@@ -8,6 +8,7 @@ import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
 import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
 import { FAR_DEEP_SPECIES } from './farmobs.js';
+import { BARROW_SPECIES } from './barrowmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -100,6 +101,7 @@ export const SPECIES = {
   ...ISLE_DEEP_SPECIES,
   // (Round 68: the far lands' old places' own: see farmobs.js.)
   ...FAR_DEEP_SPECIES,
+  ...BARROW_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,

@@ -112,6 +112,9 @@ export class Dungeons {
         level: s.type === 'kavorent' || T.ancient ? 4 : clamp(1 + Math.floor(far / 8), 1, 3),
         known: false, seen: false, entered: false, cleared: false, clearedBy: null, clearedDay: null,
         floors: {}, weakened: 0, looted: 0, delves: 0, fallen: [], spire: null,
+        // (Round 95: the people near it, and their town, for what's written
+        // down inside: see world/deeps/lore.js.)
+        style, townName: town ? town.name : null,
       };
       rec.vaultFloor = rng.int(0, rec.depth - 1);
       // (Round 71: nobody goes down into an ancient place for a living:

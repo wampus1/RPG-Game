@@ -57,6 +57,7 @@ export function sunkenPlace(rec) {
   return !!rec && (SUNKEN_TYPES.has(rec.type) || /drown|sunk|sea cave|tide|wreck/i.test(rec.name || ''));
 }
 import { MODS } from '../mod/state.js';
+import { interact as deepInteract, restore as deepRestore, tick as deepTick, touched as deepTouched } from './deeps.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
@@ -82,7 +83,7 @@ export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering']);
 
 // Each old place's own space apart, out past the map (see
 // config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,
@@ -371,7 +372,7 @@ export class DungeonRun {
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
     // (What you've built down here: a master will smash through it.)
     this.placed = new Set(this.state.placed || []);
-    this.inst = { slot: this.slot, regions: data.regions, floor: n, maxY: FY };
+    this.inst = { slot: this.slot, regions: data.regions, floor: n, maxY: data.maxY || FY };
     game.world.openInst(this.inst);
     // First time down here: adventurers have been before you, perhaps.
     if (!saved) this.firstVisit();
@@ -393,7 +394,7 @@ export class DungeonRun {
       if (!s.boss && !s.key && (hash4(this.rec.seed, n, s.id) % 100) / 100 < this.rec.weakened * 0.8) continue;
       if (this.rec.cleared && s.boss) continue;
       const y = game.world.findStandY(s.x, s.z, FY);
-      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected });
+      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected, dormant: s.dormant, group: s.group, rest: s.rest, buried: s.buried, peaceful: s.peaceful, role: s.role, effigy: s.effigy, variant: s.variant });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
       // (A great master stood where all of it fits: never half in a wall.)
       if (c && c.foot && !fits(game, c, c.x, c.y, c.z, true)) {
@@ -419,6 +420,8 @@ export class DungeonRun {
         c.maxHp = c.hp = Math.round(c.maxHp * 1.5);
       }
     }
+    // (Round 95) What's been done to its architect's works, put back.
+    deepRestore(this);
     // Where you come in (and the rest of you down here with you).
     const spot = this.arrive(game.player, arrive);
     this.gatherParty(spot, 'down');
@@ -641,6 +644,35 @@ export class DungeonRun {
     return k && KAV_KINDS[k] ? `: ${KAV_KINDS[k].title}` : '';
   }
 
+  // Something lying still, up and about (and if it was under the floor,
+  // up out of it).
+  wake(c) {
+    const game = this.game;
+    c.dormant = 0;
+    c.resting = false;
+    c.sitting = null;
+    if (c.buried) {
+      c.buried = false;
+      c.burrowed = false;
+      game.renderer.emit(c.x, c.y + 0.2, c.z, { n: 14, color: ['#3a2a1c', '#5a4632', '#8a8270'], up: 50, speed: 50, life: 0.6 });
+      game.audio?.play('dig', c);
+    }
+    game.renderer.emit(c.x, c.y + 1, c.z, { n: 10, color: c.S.construct ? ['#5ad8f0', '#ffffff'] : ['#8a8270', '#d8d0b8'], up: 30, speed: 40, life: 0.5 });
+    game.audio?.play(c.S.construct ? 'hum' : 'scream', c);
+    if (c.S.construct) game.renderer.floatText(c.x, c.y + 2.6, c.z, 'ACTIVATED', '#5ad8f0');
+  }
+
+  // Something of the place's opened (a grave-goods chest): see deeps.js.
+  touched(x, y, z) {
+    deepTouched(this, x, y, z);
+  }
+
+  // Wake all of a group (something of theirs taken, a bowl emptied: see
+  // game/deeps.js).
+  wakeGroup(group) {
+    for (const c of this.creatures()) if (c.group === group && c.dormant && !c.dead && !c.waiting) this.wake(c);
+  }
+
   // Something of the place's, made and set loose.
   spawn(species, x, y, z, o = {}) {
     const game = this.game;
@@ -658,8 +690,28 @@ export class DungeonRun {
     c.home = { x, z };
     // (Round 73: lying in wait, they rise a little sooner: four paces, not two.)
     if (o.ambush) c.dormant = 4;
+    // (Round 95) Set out by the place's architect (see world/deeps/): still
+    // till you come within `dormant` paces of them (`rest`: sat or laid
+    // down so, drawn so); one of a `group` that wakes as one; `buried`
+    // under the floor till they wake; a `role` in their fighting; and the
+    // `peaceful`, who never fight at all.
+    if (o.dormant) c.dormant = o.dormant;
+    if (o.group) c.group = o.group;
+    if (o.rest) {
+      c.resting = true;
+      // (One of the people's shape sits, as they do on a bench.)
+      if (c.S.humanoid) c.sitting = true;
+    }
+    if (o.effigy) c.effigy = true;
+    if (o.buried) {
+      c.burrowed = true;
+      c.buried = true;
+      c.dormant ||= 1;
+    }
+    if (o.role) c.role = o.role;
+    if (o.peaceful) c.peaceful = true;
     // (Down here, nothing's minding its own business: see fardeep.js.)
-    if (c.S.mode === 'neutral') c.angry = true;
+    if (c.S.mode === 'neutral' && !o.peaceful) c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
     // (Changed by the blight: see monsters.js, blightTick.)
     // (Its tricks are what make it dangerous; the blight's eaten into it,
@@ -779,12 +831,13 @@ export class DungeonRun {
       // already after you, a few paces off.
       const stirred = !c.guardian && own.some((o) => o !== c && !o.dead && !o.dormant && o.target && o.target.kind === 'player' && Math.max(Math.abs(o.x - c.x), Math.abs(o.z - c.z)) <= 6);
       if (d <= c.dormant || c.hp < c.maxHp || stirred) {
-        c.dormant = 0;
-        game.renderer.emit(c.x, c.y + 1, c.z, { n: 10, color: c.S.construct ? ['#5ad8f0', '#ffffff'] : ['#8a8270', '#d8d0b8'], up: 30, speed: 40, life: 0.5 });
-        game.audio?.play(c.S.construct ? 'hum' : 'scream', c);
-        if (c.S.construct) game.renderer.floatText(c.x, c.y + 2.6, c.z, 'ACTIVATED', '#5ad8f0');
+        this.wake(c);
+        // (And the rest of its company with it: see world/deeps/.)
+        if (c.group) for (const o of own) if (o !== c && o.group === c.group && o.dormant && !o.dead && !o.waiting) this.wake(o);
       }
     }
+    // (Round 95) Its architect's works at work: see deeps.js.
+    deepTick(this, dt, party);
     // Plates trodden on (by anyone: the dead set traps off too).
     for (const e of [...party, ...own]) {
       if (!e || e.dead || e.burrowed || e.S?.floats) continue;
@@ -1243,6 +1296,8 @@ export class DungeonRun {
     const game = this.game;
     const w = game.world;
     const p = game.player;
+    // (Round 95) What a place's architect set down: see deeps.js.
+    if (deepInteract(this, x, y, z, b)) return true;
     switch (b.interact) {
       case 'idol':
         this.blessing(x, z);

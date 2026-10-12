@@ -4882,7 +4882,11 @@ export class Game {
         const owner = this.containerOwner(x, y, z);
         // (A household keeps its chest locked: see pickLock.)
         if (this.chestLocked(x, y, z, owner)) this.pickLock(x, y, z, owner);
-        else this.openContainerAt(x, y, z, owner);
+        else {
+          this.openContainerAt(x, y, z, owner);
+          // (Round 95) Grave goods: their dead wake (see deeps.js).
+          if (this.dungeon) this.dungeon.touched(x, y, z);
+        }
         break;
       }
       case 'cell_door': {
@@ -5229,7 +5233,7 @@ export class Game {
       const master = (c.S.boss || c.species === 'saint_shade') && c.inst;
       // (Round 85: nor aboard a ship: see Lighting.)
       if (c.dead || !(c.S.light || master) || !near(c) || c.burrowed || c.submerged || c.deck) continue;
-      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null, ent: c, dy: c.S.floats ? 1 : 0 });
+      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp' || c.S.coldLight), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null, ent: c, dy: c.S.floats ? 1 : 0 });
     }
     for (const n of this.npcs) {
       if (n.dead || !near(n) || n.deck) continue;

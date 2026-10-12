@@ -17,6 +17,7 @@
 import { Sculpt } from './sculpt.js';
 import { Paint, hash2 } from './paint.js';
 import { Part } from './bossrig.js';
+import { grid, frameRows } from './pixart.js';
 
 export const FORGE = {};
 export function forge(defs) {
@@ -56,6 +57,7 @@ function toCanvas(px) {
 // feather), its edge drawn in, and what glows laid over that.
 export function forgePaint(species, f, st = {}) {
   const D = FORGE[species];
+  if (D.pix) return pixBody(D, f, st);
   const t = f / FRAMES;
   const J = { t, st, b: breathOf(t, D.breath ?? 1), sway: Math.sin(t * TAU), f };
   if (D.joints) D.joints(J, t, st);
@@ -68,6 +70,27 @@ export function forgePaint(species, f, st = {}) {
   P.done(true);
   if (D.glow) D.glow(P, J, t, st);
   return P.p;
+}
+
+// (Round 95) A master drawn by hand, pixel by pixel (see pixart.js and
+// render/art/): its body a picture of its own (`pix.body`: frames, `walk`
+// the run of them it strides with), everything above `pix.breathY` lifted
+// as it breathes; its parts pictures of their own too (`q.pix`).
+function pixBody(D, f, st) {
+  const P = D.pix;
+  const t = f / FRAMES;
+  let k = 0;
+  if (st.walk && P.walk) k = P.walk[0] + (Math.floor(t * P.walk[1] * (P.walkCycles || 2)) % P.walk[1]);
+  else if (P.idle) k = P.idle[0] + (Math.floor(t * P.idle[1]) % P.idle[1]);
+  const base = grid({ ...P.body, w: D.size, h: D.size }, frameRows(P.body, k));
+  const b = P.breathY ? Math.round(breathOf(t, D.breath ?? 1)) : 0;
+  if (!b) return base;
+  // (Lifted: each row above the line drawn b higher; the rows it leaves at
+  // the line kept as they were, so nothing opens up.)
+  const out = base.copy();
+  const W = D.size * 4;
+  for (let y = b; y < P.breathY; y++) out.d.set(base.d.subarray(y * W, (y + 1) * W), (y - b) * W);
+  return out;
 }
 
 const frames = new Map();
@@ -122,6 +145,11 @@ export function forgePart(species, name, variant = '') {
   if (p) return p;
   const D = FORGE[species];
   const q = D.parts[name];
+  if (q.pix) {
+    p = new Part(() => grid(q.pix), q.px, q.py, { outline: false });
+    PARTS.set(key, p);
+    return p;
+  }
   p = new Part(() => {
     const X = new Sculpt(q.w, q.h, { seed: (D.seed || seedOf(species)) + seedOf(name), pix: true });
     q.body(X, variant);

@@ -29,6 +29,8 @@ import './forge_myrrow.js';
 import './forge_far_figs.js';
 import './forge_far_beasts.js';
 import './forge_evolved.js';
+// (Round 95: and those drawn by hand since, in their place: see forge_pix.js.)
+import './forge_pix.js';
 
 export const FRAMES = 24;
 const cache = new Map();

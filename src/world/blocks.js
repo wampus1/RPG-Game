@@ -769,3 +769,38 @@ export function cropMature(id, meta) {
   const c = CROPS[id];
   return !c || cropStage(meta) >= c.stages - 1;
 }
+
+// (Round 95) The barrow made over (see world/deeps/barrow.js): worn flags
+// down its processional ways (and steps of them up onto a bier's dais),
+// the great carved stones and the oak that line its chambers; and what's
+// set about in it: spiral stones (that turn: a puzzle), rune slabs that
+// name the dead (read them), biers, the benches and boards of the feast of
+// the dead and its cold hearth, shields and spears laid by, offering bowls
+// (take from one, and the dead wake), corpse-lanterns, a buried ship's
+// prow, grave goods, cairns, and the runes cut in the floor that catch at
+// the living. Last of all, so no block before them changes its number.
+def('barrow_flags', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Barrow Flags' });
+def('barrow_ortho', { tool: 'pick', hardness: 9, drop: 'cobblestone', label: 'Carved Standing Stone' });
+def('barrow_oak', { tool: 'axe', hardness: 5, drop: 'planks', label: 'Oak Lining' });
+def('barrow_flags_stairs', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'barrow_flags', rotatable: true, standable: true, tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Barrow Steps' });
+// (Each carved with one of the four sigils: turned, it shows the next. See
+// game/deeps.js.)
+def('spiral_stone', { ...sprite, tall: true, solid: true, interact: 'spiral', hardness: Infinity, drop: null, label: 'Spiral Stone' });
+def('spiral_stone_sun', { ...sprite, tall: true, solid: true, interact: 'spiral', hardness: Infinity, drop: null, label: 'Spiral Stone' });
+def('spiral_stone_serpent', { ...sprite, tall: true, solid: true, interact: 'spiral', hardness: Infinity, drop: null, label: 'Spiral Stone' });
+def('spiral_stone_eye', { ...sprite, tall: true, solid: true, interact: 'spiral', hardness: Infinity, drop: null, label: 'Spiral Stone' });
+def('rune_slab', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Rune Slab' });
+def('bier', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Bier' });
+def('mead_bench', { ...sprite, solid: false, tool: 'axe', hardness: 2, drop: 'planks', label: 'Mead Bench' });
+def('feast_board', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Feast Board' });
+def('cold_hearth', { ...sprite, solid: false, light: 5, interact: 'lore', hardness: Infinity, drop: null, label: 'Cold Hearth' });
+def('shield_rack', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'round_shield', chance: 0.25 }, { item: 'planks', chance: 0.5 }], label: 'Shield Rack' });
+def('grave_spears', { ...sprite, solid: true, tool: 'axe', hardness: 1, drop: [{ item: 'spear', chance: 0.2 }, { item: 'stick', chance: 0.6 }], label: 'Grave Spears' });
+def('offering_bowl', { ...sprite, solid: false, interact: 'offering', hardness: Infinity, drop: null, label: 'Offering Bowl' });
+def('corpse_lantern', { ...sprite, solid: true, light: 9, hardness: 2, tool: 'pick', drop: null, label: 'Corpse-Lantern' });
+def('ship_prow', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Dragon Prow' });
+def('grave_goods', { ...sprite, solid: true, interact: 'container', hardness: Infinity, drop: null, label: 'Grave Goods' });
+// The stone that closes a chief's treasury, its face carved with all four
+// sigils (rolled back by the spiral stones: see game/deeps.js).
+def('spiral_seal', { tool: 'pick', hardness: Infinity, drop: null, label: 'Sealing Stone' });
+def('snare_rune', { solid: false, opaque: false, render: 'flat', standable: false, support: true, hardness: Infinity, drop: null, light: 1, label: 'Snare Rune' });

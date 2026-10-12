@@ -20,6 +20,7 @@ import { FAR_DTYPES, FAR_BOSSES } from './fardeep.js';
 import { ANCIENT_DTYPES } from './ancient.js';
 import { starGear } from './quality.js';
 import { cookDish, RECIPE_PREFIX } from './dishes.js';
+import { BARROW_ARCH } from './deeps/barrow.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -33,11 +34,12 @@ export const DTYPES = {
   barrow: {
     name: 'Barrow', wall: B.barrow_stone, floor: B.barrow_earth, alt: B.crypt_floor, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['guard', 'ossuary', 'burial', 'shrine', 'burial', 'collapsed', 'pillared', 'trap', 'treasure', 'guard'],
-    mobs: [['skeleton', 4], ['wight', 2], ['ghoul', 2], ['rat', 1], ['moth', 1]], bosses: ['barrow_king', 'mound_witch', 'huntsman'], torches: 0.25,
+    mobs: [['bone_thrall', 3], ['skeleton', 2], ['wight', 2], ['ghoul', 1], ['tomb_rat', 2], ['corpse_light', 1]], bosses: ['barrow_king', 'mound_witch', 'huntsman'], torches: 0.25,
     // Round chambers under the mound, passages that wander a little; urns of
     // the dead, roots through the roof, and a cold mist along the floor.
     shapes: { round: 5, rect: 2, octagon: 1, cross: 1 }, wiggle: 0.5, decor: [['urn', 4], ['roots', 3], ['cobweb', 2], ['rubble', 2], ['candles', 1], ['skull_pile', 1]],
     dark: [0.08, 0.085, 0.068], motes: ['#8a9a8a', '#b8c0b0'], ambient: ['whisper', 'drip', 'wind_low'],
+    arch: BARROW_ARCH,
   },
   mine: {
     name: 'Mine', wall: B.mine_rock, floor: B.gravel, alt: B.stone, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
@@ -393,7 +395,7 @@ const SUB_SHAPE = { ring: 'round', galleries: 'rect', chapels: 'rect', quarters:
 // those whose fittings need a shape of their own, the wet ones, the tiny.
 const NOT_GREAT = new Set(['entry', 'exit', 'boss', 'vault', 'foundry', 'flooded', 'trap', 'treasure', 'cache', 'shaft', 'tidepool', 'spring', 'cooling', 'reef', 'pearlbed', 'bilepool', 'brinepool']);
 export function greatKit(kit, T) {
-  return !!T && !T.ancient && !SEALED.has(kit) && !KIT_SHAPES[kit] && !NOT_GREAT.has(kit);
+  return !!T && !T.ancient && !SEALED.has(kit) && !KIT_SHAPES[kit] && !NOT_GREAT.has(kit) && !(T.arch && T.arch.shapes && T.arch.shapes[kit]);
 }
 export function subStyle(rec, T) {
   return SUB_STYLE[rec.type] || ((T && T.wiggle) >= 1 ? 'galleries' : (T && T.wiggle) === 0 ? 'chapels' : 'quarters');
@@ -402,15 +404,17 @@ export function subStyle(rec, T) {
 function roomSize(kit, rng, big, T = null) {
   // (Round 71) An evolved master's hall: as big as a hall gets.
   if (kit === 'boss' && T && T.ancient) return [rng.int(28, 32), rng.int(21, 24)];
-  const s = KIT_SIZE[kit] || [[6, 10], [5, 8]];
+  const own = T && T.arch && T.arch.sizes && T.arch.sizes[kit];
+  const s = own || KIT_SIZE[kit] || [[6, 10], [5, 8]];
   let k = big ? 1.25 : 1;
-  // (Now and then a cramped one, or a great one.)
-  if (!SEALED.has(kit) && kit !== 'entry' && kit !== 'exit') k *= rng.chance(0.18) ? 0.7 : rng.chance(0.15) ? 1.4 : 1;
+  // (Now and then a cramped one, or a great one; never an architect's own,
+  // made to its size.)
+  if (!own && !SEALED.has(kit) && kit !== 'entry' && kit !== 'exit') k *= rng.chance(0.18) ? 0.7 : rng.chance(0.15) ? 1.4 : 1;
   return [Math.max(4, Math.round(rng.int(s[0][0], s[0][1]) * k)), Math.max(4, Math.round(rng.int(s[1][0], s[1][1]) * k))];
 }
 
 function pickShape(kit, T, rng, w, d) {
-  const fixed = KIT_SHAPES[kit];
+  const fixed = (T.arch && T.arch.shapes && T.arch.shapes[kit]) || KIT_SHAPES[kit];
   let sh = fixed ? rng.pick(fixed) : rng.weighted(Object.entries(T.shapes || { rect: 1 }));
   if ((sh === 'cross' && (w < 7 || d < 7)) || (sh === 'round' && (w < 5 || d < 5)) || (sh === 'ell' && (w < 6 || d < 6))) sh = 'rect';
   if (ODD.has(sh) && (w < 7 || d < 7)) sh = 'octagon';
@@ -1080,6 +1084,9 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   const count = big ? 14 + rng.int(0, 3) : 8 + rng.int(0, 2);
   while (kits.length < count) kits.push(rng.pick(T.kits));
   kits = kits.slice(0, count);
+  // (Round 95: a kind with an architect picks its own rooms, floor by
+  // floor: see deeps/.)
+  if (T.arch && T.arch.kits) kits = T.arch.kits(rng, rec, n, last, count);
   if (last) kits[0] = 'boss';
   // (The sealed vault: one in the whole dungeon, on its floor; a Kavorent
   // ruin has three, and on one of its middle floors a foundry where a Prime
@@ -1103,7 +1110,7 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   for (let i = 1; i < R.length; i++) if (!R[i].sealed && dep[i] !== Infinity && dep[i] > dep[far]) far = i;
   const boss = R.find((r) => r.kit === 'boss');
   if (last && boss) far = boss.id;
-  if (far !== 1 && R[1] && R[1].kit === 'exit') R[1].kit = rng.pick(T.kits.filter((k) => !SEALED.has(k)));
+  if (far !== 1 && R[1] && R[1].kit === 'exit') R[1].kit = T.arch && T.arch.spare ? T.arch.spare(rng, n) : rng.pick(T.kits.filter((k) => !SEALED.has(k)));
   if (!(last && boss)) R[far].kit = last ? 'boss' : 'exit';
   entry.kit = 'entry';
   const b = new Builder(W, D, rx0);
@@ -1214,6 +1221,9 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   // (Round 94) A Kavorent hall never so crowded with its things there's no
   // getting about it.
   if (big) for (const r of R) thinKav(ctx, r);
+  // (Round 95) Its architect's last word: its ways and heights, its dead
+  // set out to meet you, what's written down there, its secrets.
+  if (T.arch && T.arch.after) T.arch.after(ctx, HELP);
   // (Dig through it or go round: there's always a way between a room's doors.)
   for (const r of R) ensureWays(ctx, r);
   passageDecor(ctx);
@@ -1262,6 +1272,7 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   out.regions = b.regions;
   out.depth = rec.depth;
   out.plan = { W: plan.W, D: plan.D, open: plan.open, room: plan.room, corr: plan.corr };
+  if (T.arch && T.arch.late) T.arch.late(ctx, HELP);
   return out;
 }
 
@@ -1562,8 +1573,23 @@ function anc(ctx) {
 // A room's bounds, in the world.
 const box = (b, r) => ({ x0: b.x0 + r.x0, z0: r.z0, x1: b.x0 + r.x1, z1: r.z1 });
 
+// (Round 95) What an architect (see deeps/) is lent to lay out its rooms.
+export const HELP = { FY, freeIn, placeIn, spawnIn, chestIn, own, doorBlocked, byWall, wallsOf, doorways, fill, lootFor, foundIn, tierOf };
+
 // --------------------------------------------------------------- kits
+// (Round 95) A kind of place with an architect of its own (see deeps/):
+// its own rooms it dresses itself; the rest it may add to after.
 function dress(ctx, r) {
+  const A = ctx.T.arch;
+  if (A && A.own && A.own.has(r.kit)) {
+    A.dress(ctx, r, HELP);
+    return;
+  }
+  dressBase(ctx, r);
+  if (A && A.extra) A.extra(ctx, r, HELP);
+}
+
+function dressBase(ctx, r) {
   const { rng, b, out, T, rec, n, big } = ctx;
   const lvl = (rec.level || 1) + n * 0.5;
   const group = (k, lo, hi) => spawnIn(ctx, r, k, rng.int(lo, hi));
@@ -2745,7 +2771,11 @@ function ensureWays(ctx, r) {
   const stairs = r.stairs || null;
   if (stairs) doors.push({ x: stairs.front.x, z: stairs.front.z });
   if (doors.length < 2) return;
-  const blocked = (x, z) => BLOCKS[b.get(x, FY, z)].solid || BLOCKS[b.get(x, FY + 1, z)].solid;
+  // (A tile raised a step, a dais or a deck, is a way across too, if
+  // there's room over it: see deeps/.)
+  const lifted = ctx.lifted;
+  const up = (x, z) => lifted && lifted.has(z * W + x);
+  const blocked = (x, z) => (up(x, z) ? BLOCKS[b.get(x, FY + 1, z)].solid || BLOCKS[b.get(x, FY + 2, z)].solid : BLOCKS[b.get(x, FY, z)].solid || BLOCKS[b.get(x, FY + 1, z)].solid);
   const start = doors[0].z * W + doors[0].x;
   const cost = new Map([[start, 0]]);
   const prev = new Map([[start, -1]]);
@@ -2773,7 +2803,7 @@ function ensureWays(ctx, r) {
     for (let i = d.z * W + d.x; i >= 0 && prev.has(i); i = prev.get(i)) {
       const x = i % W;
       const z = (i / W) | 0;
-      for (const y of [FY, FY + 1]) if (BLOCKS[b.get(x, y, z)].solid) b.set(x, y, z, B.air);
+      for (const y of up(x, z) ? [FY + 1, FY + 2] : [FY, FY + 1]) if (BLOCKS[b.get(x, y, z)].solid) b.set(x, y, z, B.air);
     }
   }
 }
@@ -2783,6 +2813,10 @@ function ensureWays(ctx, r) {
 // a room, by its size; the solid ones against the walls, out of the way.
 const WALLWARD = new Set(['urn', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'weapon_rack', 'powder_keg', 'war_banner', 'hanging_chains', 'roots', 'candles', 'kav_conduit', 'kav_statue', 'kav_holo', 'kav_monolith', 'kav_husk', 'marble_column', 'bookshelf', 'crucible', 'triumph_column', 'whale_rib', 'obsidian']);
 function decorate(ctx, r) {
+  if (ctx.T.arch && ctx.T.arch.decorate) {
+    ctx.T.arch.decorate(ctx, r, HELP);
+    return;
+  }
   const { rng, T, plan, b } = ctx;
   if (!T.decor || !T.decor.length || r.kit === 'vault' || r.kit === 'hidden' || r.kit === 'boss') return;
   let area = 0;

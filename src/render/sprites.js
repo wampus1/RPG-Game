@@ -8,6 +8,9 @@ import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
+import { barrowIcon } from './art/barrow_items.js';
+import { BARROW_MOBS } from './art/barrow_mobs.js';
+import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
 import { shipIcon } from './shipart.js';
@@ -237,6 +240,8 @@ export const CREATURE_LOOKS = {
 };
 
 Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES, FAR_CREATURES, ANCIENT_CREATURES);
+// (Round 95) The old places' own, painted by hand (see render/art/).
+for (const [k, def] of Object.entries(BARROW_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
@@ -252,6 +257,8 @@ export function lookFrame(kind, e, time) {
   if (G.attack && w && w.dur > 0) return at(G.attack, (Math.min(1, w.t / w.dur)) * 0.45);
   if (G.attack && e.strike && e.strike.dur > 0) return at(G.attack, 0.45 + Math.min(1, e.strike.t / e.strike.dur) * 0.55);
   if (G.hurt && e.flash > 0) return at(G.hurt, 1 - e.flash / 0.12);
+  // (Round 95) Sat or laid down, still, till it wakes (see world/deeps/).
+  if (G.rest && ((e.resting && e.dormant) || e.lying)) return at(G.rest, (time / (G.rest[2] > 0 ? G.rest[2] : 2.5) + (e.id || 0) * 0.37) % 1);
   // (Round 67: walking and standing at the pace the rig's own walk and
   // idle last; the game's pace if they don't say.)
   if (e.moving || !G.idle) return at(G.walk, ((time / (G.walk[2] > 0 ? G.walk[2] : 1 / 1.6)) % 1));
@@ -787,6 +794,9 @@ function toolIcon(kind, tier) {
 }
 
 function simpleIcon(key) {
+  // (Round 95: the old places' own, drawn by hand.)
+  const deep = barrowIcon(key);
+  if (deep) return deep;
   // (The other Dagoni Islands' goods: see isleart.js.)
   const isle = isleIcon(key);
   if (isle) return isle;

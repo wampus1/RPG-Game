@@ -282,6 +282,10 @@ item('moth_dust', { name: 'Gloam Dust', value: 4 });
 item('flour', { name: 'Sack of Flour', value: 4 });
 item('pearl', { name: 'Pearl', value: 16 });
 item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 70 });
+// (Round 95) A chieftain's gold, out of the barrows: a twisted torc for the
+// neck, a ring for the arm (given by a ring-giver to their sworn).
+item('gold_torc', { name: 'Gold Torc', kind: 'misc', stack: 8, value: 95 });
+item('arm_ring', { name: 'Arm-Ring', kind: 'misc', stack: 8, value: 45 });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
