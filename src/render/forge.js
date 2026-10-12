@@ -82,6 +82,9 @@ function pixBody(D, f, st) {
   let k = 0;
   if (st.walk && P.walk) k = P.walk[0] + (Math.floor(t * P.walk[1] * (P.walkCycles || 2)) % P.walk[1]);
   else if (P.idle) k = P.idle[0] + (Math.floor(t * P.idle[1]) % P.idle[1]);
+  // (A picture of its own for a state of it: eyes lit as it winds up, a
+  // mouth open as it breathes in.)
+  if (P.states) for (const [name, n] of Object.entries(P.states)) if (st[name]) k = n;
   const base = grid({ ...P.body, w: D.size, h: D.size }, frameRows(P.body, k));
   const b = P.breathY ? Math.round(breathOf(t, D.breath ?? 1)) : 0;
   if (!b) return base;
@@ -146,7 +149,8 @@ export function forgePart(species, name, variant = '') {
   const D = FORGE[species];
   const q = D.parts[name];
   if (q.pix) {
-    p = new Part(() => grid(q.pix), q.px, q.py, { outline: false });
+    const pic = (variant && q.pixVariants && q.pixVariants[variant]) || q.pix;
+    p = new Part(() => grid(pic), q.px, q.py, { outline: false });
     PARTS.set(key, p);
     return p;
   }

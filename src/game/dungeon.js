@@ -64,6 +64,10 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // older way is made afresh rather than patched onto a new plan.
 // (Round 80: 6, the floors with great rooms in them.)
 const FLOOR_GEN = 6;
+// (Round 95) A kind made over by its own architect (see world/deeps/) lays
+// its floors out its own way: older floors of it are made afresh.
+const KIND_GEN = { barrow: 7 };
+const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
 // (Round 61: half as much again, 1.43 before.)
@@ -366,7 +370,7 @@ export class DungeonRun {
     let kept = this.rec.floors[n];
     // (Kept from before each old place had its own space: moved over.)
     if (kept && kept.gen === FLOOR_GEN && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
-    const saved = kept && kept.gen === FLOOR_GEN ? kept : null;
+    const saved = kept && kept.gen === genOf(this.rec) ? kept : null;
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
@@ -552,7 +556,7 @@ export class DungeonRun {
     dropWorks(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
-    this.rec.floors[this.floor] = { regions, state: this.state, gen: FLOOR_GEN, rx0: this.rx0 };
+    this.rec.floors[this.floor] = { regions, state: this.state, gen: genOf(this.rec), rx0: this.rx0 };
     raiseWorks(this.game);
     raiseFields(this.game);
   }

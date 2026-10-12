@@ -6534,6 +6534,79 @@ into stairs when the world's brought up to date.)
 - **No one's pulled across the floor.** Everyone in a dungeon shares one floor at a time. Before, when one player took the stairs (or a lift), everyone else on that floor, wherever they were, was teleported along with them. Now, if anyone else is more than 5 tiles from the player taking the stairs, that player waits by the stairs instead. They're told the others are still about, and everyone else is told who's waiting by which stairs. Once everyone's gathered within 5 tiles, the floor changes and they all go together. Walking away from the stairs cancels the wait. A floor that gives way under someone still takes everyone, since that can't be put off.
 - **Roomier Kavorent halls.** Some Kavorent floors, the Archives and the rooms full of rubble most of all, had rooms with a third to a half of their floor taken up by solid decorations. Now, once a floor's laid out, each of its rooms is thinned until no more than 15% of its floor is solid. The most crowded clumps go first. Only show pieces are taken up (debris, monoliths, conduits, holograms, husks, statues, glow lamps, vents, and fallen walls in rubble rooms); never consoles, caches, nodes, chests, lifts, the stairs or anything a puzzle uses. Boss halls, vaults and hidden rooms are left as they are.
 
+## Round 95: The barrow, made over
+
+The first of the dungeon overhauls: one kind of old place at a time, its
+rooms, its dead and its masters all made again. The barrow is a chieftain's
+grave-mound, cramped, low and old: turf and drystone, the dead laid out
+with their things about them, and the cold still keeping it.
+
+- **Rooms with something to tell.** Barrow floors are now laid out by the
+  barrow's own architect (see `src/world/deeps/barrow.js`), out of rooms
+  only a barrow has:
+  - **The feast hall.** The chief's sworn men sit at the benches where they
+    were laid. Open the grave-goods chest at its head and they get up.
+  - **The ship burial.** A boat buried whole, its prow carved. The carving
+    can be read.
+  - **The kerb ring.** Four spiral stones about a cairn, one at each
+    quarter, each showing one of four sigils (the sun, the serpent, the eye,
+    the spiral). Click a stone to turn it. Set all four in the chief's name
+    and a hoard-door grinds open somewhere in the wall. The name is cut on a
+    name-stone in another room of the floor.
+  - **The vigil.** A bier on a raised step, with someone lying on it.
+    Touch it and it wakes, and so does its watch.
+  - **The offering pit.** Bowls of old coins left at the lip of a sunken
+    floor. Take them if you like; what they were left for comes up out of
+    the pit after them.
+  - Bone charnels, and a **robbers' tunnel** dug in from outside, with what
+    the last robber wrote before the dark got him.
+- **Up and down.** Barrow floors have raised daises and biers and sunken
+  pits now. You step up one and drop down two, and the dead do the same.
+- **Snare-runes** cut in some floors hold you a moment, and wake the dead
+  near them.
+- **The old hound.** Sometimes the chief's hound is still there, a ghost
+  nothing can touch. It trots ahead of you to its master's things, waits if
+  you fall behind, and when you get there it lies down and is gone.
+- **Lore from the world about it.** What's written on a barrow's stones
+  (the chief, their deeds, the door stone, the hearth, the name-stone, the
+  robber's page) is made from the mound's own history: who it was raised
+  for and when, names in the style of the people who raised it, and the
+  town nearest it. Click a cold hearth or a carved prow to read it.
+- **Each land's barrows look their own.** Kharos's are ash and cinder,
+  Myrrow's and Hollowmark's peat-dark, and Velmarch's and Saltmere's
+  rimed with frost, down to the dead in them.
+- **The barrow's dead, made to fight together:**
+  - **Hearthguard**: the chief's sworn guard, spear and shield. A shield
+    turns most blows from in front. Two shoulder to shoulder make a
+    shield-wall that turns nearly all of them, so get round them or at
+    them from the side. Set across a doorway, they hold it. Cut one down
+    and the other comes at you in grief, faster and harder.
+  - **Bone thralls**: weak and slow on their own. Near a corpse-light they
+    get up again when they fall.
+  - **Corpse-lights**: cold flames that keep out of reach, raise a thrall
+    from any heap of bones near them, and quicken the dead about them. Get
+    too close and one flares, and the cold slows you. Put it out and
+    everything it raised falls down again.
+  - **Tomb rats**: one alone skulks away. Three or more swarm, and any of
+    them goes for someone already bleeding.
+- **The Barrow King** now calls two hearthguard and a thrall to him ("TO
+  ME, MY HEARTH!").
+- **Every barrow master redrawn by hand, all 22 of them.** Each one was
+  painted pixel by pixel, from silhouette to palette, shading, outline and
+  highlights. Each moves as before: arms and weapons swing, heads turn,
+  capes and wings move, and what they give off stays where it was. That
+  covers the Barrow King, the Mound Witch, the Cinder King, the Urn Mother,
+  the Smoke Herald, the Bog King, the Moth-Mother, the Willow Wight, the
+  Barrow Mammoth, the Skinwalker, the Mole King, the Brine Crab King, the
+  Carrion Roc, the Frost Jarl, the Jade Corpse Lord, the Bone Thane, the
+  Salt Mummy, the Root Witch, the Raven Queen, the Antlered One, the Trow
+  King and the Finnman.
+- **Older barrow floors are made afresh.** A barrow floor saved before this
+  version is laid out the new way the next time anyone goes down to it, so
+  its dead and its grave goods are back. (Its old layout no longer matches
+  the new plan of the floor, its stairs included, so it can't be kept.)
+  Other kinds of old place keep their floors as they were.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

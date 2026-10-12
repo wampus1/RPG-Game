@@ -695,8 +695,10 @@ export const BRAINS = {
     const t = c.target;
     const ph = phaseOf(c);
     phaseSummons(c, [0.66, 0.33], () => {
-      for (let i = 0; i < 3; i++) summon(game, i === 0 ? 'wight' : 'skeleton', c, 3, { level: c.level });
-      game.renderer.floatText(c.x, c.y + 3, c.z, 'RISE!', '#a0e8ff');
+      // (Round 95) His hearth-guard, two at his side shield to shield, and
+      // a thrall or two besides.
+      for (let i = 0; i < 3; i++) summon(game, i < 2 ? 'hearthguard' : 'bone_thrall', c, 3, { level: c.level });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'TO ME, MY HEARTH!', '#a0e8ff');
       game.audio?.play('scream', c);
     });
     if (!t || t.dead) return false;

@@ -14,14 +14,19 @@ export function installPix(art) {
     D.size = A.size;
     D.ax = A.ax ?? A.size / 2;
     D.ay = A.ay ?? A.size - 2;
-    D.pix = { body: A.body, breathY: A.breathY, walk: A.walk || null, idle: A.idle || null };
+    D.pix = { body: A.body, breathY: A.breathY, walk: A.walk || null, idle: A.idle || null, states: A.states || null };
     D.walk = !!A.walk;
     D.joints = null;
     const parts = {};
     for (const [n, q] of Object.entries(A.parts || {})) {
       const [x, y] = q.at;
-      const lift = y < A.breathY;
-      parts[n] = { ...q, at: (J) => [x, y - (lift ? Math.round(J.b ?? breathOf(J.t || 0, D.breath ?? 1)) : 0)] };
+      // (One hung on another part is placed on that part's picture.)
+      const lift = !q.parent && y < A.breathY;
+      const p = { ...q, at: q.parent ? q.at : (J) => [x, y - (lift ? Math.round(J.b ?? breathOf(J.t || 0, D.breath ?? 1)) : 0)] };
+      // (A part with another picture for a state of the master's: its
+      // wings' eyes open, say.)
+      if (q.pixVariants) p.variant = (R) => Object.keys(q.pixVariants).find((k) => R.st[k]) || '';
+      parts[n] = p;
     }
     D.parts = parts;
   }

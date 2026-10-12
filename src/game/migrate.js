@@ -730,6 +730,15 @@ export const STEPS = [
       log.push('Taking the stairs below ground waits for everyone on the floor now, and Kavorent floors not yet visited are less crowded.');
     },
   },
+  {
+    // (Round 95) The barrow made over: its floors, the ones already been on
+    // too, are laid out afresh when next gone down to (see dungeon.genOf);
+    // its own dead and its masters drawn by hand.
+    to: '0.95.0',
+    data(d, log) {
+      log.push('Barrows are made over: new rooms, puzzles, lore and creatures, and every barrow master redrawn. Barrow floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
