@@ -144,6 +144,8 @@ test('a witch-light glances off the walls, stays in her hall, and is gone after 
     if (s && (s.x < br.x0 - 1 || s.z < br.z0 - 1)) away = s;
   }
   p.teleport(away.x, away.y, away.z);
+  // (Nothing else of the place about to cut the watch short.)
+  for (const q of game.creatures) if (!q.isBoss) q.dead = true;
   game.orbs = [];
   // Straight at the hall's west side.
   const o = launchOrb(game, c, { x: c.x - 10, z: c.z });

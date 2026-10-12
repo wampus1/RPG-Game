@@ -369,7 +369,7 @@ export class DungeonRun {
     const data = planFloor(this.rec, n, this.rx0);
     let kept = this.rec.floors[n];
     // (Kept from before each old place had its own space: moved over.)
-    if (kept && kept.gen === FLOOR_GEN && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
+    if (kept && kept.gen === genOf(this.rec) && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
     const saved = kept && kept.gen === genOf(this.rec) ? kept : null;
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
