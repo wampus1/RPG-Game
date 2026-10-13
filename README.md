@@ -6810,6 +6810,105 @@ and down: a chancel a step up, the drowned undercroft a step down.
 - **Older crypt floors are made afresh.** A crypt floor saved before this
   version is laid out the new way the next time anyone goes down to it.
 
+## Round 98: The holdout, made over
+
+The fourth of the dungeon overhauls. A holdout is a set of caves a band of
+outlaws took for a hold when the watch drove them off the road, and has
+lived in ever since. It isn't a ruin: it's lived in, and loud with it.
+There's smoke under the roof, the spit turning, dice, dogs and a cask on
+the go. Rooms are walled off out of the cave with palisade logs and boards
+torn off the wagons they robbed, and almost everything in them is stolen.
+It's cramped and up-and-down: archers above you on their scaffolds, a
+crack in the floor with a rope bridge over it, pits under hides.
+
+- **The alarm.** The gang wake as one when they're roused: a lookout's
+  horn, a gong struck, tin bells on a tripwire, or a plunder crate prised
+  open nearby. Everyone of the gang in earshot comes for you at once. Go
+  quietly and you can take them a room at a time.
+- **Rooms a holdout has.** Holdout floors are laid out by the holdout's
+  own architect (see `src/world/deeps/holdout.js`):
+  - **The way in.** A roomy cave, the WANTED bill for the chief nailed up
+    on the first floor (someone has drawn on it).
+  - **The mess.** One long table down the middle (or two, end to end),
+    benches either side, the spit turning over its fire at the end, casks,
+    dice on a barrel, and the gang's articles nailed to the wall. The gang
+    sit at their ease: one brawl the moment they're up.
+  - **The bunks.** Bunks against the walls, bedrolls and straw between, a
+    footlocker with a letter home in it that was never sent, and most of
+    the gang asleep. Sometimes a gong. With room enough the bunks are a
+    great hall walled into quarters.
+  - **The watch.** A scaffold two high along the back wall with a ladder
+    up to it; the lookout on it with the archers; a barricade across the
+    room with a gap in it, caltrops strewn in front, the gong, and the
+    watch rota.
+  - **The kennel.** Pens of fence along the back wall, straw, gnawed bones,
+    meat on the hooks; the dogs, and their master.
+  - **The armory.** Racks of stolen arms, stands of stolen armour, the
+    grindstone, a keg or two by the door, and the bruiser who keeps it.
+  - **The cells** (first floor). Barred cells along the back wall, each
+    with its own door; captives in some, bones in the others; the jailer,
+    who has the keys; a ransom letter on the jailer's locker.
+  - **The store** (first floor). Crates of plunder stacked about the walls,
+    each branded with its merchant house's mark (a star, a wheel, a fish, a
+    tree), with cloth, sacks and a smashed wagon. The quartermaster's
+    ledger says which brand the strongbox money went into. There is only
+    one crate with that brand: open it and the take is yours. Prise a
+    wrong one open and the lid shrieks off its nails and wakes whoever is
+    dozing near. Behind a **false wall** of painted canvas is the gang's
+    stash; a draught gives it away.
+  - **The kitchen.** The cauldron on its fire, the butcher's block, the
+    meat, a cask, and the cook; a dog after the scraps.
+  - **The powder hole.** Kegs against the walls in twos and threes and a
+    trail of black powder spilt from them toward the door. Hold a torch or
+    a lantern and use the trail to light it: it burns all the way back and
+    the kegs go up, with whoever is standing by them.
+  - **The crack** (deeper down). A cleft across the cave floor, a step
+    down and staked at its foot, a rope bridge over it, archers on the far
+    side, and deeper down a bruiser at the bridge.
+  - **The chief's hall** (bottom floor). The throne of loot at the far end
+    with a rug laid to it, the raid map, the chief's own book, banners,
+    kegs and lanterns.
+- **Traps of the gang's own.** Tripwires strung with tin bells across the
+  passages outside the rooms; hides pegged over staked pits (anything
+  heavy chasing you goes in too); caltrops at the chokes, which hurt and
+  slow you. Landing on stakes, or being thrown onto them, hurts every time.
+- **The captives.** Open a cell with the jailer's keys (kill the jailer
+  for them) or a lockpick and the captive follows you. The gang go for
+  them before you. Bring them back to the way you came in and they're
+  away up the tunnel, pressing a few coins on you, and they tell you
+  where the stash is: after that its false wall gleams.
+- **Lore from the world about it.** What's written in a holdout is made
+  from its own history and the towns it robs: the band that took the caves
+  (its founder, the year), the gang it is now and its chief (the master
+  below), the town that wants them hanged and the road between it and the
+  next, the merchant houses they've robbed, the captives they hold and
+  where they're from. Read the wanted bill, the articles, the watch rota,
+  the letters home, the ransom letter, the ledger, the raid map and the
+  chief's book.
+- **The holdout's own, made to fight together:**
+  - **The Lookout**: up on the scaffold with a spyglass. It sees you far
+    off and **marks** you (a red tick over your head). While you're marked
+    the archers shoot from further off and their arrows follow you
+    wherever you step. The first time it sees you it sounds its horn and
+    the whole holdout hears. Kill it and the mark goes.
+  - **The Houndmaster**: keeps behind his dogs. His whistle sends them in
+    to latch on; struck, he whips them into a frenzy. Killed, his dogs go
+    wild and turn on whatever is nearest, his gang included.
+  - **The War Hound**: a mastiff, fast. Set on by its master it lunges and
+    latches on, holding you a moment for the knives.
+  - **The Bruiser**: huge, with a caravan's door for a shield that turns
+    most of what comes at it from the front. It charges in a straight line
+    and throws you back (into the crack, onto the stakes, into the
+    caltrops), and it kicks the powder kegs about the place rolling at
+    you; a keg bursts on whatever it meets, the gang's own included.
+  - **The Captive**: shackled in the cells. Never fights, and your blows
+    never touch them.
+- **Fixes along the way.** The ladders up to the ledges in a mine's shafts
+  were being cleared away when the floor was finished (they are kept now),
+  and a ledge split by a doorway is never left with half of it out of
+  reach. A holdout's floor no longer repeats a little bone every fourth
+  pace.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

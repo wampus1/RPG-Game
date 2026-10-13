@@ -37,7 +37,7 @@
 import { B, BLOCKS } from '../blocks.js';
 import { hash4 } from '../../util/rng.js';
 import { mineLore } from './minelore.js';
-import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore, backOf, at2, pocket, sealHollows } from './common.js';
+import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore, backOf, at2, pocket, sealHollows, longestRun } from './common.js';
 
 // Each region's mine in its own stuff (the timbering and the cut benches
 // are Thessa's; elsewhere their own rock and timber stand in).
@@ -323,17 +323,20 @@ function dress(ctx, r, H) {
       const S = backOf(ctx, H, r);
       const lo = (S.along ? r.x0 : r.z0) + 1;
       const hi = (S.along ? r.x1 : r.z1) - 1;
-      const ledge = [];
+      const row0 = [];
       for (let a = lo; a <= hi; a++) {
         const t = at2(S, a, S.back);
-        if (free(ctx, H, r, t.x, t.z)) ledge.push(t);
+        if (free(ctx, H, r, t.x, t.z)) row0.push(t);
       }
+      const ledge = longestRun(row0, S.along);
       if (ledge.length >= 4) {
         for (const t of ledge) raise(ctx, H, t.x, t.z, M.bench, 2);
-        // The ladder, at one end, in front of it.
-        const lt = ledge[Math.floor(ledge.length / 2)];
-        const lx = lt.x + (S.along ? 0 : S.out);
-        const lz = lt.z + (S.along ? S.out : 0);
+        // The ladder, in front of it: toward its middle, wherever there's
+        // room for one. (Round 98.)
+        const fr = (t) => ({ x: t.x + (S.along ? 0 : S.out), z: t.z + (S.along ? S.out : 0) });
+        const mid = Math.floor(ledge.length / 2);
+        const lt = [...ledge].sort((a, c) => Math.abs(ledge.indexOf(a) - mid) - Math.abs(ledge.indexOf(c) - mid)).find((t) => free(ctx, H, r, fr(t).x, fr(t).z)) || ledge[mid];
+        const { x: lx, z: lz } = fr(lt);
         if (free(ctx, H, r, lx, lz)) {
           // (Facing the ledge: see player.climb.)
           const d = S.along ? (S.out < 0 ? 0 : 2) : S.out < 0 ? 3 : 1;

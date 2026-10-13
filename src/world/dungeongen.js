@@ -23,6 +23,7 @@ import { cookDish, RECIPE_PREFIX } from './dishes.js';
 import { BARROW_ARCH } from './deeps/barrow.js';
 import { MINE_ARCH } from './deeps/mine.js';
 import { CRYPT_ARCH } from './deeps/crypt.js';
+import { HOLD_ARCH } from './deeps/holdout.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -65,13 +66,15 @@ export const DTYPES = {
     arch: CRYPT_ARCH,
   },
   holdout: {
-    name: 'Holdout', wall: B.cave_rock, floor: B.dirt, alt: B.path, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
+    name: 'Holdout', wall: B.hold_rock, floor: B.hold_dirt, alt: B.hold_dirt, beam: B.hold_shore, regions: [2, 2], floors: [1, 3],
     kits: ['bunks', 'cache', 'watch', 'kitchen', 'cells', 'collapsed', 'trap', 'bunks', 'watch', 'treasure'],
-    mobs: [['cutthroat', 4], ['holdout_archer', 3], ['bombarder', 2], ['thief', 2], ['coward', 2], ['rat', 1], ['wolf', 1]], bosses: ['warlord', 'twins', 'poisoner'], torches: 0.7,
+    mobs: [['cutthroat', 4], ['holdout_archer', 3], ['bombarder', 2], ['thief', 2], ['coward', 2], ['war_hound', 1], ['bruiser', 1], ['rat', 1]], bosses: ['warlord', 'twins', 'poisoner'], torches: 0.5,
     // Caves somebody's made a home of: rooms walled off square, racks of
-    // stolen arms, banners, kegs of powder, an alarm gong.
+    // stolen arms, banners, kegs of powder, an alarm gong. (Round 98: its
+    // rooms its own architect's: see deeps/holdout.js.)
     shapes: { rect: 3, ell: 3, cave: 2 }, wiggle: 0.8, decor: [['weapon_rack', 3], ['war_banner', 2], ['powder_keg', 2], ['stalagmite', 1], ['rubble', 2]],
     dark: [0.09, 0.066, 0.058], motes: ['#8a8078', '#5a5450'], ambient: ['crackle', 'creak', 'voices'],
+    arch: HOLD_ARCH,
   },
   kavorent: {
     name: 'Kavorent Ruin', wall: B.kav_wall, floor: B.kav_floor, alt: B.kav_floor, beam: null, regions: [3, 3], floors: [4, 4],
@@ -1252,7 +1255,8 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
     const z = (k / W) | 0;
     for (const y of [FY, FY + 1]) {
       const id = b.get(x, y, z);
-      if (id !== B.air && id !== B.stairs_up && id !== B.torch) b.set(x, y, z, B.air);
+      // (Round 98: nor the ladder up to a ledge, set there to be kept.)
+      if (id !== B.air && id !== B.stairs_up && id !== B.torch && id !== B.ladder) b.set(x, y, z, B.air);
     }
   }
   // (And with all that set about, the lava still leaves a way through each

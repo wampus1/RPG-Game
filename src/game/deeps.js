@@ -15,6 +15,7 @@ import { findPath } from '../entities/pathfind.js';
 import { addItem } from './inventory.js';
 import * as MW from './minework.js';
 import * as CW from './cryptwork.js';
+import * as HW from './holdwork.js';
 
 const key = (x, z) => `${x},${z}`;
 const near = (a, b, r) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= r;
@@ -37,6 +38,8 @@ export function restore(run) {
   MW.restore(run);
   // (Round 97) The crypt's: see cryptwork.js.
   CW.restore(run);
+  // (Round 98) The holdout's: see holdwork.js.
+  if (run.rec.type === 'holdout') HW.restore(run);
 }
 
 // Something of the architect's clicked (true if it was).
@@ -46,7 +49,7 @@ export function interact(run, x, y, z, b) {
     case 'lore': {
       const t = (run.data.lore || []).find((q) => q.x === x && q.z === z);
       if (t) game.ui.openSign(t.lines, t.title);
-      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
+      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
       return true;
     }
     case 'spiral':
@@ -56,12 +59,14 @@ export function interact(run, x, y, z, b) {
       takeOffering(run, x, z);
       return true;
   }
-  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b);
+  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b);
 }
 
-// One of the place's own fallen (the crypt's bones: see cryptwork.js).
+// One of the place's own fallen (the crypt's bones: see cryptwork.js; the
+// holdout's houndmaster and captives: see holdwork.js).
 export function killed(run, e) {
   CW.onKill(run, e);
+  if (run.rec.type === 'holdout') HW.onKill(run, e);
 }
 
 // A spiral stone turned to its next sigil; if that sets the ring in its
@@ -184,6 +189,7 @@ export function tick(run, dt, party) {
   hound(run, dt, party);
   MW.tick(run, dt, party);
   CW.tick(run, dt, party);
+  HW.tick(run, dt, party);
 }
 
 // The old hound: trotting ahead of you to where it means to go, looking

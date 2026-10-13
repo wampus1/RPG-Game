@@ -42,6 +42,7 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { packLabel, DungeonRun, DUNGEON_INTERACTS, ownerName } from './dungeon.js';
 import { propBroken } from './minework.js';
+import { cellDoor as holdCellDoor } from './holdwork.js';
 import { startIntro } from './cutscene.js';
 import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
 import { newFeats, noteIsle } from './achievements.js';
@@ -4895,6 +4896,9 @@ export class Game {
       case 'cell_door': {
         // (A cage at an outlaws' camp: see sim/saga.)
         if (this.sim.saga && this.sim.saga.door(x, y, z)) break;
+        // (Round 98: a cell in a holdout, locked till you've the jailer's
+        // keys or a pick: see holdwork.cellDoor.)
+        if (this.dungeon && this.dungeon.rec.type === 'holdout' && holdCellDoor(this.dungeon, x, y, z, p)) break;
         const j = this.sim.justice.jail;
         const L = this.jailLayoutAt(x, z);
         if (j && L && j.sid === L.settlement.id) {
@@ -5998,6 +6002,12 @@ export class Game {
     };
     for (const a of this.projectiles) {
       a.t += dt;
+      // (Round 98: an arrow at someone marked follows them.)
+      if (a.homing && a.target && !a.target.dead) {
+        a.tx = a.target.x;
+        a.tz = a.target.z;
+        a.ty = a.target.y + 1;
+      }
       // Loosed where you aimed: the first thing in its way, or the ground.
       if (a.aimed) {
         const v = flyAimed(this, a);

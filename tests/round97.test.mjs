@@ -20,7 +20,7 @@ import { CRYPT_MOBS } from '../src/render/art/crypt_mobs.js';
 import { CRYPT_SPRITES } from '../src/render/art/crypt_tex.js';
 import { cryptLore, godOf, POSES } from '../src/world/deeps/cryptlore.js';
 import { snuff, relight } from '../src/game/cryptwork.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { CRYPT_BOSS_ART } from '../src/render/art/crypt_bosses.js';
 import { FORGE } from '../src/render/forge.js';
 import '../src/render/bossbody.js';
@@ -405,7 +405,7 @@ test('the crypt\'s masters are all painted by hand, every part in place', () => 
 });
 
 test('the version and its step', () => {
-  assert.equal(GAME_VERSION, '0.97.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.97.0') >= 0);
   const steps = stepsFor('0.96.0');
   assert.ok(steps.some((s) => s.to === '0.97.0'));
 });

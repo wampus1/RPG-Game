@@ -46,7 +46,7 @@
 import { B, BLOCKS } from '../blocks.js';
 import { hash4 } from '../../util/rng.js';
 import { cryptLore } from './cryptlore.js';
-import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore, at2, pocket, sealHollows } from './common.js';
+import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore, at2, pocket, sealHollows, frameOf, shown, backSeen as backOf, place } from './common.js';
 
 // Each land's crypt in its own stuff (the dressed limestone, the marble,
 // the niches are Thessa's own; elsewhere their own stone stands in).
@@ -134,50 +134,6 @@ function tomb(ctx, r, x, z, pose, o = {}) {
   const t = { x: b.x0 + x, z, y, pose: pose & 3, room: r.id, species: o.species || 'entombed', ...o };
   (ctx.out.tombs ||= []).push(t);
   return t;
-}
-// A frame laid along a room's long way: u from one end toward the other
-// (the end away from its main way in), v across it.
-function frameOf(ctx, H, r) {
-  const longX = r.x1 - r.x0 >= r.z1 - r.z0;
-  const door = mainDoor(ctx, H, r);
-  const L = longX ? r.x1 - r.x0 + 1 : r.z1 - r.z0 + 1;
-  const Wd = longX ? r.z1 - r.z0 + 1 : r.x1 - r.x0 + 1;
-  // (Down a long room toward its end away from the way in; a room laid
-  // north and south always toward its north end, where its end wall's
-  // face can be seen.)
-  let dir = longX ? 1 : -1;
-  if (door && longX) dir = door.x <= r.cx ? 1 : -1;
-  const start = longX ? (dir > 0 ? r.x0 : r.x1) : dir > 0 ? r.z0 : r.z1;
-  const across = longX ? r.z0 : r.x0;
-  const P = (u, v) => (longX ? { x: start + dir * u, z: across + v } : { x: across + v, z: start + dir * u });
-  // (Steps up, facing back down the room.)
-  const stepRot = longX ? (-dir > 0 ? 3 : 1) : -dir > 0 ? 0 : 2;
-  return { longX, L, Wd, dir, P, stepRot, mid: Math.floor((Wd - 1) / 2) };
-}
-// A free tile something can be set on and seen: not against the wall to
-// the south of it (the face of that wall, seen from above, hides the row
-// in front of it).
-const shown = (ctx, H, r, x, z) => free(ctx, H, r, x, z) && ctx.plan.at(x, z + 1);
-// A room's back wall, as a row: in a wide room, always its north wall (the
-// one whose face you see), whichever side its way in is; in a deep one,
-// the side away from its way in.
-function backOf(ctx, H, r) {
-  const along = r.x1 - r.x0 >= r.z1 - r.z0;
-  if (along) return { along, back: r.z0, out: 1 };
-  const door = mainDoor(ctx, H, r);
-  const back = door && door.x <= r.cx ? r.x1 : r.x0;
-  return { along, back, out: back === r.x1 ? -1 : 1 };
-}
-// Something set out on a free tile of the room where it'll be seen (as
-// H.placeIn, but never on a row hidden by the wall to its south).
-function place(ctx, H, r, id, meta = 0, edge = false) {
-  for (let t = 0; t < 8; t++) {
-    const at = H.placeIn(ctx, r, id, meta, edge);
-    if (!at) return null;
-    if (ctx.plan.at(at.x, at.z + 1)) return at;
-    ctx.b.set(at.x, ctx.FY, at.z, B.air);
-  }
-  return null;
 }
 // The floor underfoot made something else (a ledger slab, the marble).
 const floorAt = (ctx, x, z, id) => ctx.b.set(x, ctx.FY - 1, z, id);

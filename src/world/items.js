@@ -644,6 +644,7 @@ for (const k of SHARD_GEMS) item(`shard_${k}`, { name: `${GEMS[k].name} Shard`, 
 item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 0.5, exchange: 2, about: 'Stamped with kings nobody remembers. Any merchant will change them: two of them for a gold coin.' });
 item('old_blueprint', { name: 'Old Blueprint', kind: 'misc', stack: 8, value: 30, about: 'Plans for works long forgotten. A mayor would pay well for them, and the town\'s builders and thinkers would learn from them.' });
 item('sigil', { name: 'Bronze Sigil', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'The key to a sealed door, down below.' });
+item('cell_keys', { name: 'Jailer\'s Keys', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'A ring of iron keys off a holdout jailer\'s belt: they open the cells below.' });
 item('kav_key', { name: 'Glyph Key', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'A shard of light in a frame of alloy: it opens a Kavorent vault.' });
 // A relic's power, and the colour of its circle.
 export const RELICS = {

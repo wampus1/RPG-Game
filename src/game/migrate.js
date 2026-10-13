@@ -750,6 +750,11 @@ export const STEPS = [
     data(d, log) {
       log.push('Crypts are made over: the vigil candles, a nave and its chapels, the donors\' tombs, the drowned undercroft, new creatures, and every crypt master redrawn. Crypt floors you have already been on are laid out afresh the next time you go down.');
     },
+  },  {
+    to: '0.98.0',
+    data(d, log) {
+      log.push('Holdouts are made over: lived-in caves with a mess, bunks, scaffolds for the lookouts, a kennel, cells with captives, plunder crates and a hidden stash, powder trails, tripwires and pits; new creatures, and every holdout chief redrawn. Holdout floors you have already been on are laid out afresh the next time you go down.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

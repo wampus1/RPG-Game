@@ -11,6 +11,7 @@ import { FAR_DEEP_SPECIES } from './farmobs.js';
 import { BARROW_SPECIES } from './barrowmobs.js';
 import { MINE_SPECIES } from './minemobs.js';
 import { CRYPT_SPECIES } from './cryptmobs.js';
+import { HOLD_SPECIES } from './holdmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -106,6 +107,7 @@ export const SPECIES = {
   ...BARROW_SPECIES,
   ...MINE_SPECIES,
   ...CRYPT_SPECIES,
+  ...HOLD_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,
@@ -439,6 +441,8 @@ export class Creature extends Entity {
     // (A cinderling throws as a wisp does, but fire.)
     const wisp = this.species === 'wisp' || !!this.S.lobs;
     const fire = this.S.lobs === 'fire';
+    // (Round 98: marked by a holdout's lookout, you're seen further off.)
+    const marked = !wisp && t.markedT > 0;
     this.castT = (this.castT ?? this.rng.float(1, 2.5)) - dt;
     // Gathering itself: the shot comes when it's ready.
     if (this.aiming) {
@@ -451,7 +455,12 @@ export class Creature extends Entity {
       this.castT = wisp ? this.rng.float(3.5, 5) : this.rng.float(2.4, 3.4);
       if (fire) lob(game, this, a.x, a.z, { tint: [255, 130, 40], onLand: (g, x, z, y) => cinderBurst(g, this, x, z, y) });
       else if (wisp) game.lobOrb(this, a.x, a.y, a.z, this.S.dmg);
-      else if (d <= 9) game.shoot(this, t, 3, 'arrow');
+      else if (d <= (marked ? 13 : 9)) {
+        game.shoot(this, t, marked ? 4 : 3, 'arrow');
+        // (At someone a lookout's marked, the arrow finds them wherever
+        // they've gone: see holdmobs.lookout.)
+        if (marked) game.projectiles[game.projectiles.length - 1].homing = true;
+      }
       this.doAction(0.3);
       return true;
     }
@@ -463,7 +472,7 @@ export class Creature extends Entity {
       if (!this.moving) for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * (wisp ? 0.6 : 0.9))) return true;
       return !wisp ? false : true;
     }
-    if (d > (wisp ? 8 : 9)) return false;
+    if (d > (wisp ? 8 : marked ? 13 : 9)) return false;
     if (this.castT > 0 || Math.abs(t.y - this.y) > 2) return true;
     // (Only with a clear line to them; and a wisp's fire comes down from
     // above, so nobody under a roof it isn't under itself.)

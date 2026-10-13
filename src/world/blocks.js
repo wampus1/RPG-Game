@@ -891,3 +891,60 @@ def('light_shaft', { ...sprite, tall: true, solid: false, light: 13, hardness: I
 def('crypt_fern', { ...sprite, solid: false, hardness: 0.1, drop: null, label: 'Ferns' });
 def('vestment_press', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Vestment Press' });
 def('grave_board', { ...sprite, solid: true, interact: 'lore', tool: 'axe', hardness: 1, drop: 'planks', label: 'Grave-Board' });
+
+// (Round 98) The holdout made over (see world/deeps/holdout.js): its cave
+// rock (drawn afresh, warm and sooted), a timber shore, a palisade of
+// sharpened logs, boards torn off caravans, the scaffold the archers stand
+// on, a false wall over the gang's stash; its packed earth, rough planks, a
+// stolen rug, straw, a rope bridge's slats; caltrops, a tripwire strung
+// with bells, a trail of black powder, a hide pegged over a pit; and what's
+// set about in it: the mess's tables and benches, bunks, bedrolls, a
+// footlocker, the spit over its pit, an ale cask, dice on a barrel, crates
+// of plunder with their merchants' brands (and one prised open), bolts of
+// cloth, sacks, a smashed wagon, a stand of stolen armour, a grindstone,
+// the cook's cauldron, a butcher's block, a rack of meat, the WANTED post,
+// the raid map, the quartermaster's ledger, the chief's throne of loot, a
+// lantern on its post, a dog's bones. Last of all, so no block before them
+// changes its number.
+def('hold_rock', { tool: 'pick', hardness: 6, drop: 'cobblestone', label: 'Cave Rock' });
+def('hold_shore', { tool: 'axe', hardness: 4, drop: 'planks', label: 'Shored Rock' });
+def('palisade', { opaque: true, tool: 'axe', hardness: 3, drop: 'log_oak', label: 'Palisade' });
+def('hold_boards', { tool: 'axe', hardness: 2, drop: 'planks', label: 'Wagon Boards' });
+def('hold_scaffold', { tool: 'axe', hardness: 2, drop: 'planks', label: 'Scaffold' });
+def('hold_false', { tool: 'pick', hardness: 1, interact: 'stash', drop: null, label: 'Cave Rock' });
+def('hold_dirt', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Packed Earth' });
+def('hold_planks', { tool: 'axe', hardness: 2, drop: 'planks', label: 'Rough Planks' });
+def('hold_rug', { tool: 'axe', hardness: 1, drop: 'cloth', label: 'Stolen Rug' });
+def('hold_straw', { tool: 'shovel', hardness: 0.4, drop: 'dirt', label: 'Straw' });
+def('hold_bridge', { tool: 'axe', hardness: 1.5, drop: 'planks', label: 'Rope Bridge' });
+def('hold_caltrops', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, hardness: 0.5, drop: null, label: 'Caltrops' });
+def('hold_tripwire', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, hardness: 0.2, drop: null, label: 'Tripwire' });
+def('hold_powder', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, interact: 'powder', hardness: 0.2, drop: null, label: 'Powder Trail' });
+def('hold_hide', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, hardness: 0.3, drop: null, label: 'Hide' });
+def('hold_table', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Mess Table' });
+def('hold_bench', { ...sprite, solid: false, tool: 'axe', hardness: 1.5, drop: 'planks', label: 'Bench' });
+def('hold_bunk', { ...sprite, tall: true, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Bunk' });
+def('hold_bedroll', { ...sprite, solid: false, hardness: 0.5, drop: [{ item: 'cloth', chance: 0.5 }], label: 'Bedroll' });
+def('hold_locker', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Footlocker' });
+def('hold_spit', { ...sprite, solid: true, light: 12, hardness: Infinity, drop: null, label: 'Spit' });
+def('ale_cask', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: null, label: 'Ale Cask' });
+def('dice_barrel', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'coin', chance: 0.6, min: 1, max: 3 }], label: 'Dice Barrel' });
+def('crate_star', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Star Brand)' });
+def('crate_wheel', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Wheel Brand)' });
+def('crate_fish', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Fish Brand)' });
+def('crate_tree', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Tree Brand)' });
+def('crate_open', { ...sprite, solid: true, tool: 'axe', hardness: 1, drop: 'planks', label: 'Empty Crate' });
+def('cloth_bolts', { ...sprite, solid: true, hardness: 0.5, drop: [{ item: 'cloth', chance: 1, min: 1, max: 3 }], label: 'Bolts of Cloth' });
+def('loot_sacks', { ...sprite, solid: true, hardness: 0.5, drop: [{ item: 'coin', chance: 0.5, min: 1, max: 4 }, { item: 'wheat', chance: 0.5 }], label: 'Sacks' });
+def('smashed_wagon', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Smashed Wagon' });
+def('armour_stand', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Armour Stand' });
+def('hold_grind', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Grindstone' });
+def('hold_cauldron', { ...sprite, solid: true, light: 6, hardness: Infinity, drop: null, label: 'Cauldron' });
+def('butcher_block', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Butcher\'s Block' });
+def('meat_hooks', { ...sprite, tall: true, solid: true, hardness: 0.6, drop: [{ item: 'raw_meat', chance: 0.8, min: 1, max: 2 }], label: 'Meat Hooks' });
+def('wanted_post', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Wanted Bill' });
+def('raid_map', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Raid Map' });
+def('plunder_ledger', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Plunder Ledger' });
+def('loot_throne', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Throne of Loot' });
+def('hold_lantern', { ...sprite, tall: true, solid: true, light: 11, hardness: Infinity, drop: null, label: 'Lantern Post' });
+def('dog_bones', { ...sprite, solid: false, hardness: 0.2, drop: [{ item: 'bone', chance: 0.6 }], label: 'Gnawed Bones' });

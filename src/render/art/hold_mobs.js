@@ -1,0 +1,236 @@
+// (Round 98) The holdout's own, painted by hand (see render/pixart.js): its
+// silhouette first, then its colours, its texture, its light and shade, its
+// outline and highlights, frame by frame. Each faces left (the renderer
+// flips it); its groups are which frames it walks, stands, strikes and
+// flinches with (see sprites.lookFrame).
+
+// The Lookout: wiry, a short hooded cloak of dull green over a leather
+// jerkin, the gang's red scarf; a brass spyglass up to the eye as it scans;
+// an ox-horn at the hip, brought up to the lips to sound the alarm.
+export const LOOKOUT = {
+  size: 24,
+  pal: { a: '#0e120c', b: '#222c1e', c: '#4a5c3c', d: '#0b0e09', e: '#281c05', f: '#0e0a08', g: '#fbe69a', h: '#d8b450', i: '#a8802a', j: '#3a2808', k: '#9a6a4a', l: '#6e4e14', m: '#dcac80', n: '#c08c64', o: '#060404', p: '#281910', q: '#6a4430', r: '#8c5c36', s: '#4e301c', t: '#150c07', u: '#6c4428', v: '#341f12', w: '#3a2418', x: '#9a2418', y: '#1f0504', z: '#6a1410', A: '#64784e', B: '#34422c', C: '#3a0a08', D: '#100905', E: '#ece0bc', F: '#a8966e', G: '#1f1604', H: '#1e120a', I: '#170e08', J: '#946a48', K: '#5a3c26', L: '#765236', M: '#3e281a', N: '#2a1a10', O: '#040202', P: '#280705', Q: '#332b1d', R: '#d0c094', S: '#4a3e2a', T: '#7a6a4a', U: '#ffffff' },
+  rows: [
+    '..........aaaa..........',
+    '.........abccba.........',
+    '........abccccbd........',
+    '.eeeeeeabcfffcbd........',
+    'egggghhijfkkkfcd........',
+    'eghiillmnkokkfcd........',
+    '.eeeeepnqrskkfcd........',
+    '.......ptuvwkfbd........',
+    '........tuvkfbxyd.......',
+    '........tuvxxxzABd......',
+    '........tususcCrbd......',
+    '........tusvvcBCBd......',
+    '........tusvvArcbd......',
+    '........tussvsrBbd......',
+    '........DussvrBEFcd.....',
+    '........DushvvEFFFhG....',
+    '........DuvvvvcFABd.....',
+    '........DsvvvHAcBbd.....',
+    '.........IJKIJKdcbd.....',
+    '.........ILMILMIdd......',
+    '.........ILMILMI........',
+    '.........IKNIKNI........',
+    '........DruuuusD........',
+    '........DsvvvvHD........',
+  ],
+  frames: [
+    {},
+    { 0: '........................', 1: '..........aaaa..........', 2: '.........abccba.........', 3: '........abccccbd........', 4: '.eeeeeeabcfffcbd........', 5: 'egggghhijfkkkfcd........', 6: 'eghiillmnkokkfcd........', 7: '.eeeeepnqrskkfcd........', 8: '.......ptuvwkfbd........', 9: '........tuvkfbxyd.......', 10: '........tuvxxxzABd......', 11: '........tususcCrbd......', 12: '........tusvvcBCBd......', 13: '........tusvvArcbd......', 14: '........DussvsrBbd......', 15: '........DussvrBEFcd.....', 16: '........DushvvEFFFhG....', 17: '........DuvvvvcFABd.....', 18: '........DsvvvHAcBbd.....', 19: '.........IJKIJKdcbd.....', 20: '.........ILMILMIdd......' },
+    { 3: '.......abcfffcbd........', 4: '.......acfkkkfcd........', 5: '.......Ofkokkfcd........', 6: '.......Ofkkkkfcd........', 7: '........pkkwkfbd........', 8: '.........pqkfbxyd.......', 9: '.........PxxxxzABd......', 10: '........truuscCrbd......', 14: '........DuvsvrBEFcd.....', 15: '.......GDsvhvvEFFFhG....', 16: '......GghinuvvcFABd.....', 17: '......GhilsvvHAcBbd.....', 18: '.......GGGIJLKIdcbd.....', 19: '..........ILMMI.dd......', 20: '..........ILMMI.........', 21: '..........IKMNI.........', 22: '.........DruusD.........', 23: '.........DsvvHD.........' },
+    { 0: '........................', 1: '..........aaaa..........', 2: '.........abccba.........', 3: '........abccccbd........', 4: '.......abcfffcbd........', 5: '.......acfkkkfcd........', 6: '.......Ofkokkfcd........', 7: '.......Ofkkkkfcd........', 8: '........pkkwkfbd........', 9: '.........pqkfbxyd.......', 10: '.........PxxxxzABd......', 11: '........truuscCrbd......', 12: '........tusvvcBCBd......', 13: '........tusvvArcbd......', 14: '........DussvsrBbd......', 15: '........DuvsvrBEFcd.....', 16: '.......GDsvhvvEFFFhG....', 17: '......GghinuvvcFABd.....', 18: '......GhilsvvHAcBbd.....', 19: '.......GGIJKIJKdcbd.....', 20: '.........ILMILMIdd......' },
+    { 3: '.......abcfffcbd........', 4: '.......acfkkkfcd........', 5: '.......Ofkokkfcd........', 6: '.......Ofkkkkfcd........', 7: '........pkkwkfbd........', 8: '.........pqkfbxyd.......', 9: '.........PxxxxzABd......', 10: '........truuscCrbd......', 14: '........DuvsvrBEFcd.....', 15: '.......GDsvhvvEFFFhG....', 16: '......GghinuvvcFABd.....', 17: '......GhilsvvHAcBbd.....', 18: '.......GIJKIDIJKcbd.....', 19: '........ILMI.ILMId......', 20: '........ILMI.ILMI.......', 21: '........IKNI.IKNI.......', 22: '.......DrusDDrusD.......', 23: '.......DsvHDDsvHD.......' },
+    { 0: '........................', 1: '..........aaaa..........', 2: '.........abccba.........', 3: '........abccccbd........', 4: '.......abcfffcbd........', 5: '.......acfkkkfcd........', 6: '.......Ofkokkfcd........', 7: '.......Ofkkkkfcd........', 8: '........pkkwkfbd........', 9: '.........pqkfbxyd.......', 10: '.........PxxxxzABd......', 11: '........truuscCrbd......', 12: '........tusvvcBCBd......', 13: '........tusvvArcbd......', 14: '........DussvsrBbd......', 15: '........DuvsvrBEFcd.....', 16: '.......GDsvhvvEFFFhG....', 17: '......GghinuvvcFABd.....', 18: '......GhilsvvHAcBbd.....', 19: '.......GGIJKIJKdcbd.....', 20: '.........ILMILMIdd......' },
+    { 3: '.......abcfffcbd........', 4: '.Q.....acfkkkfcd........', 5: 'QRQQQ..Ofkokkfcd........', 6: 'QFQEFQQOfkkkkfcd........', 7: '.QERFRFSpkkwkfbd........', 8: '.QERFFTSmkqkfbxyd.......', 9: 'QRQQQQQpnwsxxxzABd......', 10: 'QFQ.....trsuscCcbd......', 11: '.Q......tusvvcBCBd......', 12: '........tusvvABcbd......', 13: '........tussvscBbd......', 14: '........DussvvABBBd.....', 15: '........DushssssHBd.....', 16: '........DuvvvvAccbd.....', 17: '........DsvvvHABBbd.....' },
+    { 0: '........................', 1: '..........aaaa..........', 2: '.........abccba.........', 3: '........abccccbd........', 4: '.......abcfffcbd........', 5: '.Q.....acfkkkfcd........', 6: 'QRQQQ..Ofkokkfcd........', 7: 'QFQEFQQOfkkkkfcd........', 8: '.QERFRFSpkkwkfbd........', 9: '.QERFFTSmkqkfbxyd.......', 10: 'QRQQQQQpnwsxxxzABd......', 11: 'QFQ.....trsuscCcbd......', 12: '.Q......tusvvcBCBd......', 13: '........tusvvABcbd......', 14: '........DussvscBbd......', 15: '........DussvvABBBd.....', 16: '........DushssssHBd.....', 17: '........DuvvvvAccbd.....', 18: '........DsvvvHABBbd.....', 19: '.........IJKIJKdcbd.....', 20: '.........ILMILMIdd......' },
+    { 3: '.......abcfffcbd........', 4: '.......acfkkkfcd........', 5: '.......OfkUkkfcd........', 6: '.......Ofkkkkfcd........', 7: '........pkkwkfbd........', 8: '.........pqkfbxyd.......', 9: '.........PxxxxzABd......', 10: '........truuscCrbd......', 14: '........DuvsvrBEFcd.....', 15: '.......GDsvhvvEFFFhG....', 16: '......GghinuvvcFABd.....', 17: '......GhilsvvHAcBbd.....', 18: '.......GGIJKIJKdcbd.....' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Houndmaster: thick-set, shaven head, a wiry ginger beard; a leather
+// apron, a wolf's pelt over the shoulders; the whip coiled in a heavy
+// glove, cracked out long; a bone whistle on a cord.
+export const HOUNDMASTER = {
+  size: 24,
+  pal: { a: '#28160e', b: '#6a3e28', c: '#c08a64', d: '#060404', e: '#fbe69a', f: '#281c05', g: '#dcaa84', h: '#6a2a0e', i: '#280e04', j: '#c46a28', k: '#6e6254', l: '#171311', m: '#9a2418', n: '#928474', o: '#3a0a08', p: '#4a4038', q: '#2a2420', r: '#151517', s: '#86868e', t: '#4a4a52', u: '#e6dcc4', v: '#fffaec', w: '#66666e', x: '#84542c', y: '#663e20', z: '#4a2c16', A: '#323238', B: '#2e1a0c', C: '#101012', D: '#9a6444', E: '#3a2014', F: '#0e0703', G: '#3e3424', H: '#0e0c08', I: '#0e0a08', J: '#1a0e06', K: '#6a5c44', L: '#544834', M: '#2a2418', N: '#1a1610', O: '#1d1916', P: '#e06040', Q: '#b4a896', R: '#280705', S: '#6a1410', T: '#120904', U: '#ffffff' },
+  rows: [
+    '........abccba..........',
+    '.......abccccba.........',
+    '......abcccccca.........',
+    '......accdcccef.........',
+    '......agcccccca.........',
+    '......achhhhcba.........',
+    '......ihjjjhhbklll......',
+    '.......ihjjhmnknkkl.....',
+    '........ihhmonppkpql....',
+    '........rstuppppppl.....',
+    '........agcvwtqwkpl.....',
+    '........acbxyzsAnpl.....',
+    '.......rwcbBBBwAkpl.....',
+    '.......rtcbBBBwttnkl....',
+    '.......CtDEBBBwtAkpl....',
+    '.......FxyyBzBzwAnpl....',
+    '.......FzBBBzBBwAkql....',
+    '......FxyzzBBBBGHll.....',
+    '.....FzzIBJBBBJGH.......',
+    '......FyBJKLLLLMH.......',
+    '......FJFHLMMMMMH.......',
+    '.....FJF.HGMMMMNH.......',
+    '......F.FxyyyyyyzF......',
+    '........FzBBBBBBJF......',
+  ],
+  frames: [
+    {},
+    { 6: '......ihjjjhhba.........', 7: '.......ihjjhiOklll......', 8: '........ihhPmQpnnpl.....', 9: '........RmmSonkpkpql....', 10: '........rstukpppppl.....', 11: '........agcvwtqwnpl.....', 12: '........acbxyzsAnpl.....', 13: '.......rwcbBBBwAppl.....', 14: '.......CtcbBBBwttkkl....', 15: '.......CtDEBBBwtAnpl....', 16: '.......FxyyBzBzwAnpl....', 17: '.......FzBBBzBBwApql....', 18: '......FxyzzBBBBGHll.....', 19: '.....FzzIBJBBBJGH.......', 20: '......FyBJKLLLLMH.......', 21: '......FJFHGMMMMNH.......', 22: '.....FJFFxyyyyyyzF......', 23: '......F.FzBBBBBBJF......' },
+    { 17: '......FxyzzBBBBFCll.....', 18: '.....FzzIBJBBBJF........', 19: '......FyBJHKLLGH........', 20: '......FJFFHLMMMH........', 21: '.....FJF..HGMMNH........', 22: '......F..FxyyyyzF.......', 23: '.........FzBBBBJF.......' },
+    { 6: '......ihjjjhhba.........', 7: '.......ihjjhiOklll......', 8: '........ihhPmQpnnpl.....', 9: '........RmmSonkpkpql....', 10: '........rstukpppppl.....', 11: '........agcvwtqwnpl.....', 12: '........acbxyzsAnpl.....', 13: '.......rwcbBBBwAppl.....', 14: '.......CtcbBBBwttkkl....', 15: '.......CtDEBBBwtAnpl....', 16: '.......FxyyBzBzwAnpl....', 17: '.......FzBBBzBBwApql....', 18: '......FxyzzBBBBGHll.....', 19: '.....FzzIBJBBBJGH.......', 20: '......FyBJKLLLLMH.......', 21: '......FJFHGMMMMNH.......', 22: '.....FJFFxyyyyyyzF......', 23: '......F.FzBBBBBBJF......' },
+    { 17: '......FxyzzBBBBKGHl.....', 18: '.....FzzIBJBBBJLMH......', 19: '......FyBJKGHHKMMH......', 20: '......FJHKMMHHLMMH......', 21: '.....FJFHGMNHHGMNH......', 22: '......FFxyyzFFxyyzF.....', 23: '.......FzBBJFFzBBJF.....' },
+    { 6: '......ihjjjhhba.........', 7: '.......ihjjhiOklll......', 8: '........ihhPmQpnnpl.....', 9: '........RmmSonkpkpql....', 10: '........rstukpppppl.....', 11: '........agcvwtqwnpl.....', 12: '........acbxyzsAnpl.....', 13: '.......rwcbBBBwAppl.....', 14: '.......CtcbBBBwttkkl....', 15: '.......CtDEBBBwtAnpl....', 16: '.......FxyyBzBzwAnpl....', 17: '.......FzBBBzBBwApql....', 18: '......FxyzzBBBBGHll.....', 19: '.....FzzIBJBBBJGH.......', 20: '......FyBJKLLLLMH.......', 21: '......FJFHGMMMMNH.......', 22: '.....FJFFxyyyyyyzF......', 23: '......F.FzBBBBBBJF......' },
+    { 5: 'T.....achhhhcba.........', 6: 'JT....ihjjjhhbklll......', 7: 'TT.....ihjjhmnknkkl.....', 8: 'TJTTTTaaihhmonppkpql....', 9: '.TTJxzgccDwuppppppl.....', 10: '...TzJgDDbsvwtqwkpl.....', 11: '....TTaaTxyyyzsAnpl.....', 12: '.......rwyzBBBwAkpl.....', 13: '.......rtyzBBBwttnkl....', 14: '.......CtyzBBBwtAkpl....', 15: '.......FxzzBzBzwAnpl....', 16: '.......FyzzBzBBwAkql....', 17: '.......FyBBBBBBGHll.....', 18: '.......FzBBBBBJGH.......', 19: '........FHKLLLLMH.......', 20: '.........HLMMMMMH.......', 21: '.........HGMMMMNH.......', 22: '........FxyyyyyyzF......' },
+    { 6: '......ihjjjhhba.........', 7: '.......ihjjhiOklll......', 8: '........ihhPmQpnnpl.....', 9: '....TTaaRmmSonkpkpql....', 10: '...TxzgccDwukpppppl.....', 11: '..TJzJgDDbsvwtqwnpl.....', 12: '..TTTTaaTxyyyzsAnpl.....', 13: 'TTJT...rwyzBBBwAppl.....', 14: 'zJF....CtyzBBBwttkkl....', 15: 'FF.....CtyzBBBwtAnpl....', 16: '.......FxzzBzBzwAnpl....', 17: '.......FyzzBzBBwApql....', 18: '.......FyBBBBBBGHll.....', 19: '.......FzBBBBBJGH.......', 20: '........FHKLLLLMH.......', 21: '.........HGMMMMNH.......', 22: '........FxyyyyyyzF......' },
+    { 5: '......avxzhhcba.........', 6: '......ihzJghhbklll......', 7: '.......ihgbhmnknkkl.....', 8: '........acbmonppkpql....', 9: '........acbuppppppl.....', 10: '........aDEvwtqwkpl.....', 11: '........TxyyyzsAnpl.....', 12: '.......rwyzBBBwAkpl.....', 13: '.......rtyzBBBwttnkl....', 14: '.......CtyzBBBwtAkpl....', 15: '.......FxzzBzBzwAnpl....', 16: '.......FyzzBzBBwAkql....', 17: '.......FyBBBBBBGHll.....', 18: '.......FzBBBBBJGH.......', 19: '........FHKLLLLMH.......', 20: '.........HLMMMMMH.......', 21: '.........HGMMMMNH.......', 22: '........FxyyyyyyzF......' },
+    { 3: '......accUcccef.........' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 3, 0.5], hurt: [9, 1, 0.2] },
+};
+
+// The War Hound: a brindled mastiff, deep-chested, black-masked, a rose
+// ear; a collar studded with iron; scars on its flank. It pants, bounds,
+// lunges with its jaws wide.
+export const WAR_HOUND = {
+  size: 24,
+  pal: { a: '#150c07', b: '#050402', c: '#a87440', d: '#82562e', e: '#3a2c20', f: '#1e1610', g: '#3a2414', h: '#5e3c20', i: '#2a2018', j: '#fff090', k: '#1e120a', l: '#080604', m: '#120c08', n: '#764630', o: '#4a2614', p: '#120804', q: '#100905', r: '#5e3420', s: '#d8d8e0', t: '#2e180c', u: '#a8a8b4', v: '#330e0e', w: '#ece4d4', x: '#c85454', y: '#a83a3a', z: '#7a2424', A: '#4a1414', B: '#040302', C: '#7a522c', D: '#442a16', E: '#0c0703', F: '#2a1a0e', G: '#e07a7a', H: '#ffffff' },
+  rows: [
+    '........................',
+    '........................',
+    '........................',
+    '......aabb..............',
+    '....aacdefb.............',
+    '...acgghhfb.............',
+    '.bbeijchhka.............',
+    'blefmcddhnop..........q.',
+    'beffmdhdgrspa....qqq.qdq',
+    'beifmldhkrtcdaaqqcddqqhq',
+    'bifmlldhgruccccdcddhhhq.',
+    'vwxwxwdggrtcdcdhdhhggkq.',
+    'vyzzzAdhgosccdchhhhkgkq.',
+    '.bwiwfdcdcchhhhcggggkkq.',
+    '..Bqccddhdhhgkggggkkkq..',
+    '...qchdhghkkkqqqchgkq...',
+    '....qddhghgkq..qhkCDE...',
+    '.....qcdgkkq...qhghFE...',
+    '.....qhgCDE.....qdhhDE..',
+    '.....qhkhFE.....qdkhFE..',
+    '.....qhkhFE....qckCFE...',
+    '....qcgkhFE...qchkhFE...',
+    '....qdgkhFE...qdgkhFE...',
+    '.....qqqEE.....qqqEE....',
+  ],
+  frames: [
+    {},
+    { 3: '........................', 4: '......aabb..............', 5: '....aacdefb.............', 6: '...acggghfb.............', 7: '.bbeijcdhka.............', 8: 'blefmchdhnop..........q.', 9: 'beffmdhhkrspa....qqq.qdq', 10: 'beifmldhgrtcdaaqqccdqqhq', 11: 'bifmlldggrucdcccchdhdhq.', 12: 'vwxwxwdhgrtccchhddhkgkq.', 13: 'vyzzzAhhgosdcdchghhggkq.', 14: '.Bwiwfcchccdhghchgkgkkq.', 15: '..Bqcdddddghgggkggkkkq..', 16: '...qcddgghgkkqqqdggkq...', 17: '....qdddgggkq..qhgCDE...', 18: '.....qddgkkq....qdhhDE..', 19: '.....qhkCDE.....qdkhFE..' },
+    { 10: 'biiflldhgruccccdcddhhhq.', 11: '.bflwchkkrtcdcdhdhhggkq.', 12: '..baddhgkosccdchhhhkgkq.', 13: '...accdddccghhhcggggkkq.', 14: '...qccddhdhhgkggggkkkq..', 15: '...qdhdhghkkkqqqchgkq...' },
+    { 3: '........................', 4: '......aabb..............', 5: '....aacdefb.............', 6: '...acggghfb.............', 7: '.bbeijcdhka.............', 8: 'blefmcgdhnop..........q.', 9: 'beffmdhhgrspa....qqq.qdq', 10: 'beifmldhgrtcdaaqqccdqqhq', 11: 'biiflldggrucdcccchdhdhq.', 12: '.bflwchgkrtccchhdhhkgkq.', 13: '..bacdggkosdcdchghhggkq.', 14: '...qcccdhcchhghchgkgkkq.', 15: '...qcdddddghggggggkkkq..', 16: '...qddhghhgkkqqddgkkq...', 17: '....qdhhhggkq..qdkECDE..', 18: '.....qhhhkkq...qhkqEhDE.', 19: '......qhkqq...qckq.EhFE.', 20: '.....ECDhdq..qqhkq.EhFE.', 21: '....ECFdggq.qcdgq.ECDFE.', 22: '....EhFdgkq.qdgkq.EhDFE.', 23: '.....EEqqq...qqq...EEE..' },
+    { 8: 'beffmdhhgrspa....qqq.qdq', 10: 'biiflldhgruccccdcddhhhq.', 11: '.bflwchkkrtcdcdhdhhggkq.', 12: '..baddhgkosccdchhhhkgkq.', 13: '...accdddccghhhcggggkkq.', 14: '...qccddhdhhgkggggkkkq..', 15: '...qdhdhghkkkqqqchgkq...', 16: '....qddgghgkq..qhkCDE...', 17: '.....qchgkkq...qhghFE...', 18: '.....qhkCDE.....qddDE...', 19: '....qckqEhDE....qdkDE...', 20: '....qhkqEhFE....qhgq....', 21: '...qchkECDFE...qckgq....', 22: '...qhgkEhDFE...qdgkq....', 23: '....qqq.EEE.....qqq.....' },
+    { 3: '........................', 4: '......aabb..............', 5: '....aacdefb.............', 6: '...acggghfb.............', 7: '.bbeijcdhka.............', 8: 'blefmchhhnop..........q.', 9: 'beffmdhhkrspa....qqq.qdq', 10: 'beifmldhgrtcdaaqqccdqqhq', 11: 'biiflldggrucdcccchdhdhq.', 12: '.bflwchgkrtccchhhhdkgkq.', 13: '..baccggkosdcdchghhggkq.', 14: '...qcccdhcchhghchgkgkkq.', 15: '...qcdddddghgggkgggkkq..', 16: '...qdddkghgkkqqqdkhkq...', 17: '....qchhgggkq...qhghE...', 18: '....qcgggkkq.....qddq...', 19: '....qdkqECDE....Ehhgq...', 20: '...qckq..EhDE..EEDhgq...', 21: '..qchkq.ECDFE.ECDdggq...', 22: '..qdkkq.EhDFE.EhFdgkq...', 23: '...qqq...EEE...EEqqq....' },
+    { 3: '.....aabb...............', 4: '...aacdefb..............', 5: '..acgghhfb..............', 6: 'bbeijcdgka..............', 7: 'lefmdddhnop..........q..', 8: 'effmddhgrspa....qqq.qhq.', 9: 'eifmldhgrtcdaaaqcchqqhq.', 10: 'ifmllhhgrudccccdddhdgq..', 11: 'wxwxwdhkrtcccdhddgggkq..', 12: 'yzzzAdhgosccdcghhhgkkq..', 13: 'bwiwfcddccdghhchkggkkq..', 14: '.Bqdcdddhhhggkhggkkkq...', 15: '..qcdhhghgkkqqdghkkq....', 16: '...qdddkhgkq..qhgCDE....', 17: '....qcdgkkq....qddhDE...', 18: '....qdkCDE.....qhghFE...', 19: '....qhkhFE.....qdkhFE...', 20: '....qgkhFE....qdkCFE....', 21: '...qcgkhFE...qchkhFE....', 22: '...qhgkhFE...qhgkhFE....', 23: '....qqqEE.....qqqEE.....' },
+    { 3: '........................', 4: '....aabb................', 5: '..aachefb...............', 6: '.adgghhfb...............', 7: 'beijddhka...............', 8: 'efmcddgnop..........q..l', 9: 'ifmhhhgrspa....qqq.qdq..', 10: 'efffdggrtchaaaadcdqqgq..', 11: 'immmdhgrucccdccddgdhq...', 12: 'Gwxwhhgrtdccdhhdhggkq..w', 13: 'yzzAdhkoscchchhhgggkq...', 14: 'wiwfccdcddhhhchgggkkq...', 15: 'Bqccdhddhhkggggkkkkq....', 16: '.qdddhgggkkqqqdhgkq.....', 17: '..qdhdghgkq..qggCDE.....', 18: '...qcdkkkq....qdghDE....', 19: '...qhkCDE.....qdghFE....', 20: '...qhkhFE....qckCFE.....', 21: '..qcgkhFE...qchkhFE.....', 22: '..qdkkhFE...qdkkhFE.....', 23: '...qqqEE.....qqqEE......' },
+    { 6: '.bbeiHchhka.............', 10: 'biiflldhgruccccdcddhhhq.', 11: '.bflwchkkrtcdcdhdhhggkq.', 12: '..baddhgkosccdchhhhkgkq.', 13: '...accdddccghhhcggggkkq.', 14: '...qccddhdhhgkggggkkkq..', 15: '...qdhdhghkkkqqqchgkq...' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Bruiser: a slab of a man, a small shaven head sunk between shoulders
+// like boulders; a studded harness, tattoos; before him a caravan's door
+// for a shield, iron-banded, its painted panel; shoved out to strike.
+export const BRUISER = {
+  size: 24,
+  pal: { a: '#28160e', b: '#1f110b', c: '#6a3e28', d: '#c08a64', e: '#191008', f: '#3a2014', g: '#a07444', h: '#7e5630', i: '#3e2814', j: '#dcaa84', k: '#060404', l: '#9a6444', m: '#151519', n: '#54545e', o: '#a8a8b4', p: '#4a2c16', q: '#2e1a0c', r: '#5c3c1e', s: '#1e1e24', t: '#2a4468', u: '#d47050', v: '#b84e36', w: '#943426', x: '#6a2018', y: '#9a6a4c', z: '#190e08', A: '#3a1010', B: '#7e5238', C: '#24170c', D: '#9a2418', E: '#3a0a08', F: '#b48262', G: '#130c06', H: '#663e20', I: '#563222', J: '#1a0e06', K: '#2e1a10', L: '#6a5c44', M: '#544834', N: '#3e3424', O: '#0e0c08', P: '#101013', Q: '#2a2418', R: '#0e0703', S: '#84542c', T: '#1a1610', U: '#ffffff' },
+  rows: [
+    '........................',
+    '............aaab........',
+    '...........acddcb.......',
+    '..........acddddcb......',
+    '..eeeeeee.adffdddbb.....',
+    '.eghhhhhiajdkdddcbjbb...',
+    '.egiiiiiijjjddddcdldlb..',
+    '.mgnnnnniopdffddcdqqllb.',
+    '.egrrrrrisjpdddcqqtcccfb',
+    '.eguvvvwijjddpqqltctcfb.',
+    '.egvxuxxijjdqqlopctcfyz.',
+    '.egwxxxAjjdqdllllpoffyBz',
+    '.egrrrrCjjdddllllcfppfb.',
+    '.mgnnnnsdddclcfffDDElFz.',
+    '.GghhhhhiddllcccclllfBz.',
+    '.GgrrrriiddllcccccccfBz.',
+    '.GgrrrriipHHHoHHHHHpFIz.',
+    '.GgiiiiiispqqqqqqqqJyKz.',
+    '.GgiiiiiiLMNjjdlfLNOzz..',
+    '.PgnnnnniLNNNOOLMNQO....',
+    '.GghhhhhiLNNQOOLNNQO....',
+    '.GgiiiiiiLNNQOOLNNQO....',
+    '..GGGGGRSHHHpRRSHHHpR...',
+    '.......RpqqqJRRpqqqJR...',
+  ],
+  frames: [
+    {},
+    { 1: '........................', 2: '............aaab........', 3: '...........acddcb.......', 4: '..........acddddcb......', 5: '..eeeeeee.adffdddbb.....', 6: '.eghhhhhiajdkdddcbjbb...', 7: '.egiiiiiijjjddddcdldlb..', 8: '.mgnnnnniopdffddcdqqllb.', 9: '.egrrrrrisjpdddcqqtcccfb', 10: '.eguvvvwijjddpqqltctcfb.', 11: '.egvxuxxijjdqqlopctcfyz.', 12: '.egwxxxAjjdqdllllpoffyBz', 13: '.egrrrrCjjdddllllcfppfb.', 14: '.PgnnnnsdddclcfffDDElFz.', 15: '.GghhhhhiddllcccclllfBz.', 16: '.GgrrrriiddllcccccccfBz.', 17: '.GgrrrriipHHHoHHHHHpFIz.', 18: '.GgiiiiiispqqqqqqqqJyKz.', 19: '.GgiiiiiiLMNjjdlfLNOzz..', 20: '.PgnnnnniLNNNOOLMNQO....', 21: '.GghhhhhiLNNQOOLNNQO....', 22: '.GgiiiiiiSHHpRRSHHHpR...', 23: '..GGGGGRpqqqJRRpqqqJR...' },
+    { 18: '.GgiiiiiiOLNjjdlfMORzz..', 19: '.PgnnnnniOLMLMMMNTO.....', 20: '.GghhhhhiOLMMNNNQTO.....', 21: '.GgiiiiiiOLMMNNNQTO.....', 22: '..GGGGGGRSHHHHHHHHpR....', 23: '........RpqqqqqqqqJR....' },
+    { 1: '........................', 2: '............aaab........', 3: '...........acddcb.......', 4: '..........acddddcb......', 5: '..eeeeeee.adffdddbb.....', 6: '.eghhhhhiajdkdddcbjbb...', 7: '.egiiiiiijjjddddcdldlb..', 8: '.mgnnnnniopdffddcdqqllb.', 9: '.egrrrrrisjpdddcqqtcccfb', 10: '.eguvvvwijjddpqqltctcfb.', 11: '.egvxuxxijjdqqlopctcfyz.', 12: '.egwxxxAjjdqdllllpoffyBz', 13: '.egrrrrCjjdddllllcfppfb.', 14: '.PgnnnnsdddclcfffDDElFz.', 15: '.GghhhhhiddllcccclllfBz.', 16: '.GgrrrriiddllcccccccfBz.', 17: '.GgrrrriipHHHoHHHHHpFIz.', 18: '.GgiiiiiispqqqqqqqqJyKz.', 19: '.GgiiiiiiLMNjjdlfLNOzz..', 20: '.PgnnnnniLNNNOOLMNQO....', 21: '.GghhhhhiLNNQOOLNNQO....', 22: '.GgiiiiiiSHHpRRSHHHpR...', 23: '..GGGGGRpqqqJRRpqqqJR...' },
+    { 18: '.GgiiiiiiLMNjjdlfLMNOz..', 19: '.PgnnnnniMNQObbOLNNQO...', 20: '.GghhhhhiMNQO..OLNNQO...', 21: '.GgiiiiiiMNQO..OLNNQO...', 22: '..GGGGRSHHHpR..RSHHHpR..', 23: '......RpqqqJR..RpqqqJR..' },
+    { 1: '........................', 2: '............aaab........', 3: '...........acddcb.......', 4: '..........acddddcb......', 5: '..eeeeeee.adffdddbb.....', 6: '.eghhhhhiajdkdddcbjbb...', 7: '.egiiiiiijjjddddcdldlb..', 8: '.mgnnnnniopdffddcdqqllb.', 9: '.egrrrrrisjpdddcqqtcccfb', 10: '.eguvvvwijjddpqqltctcfb.', 11: '.egvxuxxijjdqqlopctcfyz.', 12: '.egwxxxAjjdqdllllpoffyBz', 13: '.egrrrrCjjdddllllcfppfb.', 14: '.PgnnnnsdddclcfffDDElFz.', 15: '.GghhhhhiddllcccclllfBz.', 16: '.GgrrrriiddllcccccccfBz.', 17: '.GgrrrriipHHHoHHHHHpFIz.', 18: '.GgiiiiiispqqqqqqqqJyKz.', 19: '.GgiiiiiiLMNjjdlfLNOzz..', 20: '.PgnnnnniLNNNOOLMNQO....', 21: '.GghhhhhiLNNQOOLNNQO....', 22: '.GgiiiiiiSHHpRRSHHHpR...', 23: '..GGGGGRpqqqJRRpqqqJR...' },
+    { 4: 'eeeeeee...adffdddbb.....', 5: 'ghhhhhieaajdkdddcbjbb...', 6: 'giiiiiiajjjjddddcdldlb..', 7: 'gnnnnnijjopdffddclqqclb.', 8: 'grrrrrisjjdpdddcqqtccffb', 9: 'guvvvwijjdddlpqqltctffb.', 10: 'gvxuxxiajjddqqlopctcfyz.', 11: 'gwxxxAjjddqqllllcpoffyBz', 12: 'grrrrCjjdqddlllllffppfb.', 13: 'gnnnnsddddlclcfffDDElFz.', 14: 'ghhhhhibddlllcccclllfBz.', 15: 'grrrriibddlllcccccccfBz.', 16: 'grrrriiGRSHHHoHHHHHpFIz.', 17: 'giiiiiisRpqqqqqqqqqJyKz.', 18: 'giiiiiiGOLMNjjdlfLNOzz..', 19: 'gnnnnniPOLNNNOOLMNQO....', 20: 'ghhhhhiGOLNNQOOLNNQO....', 21: 'giiiiiiGOLNNQOOLNNQO....', 22: 'GGGGGGGRSHHHpRRSHHHpR...' },
+    { 1: '........................', 2: '............aaab........', 3: '...........acddcb.......', 4: '..........acddddcb......', 5: 'eeeee.....adffdddbb.....', 6: 'ghhhie..aajdkdddcbjbb...', 7: 'riiiie.ajjjjddddcdldlb..', 8: 'nnnnimajjopdffddclqqclb.', 9: 'rrrrisjjdddpdddcqqtccffb', 10: 'uvvwieadjdddlpqqltctffb.', 11: 'vuxxieaajjddqqlopctcfyz.', 12: 'wxxAjjdajjqqdllllpoffyBz', 13: 'rrrCjjjjqqlllllllffppfb.', 14: 'nnnslcfbjddclcfffDDElFz.', 15: 'ghhhiGbbddlllcccclllfBz.', 16: 'hrriiG.bddlllcccccccfBz.', 17: 'hrriiG..RSHHHoHHHHHpFIz.', 18: 'hiiiisP.RpqqqqqqqqqJyKz.', 19: 'riiiiG..OLMNjjdlfLNOzz..', 20: 'nnnniP..OLNNNOOLMNQO....', 21: 'ghhhiG..OLNNQOOLNNQO....', 22: 'riiiiG.RSHHHpRRSHHHpR...', 23: 'GGGGG..RpqqqJRRpqqqJR...' },
+    { 5: '.eghhhhhiajdUdddcbjbb...' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Captive: thin, in a torn linen shirt and a waistcoat that was good
+// once, barefoot, bruised, wrists shackled. Sits hunched in the cell, knees
+// up; freed, walks close behind you; struck, cowers.
+export const CAPTIVE = {
+  size: 24,
+  pal: { a: '#120c07', b: '#2e2012', c: '#5e462c', d: '#0e0905', e: '#a87656', f: '#060404', g: '#0e070e', h: '#332016', i: '#cc9c78', j: '#6a3e7a', k: '#7a547e', l: '#462a4a', m: '#281911', n: '#4a2e20', o: '#2e1a30', p: '#101013', q: '#100e0b', r: '#685e4a', s: '#c4c0b2', t: '#5e3c62', u: '#54545e', v: '#1e1e24', w: '#e2ded0', x: '#a09c90', y: '#4a4840', z: '#e8c09c', A: '#76726a', B: '#7a5038', C: '#847a62', D: '#4e4636', E: '#1a0e1a', F: '#342e24', G: '#282723', H: '#33322c', I: '#151519' },
+  rows: [
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '.........aaaaa..........',
+    '........abccbba.........',
+    '.......abcccccbd........',
+    '.......acbeeccbd........',
+    '.......abefeecbdg.......',
+    '.......hieeejebklg......',
+    '........meneebkoog......',
+    '.......pqreeestoog......',
+    '......puvwwsxyloog......',
+    '......mzewsxxAytolg.....',
+    '......miBCrrDsAtoEg.....',
+    '.......qrvrDFvxlovp.....',
+    '......mqrrFvDwAvlEg.....',
+    '.....mziiemGwsxsxyG.....',
+    '.....mzeeBm.GGGGGG......',
+    '......mmmm..............',
+  ],
+  frames: [
+    {},
+    { 8: '........................', 9: '.........aaaaa..........', 10: '........abccbba.........', 11: '.......abcccccbd........', 12: '.......acbeeccbd........', 13: '.......abefeecbdg.......', 14: '.......mieeejebklg......', 15: '........meneebkoog......', 16: '.......pqreeestoog......', 17: '......puvwwsxyloog......', 18: '......mzewsxxAytoEg.....', 19: '......miBvCrDvxlovp.....', 20: '......mqCrFvDwAvlEg.....' },
+    { 2: '.........aaaaa..........', 3: '........abccbba.........', 4: '.......abcccccbd........', 5: '.......acbeeccbd........', 6: '.......abefeecbd........', 7: '.......hieeejebd........', 8: '........heneeba.........', 9: '.........heeeklg........', 10: '........Hwsxkoog........', 11: '........HsxAtoog........', 12: '........HsxAtoog........', 13: '........HsxAtlolg.......', 14: '.......puvsAtooog.......', 15: '......puzeGxlooEg.......', 16: '......pviBsGwsxG........', 17: '.......pmmqCrDq.........', 18: '..........qrDFq.........', 19: '..........qrDFq.........', 20: '..........qrDFq.........', 21: '..........qrDFq.........', 22: '..........mziem.........', 23: '..........mieBm.........' },
+    { 3: '.........aaaaa..........', 4: '........abccbba.........', 5: '.......abcccccbd........', 6: '.......acbeeccbd........', 7: '.......abefeecbd........', 8: '.......hieeejebd........', 9: '........heneeba.........', 10: '.........heeeklg........', 11: '........Hwsxkoog........', 12: '........HsxAtoog........', 13: '........HsxAtoog........', 14: '........GsxAtlolg.......', 15: '.......puvsAtooog.......', 16: '......puzeGxlooEg.......', 17: '......pviBsGwsxG........', 18: '.......pmqCDqCDq........', 19: '.........qrFqrFq........', 20: '.........qrFqrFq........', 21: '.........qrFqrFq........', 22: '.........mzemzem........', 23: '.........miBmiBm........' },
+    { 2: '.........aaaaa..........', 3: '........abccbba.........', 4: '.......abcccccbd........', 5: '.......acbeeccbd........', 6: '.......abefeecbd........', 7: '.......hieeejebd........', 8: '........heneeba.........', 9: '.........heeeklg........', 10: '........Hwsxkoog........', 11: '........HsxAtoog........', 12: '........HsxAtoog........', 13: '........HsxAtlolg.......', 14: '.......puvsAtooog.......', 15: '......puzeGxlooEg.......', 16: '......pviBsGwsxG........', 17: '.......pqCDqGqCDq.......', 18: '........qrFq.qrFq.......', 19: '........qrFq.qrFq.......', 20: '........qrFq.qrFq.......', 21: '........qrFq.qrFq.......', 22: '........mzem.mzem.......', 23: '........miBm.miBm.......' },
+    { 3: '.........aaaaa..........', 4: '........abccbba.........', 5: '.......abcccccbd........', 6: '.......acbeeccbd........', 7: '.......abefeecbd........', 8: '.......hieeejebd........', 9: '........heneeba.........', 10: '.........heeeklg........', 11: '........Hwsxkoog........', 12: '........HsxAtoog........', 13: '........HsxAtoog........', 14: '........GsxAtlolg.......', 15: '.......puvsAtooog.......', 16: '......puzeGxlooEg.......', 17: '......pviBsGwsxG........', 18: '.......pmqCDqCDq........', 19: '.........qrFqrFq........', 20: '.........qrFqrFq........', 21: '.........qrFqrFq........', 22: '.........mzemzem........', 23: '.........miBmiBm........' },
+    { 4: '..........aaaaa.........', 5: '.........abccbbd........', 6: '.......habcccccbd.......', 7: '......hzecbeeccbd.......', 8: '......hiBsefeecbd.......', 9: '......Iuvxeeejebd.......', 10: '.......HwAeneebd........', 11: '.......Hsxxeeelg........', 12: '........HHsxktog........', 13: '.........HsAtoog........', 14: '.........GsAtoog........', 15: '........GwxAtlolg.......', 16: '........GsxAtooog.......', 17: '........GxGxlooEg.......', 18: '........GsxGwsxG........', 19: '.........qCDqCDq........', 20: '.........qrFqrFq........', 21: '.........qrFqrFq........', 22: '.........mzemzem........', 23: '.........miBmiBm........' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], hurt: [6, 1, 0.2] },
+};
+
+export const HOLD_MOBS = { lookout: LOOKOUT, houndmaster: HOUNDMASTER, war_hound: WAR_HOUND, bruiser: BRUISER, captive: CAPTIVE };

@@ -158,3 +158,61 @@ export function sealHollows(ctx, H, r, fill = B.mine_fall) {
   out.spawns.forEach((sp, i) => (sp.id = i));
 }
 
+
+// (Round 98) A frame laid along a room's long way: u from one end toward
+// the other (the end away from its main way in), v across it.
+export function frameOf(ctx, H, r) {
+  const longX = r.x1 - r.x0 >= r.z1 - r.z0;
+  const door = mainDoor(ctx, H, r);
+  const L = longX ? r.x1 - r.x0 + 1 : r.z1 - r.z0 + 1;
+  const Wd = longX ? r.z1 - r.z0 + 1 : r.x1 - r.x0 + 1;
+  // (Down a long room toward its end away from the way in; a room laid
+  // north and south always toward its north end, where its end wall's
+  // face can be seen.)
+  let dir = longX ? 1 : -1;
+  if (door && longX) dir = door.x <= r.cx ? 1 : -1;
+  const start = longX ? (dir > 0 ? r.x0 : r.x1) : dir > 0 ? r.z0 : r.z1;
+  const across = longX ? r.z0 : r.x0;
+  const P = (u, v) => (longX ? { x: start + dir * u, z: across + v } : { x: across + v, z: start + dir * u });
+  // (Steps up, facing back down the room.)
+  const stepRot = longX ? (-dir > 0 ? 3 : 1) : -dir > 0 ? 0 : 2;
+  return { longX, L, Wd, dir, P, stepRot, mid: Math.floor((Wd - 1) / 2) };
+}
+// A free tile something can be set on and seen: not against the wall to
+// the south of it (the face of that wall, seen from above, hides the row
+// in front of it).
+export const shown = (ctx, H, r, x, z) => free(ctx, H, r, x, z) && ctx.plan.at(x, z + 1);
+// A room's back wall, as a row, where it can be seen: in a wide room,
+// always its north wall (the one whose face you see), whichever side its
+// way in is; in a deep one, the side away from its way in.
+export function backSeen(ctx, H, r) {
+  const along = r.x1 - r.x0 >= r.z1 - r.z0;
+  if (along) return { along, back: r.z0, out: 1 };
+  const door = mainDoor(ctx, H, r);
+  const back = door && door.x <= r.cx ? r.x1 : r.x0;
+  return { along, back, out: back === r.x1 ? -1 : 1 };
+}
+// Something set out on a free tile of the room where it'll be seen (as
+// H.placeIn, but never on a row hidden by the wall to its south).
+export function place(ctx, H, r, id, meta = 0, edge = false) {
+  for (let t = 0; t < 8; t++) {
+    const at = H.placeIn(ctx, r, id, meta, edge);
+    if (!at) return null;
+    if (ctx.plan.at(at.x, at.z + 1)) return at;
+    ctx.b.set(at.x, H.FY, at.z, B.air);
+  }
+  return null;
+}
+// (Round 98) The longest unbroken run of tiles along a row (a ledge is one
+// run, never two either side of a doorway with a ladder to only one).
+export function longestRun(tiles, along) {
+  let best = [];
+  let cur = [];
+  for (const t of tiles) {
+    const prev = cur[cur.length - 1];
+    if (prev && Math.abs((along ? t.x - prev.x : t.z - prev.z)) === 1) cur.push(t);
+    else cur = [t];
+    if (cur.length > best.length) best = cur;
+  }
+  return best;
+}
