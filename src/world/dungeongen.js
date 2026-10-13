@@ -1259,8 +1259,9 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
     const z = (k / W) | 0;
     for (const y of [FY, FY + 1]) {
       const id = b.get(x, y, z);
-      // (Round 98: nor the ladder up to a ledge, set there to be kept.)
-      if (id !== B.air && id !== B.stairs_up && id !== B.torch && id !== B.ladder) b.set(x, y, z, B.air);
+      // (Round 98: nor the ladder up to a ledge, set there to be kept; any
+      // place's own ladder, a rope one as much as wood: Round 106.)
+      if (id !== B.air && id !== B.stairs_up && id !== B.torch && !BLOCKS[id].ladder) b.set(x, y, z, B.air);
     }
   }
   // (And with all that set about, the lava still leaves a way through each

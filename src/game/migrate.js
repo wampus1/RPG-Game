@@ -798,6 +798,12 @@ export const STEPS = [
       log.push('The Leviathan\'s Guts are made over: drawn afresh, with the gullet, the whalers\' camp under the ribs, the stomach with the swallowed ship, the valve, the gutworms\' nest, the ambergris pocket and the artery; the heartbeat, the valves that open on it, the ridged floor that pushes, the bile that burns, the blisters that burst, the gutworms that latch on, the hermits that wear ambergris, and the whalers\' scar; and their masters redrawn. Gut floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.6.0',
+    data(d, log) {
+      log.push('The Salt Cathedrals are made over: drawn afresh, with the miners\' chapel, the brine lake and its sluice, the workings and their gallery, the shaft and its loft, the brine pans and the singing hall; the brine that crusts you fast and mends the salt dead, the chandeliers on their ropes, the singing crystals, the drowned chapel behind the flooded arch, the bricked-up chapel, the rakers, the blooms and the pale flamingos; and their masters redrawn. Salt Cathedral floors you have already been on are laid out afresh the next time you go down. (And the rope ladders up to the ledges of the Leviathan\'s Gut are there now.)');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

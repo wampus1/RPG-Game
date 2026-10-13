@@ -286,6 +286,9 @@ item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 
 // what it can't digest, worth more than its weight in gold to the
 // perfumers.
 item('ambergris', { name: 'Ambergris', kind: 'misc', stack: 16, value: 60, about: 'A lump of grey wax out of a whale\'s gut, sweet-smelling and worth more than its weight in gold to the perfumers.' });
+// (Round 106) Out of the Salt Cathedral: a tear of the Mother's, a drop of
+// brine set hard and clear as glass, pink at its heart.
+item('mothers_tear', { name: 'Mother\'s Tear', kind: 'misc', stack: 16, value: 75, about: 'A drop of brine from the Salt Cathedral, set as hard and clear as glass, pink at its heart. The pilgrims of Saltmere pay well for them.' });
 // (Round 95) A chieftain's gold, out of the barrows: a twisted torc for the
 // neck, a ring for the arm (given by a ring-giver to their sworn).
 item('gold_torc', { name: 'Gold Torc', kind: 'misc', stack: 8, value: 95 });

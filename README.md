@@ -7878,6 +7878,160 @@ dead are still here.
 - **Version 1.5.0.** Worlds from 1.4 load as before. Gut floors you have
   already been on are laid out afresh the next time you go down.
 
+## Round 106: The Salt Cathedral, made over
+
+The twelfth of the dungeon overhauls. A Salt Cathedral is one of
+Saltmere's oldest salt workings. The miners dug it down and down for the
+Salt Mother until they were carving chapels instead of cutting salt, and
+then the brine came up through the floor. The first feeling should be awe
+and quiet: white and grey rock salt carved into a church, with reliefs in
+the walls, pews and an altar of salt, chandeliers of crystal and votive
+candles in niches. The second is thirst and stillness: everything is dry,
+the dead are preserved white, and the brine crusts you over if you wade
+it. Under the holiness it is still a mine, with timber holding the roof
+up, carts of cut salt and the pans where brine was boiled. It is large and
+high: the chapel's dais is up carved steps, the workings' gallery up salt
+stairs, the shaft's loft up a ladder, and the brine lake is sunk below.
+
+- **Drawn afresh.** Every Salt Cathedral tile and thing is painted by
+  hand:
+  - **The walls.** Rock salt in its bands (grey, white, a pink band, a seam
+    of clay), pick marks where the miners cut it and smooth where they
+    carved it. Also:
+    - reliefs cut in the salt (the Salt Mother, veiled, arms open; the
+      miners at work), and an arched niche with a votive burning in it;
+    - timber cribbing greyed by the salt, a vein of pink crystal, brine
+      seeping down the wall, and the miners' tally;
+    - salt bricks where a chapel was walled up, an iron ring with a
+      chandelier's rope tied off, the sluice gate, and an arch flooded to
+      its roof.
+  - **The floors.** Carved salt, the chapel's slabs laid in a diamond, the
+    salt crust in its polygons, brine, salt-greyed planks, pink crystal,
+    brick, and the drained lake's wet bed.
+  - **The things set about.**
+    - The crystal chandeliers (they cast a faint shadow far below), pews,
+      the altar, the Salt Mother carved, and votive candles.
+    - Timber posts, carts of cut salt, cut blocks, sacks, picks and rakes,
+      a treadwheel, miners' lamps, a ladder and the tally-book.
+    - The miners white with salt where they sat down, the brine pans on
+      their hearths, the miners' boat, the singing crystals, and the
+      crystal the blooms grow.
+- **Rooms a Salt Cathedral has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/saltworks.js`), beside its old rooms.
+  The old brine pools are now brine sunk in the floor, and the old
+  crystals, candles, carts and statues are the cathedral's own.
+  - **The chapel.** The miners' church. A dais at its head up a carved
+    step, with the altar and the Mother's statue on it; pews in short rows
+    either side of the aisle; reliefs and niches in the walls; and
+    chandeliers over the aisles, each on a rope tied off at the wall. The
+    dead are at prayer, and a raker stands at the back. On every first
+    floor.
+  - **The lake.** Brine sunk across the room with a bank round it, and a
+    walkway of planks across the middle. The miners' boat is drawn up on
+    the bank, with the treadwheel, the sluice in the wall beside it, and
+    the brine-reeve's notes. At its end is an arch flooded to its roof.
+    Pale flamingos stand by the water.
+  - **The workings.** The salt face: timber posts in rows, cribbing on the
+    walls, cut blocks, carts, sacks and tools. A gallery runs along the
+    back up salt stairs, with the gang's stash at its far end. The
+    tally-book is here, and the rakers are at work.
+  - **The shaft.** Where the salt went up: the hoist's wheel, a loft of
+    cribbing along the back up a ladder with the miners' stash on it,
+    lamps, and the Salt Office's decree.
+  - **The pans.** Where brine was boiled for salt: the pans lit on their
+    hearths, a channel of brine sunk along the floor, and sacks. Scorpions
+    and a bloom.
+  - **The singing hall.** A floor of crystal, great singing crystals,
+    growth and veins of crystal, and the chapel the miners bricked up.
+- **What's at work there.**
+  - **The brine.** Wading it, the salt crusts on you, slower and slower,
+    and a few seconds in you're set fast for a moment. Out of it the
+    crust flakes off. The salt wights and rakers mend standing in it. The
+    scorpions, the flamingos and the blooms don't mind it.
+  - **The chandeliers.** Slip a chandelier's rope at its iron ring and it
+    comes down on whatever is under it: it hurts and stuns, worst of all
+    for anything made of salt, and shatters. There are chandeliers in the
+    master's hall too.
+  - **The singing crystals.** Strike one and it rings. Everything made of
+    salt near it shakes still, and the blooms' growth shatters. But
+    everything that hears it wakes, and the flamingos take fright. It
+    won't ring again for a few seconds. A true note shakes the Mirage
+    Lion's haze off it for a moment.
+  - **The sluice.** Walk the treadwheel by the lake and the sluice opens.
+    The lake drains (its bed will bear you), and the flooded arch comes
+    clear onto the drowned chapel and its chest. What lay drowned on the
+    lake bed gets up. The brine-reeve's notes tell you how.
+  - **The bricked chapel.** One wall in the singing hall is bricks, not
+    carved rock; look for the courses. Strike it down: behind it are the
+    walled-up chapel, its dead, and its chest. The tally-book hints at it.
+  - What's been done (the lake drained, the chandeliers down, the bricks
+    struck down) stays done when you come back to the floor.
+- **What's written there.** Every Salt Cathedral has its saint, the
+  brotherhood that worked it (its rake-master, its miners by name and
+  trade), the Doge's Salt Office and its quota, and the town above. It
+  also has what went wrong: they dug through into the old sea, the
+  rake-master heard the Mother singing and would not stop, the Salt Office
+  doubled the quota and they cut out the pillars, they walled up the sick
+  in a chapel, or the salt began to sing and they followed it down. Its
+  papers come from all of that (see `src/world/deeps/saltlore.js`):
+  - the miners' hymn on the altar and the words cut under the Mother;
+  - the tally-book, the Salt Office's decree, and the brine-reeve's notes;
+  - a votive, a letter home, a prayer, a dead miner, what's scratched in
+    the bricked chapel, and the master's hall.
+- **A new item.** A Mother's Tear: a drop of brine set as hard and clear as
+  glass, pink at its heart. It is found in the drowned and bricked
+  chapels, and sometimes on a bloom.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the salt wights and brine scorpions stay):
+  - **The Salt Raker.** One of the dead rakers, hunched in a cowled smock
+    gone stiff with salt, with its long rake. It holds at the rake's
+    length, two paces off, and its blow drags you a pace toward it.
+  - **The Salt Bloom.** Crystal grown round a heart of brine, rooted in
+    the floor. It grows crystal on the tiles round it, faster beside the
+    brine, walling you in, and its touch crusts you. Break it and all its
+    growth crumbles.
+  - **The Pale Flamingo.** A peaceful, blind white flamingo of the brine
+    lakes. Come near one, strike one, or ring a crystal by them, and the
+    flock takes fright honking: everything near wakes and comes for you.
+  - Together:
+    - the raker drags you into the brine, where you set fast, while the
+      wights wade in after you and mend;
+    - the blooms close off your way out while you fight;
+    - the flamingos raise the alarm in the middle of a careful fight;
+    - the crystal that stuns the wights wakes the rest.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Salt Mother.** The statue the miners carved to be their saint,
+    out of the living rock salt; the salt round her listened to their
+    prayers so long that it began to answer. She is:
+    - veiled, the veil carved in long folds to her shoulders, a crown of
+      crystal points over it and a carved halo of crystal behind;
+    - downcast, her eyes shut, brine running from under her lids;
+    - robed in rock salt going pink toward the hem where the brine has
+      soaked into her, with a cord at her waist and old cracks;
+    - open-armed, palms up, brine dripping from her fingers;
+    - footless: her robe has crusted into the floor in a mound of salt
+      with crystals growing out of it, in a pool of brine.
+    She mends in the brine like her children.
+  - **The Mirage Lion.** The Doge's winged lion, carved over the brine
+    well and gilded, until the salt sang to it and it moved. It has:
+    - gilt going to bronze in the shadows, with salt crusted white along
+      its back and brow;
+    - a mane in heavy curled locks, and pale shining eyes;
+    - the saint's nimbus, a ring of gold, behind its head;
+    - gilt wings raised over its shoulders, white-tipped;
+    - a long tufted tail.
+    It walks.
+- **Fixes.**
+  - Rope ladders and other ladders of a place's own are no longer cleared
+    away when a floor is finished. The Leviathan's Gut's rope ladders up
+    to the whalers' ledges were missing, so the ledge and its stash
+    couldn't be reached. Gut floors you have already been on are laid out
+    afresh so they get their ladders.
+- **Version 1.6.0.** Worlds from 1.5 load as before. Salt Cathedral floors
+  you have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

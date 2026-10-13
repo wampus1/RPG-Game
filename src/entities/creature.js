@@ -19,6 +19,7 @@ import { GROTTO_SPECIES } from './grottomobs.js';
 import { CATA_SPECIES } from './catamobs.js';
 import { VAULT_SPECIES } from './vaultmobs.js';
 import { GUT_SPECIES } from './gutmobs.js';
+import { SALT_SPECIES } from './saltmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -122,6 +123,7 @@ export const SPECIES = {
   ...CATA_SPECIES,
   ...VAULT_SPECIES,
   ...GUT_SPECIES,
+  ...SALT_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,

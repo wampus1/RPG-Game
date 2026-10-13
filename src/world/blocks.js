@@ -1300,3 +1300,57 @@ def('lv_hull', { ...sprite, solid: true, rotatable: true, hardness: Infinity, dr
 def('lv_mast', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Broken Mast' });
 def('lv_hook', { ...sprite, tall: true, solid: false, hardness: Infinity, drop: null, label: 'Flensing Hook' });
 def('lv_anchor', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Anchor' });
+
+// (Round 106) The Salt Cathedral made over (see world/deeps/saltworks.js):
+// its walls of rock salt in their bands; the reliefs the miners cut, the
+// timber cribbing, a niche with its votive, the bricked-up chapel (strike
+// it down), an iron ring with a chandelier's rope tied off (slip it: the
+// chandelier falls), a vein of crystal, brine seeping, the miners' tally,
+// the sluice gate, the arch flooded to its roof; a carved step; its floors
+// (carved salt, the chapel's slabs, the crust, brine, that crusts you over,
+// planks, crystal, brick, the drained lake's bed); and what's set about in
+// it: the chandeliers and their shards, pews, the altar, the Mother's
+// statue, votives, the timber posts, carts, cut salt, sacks, tools, the
+// treadwheel (the sluice's), lamps, a ladder, the tally-book, the dead
+// miners, the pans, a boat, the singing crystals, and the crystals the
+// blooms grow. Last of all, so no block before them changes its number.
+def('sw_rock', { tool: 'pick', hardness: Infinity, drop: null, label: 'Rock Salt' });
+def('sw_relief', { hardness: Infinity, drop: null, label: 'A Relief, Carved in Salt' });
+def('sw_crib', { hardness: Infinity, drop: null, label: 'Timber Cribbing' });
+def('sw_niche', { hardness: Infinity, drop: null, light: 6, label: 'A Niche, a Votive in It' });
+def('sw_bricked', { interact: 'sw_bricked', hardness: Infinity, drop: null, label: 'Salt Bricks' });
+def('sw_cleat', { interact: 'sw_cleat', hardness: Infinity, drop: null, label: 'A Rope, Tied Off' });
+def('sw_vein', { hardness: Infinity, drop: null, light: 3, label: 'A Vein of Crystal' });
+def('sw_seep', { hardness: Infinity, drop: null, label: 'Brine, Seeping' });
+def('sw_tally', { hardness: Infinity, drop: null, label: 'The Miners\' Tally' });
+def('sw_sluice', { hardness: Infinity, drop: null, label: 'Sluice Gate' });
+def('sw_flooded', { hardness: Infinity, drop: null, label: 'Flooded to the Roof' });
+def('sw_step', { hardness: Infinity, drop: null, label: 'Carved Step' });
+def('sw_floor', { hardness: Infinity, drop: null, label: 'Carved Salt' });
+def('sw_slabs', { hardness: Infinity, drop: null, label: 'Salt Slabs' });
+def('sw_crust', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Salt Crust' });
+def('sw_brine', { hardness: Infinity, drop: null, light: 2, label: 'Brine' });
+def('sw_planks', { hardness: Infinity, drop: null, label: 'Salt-Greyed Planks' });
+def('sw_crystalfloor', { hardness: Infinity, drop: null, light: 2, label: 'Crystal' });
+def('sw_brick', { hardness: Infinity, drop: null, label: 'Brick' });
+def('sw_wetbed', { hardness: Infinity, drop: null, label: 'The Lake\'s Bed' });
+def('sw_chandelier', { ...sprite, tall: true, solid: false, hardness: Infinity, light: 11, drop: null, label: 'Salt Chandelier' });
+def('sw_shards', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'A Fallen Chandelier' });
+def('sw_pew', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Pew of Salt' });
+def('sw_altar', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, light: 8, lightWhenState: true, drop: null, label: 'Altar of Salt' });
+def('sw_mother', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, light: 3, drop: null, label: 'The Salt Mother, Carved' });
+def('sw_votive', { ...dressing, hardness: Infinity, light: 6, drop: null, label: 'Votive Candles' });
+def('sw_post', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Timber Post' });
+def('sw_cart', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Cart of Salt' });
+def('sw_blocks', { ...sprite, solid: true, rotatable: true, hardness: 1, drop: [{ item: 'salt', min: 2, max: 4 }], label: 'Cut Salt' });
+def('sw_sacks', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'salt', min: 1, max: 3 }], label: 'Sacks of Salt' });
+def('sw_tools', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Picks and a Rake' });
+def('sw_wheel', { ...sprite, tall: true, solid: true, interact: 'sw_wheel', hardness: Infinity, drop: null, label: 'Treadwheel' });
+def('sw_lamp', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, light: 10, lightWhenState: true, drop: null, label: 'Miner\'s Lamp' });
+def('sw_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder' });
+def('sw_ledger', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Tally-Book' });
+def('sw_dead', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Miner, White with Salt' });
+def('sw_pan', { ...sprite, solid: true, hardness: Infinity, light: 9, lightWhenState: true, drop: null, label: 'Brine Pan' });
+def('sw_boat', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Miners\' Boat' });
+def('sw_singer', { ...sprite, tall: true, solid: true, interact: 'sw_singer', hardness: Infinity, light: 7, drop: null, label: 'Singing Crystal' });
+def('sw_growth', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: 0.6, drop: [{ item: 'salt', chance: 0.5 }], label: 'Salt Growth' });

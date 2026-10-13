@@ -22,6 +22,7 @@
 import { B } from './blocks.js';
 import { VAULT_ARCH } from './deeps/vault.js';
 import { GUT_ARCH } from './deeps/gut.js';
+import { SALT_ARCH } from './deeps/saltworks.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -307,14 +308,17 @@ export const FAR_DTYPES = {
   // cathedrals: white vaults of salt, pillars of crystal, pools of brine,
   // the miners' chapels; and the brine wells up.
   saltworks: {
-    name: 'Salt Cathedral', isle: 'saltmere', wall: B.salt_brick, floor: B.salt_crust, alt: B.tile_blue, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Salt Cathedral', isle: 'saltmere', wall: B.sw_rock, floor: B.sw_floor, alt: B.sw_crust, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['crystals', 'brinepool', 'shrine', 'pillared', 'crystals', 'gallery', 'trap', 'treasure', 'brinepool', 'guard'],
-    mobs: [['salt_wight', 4], ['brine_scorpion', 3], ['drowned', 1]],
-    swap: { skeleton: ['salt_wight'], wight: ['salt_wight'], ghoul: ['brine_scorpion'], crawler: ['brine_scorpion'] },
+    mobs: [['salt_wight', 4], ['brine_scorpion', 3], ['salt_raker', 2], ['salt_bloom', 1]],
+    swap: { skeleton: ['salt_wight'], wight: ['salt_wight'], ghoul: ['brine_scorpion'], crawler: ['brine_scorpion'], drowned: ['salt_wight'] },
     bosses: ['salt_mother', 'mirage_lion'], torches: 0.25,
-    shapes: { octagon: 3, rect: 2, cave: 2, cross: 1 }, wiggle: 0.4, decor: [['salt_crystal', 4], ['candles', 2], ['statue', 1], ['mine_cart', 1]],
+    shapes: { octagon: 3, rect: 2, cave: 2, cross: 1 }, wiggle: 0.4, decor: [['sw_votive', 3], ['sw_growth', 2], ['sw_sacks', 1], ['sw_dead', 1]],
     dark: [0.12, 0.11, 0.12], motes: ['#ffffff', '#f8d8e8'], ambient: ['drip', 'salt_song', 'tink', 'drone'],
-    loot: [['salt', 4, 8, 0.6], ['gem', 1, 2, 0.2], ['pink_feather', 1, 2, 0.3], ['gold_ore', 1, 2, 0.2]],
+    loot: [['salt', 4, 8, 0.6], ['gem', 1, 2, 0.2], ['pink_feather', 1, 2, 0.3], ['gold_ore', 1, 2, 0.2], ['mothers_tear', 1, 1, 0.08]],
+    // (Round 106: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/saltworks.js.)
+    arch: SALT_ARCH,
   },
   // The oldest burrows under Hollowmark, dug before the Hollowfolk came by
   // whatever was digging then: tunnels round as pipes, larders, rooms of
