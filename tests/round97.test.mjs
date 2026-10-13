@@ -21,6 +21,9 @@ import { CRYPT_SPRITES } from '../src/render/art/crypt_tex.js';
 import { cryptLore, godOf, POSES } from '../src/world/deeps/cryptlore.js';
 import { snuff, relight } from '../src/game/cryptwork.js';
 import { GAME_VERSION } from '../src/version.js';
+import { CRYPT_BOSS_ART } from '../src/render/art/crypt_bosses.js';
+import { FORGE } from '../src/render/forge.js';
+import '../src/render/bossbody.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 const rec = (s, isle) => ({
@@ -372,6 +375,33 @@ test('the penitent waits for you, and walks on as you follow', () => {
   run(game, input, 10);
   assert.ok(pn.x >= x0 + 6, `and walks on (${pn.x - x0})`);
   d.leave();
+});
+
+test('the crypt\'s masters are all painted by hand, every part in place', () => {
+  const names = Object.keys(CRYPT_BOSS_ART);
+  assert.equal(names.length, 23);
+  for (const k of names) {
+    assert.ok(SPECIES[k], `${k} is a species`);
+    const D = FORGE[k];
+    assert.ok(D && D.pix, `${k} is painted`);
+    const A = CRYPT_BOSS_ART[k];
+    assert.ok(A.body.rows.length, `${k} has a body`);
+    for (const [n, q] of Object.entries(A.parts || {})) {
+      assert.ok(q.pix && q.pix.rows.length, `${k}.${n} has a picture`);
+      if (q.parent) assert.ok(A.parts[q.parent], `${k}.${n} hangs on ${q.parent}`);
+    }
+  }
+  // (What their effects hang on: the censers and staves in their hands,
+  // the lantern on its crook, the choir's singing faces.)
+  for (const k of ['priest', 'kiln_priest', 'whale_priest', 'pale_vestal', 'rune_witch', 'lantern_lord', 'hollow_saint']) assert.equal(CRYPT_BOSS_ART[k].parts.blade.parent, 'armN', `${k}'s weapon is in its hand`);
+  assert.ok(CRYPT_BOSS_ART.lantern_lord.parts.lantern, 'the lantern hangs from its crook');
+  for (let i = 0; i < 3; i++) assert.ok(CRYPT_BOSS_ART.drowned_choir.parts[`head${i}`].pixVariants.song, 'each voice opens its mouth to sing');
+  // (The panes and shards still orbit as the forged ones did; the
+  // horror's heart beats.)
+  assert.equal(typeof FORGE.obsidian_abbess.parts.pane0front.at, 'function');
+  assert.ok(FORGE.obsidian_abbess.parts.pane0front.show, 'a pane shows in front only as it comes round');
+  assert.deepEqual(CRYPT_BOSS_ART.horror.idle, [0, 4]);
+  assert.ok(FORGE.horror.legs, 'the horror keeps its legs of bone');
 });
 
 test('the version and its step', () => {

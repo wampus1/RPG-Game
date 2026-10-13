@@ -6792,6 +6792,21 @@ and down: a chancel a step up, the drowned undercroft a step down.
     take half the hurt; with two singing, their wounds close too. Strike
     the cantor and the hymn breaks off for a while.
   - **The Penitent**: the pale ghost of the walk. It never fights.
+- **The crypt's masters, painted by hand.** All twenty-three of them, every
+  pixel placed: the Drowned Priest swollen in his dripping hood with the
+  reliquary's flail; the Hollow Saint with the light where her face was;
+  the Obsidian Abbess with her panes of black glass turning round her; the
+  Kiln Priest and his censer of coals; the Pale Vestal's fire-bowl; the
+  Whale Priest in his whale-skull mask; the Salt Bride weeping in her lace;
+  the Selkie Widow with her sealskin found again; the Rune Witch and her
+  burning runestone; the Lantern Lord under his toadstool cap, his lantern
+  swinging from his crook; the Hollow King's empty armour, mist at every
+  joint; the Lamplighter with his pole and lantern; the Ossuary Horror and
+  its beating heart; the Vitrified Horror's eyes in the glass; the Drowned
+  Choir, whose mouths glow when they sing; the gold-mended Marble
+  Colossus; the Nine-Tailed Fox and its fan of tails; the Hungry Ghost and
+  the Banshee; the six-winged Flamingo Seraph; the Moth Queen; the Kraken's
+  Spawn; and the Drowned Bell with weed swaying off its lip.
 - **Older crypt floors are made afresh.** A crypt floor saved before this
   version is laid out the new way the next time anyone goes down to it.
 

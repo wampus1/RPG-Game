@@ -7,6 +7,7 @@
 import { FORGE, breathOf } from './forge.js';
 import { BARROW_BOSS_ART } from './art/barrow_bosses.js';
 import { MINE_BOSS_ART } from './art/mine_bosses.js';
+import { CRYPT_BOSS_ART } from './art/crypt_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -31,6 +32,12 @@ export function installPix(art) {
       // (When it's shown, as the forged part it stands for was: a neck
       // under the water while its master is down there, say.)
       if (!p.show && was[n] && was[n].show) p.show = was[n].show;
+      // (Where it goes kept as the forged part had it, when that moves of
+      // itself: a pane of glass orbiting its master, say.)
+      if (q.keepAt && was[n]) {
+        p.at = was[n].at;
+        if (was[n].extra) p.extra = was[n].extra;
+      }
       parts[n] = p;
     }
     D.parts = parts;
@@ -39,3 +46,4 @@ export function installPix(art) {
 
 installPix(BARROW_BOSS_ART);
 installPix(MINE_BOSS_ART);
+installPix(CRYPT_BOSS_ART);
