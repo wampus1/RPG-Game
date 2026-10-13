@@ -16,6 +16,9 @@ import { BLOCKS, B } from '../src/world/blocks.js';
 import { SPECIES } from '../src/entities/creature.js';
 import { MINE_SPECIES } from '../src/entities/minemobs.js';
 import { MINE_MOBS } from '../src/render/art/mine_mobs.js';
+import { MINE_BOSS_ART } from '../src/render/art/mine_bosses.js';
+import '../src/render/bossbody.js';
+import { FORGE } from '../src/render/forge.js';
 import { mineLore } from '../src/world/deeps/minelore.js';
 import { igniteGas, propFall } from '../src/game/minework.js';
 import { GAME_VERSION } from '../src/version.js';
@@ -337,6 +340,26 @@ test('hurt a knocker and the roof comes down on you', () => {
   run(game, input, 1.5);
   assert.ok(p.hp < hp, 'on you');
   d.leave();
+});
+
+test('the mine\'s masters are all painted by hand, every part in place', () => {
+  const names = Object.keys(MINE_BOSS_ART);
+  assert.equal(names.length, 23);
+  for (const k of names) {
+    assert.ok(SPECIES[k], `${k} is a species`);
+    const D = FORGE[k];
+    assert.ok(D && D.pix, `${k} is painted`);
+    const A = MINE_BOSS_ART[k];
+    assert.ok(A.body.rows.length, `${k} has a body`);
+    for (const [n, q] of Object.entries(A.parts || {})) {
+      assert.ok(q.pix && q.pix.rows.length, `${k}.${n} has a picture`);
+      if (q.parent) assert.ok(A.parts[q.parent], `${k}.${n} hangs on ${q.parent}`);
+    }
+  }
+  // (What their effects hang on: the overseers' weapons in their hands,
+  // the golems' heads.)
+  for (const k of ['foreman', 'iron_legate']) assert.equal(MINE_BOSS_ART[k].parts.blade.parent, 'armN', `${k}'s weapon is in its hand`);
+  for (const k of ['deep_golem', 'turquoise_golem', 'rune_golem', 'storm_giant']) assert.ok(MINE_BOSS_ART[k].parts.head, `${k} has a head`);
 });
 
 test('the version and its step', () => {

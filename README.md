@@ -6689,6 +6689,18 @@ the dead in it are still at work.
     roof is bad and where the air is wrong. Hurt one and the roof comes
     down on you.
   - Crawlers hatch from the eggs at the breakthrough when you come near.
+- **Every mine master redrawn by hand, all 23 of them.** Each one was
+  painted pixel by pixel, from silhouette to palette, shading, outline and
+  highlights. The wyrms now have curved ring segments and lipped mouths, the
+  golems are built of bevelled, fitted stones, and the crabs have jointed
+  claws. Each moves as before: necks sway, jaws open, arms and claws swing,
+  and what they give off stays where it was. That covers the Deep Worm, the
+  Glass Wyrm, the Lamprey Queen, the Silver Wyrm, the Great Centipede, the
+  Salt Wyrm, the Glowworm Queen, the Ninth Wyrm, the Deep Golem, the
+  Turquoise Golem, the Rune Golem, the Storm Giant, the Crystal Matriarch,
+  the Stack Crab, Foreman Gask, the Iron Legate, the Brood Mother, the Gas
+  Bloat, the Oil Bloat, the Magma Tender, the Bellows Golem, the Spore
+  Colossus and the Scrimshaw Horror.
 - **Older mine floors are made afresh.** A mine floor saved before this
   version is laid out the new way the next time anyone goes down to it.
 
