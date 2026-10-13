@@ -6929,6 +6929,97 @@ crack in the floor with a rope bridge over it, pits under hides.
   reach. A holdout's floor no longer repeats a little bone every fourth
   pace.
 
+## Round 99: The Kavorent, made over
+
+The fifth of the dungeon overhauls. A Kavorent ruin is the deep a precise,
+vanished people built to leave their bodies in: they lay down in pods in
+its cradle halls and went up the conduits into the Choir, to wait out the
+long count together. It isn't a ruin, mostly. It's still running:
+polished alloy seamed with cold light, inlaid floors, a hum under
+everything, halls far bigger than they need to be, sentinels twice your
+height, and constructs keeping it all exactly as it was. Its floors are
+wide and many-roomed with little up and down: daises two steps up, a
+gallery along a hall's side, channels sunk in the floor.
+
+- **Drawn afresh.** Every Kavorent tile and thing is painted by hand,
+  around cyan, so each floor's own ruin-light (cyan, violet, amber,
+  verdant, crimson, pale) still turns it:
+  - **The walls.** A precise panel with its cap bevelled, a recessed
+    panel, and a seam of cold light at the same height all round a room;
+    faces with a column of glyphs, a vent, or failed and cracked. There is
+    a wall of the sleepers' names, and viewports onto the works behind.
+  - **The floors.** Polished plates with a single seam, some halved, some
+    with their fixings showing. There is the hall's inlay (a runner of
+    framed medallions), a grate over a channel, the dais and its steps, a
+    bed of live cables, the lift's pad, and fallen alloy.
+  - **The things set about.** The sleepers' pods (sealed, open and empty,
+    or broken from inside), a construct's cradle, the orrery, glyph
+    pillars, the memory well, a railing, a coolant tank, the sentinel
+    lens, sealed crates and the Choir's crystal. The old sentinels,
+    monoliths, light-screens, consoles, caches, lamps, pylons, mending
+    springs, conduits, husks, vents and power nodes are all repainted.
+- **Rooms a Kavorent floor has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/kavorent.js`), beside its old rooms (the
+  pillared halls, labs, archives, hangars, the reactor's node ring, the
+  console and its plates, the sequence of plates, the emitters' gallery,
+  the fallen rooms, the foundry and its Prime, the vaults), and more of
+  what each floor was for:
+  - **The cradle.** The sleepers' hall, on every floor but its master's.
+    Rows of pods stand on a dais along the back wall, most of them sealed,
+    some open and empty, one broken from inside. The wall behind them is
+    the wall of their names, and a runner of inlay leads up to the steps.
+    A conductor and its drones keep the choir.
+  - **The concourse.** A long hall with a gallery a step up along its back
+    wall behind a rail. What's up there shoots down at you. A sentinel
+    stands at its end.
+  - **The orrery.** The great model of the rings round the spire, turning,
+    with a ring of inlay round it and consoles about it.
+  - **The repair bay.** Construct cradles along the wall, a construct
+    stood dormant before each one (they wake as one when you come close).
+    There are crates of parts, a tank, the work log, and a reclaimer at
+    its scrap.
+  - **The conduit spine.** A channel sunk down the hall's length, full of
+    live cables, with grates across it every few paces and viewports onto
+    the works. Conductors keep it.
+  - **The memory well.** A shaft of light out of the floor with three
+    glyph pillars before it. Turn each pillar to the glyph its console
+    shows. Set right, the well gives back what it keeps. Set all wrong, it
+    pulses and wakes what's near.
+- **Its works.**
+  - **Sentinel lenses** stand by the doors. Walk into a lens's sight and
+    its eye burns red, and every construct near wakes and comes for you.
+    A while later it goes back to watching. Break it and it's blind.
+  - **The live cables.** Step down among them and they bite.
+  - **The well's console** is dark until the archivist comes by on its
+    round (or falls), and then shows the three glyphs in order.
+- **What's written there.** Every ruin is one Cadence of the Kavorent,
+  with its own name, its founder, and how many lie sleeping in it, and
+  every one has gone wrong its own way: the count stalled, a sleeper woke,
+  the blight got into the conduits, people from above dug in, or the
+  Choir went quiet. The town above remembers it as something else ("the
+  humming hill"). Its papers come from all of that (see
+  `src/world/deeps/kavlore.js`): each sleeper's plate, the wall of names,
+  the orrery's plaque, a construct's work log, the warnings on the
+  consoles, a digger from above who got as far as the way in, the one who
+  woke, the well's glyphs, and the master's hall.
+- **Its new constructs**, each painted by hand and made to work with the
+  old ones:
+  - **The Conductor**: a floating pylon that draws an arc between itself
+    and the nearest of its kind and holds it. Whoever crosses the line is
+    shocked and held a moment. Strung between two wardens it walls a
+    doorway; strung to a golem, the line sweeps the hall as the golem
+    walks. Over the live cables it burns hotter.
+  - **The Prism**: a crystal of the Choir turning in a cage. A drone's
+    light sent into it comes out of it at you, from somewhere you weren't
+    watching. A shot that strikes it (an arrow, a bolt, a spell) is turned
+    back on whoever loosed it. Only a blade up close will do.
+  - **The Reclaimer**: a low scavenger with a hopper of scrap on its back.
+    It goes to the wreck of whatever construct you've broken (or an old
+    husk lying about) and builds an arc mite out of it, and with its hopper
+    full it shrugs off blows. Kill it first, or the fight never ends.
+  - **The Archivist**: walks from console to console keeping the record,
+    and never fights. Strike it and it sounds the alarm and flees.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

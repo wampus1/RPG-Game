@@ -24,6 +24,7 @@ import { BARROW_ARCH } from './deeps/barrow.js';
 import { MINE_ARCH } from './deeps/mine.js';
 import { CRYPT_ARCH } from './deeps/crypt.js';
 import { HOLD_ARCH } from './deeps/holdout.js';
+import { KAV_ARCH } from './deeps/kavorent.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -86,6 +87,9 @@ export const DTYPES = {
     // hexes, wheels with spokes, crescents, saw-edged halls, wedges, zigzags.)
     shapes: { rect: 2, octagon: 1, cross: 1, diamond: 2, star: 1, hex: 2, wheel: 1, crescent: 1, teeth: 2, wedge: 1, zigzag: 1 }, wiggle: 0, decor: [['kav_conduit', 3], ['kav_vent', 3], ['kav_husk', 2], ['kav_holo', 1], ['kav_statue', 1], ['kav_monolith', 1]],
     dark: [0.15, 0.18, 0.25], motes: ['#5ad8f0', '#c8fbff'], ambient: ['hum', 'pulse', 'hum', 'drone'],
+    // (Round 99: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/kavorent.js.)
+    arch: KAV_ARCH,
   },
 };
 

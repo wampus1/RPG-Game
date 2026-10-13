@@ -1,0 +1,193 @@
+// (Round 99) The Kavorent's new constructs, painted by hand (see
+// render/pixart.js): silhouette first, then colours, texture, light and
+// shade, outline and highlights, frame by frame. Each faces left (the
+// renderer flips it); its groups are which frames it moves, stands,
+// strikes and flinches with (see sprites.lookFrame).
+
+// The Conductor: a spindly floating pylon, a crown of three prongs round a
+// ball of light (its arcs leap from it), a collar with its eye, a body
+// tapering to a point; it flares, prongs spread, arcs crackling out.
+export const CONDUCTOR = {
+  size: 24,
+  pal: { a: '#17232a', b: '#8eacb8', c: '#121b21', d: '#c0d8de', e: '#46cfee', f: '#9ef0ff', g: '#628290', h: '#ffffff', i: '#030507', j: '#090e11', k: '#0d1419', l: '#22323c', m: '#020405', n: '#62828f', o: '#3f5866', p: '#05080a', q: '#d0faff', r: '#0b1116', s: '#070b0d', t: '#2b3d48', u: '#1a2730', v: '#405a68', w: '#e04858' },
+  rows: [
+    '........................',
+    '............a...........',
+    '.......a...aba...c......',
+    '......ada..aea..cbc.....',
+    '.......aba.fff.cbc......',
+    '.......agaefhfecgc......',
+    '........abafffabc.......',
+    '........agaaeaagc.......',
+    '.........abagabc........',
+    '.........agagagc........',
+    '..........adgga.........',
+    '........ijkglkjmm.......',
+    '.......innnnooooom......',
+    '.......ipqerrrrrpm......',
+    '.......ssntdgnots.......',
+    '......ststugvouuts......',
+    '.....stkssotgtstuks.....',
+    '.....cdc.sougtssscgc....',
+    '......c..stulks...c.....',
+    '..........sots..........',
+    '..........soks..........',
+    '..........sks...........',
+    '...........s............',
+    '........................',
+  ],
+  frames: [
+    {},
+    { 1: '........................', 2: '............a...........', 3: '.......a...aba...c......', 4: '......ada..aea..cbc.....', 5: '.......aba.fff.cbc......', 6: '.......agaefhfecgc......', 7: '........abafffabc.......', 8: '........agaaeaagc.......', 9: '.........abagabc........', 10: '.........agagagc........', 11: '..........adgga.........', 12: '........ijkglkjmm.......', 13: '.......innnnooooom......', 14: '.......mpqerrrrrpm......', 15: '.......ssntdgnots.......', 16: '......ststugvouuts......', 17: '.....stkssotgtstuks.....', 18: '.....cdc.sougtssscgc....', 19: '......c..stulks...c.....', 20: '..........sots..........', 21: '..........soks..........', 22: '..........sks...........', 23: '...........s............' },
+    {},
+    { 1: '........................', 2: '............a...........', 3: '.......a...aba...c......', 4: '......ada..aea..cbc.....', 5: '.......aba.fff.cbc......', 6: '.......agaefhfecgc......', 7: '........abafffabc.......', 8: '........agaaeaagc.......', 9: '.........abagabc........', 10: '.........agagagc........', 11: '..........adgga.........', 12: '........ijkglkjmm.......', 13: '.......innnnooooom......', 14: '.......mpqerrrrrpm......', 15: '.......ssntdgnots.......', 16: '......ststugvouuts......', 17: '.....stkssotgtstuks.....', 18: '.....cdc.sougtssscgc....', 19: '......c..stulks...c.....', 20: '..........sots..........', 21: '..........soks..........', 22: '..........sks...........', 23: '...........s............' },
+    { 1: '........................', 2: '............a...........', 3: '.......a...aba...c......', 4: '......ada..aea..cbc.....', 5: '.......aba.fff.cbc......', 6: '.......agaefhfecgc......', 7: '........abafffabc.......', 8: '........agaaeaagc.......', 9: '.........abagabc........', 10: '.........agagagc........', 11: '..........adgga.........', 12: '........ijkglkjmm.......', 13: '.......innnnooooom......', 14: '.......mpqerrrrrpm......', 15: '.......ssntdgnots.......', 16: '......ststugvouuts......', 17: '.....stkssotgtstuks.....', 18: '.....cdc.sougtssscgc....', 19: '......c..stulks...c.....', 20: '..........sots..........', 21: '..........soks..........', 22: '..........sks...........', 23: '...........s............' },
+    {},
+    { 2: '......a....aea....c.....', 3: '.....ada..efffe..cbc....', 4: '......aba.ffhff.cbc.....', 5: '......agaffhfhfecgc.....', 6: '.....f.hfahfhffhbc......', 7: '...h....abefffebf..f....', 8: '..f..f...abaeabc.h..f...', 9: '.........agagagc.....h..' },
+    { 1: '........................', 2: '............a...........', 3: '.....a....eefee....c....', 4: '....ada..efffffe..cbc...', 5: '.....aba.efhhhfe.cbc....', 6: '......abaffhfhhfcbc.....', 7: '......fahffhhhhebc......', 8: '...f.h.agefffffehc.h....', 9: '..fh....abeefeebcf......', 10: '.........abagabc.....h..', 11: '..........adgga.........', 12: '........ijkglkjmm.......', 13: '.......innnnooooom......', 14: '.......mpqerrrrrpm......', 15: '.......ssntdgnots.......', 16: '......ststugvouuts......', 17: '.....stkssotgtstuks.....', 18: '.....cdc.sougtssscgc....', 19: '......c..stulks...c.....', 20: '..........sots..........', 21: '..........soks..........', 22: '..........sks...........', 23: '...........s............' },
+    { 1: '........................', 2: '............a...........', 3: '.......a...aba...c......', 4: '......ada..aea..cbc.....', 5: '.......aba.fff.cbc......', 6: '.......agaefhfecgc......', 7: '........abafffabc.......', 8: '........agaaeaagc.......', 9: '.........abagabc........', 10: '.........agagagch.......', 11: '..........adgga.........', 12: '........ijkglkjmm.......', 13: '.......innnnooooom......', 14: '.......mpwerrrrrpm......', 15: '.......ssntdgnhts.......', 16: '......ststugvouuts......', 17: '.....stkssotgtstuks.....', 18: '.....cdc.shugtssscgc....', 19: '......c..stulks...c.....', 20: '..........sots..........', 21: '..........soks..........', 22: '..........sks...........', 23: '...........s............' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Prism: a crystal of the Choir turning in an alloy cage, a ring of
+// thrusters round its middle; it flares white when it relays a shot or
+// turns one back.
+export const PRISM = {
+  size: 24,
+  pal: { a: '#092831', b: '#1f8aa6', c: '#17232a', d: '#22323c', e: '#8eacb8', f: '#121b21', g: '#0b1528', h: '#78a8f0', i: '#cfe2ff', j: '#1e3a70', k: '#3a6ac0', l: '#ffffff', m: '#08101f', n: '#090e11', o: '#101e3a', p: '#070b0d', q: '#62828f', r: '#3f5866', s: '#2b3d48', t: '#1a2730', u: '#0d1419', v: '#030507', w: '#46cfee', x: '#020405', y: '#d0faff', z: '#9ef0ff', A: '#7ee4f8', B: '#ff9aa4' },
+  rows: [
+    '...........aba..........',
+    '..........ccdcc.........',
+    '.........cecccef........',
+    '........cecgg.cef.......',
+    '........ccghig.ff.......',
+    '......ccecghig.feff.....',
+    '.....ceccghijkg.ffef....',
+    '....cec.gihlkjkm..fef...',
+    '...cec..ghhikjjm...fef..',
+    '....c..gihijjjjkm...f...',
+    '...cecngkhijjjjomppfef..',
+    '..nqqqqqqqqqrrrrrrrrrrp.',
+    '..nstttttttttttttttttup.',
+    '...vwvnngkhhhhkmpppxwx..',
+    '....f...mkkhkjom....f...',
+    '...fef...mkhjjm....fef..',
+    '....fef..mkhjom...fef...',
+    '.....feffmkhjm..ffef....',
+    '......ffefmkhm.feff.....',
+    '........ffmkhm.ff.......',
+    '........fefmm.fef.......',
+    '.........fefffef........',
+    '..........ffdff.........',
+    '............f...........',
+  ],
+  frames: [
+    {},
+    { 0: '............a...........', 1: '...........aba..........', 2: '..........ccdcc.........', 3: '.........cecccef........', 4: '........cecgg.cef.......', 5: '........ccghig.ff.......', 6: '......ccecghig.feff.....', 7: '.....ceccgihikg.ffef....', 8: '....cec.giklijkm..fef...', 9: '...cec..ghhikjjm...fef..', 10: '....c..gijiijjjkm...f...', 11: '...cecngkjhijjjomppfef..', 12: '..nqqqqqqqqqrrrrrrrrrrp.', 13: '..nstttttttttttttttttup.', 14: '...xwxppmikhhhkmpppxwx..', 15: '....f...mkkhkjom....f...', 16: '...fef...mkhjjm....fef..', 17: '....fef..mkkhom...fef...', 18: '.....feff.mkhm..ffef....', 19: '......ffefmkhm.feff.....', 20: '........ffmkhm.ff.......', 21: '........fefmm.fef.......', 22: '.........fefffef........', 23: '..........ffdff.........' },
+    { 0: '............a...........', 1: '...........aba..........', 2: '..........ccdcc.........', 3: '.........cecccef........', 4: '........cecgg.cef.......', 5: '........ccghig.ff.......', 6: '......ccecghig.feff.....', 7: '.....ceccgihikg.ffef....', 8: '....cec.giklijkm..fef...', 9: '...cec..ghkkhijm...fef..', 10: '....c..gijijhijkm...f...', 11: '...cecngkjjjhijomppfef..', 12: '..nqqqqqqqqqrrrrrrrrrrp.', 13: '..nstttttttttttttttttup.', 14: '...xwxppmihhkhkmpppxwx..', 15: '....f...mkkkkhom....f...', 16: '...fef...mhkkhm....fef..', 17: '....fef..mkkhom...fef...', 18: '.....feff.mkhm..ffef....', 19: '......ffefmkhm.feff.....', 20: '........ffmkhm.ff.......', 21: '........fefmm.fef.......', 22: '.........fefffef........', 23: '..........ffdff.........' },
+    { 6: '.....ceccgikhig.ffef....', 7: '....cec.giklhikm..fef...', 8: '...cec..ghkkhijm...fef..', 9: '....c..gijijjhikm...f...', 10: '...cecngkjjjjhiomppfef..', 13: '...vwvnngihhhkhmpppxwx..', 14: '....f...mkkkkhom....f...', 15: '...fef...mhkkhm....fef..', 16: '....fef..mkkkhm...fef...', 17: '.....feff.mhkhm.ffef....' },
+    {},
+    { 0: '............a...........', 1: '...........aba..........', 2: '..........ccdcc.........', 3: '.........cecccef........', 4: '........cecgg.cef.......', 5: '........ccghig.ff.......', 6: '......ccecghig.feff.....', 7: '.....ceccgihikg.ffef....', 8: '....cec.giklijkm..fef...', 9: '...cec..ghhikjjm...fef..', 10: '....c..gijiijjjkm...f...', 11: '...cecngkjhijjjomppfef..', 12: '..nqqqqqqqqqrrrrrrrrrrp.', 13: '..nstttttttttttttttttup.', 14: '...xwxppmikhhhkmpppxwx..', 15: '....f...mkkhkjom....f...', 16: '...fef...mkhjjm....fef..', 17: '....fef..mkkhom...fef...', 18: '.....feff.mkhm..ffef....', 19: '......ffefmkhm.feff.....', 20: '........ffmkhm.ff.......', 21: '........fefmm.fef.......', 22: '.........fefffef........', 23: '..........ffdff.........' },
+    { 0: '............a...........', 1: '...........aba..........', 2: '..........ccdcc.........', 3: '.........cecccef........', 4: '........cecgg.cef.......', 5: '........ccghig.ff.......', 6: '......ccecghig.feff.....', 7: '.....ceccgihikg.ffef....', 8: '....cec.giklijkm..fef...', 9: '...cec..ghkkhijm...fef..', 10: '....c..gijijhijkm...f...', 11: '...cecngkjjjhijomppfef..', 12: '..nqqqqqqqqqrrrrrrrrrrp.', 13: '..nstttttttttttttttttup.', 14: '...xwxppmihhkhkmpppxwx..', 15: '....f...mkkkkhom....f...', 16: '...fef...mhkkhm....fef..', 17: '....fef..mkkhom...fef...', 18: '.....feff.mkhm..ffef....', 19: '......ffefmkhm.feff.....', 20: '........ffmkhm.ff.......', 21: '........fefmm.fef.......', 22: '.........fefffef........', 23: '..........ffdff.........' },
+    { 6: '.....ceccgikhig.ffef....', 7: '....cec.giklhikm..fef...', 8: '...cec..ghkkhijm...fef..', 9: '....c..gijijjhikm...f...', 10: '...cecngkjjjjhiomppfef..', 13: '...vwvnngihhhkhmpppxwx..', 14: '....f...mkkkkhom....f...', 15: '...fef...mhkkhm....fef..', 16: '....fef..mkkkhm...fef...', 17: '.....feff.mhkhm.ffef....' },
+    { 5: '......ccecgyzg.feff.....', 6: '.....ceccgyzyzg.ffef....', 7: '....cec.gyzlzyzm..fef...', 8: '...cec..gzyzyzym...fef..', 9: '....c..gzyzyzyzym...f...', 10: '...cecngyzyzyzyzmppfef..', 13: '...vwvnngyzyzyzmpppxwx..', 14: '....fy..mzyzyzym...yf...', 15: '...fef...mzyzym....fef..', 16: '....fef..myzyzm...fef...', 17: '.....feffmzyzm..ffef....', 18: '......ffefmzym.feff.....' },
+    { 5: '..A...ccecgyzg.feff...A.', 6: '...y.ceccgyzyzg.ffef.y..', 7: '....cec.gyzlzyzm..fef...', 8: '...cec..gzyzyzym...fef..', 9: '....c..gzyzyzyzym...f...', 10: '...cecngyzyzyzyzmppfef..', 13: '...vwvnngyzyzyzmpppxwx..', 14: '....fy..mzyzyzym...yf...', 15: '...fef...mzyzym....fef..', 16: '...yfef..myzyzm...fefy..', 17: '..A..feff.myzm..ffef..A.', 18: '......ffefmzym.feff.....' },
+    { 6: '.....ceccgihikg.ffef....', 7: '....cec.gikBijkm..fef...', 9: '....c..gijiijljkm...f...', 10: '...cecngkjhijjlomppfef..', 13: '...vwvnngikhhhkmpppxwx..', 14: '....f...mkkhljom....f...', 15: '...fef...mkljjm....fef..', 16: '....fef..mkkhom...fef...', 17: '.....feff.mkhm..ffef....' },
+  ],
+  groups: { idle: [0, 4, 1.4], walk: [4, 4, 0.62], attack: [8, 2, 0.5], hurt: [10, 1, 0.2] },
+};
+
+// The Reclaimer: a low scavenger like a crab, a hopper of scrap on its
+// back, six jointed legs, a pincer reaching forward, a single eye.
+export const RECLAIMER = {
+  size: 24,
+  pal: { a: '#121b21', b: '#1d1910', c: '#c0d8de', d: '#b8a888', e: '#628290', f: '#17130d', g: '#6e624a', h: '#090e11', i: '#3f5866', j: '#2a2418', k: '#22323c', l: '#62828f', m: '#2b3d48', n: '#070b0d', o: '#1a2730', p: '#0d1419', q: '#030507', r: '#1b2932', s: '#121b22', t: '#020405', u: '#17232a', v: '#0b1116', w: '#46cfee', x: '#05080a', y: '#8eacb8', z: '#405a68', A: '#d0faff', B: '#1f8aa6', C: '#ffffff', D: '#e04858' },
+  rows: [
+    '........................',
+    '........................',
+    '.................a......',
+    '.............b..aca.....',
+    '............bdbaea.f....',
+    '............bghieafjf...',
+    '...........hbgiakfgf....',
+    '..........hlljmkiijin...',
+    '..........hmommmoompn...',
+    '...........qrrrrrrst....',
+    '.u.........qrssssvwt....',
+    'ucu......hhqrvvvvvvt....',
+    '.ukuu..hhmmpsvvvvvxt....',
+    '..ukyuhpcccyyyyyyepn....',
+    '.akaaceezzzzzzzzzzkmn...',
+    'aka.npABmezzzzzzkliopn..',
+    '.a...nmooiiimiiiioopn...',
+    '......noyiopyooooypn....',
+    '.....acenmpcmooopacea...',
+    '....acanmnaeannnnmnaca..',
+    '....aeanmnaea...npnaea..',
+    '...aya.npnaea....n..aya.',
+    '...aea..n..a........aea.',
+    '....a................a..',
+  ],
+  frames: [
+    {},
+    {},
+    {},
+    { 17: '.....aaceiooyooooceaa...', 18: '....acenloopemoopnacca..', 19: '....aeanmnacannnnmnaea..', 20: '...aya.npnaea...nmn.aya.', 21: '...aea..n.aea...npn.aea.', 22: '....a.....aea....n...a..', 23: '...........a............' },
+    {},
+    { 17: '.....aaceiooyooooceaa...', 18: '....acenloopemoopnacca..', 19: '....aeanmnacannnnmnaea..', 20: '...aya.npnaea...nmn.aya.', 21: '...aea..n.aea...npn.aea.', 22: '....a.....aea....n...a..', 23: '...........a............' },
+    { 9: 'u..........qrrrrrrst....', 10: 'cu.........qrssssvwt....', 11: 'ueu......hhqrvvvvvvt....', 12: 'ukuu...hhmmpsvvvvvxt....', 13: '.ukyuuhpcccyyyyyyepn....', 14: 'aeaacyeezzzzzzzzzzkmn...', 16: 'ka...nmooiiimiiiioopn...', 17: 'a.....noyiopyooooypn....' },
+    { 9: 'u..........qrrrrrrst....', 10: 'eu.........qrssssvwt....', 11: 'eu.......hhqrvvvvvvt....', 12: 'kuuu...hhmmpsvvvvvxt....', 13: 'ukceuuhpcccyyyyyyepn....', 14: 'eaaacyeezzzzzzzzzzkmn...', 15: 'ea..npABmezzzzzzkliopn..', 16: 'ka...nmooiiimiiiioopn...', 17: 'a....aaceiooyooooceaa...', 18: '....acenloopemoopnacca..', 19: '....aeanmnacannnnmnaea..', 20: '...aya.npnaea...nmn.aya.', 21: '...aea..n.aea...npn.aea.', 22: '....a.....aea....n...a..', 23: '...........a............' },
+    { 12: '.ukuu..hhmCpsvvvvvxt....', 15: 'aka.npDBmezzzzzCkliopn..', 17: '......noyiopCooooypn....' },
+  ],
+  groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
+};
+
+// The Archivist: tall and thin, a mantle of hanging plates, a slate of
+// glyphs held to its breast, a single great lens for a face. Alarmed, it
+// throws up its arms and its lens burns red.
+export const ARCHIVIST = {
+  size: 24,
+  pal: { a: '#17232a', b: '#c0d8de', c: '#8eacb8', d: '#22323c', e: '#121b21', f: '#405a68', g: '#628290', h: '#030507', i: '#ffffff', j: '#d0faff', k: '#9ef0ff', l: '#090e11', m: '#070b0d', n: '#2b3d48', o: '#3f5866', p: '#0d1419', q: '#1a2730', r: '#1b2932', s: '#46cfee', t: '#14505e', u: '#0b1116', v: '#020405', w: '#121b22', x: '#05080a', y: '#62828f', z: '#e04858', A: '#ff9aa4', B: '#9a2030' },
+  rows: [
+    '............abcde.......',
+    '..........aabffe........',
+    '.........agggffe........',
+    '.........hijcffe........',
+    '.........hjkcffe........',
+    '.........abcgffe........',
+    '.........agfffde........',
+    '.........aaadalmm.......',
+    '........agcgnnonnm......',
+    '........acggcgnopm......',
+    '........agncffpnm.......',
+    '......hacnpbffonm.......',
+    '.....hoooooocfnnqm......',
+    '.....hrsstsucfnnqm......',
+    '.....vrsjssucfqqqm......',
+    '.....vrtsstucfqqqm......',
+    '.....vruuuuucfqqqm......',
+    '.....vwuuuuxcfqqqm......',
+    '......vmyoqbffqqqm......',
+    '.......moqqbffqqqm......',
+    '.......moqqbfdqqqm......',
+    '.......mnqqnqnqqqm......',
+    '........mmmmmmmmm.......',
+    '........................',
+  ],
+  frames: [
+    {},
+    { 13: '.....hrstssucfnnqm......', 14: '.....vrtjstucfqqqm......', 15: '.....vrsstsucfqqqm......' },
+    { 13: '.....hrtsstucfnnqm......', 14: '.....vrsjtsucfqqqm......', 15: '.....vrstssucfqqqm......' },
+    {},
+    { 13: '.....hrstssucfnnqm......', 14: '.....vrtjstucfqqqm......', 15: '.....vrsstsucfqqqm......', 18: '......vvmynbffoqqqm.....', 19: '........moqbffoqqqm.....', 20: '........moqbfdoqqqm.....', 21: '........mnqqnqqqqqm.....', 22: '.........mmmmmmmmm......' },
+    { 13: '.....hrtsstucfnnqm......', 14: '.....vrsjtsucfqqqm......', 15: '.....vrstssucfqqqm......' },
+    { 18: '......vmyqnbffoqm.......', 19: '......mynqqbffoqm.......', 20: '......moqqqbfdoqm.......', 21: '......mnqqqqnqqqm.......', 22: '.......mmmmmmmmm........' },
+    { 0: '.....hhh....abcde.......', 1: '....hnrwh.aabffe........', 2: '....hrzuhagggffe..m.....', 3: '....hwuxhhAzcffe.mom....', 4: '.....aca.hzBcffe.mnm....', 5: '......acaabcgffemom.....', 6: '.......acagfffdmom......', 7: '.......agaaadalmnm......', 8: '.......aggcgnnopnm......', 10: '........lyncffonm.......', 11: '........loqbffoqm.......', 12: '........loqbffqqqm......', 13: '........loqbffqqqm......', 14: '........moqbffqqqm......', 15: '........moqbffqqqm......', 16: '........moqbffqqqm......', 17: '.......myqqbffqqqm......', 18: '.......moqqbffqqqm......' },
+    { 0: '.....hhh....abcde.......', 1: '....hnrwh.aabffe........', 2: '....hrzuhagggffe..m.....', 3: '....hwuxhhAzcffe.mom....', 4: '.....aca.hzBcffe.mnm....', 5: '......acaabcgffemom.....', 6: '.......acagfffdmom......', 7: '.......agaaadalmnm......', 8: '.......aggcgnnopnm......', 10: '........lyncffonm.......', 11: '........loqbffoqm.......', 12: '........loqbffqqqm......', 13: '........loqbffqqqm......', 14: '........moqbffqqqm......', 15: '........moqbffqqqm......', 16: '........moqbffqqqm......', 17: '........moqbffqqqm......', 18: '........moqbffoqqqm.....', 19: '........moqbffoqqqm.....', 20: '........moqbfdoqqqm.....', 21: '........mnqqnqqqqqm.....', 22: '.........mmmmmmmmm......' },
+    { 0: '.....hhh....abcde.......', 1: '....hnrwh.aabffe........', 2: '....hrzuhagggffe..m.....', 3: '....hwuxhhAzcffe.mom....', 4: '.....aca.hzBcffe.mnm....', 5: '......acaabcgffemom.....', 6: '.......acagfffdmom......', 7: '.......agaaadalmnm......', 8: '.......aggcgnnopnm......', 10: '........lyncfionm.......', 11: '........loqbffoqm.......', 12: '........loqbffqqqm......', 13: '........loqbffqqqm......', 14: '........moqbffqqqm......', 15: '........moqbffqiqm......', 16: '........moqbffqqqm......', 17: '.......myqqbffqqqm......', 18: '.......moqqbffqqqm......' },
+  ],
+  groups: { idle: [0, 3, 1.4], walk: [3, 4, 0.62], attack: [7, 2, 0.5], hurt: [9, 1, 0.2] },
+};
+
+export const KAV_MOBS = { conductor: CONDUCTOR, prism: PRISM, reclaimer: RECLAIMER, archivist: ARCHIVIST };

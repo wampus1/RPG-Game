@@ -370,7 +370,6 @@ test('the holdout\'s chiefs are all painted by hand, every part in place', () =>
 
 test('the version and its step', () => {
   assert.ok(compareVersions(GAME_VERSION, '0.98.0') >= 0);
-  assert.equal(GAME_VERSION, '0.98.0');
   const steps = stepsFor('0.97.0');
   assert.ok(steps.some((s) => s.to === '0.98.0'));
 });

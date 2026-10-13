@@ -948,3 +948,35 @@ def('plunder_ledger', { ...sprite, solid: true, interact: 'lore', hardness: Infi
 def('loot_throne', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Throne of Loot' });
 def('hold_lantern', { ...sprite, tall: true, solid: true, light: 11, hardness: Infinity, drop: null, label: 'Lantern Post' });
 def('dog_bones', { ...sprite, solid: false, hardness: 0.2, drop: [{ item: 'bone', chance: 0.6 }], label: 'Gnawed Bones' });
+
+// (Round 99) The Kavorent made over (see world/deeps/kavorent.js): its
+// alloy (drawn afresh: a precise panel with its seam of light), a wall of
+// it failed and cracked, the cradle's wall of the sleepers' names, a
+// viewport onto the works; a plate with a node of light let in, the hall's
+// inlay, a grate over a channel, the dais and its steps, a bed of cables in
+// a sunk channel; and what's set about in it: the sleepers' pods (sealed,
+// open, broken), a construct's cradle, the orrery, a railing, a coolant
+// tank, the sentinel lens, a sealed crate, the Choir's crystal, the memory
+// well and its glyph pillars. Last of all, so no block before them changes
+// its number.
+def('kav_failed', { hardness: Infinity, drop: null, label: 'Failed Alloy' });
+def('kav_mural', { interact: 'lore', hardness: Infinity, drop: null, light: 2, label: 'The Names' });
+def('kav_viewport', { hardness: Infinity, drop: null, light: 3, label: 'Viewport' });
+def('kav_node_floor', { hardness: Infinity, drop: null, light: 4, label: 'Lit Plate' });
+def('kav_inlay', { hardness: Infinity, drop: null, light: 2, label: 'Inlaid Floor' });
+def('kav_grate', { hardness: Infinity, drop: null, light: 3, label: 'Grate' });
+def('kav_dais', { hardness: Infinity, drop: null, label: 'Dais' });
+def('kav_steps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'kav_dais', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Steps' });
+def('kav_cables', { hardness: Infinity, drop: null, light: 4, label: 'Cables' });
+def('kav_pod', { ...sprite, tall: true, solid: true, interact: 'lore', light: 4, hardness: Infinity, drop: null, label: 'Sleeper\'s Pod' });
+def('kav_pod_open', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Empty Pod' });
+def('kav_pod_broken', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Broken Pod' });
+def('kav_cradle', { ...sprite, tall: true, solid: true, light: 3, hardness: Infinity, drop: null, label: 'Construct Cradle' });
+def('kav_orrery', { ...sprite, tall: true, solid: true, interact: 'lore', light: 6, hardness: Infinity, drop: null, label: 'Orrery' });
+def('kav_rail', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Railing' });
+def('kav_tank', { ...sprite, tall: true, solid: true, light: 6, hardness: Infinity, drop: null, label: 'Coolant Tank' });
+def('kav_lens', { ...sprite, tall: true, solid: true, light: 4, tool: 'pick', hardness: 4, drop: [{ item: 'kav_scrap', chance: 0.6 }], label: 'Sentinel Lens' });
+def('kav_crate', { ...sprite, solid: true, interact: 'lore', tool: 'pick', hardness: 3, drop: [{ item: 'kav_scrap', chance: 0.7, min: 1, max: 2 }], label: 'Sealed Crate' });
+def('kav_shards', { ...sprite, solid: false, tool: 'pick', light: 5, hardness: 0.8, drop: [{ item: 'kav_scrap', chance: 0.2 }], label: 'Choir Crystal' });
+def('kav_well', { ...sprite, tall: true, solid: true, interact: 'kav_well', light: 11, hardness: Infinity, drop: null, label: 'Memory Well' });
+def('kav_glyph', { ...sprite, solid: true, rotatable: true, interact: 'kav_glyph', light: 3, hardness: Infinity, drop: null, label: 'Glyph Pillar' });

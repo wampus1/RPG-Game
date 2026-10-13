@@ -9,6 +9,7 @@ import { barrowTop, barrowFront, BARROW_SPRITES, BARROW_ANIM, barrowFlat } from 
 import { mineTop, mineFront, MINE_SPRITES, MINE_ANIM, mineFlat } from './art/mine_tex.js';
 import { cryptTop, cryptFront, CRYPT_SPRITES, CRYPT_ANIM, cryptFlat } from './art/crypt_tex.js';
 import { holdTop, holdFront, HOLD_SPRITES, HOLD_ANIM, holdFlat } from './art/hold_tex.js';
+import { kavTop, kavFront, KAV_SPRITES, KAV_ANIM } from './art/kav_tex.js';
 
 const TALL = 40;
 const KAV = { dark: '#1c1a2a', plate: '#2a2840', edge: '#3c3a58', seam: '#5ad8f0', glow: '#a8f4ff', rune: '#7ae0ff', deep: '#0e0c18' };
@@ -25,7 +26,7 @@ function massTop(p, pal, rand, bits = null) {
 // --- cube tops ----------------------------------------------------------------
 export function dungeonTop(name, v, rand) {
   // (Round 95: the barrow's own, drawn by hand: see art/barrow_tex.js.)
-  const own = barrowTop(name, v, rand) || mineTop(name, v, rand) || cryptTop(name, v) || holdTop(name, v);
+  const own = barrowTop(name, v, rand) || mineTop(name, v, rand) || cryptTop(name, v) || holdTop(name, v) || kavTop(name, v);
   if (own) return own;
   const p = new Px(16, 16);
   switch (name) {
@@ -163,7 +164,7 @@ export function dungeonTop(name, v, rand) {
       }
       return p;
     }
-    case 'kav_pillar': case 'kav_wall': case 'kav_keystone': {
+    case 'kav_keystone': {
       p.fill(KAV.plate);
       // Panels: a fine grid of seams, a dim etched hex here and there.
       for (let i = 0; i < 16; i++) {
@@ -173,7 +174,6 @@ export function dungeonTop(name, v, rand) {
       p.hline(1, 15, 8, KAV.dark);
       p.vline(8, 1, 15, KAV.dark);
       if (v % 2 === 0) for (const [x, y] of [[3, 3], [4, 3], [5, 4], [4, 5], [3, 5], [2, 4]]) p.set(x + 8 * (v >> 1), y, '#3e3c5e');
-      if (name === 'kav_wall' && v === 3) randomWalk(p, rand, 4, 4, 9, KAV.deep);
       return p;
     }
     case 'blight_floor': {
@@ -196,20 +196,6 @@ export function dungeonTop(name, v, rand) {
       if (v % 2 === 0) p.set(3 + rand() * 10, 3 + rand() * 10, '#d090ff');
       return p;
     }
-    case 'kav_floor': {
-      p.fill('#24223a');
-      // Hexagonal tiles, their seams faintly alight.
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-        const row = Math.floor(y / 4);
-        const xx = (x + (row % 2) * 4) % 8;
-        if (y % 4 === 0 || xx === 0) p.set(x, y, '#2e2c4c');
-      }
-      if (v === 0) {
-        p.set(4, 4, KAV.seam);
-        p.set(12, 8, '#3a8aa0');
-      }
-      return p;
-    }
     case 'kav_coolant': {
       // Frozen coolant, frost-white at its rim, a cold blue core.
       p.fill('#7ac8e8');
@@ -219,35 +205,6 @@ export function dungeonTop(name, v, rand) {
       for (let i = 0; i < 16; i++) {
         p.set(i, 0, '#e0f8ff');
         p.set(0, i, '#e0f8ff');
-      }
-      return p;
-    }
-    case 'kav_glow': {
-      p.fill(KAV.plate);
-      p.rect(0, 7, 16, 2, KAV.seam);
-      p.hline(0, 15, 7, KAV.glow);
-      p.hline(0, 15, 6, '#3a6a80');
-      p.hline(0, 15, 9, '#3a6a80');
-      return p;
-    }
-    case 'kav_lift': {
-      p.fill('#24223a');
-      p.ellipse(8, 8, 7, 7, '#3a3858');
-      p.ellipse(8, 8, 6, 6, '#2a2840');
-      for (let a = 0; a < 24; a++) {
-        const t = (a / 24) * Math.PI * 2;
-        p.set(8 + Math.cos(t) * 6.5, 8 + Math.sin(t) * 6.5, a % 3 ? KAV.seam : KAV.glow);
-      }
-      p.rect(7, 7, 2, 2, KAV.seam);
-      return p;
-    }
-    case 'kav_debris': {
-      speckle(p, ['#2a2840', '#1c1a2a', '#3a3858'], rand, 0.4);
-      for (let i = 0; i < 4; i++) {
-        const x = rand() * 12;
-        const y = rand() * 12;
-        p.line(x, y, x + 3, y + 1, '#4a4868');
-        p.set(x + 1, y, '#5ad8f0');
       }
       return p;
     }
@@ -263,7 +220,7 @@ export function dungeonTop(name, v, rand) {
 
 // --- cube fronts (the wall faces you see) --------------------------------------
 export function dungeonFront(name, v, rand, rot) {
-  const own = barrowFront(name, v, rand) || mineFront(name, v, rand) || cryptFront(name, v) || holdFront(name, v);
+  const own = barrowFront(name, v, rand) || mineFront(name, v, rand) || cryptFront(name, v) || holdFront(name, v) || kavFront(name, v);
   if (own) return own;
   const p = new Px(16, LH);
   switch (name) {
@@ -377,19 +334,6 @@ export function dungeonFront(name, v, rand, rot) {
       p.set(7, 10, KAV.seam);
       return p;
     }
-    case 'kav_pillar': case 'kav_wall': {
-      p.fill(KAV.plate);
-      // Tall panels with a thin seam of cold light between them.
-      const sx = v % 2 ? 7 : 11;
-      p.vline(sx, 0, LH - 1, KAV.dark);
-      p.vline(sx + 1, 1, LH - 2, v === 0 ? KAV.seam : '#2e5a6a');
-      p.hline(0, 15, 0, KAV.edge);
-      p.hline(0, 15, LH - 1, KAV.deep);
-      p.set(2, 2, '#4a4870');
-      p.set(14, 2, '#4a4870');
-      if (name === 'kav_wall' && v === 3) randomWalk(p, rand, 3, 2, 8, KAV.deep);
-      return p;
-    }
     case 'blight_wall': {
       p.fill('#2a2236');
       p.hline(0, 15, 0, '#3e3254');
@@ -410,12 +354,6 @@ export function dungeonFront(name, v, rand, rot) {
       p.hline(0, 15, 0, '#3a2a52');
       p.hline(0, 15, LH - 1, '#140e1c');
       return p;
-    case 'kav_floor': case 'kav_lift': case 'kav_debris':
-      p.fill('#24223a');
-      p.hline(0, 15, 0, KAV.edge);
-      p.hline(0, 15, LH - 1, KAV.deep);
-      if (name === 'kav_lift') p.hline(2, 13, 4, KAV.seam);
-      return p;
     case 'kav_coolant':
       // Banded ice over alloy: frost running down it.
       p.fill('#6ab8dc');
@@ -429,12 +367,6 @@ export function dungeonFront(name, v, rand, rot) {
       }
       p.hline(0, 15, 0, '#ffffff');
       p.hline(0, 15, LH - 1, '#3a7aa0');
-      return p;
-    case 'kav_glow':
-      p.fill(KAV.plate);
-      p.rect(0, 4, 16, 3, KAV.seam);
-      p.hline(0, 15, 5, KAV.glow);
-      p.hline(0, 15, 0, KAV.edge);
       return p;
     case 'kav_emitter':
       p.fill(KAV.plate);
@@ -700,28 +632,6 @@ export const DSPRITES = {
     }
     return p;
   },
-  kav_console(rot, st, f) {
-    const p = spr();
-    p.rect(5, 16, 6, 10, KAV.plate);
-    p.vline(5, 16, 25, KAV.edge);
-    p.rect(2, 10, 12, 7, KAV.dark);
-    p.rect(3, 11, 10, 5, st ? '#1a4a3a' : '#0e2a38');
-    // The glyphs on its face, scrolling.
-    for (let i = 0; i < 6; i++) p.set(4 + ((i * 3 + f) % 9), 12 + (i % 3), st ? '#7affb0' : KAV.rune);
-    return p.outline(OUT);
-  },
-  kav_node(rot, st, f) {
-    const p = spr();
-    p.rect(4, 22, 8, 4, KAV.plate);
-    p.hline(4, 11, 22, KAV.edge);
-    const c = st ? ['#c8fff0', '#5af0c8', '#2a8a7a'] : ['#5a7a88', '#3a5060', '#2a3440'];
-    const h = f % 2 ? 0 : 1;
-    p.rect(6, 10 + h, 4, 12 - h, c[1]);
-    p.rect(7, 8 + h, 2, 3, c[0]);
-    p.vline(6, 10 + h, 21, c[2]);
-    if (st) p.set(8, 7 + h, '#ffffff');
-    return p.outline(OUT);
-  },
   kav_seal(rot, st, f) {
     const p = spr(TALL);
     p.rect(0, 2, 16, 38, KAV.plate);
@@ -733,55 +643,6 @@ export const DSPRITES = {
       p.set(8 + Math.cos(t) * 4.5, 20 + Math.sin(t) * 4.5, a % 2 ? KAV.seam : KAV.glow);
     }
     p.rect(7, 19, 3, 3, KAV.rune);
-    return p.outline(OUT);
-  },
-  kav_cache(rot, st) {
-    const p = spr();
-    p.rect(2, 14, 12, 12, KAV.plate);
-    p.rect(2, 12, 12, 3, st ? KAV.dark : '#3a3858');
-    p.hline(2, 13, 12, KAV.edge);
-    p.hline(2, 13, 18, KAV.seam);
-    p.rect(7, 16, 2, 4, KAV.glow);
-    return p.outline(OUT);
-  },
-  // A realm's coldfire lamp: a slim alloy post, a lens of cold light on top
-  // that breathes slowly.
-  kav_lamp(rot, st, f) {
-    const p = spr(TALL);
-    p.rect(7, 12, 2, 28, KAV.plate);
-    p.vline(7, 12, 39, KAV.edge);
-    p.rect(5, 36, 6, 4, KAV.dark);
-    p.hline(5, 10, 36, KAV.edge);
-    const g = [KAV.glow, '#c8fbff', KAV.glow, KAV.seam][f % 4];
-    p.rect(5, 4, 6, 8, KAV.dark);
-    p.rect(6, 5, 4, 6, g);
-    p.set(7, 6, '#ffffff');
-    p.hline(4, 11, 3, KAV.plate);
-    p.hline(4, 11, 12, KAV.plate);
-    return p.outline(OUT);
-  },
-  // A ward pylon: three tapering alloy blades round a core that crackles.
-  kav_pylon(rot, st, f) {
-    const p = spr(TALL);
-    for (let y = 8; y < 40; y++) {
-      const w = Math.round(1 + (y - 8) / 10);
-      p.hline(3, 3 + w, y, KAV.plate);
-      p.hline(12 - w, 12, y, KAV.plate);
-    }
-    p.rect(6, 4, 4, 34, KAV.dark);
-    p.vline(8, 6, 36, f % 2 ? KAV.glow : KAV.seam);
-    p.rect(6, 2, 4, 4, f % 2 ? '#ffffff' : KAV.glow);
-    for (let i = 0; i < 3; i++) p.set(5 + ((f + i * 3) % 6), 10 + i * 9, KAV.rune);
-    return p.outline(OUT);
-  },
-  // The mending spring: a low basin of alloy brimming with light.
-  kav_basin(rot, st, f) {
-    const p = spr();
-    p.rect(1, 18, 14, 8, KAV.plate);
-    p.hline(1, 14, 18, KAV.edge);
-    p.rect(2, 16, 12, 3, KAV.dark);
-    for (let x = 3; x < 13; x++) p.set(x, 17, (x + f) % 3 ? KAV.glow : '#ffffff');
-    for (let i = 0; i < 3; i++) p.set(4 + ((i * 4 + f * 2) % 9), 12 - ((f + i) % 4), '#c8fbff');
     return p.outline(OUT);
   },
   relic(rot, st, f) {
@@ -1175,121 +1036,9 @@ Object.assign(DSPRITES, {
     return p.outline(OUT);
   },
 });
-// A Kavorent hall's dressing (its light the floor's own colour: see
-// Renderer.kavAtlasFor).
-const GLYPH = [0b101010111, 0b111001111, 0b010111010, 0b110011100, 0b100111001, 0b011101110, 0b111100001, 0b001111100];
+// (Round 99: a Kavorent hall's dressing is painted by hand now: see
+// art/kav_tex.js.)
 Object.assign(DSPRITES, {
-  // A sentinel: a hooded figure of alloy twice your height on a plinth,
-  // hands on the pommel of a blade of light, a visor that smoulders.
-  kav_statue(rot, st, f) {
-    const p = spr(TALL);
-    p.rect(1, 34, 14, 6, KAV.dark);
-    p.hline(1, 14, 34, KAV.edge);
-    p.hline(2, 13, 37, f % 2 ? KAV.glow : KAV.seam);
-    for (let y = 12; y < 34; y++) {
-      const w = 3 + Math.floor((y - 12) / 6);
-      p.hline(8 - w, 7 + w, y, KAV.plate);
-      p.set(8 - w, y, KAV.edge);
-      p.set(7 + w, y, KAV.deep);
-    }
-    p.vline(5, 20, 33, KAV.dark);
-    p.vline(11, 22, 33, KAV.dark);
-    p.rect(2, 10, 4, 4, KAV.edge);
-    p.rect(10, 10, 4, 4, KAV.plate);
-    p.hline(2, 5, 10, '#5a5878');
-    p.rect(5, 2, 6, 9, KAV.plate);
-    p.hline(6, 9, 1, KAV.plate);
-    p.vline(5, 2, 10, KAV.edge);
-    p.rect(6, 4, 4, 5, KAV.deep);
-    p.hline(6, 9, 6, f % 2 ? '#ffffff' : KAV.glow);
-    // The blade, point down, and the hands on it.
-    p.vline(8, 17, 33, KAV.glow);
-    p.vline(7, 18, 32, KAV.seam);
-    p.hline(5, 10, 16, KAV.edge);
-    p.rect(6, 13, 4, 3, KAV.edge);
-    p.hline(6, 9, 13, '#5a5878');
-    return p.outline(OUT);
-  },
-  // A monolith of black glass, glyphs crawling up it.
-  kav_monolith(rot, st, f) {
-    const p = spr(TALL);
-    p.rect(2, 5, 12, 35, KAV.deep);
-    p.hline(3, 12, 4, KAV.deep);
-    p.hline(5, 10, 3, KAV.deep);
-    p.hline(7, 8, 2, KAV.seam);
-    p.vline(2, 5, 39, KAV.edge);
-    p.vline(3, 4, 39, KAV.dark);
-    p.vline(13, 5, 39, '#08060e');
-    // (A wave of light climbing through them.)
-    for (let k = 0; k < 6; k++) {
-      const y = 33 - k * 5;
-      const g = GLYPH[(k * 3 + rot) % GLYPH.length];
-      const c = k % 4 === f % 4 ? '#ffffff' : (k + 1) % 4 === f % 4 ? KAV.glow : k % 2 ? KAV.rune : KAV.seam;
-      for (let i = 0; i < 9; i++) if (g & (1 << i)) p.set(6 + (i % 3), y + Math.floor(i / 3), c);
-      if (k % 3 === 0) p.set(10, y + 1, KAV.seam);
-    }
-    p.hline(2, 13, 39, KAV.plate);
-    return p.outline(OUT);
-  },
-  // A light-screen: a projector throwing a turning glyph into the air.
-  kav_holo(rot, st, f) {
-    const p = spr(TALL);
-    p.rect(3, 34, 10, 6, KAV.plate);
-    p.hline(3, 12, 34, KAV.edge);
-    p.rect(5, 32, 6, 2, KAV.dark);
-    p.hline(6, 9, 32, KAV.glow);
-    // The beam, thin as gauze.
-    for (let y = 8; y < 32; y++) {
-      const w = Math.round((y - 8) / 6);
-      for (let x = 7 - w; x <= 8 + w; x++) if ((x + y + f) % 3 === 0) p.set(x, y, KAV.seam);
-    }
-    // The glyph, turning (it narrows edge-on) and flickering.
-    const wid = [5, 3, 1, 3][f % 4];
-    p.rect(8 - wid, 3, wid * 2, 10, f === 2 ? KAV.seam : KAV.glow);
-    p.rect(9 - wid, 4, Math.max(0, wid * 2 - 2), 8, KAV.rune);
-    if (wid > 1) {
-      p.hline(9 - wid, 6 + wid, 6, '#ffffff');
-      p.hline(9 - wid, 6 + wid, 9, KAV.seam);
-    }
-    return p.outline(OUT);
-  },
-  // A bundle of conduits on squat feet, pulses of light running along it.
-  kav_conduit(rot, st, f) {
-    const p = spr();
-    const side = rot % 2 === 1;
-    p.rect(2, 22, 3, 6, KAV.dark);
-    p.rect(11, 22, 3, 6, KAV.dark);
-    for (let i = 0; i < 3; i++) {
-      const y = 14 + i * 3;
-      p.rect(0, y, 16, 3, i === 1 ? KAV.dark : KAV.plate);
-      p.hline(0, 15, y, KAV.edge);
-      const x = side ? (f * 5 + i * 6) % 16 : 15 - ((f * 5 + i * 6) % 16);
-      p.set(x, y + 1, '#ffffff');
-      p.set((x + 15) % 16, y + 1, KAV.glow);
-      p.set((x + 14) % 16, y + 1, KAV.seam);
-    }
-    p.rect(6, 12, 4, 13, KAV.edge);
-    p.rect(7, 13, 2, 11, KAV.deep);
-    p.set(7, 15 + (f % 4) * 2, KAV.glow);
-    return p.outline(OUT);
-  },
-  // What's left of a construct: a carapace slumped on its side, cables
-  // spilling out, and an eye that hasn't quite gone out.
-  kav_husk(rot, st, f) {
-    const p = spr();
-    const fl = rot % 2 ? -1 : 1;
-    const X = (x) => (fl > 0 ? x : 15 - x);
-    p.ellipse(X(9), 21, 6, 4, KAV.plate);
-    p.ellipse(X(9), 20, 5, 2, KAV.edge);
-    p.ellipse(X(4), 23, 3, 3, KAV.dark);
-    p.set(X(4), 23, f % 4 === 0 ? '#ffffff' : f % 2 ? KAV.glow : KAV.deep);
-    p.line(X(13), 24, X(15), 27, KAV.dark);
-    p.line(X(11), 25, X(12), 27, KAV.edge);
-    p.line(X(6), 18, X(3), 15, KAV.dark);
-    p.set(X(3), 15, f === 1 ? KAV.glow : KAV.edge);
-    p.line(X(9), 24, X(7), 27, '#5a5878');
-    return p.outline(OUT);
-  },
   // Your pack, tipped over where you fell, things spilling from it, a
   // glint to find it by in the dark.
   satchel(rot, st, f) {
@@ -1345,16 +1094,6 @@ Object.assign(DSPRITES, {
     p.rect(7, 17, 2, 3, st ? (f % 2 ? '#ffc040' : '#ffe8a0') : STONE[1]);
     return p.outline(OUT);
   },
-  // A vent in the floor, something glowing under its slats.
-  kav_vent(rot, st, f) {
-    const p = spr();
-    p.rect(2, 16, 12, 9, KAV.dark);
-    p.rect(3, 17, 10, 7, f % 2 ? KAV.seam : '#2a8aa8');
-    for (let y = 17; y < 24; y += 2) p.hline(2, 13, y, KAV.edge);
-    p.hline(2, 13, 16, KAV.plate);
-    p.hline(2, 13, 25, KAV.deep);
-    return p;
-  },
 });
-Object.assign(DSPRITES, BARROW_SPRITES, MINE_SPRITES, CRYPT_SPRITES, HOLD_SPRITES);
-export const DANIM = { ...BARROW_ANIM, ...MINE_ANIM, ...CRYPT_ANIM, ...HOLD_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2 };
+Object.assign(DSPRITES, BARROW_SPRITES, MINE_SPRITES, CRYPT_SPRITES, HOLD_SPRITES, KAV_SPRITES);
+export const DANIM = { ...BARROW_ANIM, ...MINE_ANIM, ...CRYPT_ANIM, ...HOLD_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2, ...KAV_ANIM };
