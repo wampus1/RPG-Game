@@ -17,6 +17,7 @@
 import { B } from './blocks.js';
 import { FAR_DSTYLE, FAR_BOSSES, FAR_BOSS_HP, FAR_BOSS_DMG, FAR_BOSS_TEMPO, FAR_TYPE_LORE } from './fardeep.js';
 import { ANCIENT_LORE } from './ancient.js';
+import { GROVE_ARCH } from './deeps/grove.js';
 
 // Where you begin (inside the storm wall, washed up on its beach).
 export const HOME_ISLE = 'thessa';
@@ -101,14 +102,17 @@ export const ISLE_DTYPES = {
   // trunks, rooted walls, moss and glowcaps, briars, springs; what lives
   // in the wood lives down there, and some of it bigger.
   grove: {
-    name: 'Wildwood Hollow', isle: 'thessa', wall: B.root_wall, floor: B.moss, alt: B.dirt, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Wildwood Hollow', isle: 'thessa', wall: B.gr_roots, floor: B.gr_moss, alt: B.gr_litter, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['glade', 'thicket', 'burrow', 'spring', 'glade', 'thicket', 'collapsed', 'shrine', 'trap', 'treasure'],
-    mobs: [['thornling', 4], ['wolf', 2], ['moth', 2], ['wisp', 2], ['crawler', 1]],
-    swap: { skeleton: ['thornling'], wight: ['thornling'], drowned: ['thornling'], ghoul: ['wolf'] },
+    mobs: [['thornling', 4], ['woodwose', 2], ['wolf', 2], ['drowsebloom', 1], ['glimmer', 1], ['delver', 1], ['moth', 1], ['wisp', 1]],
+    swap: { skeleton: ['thornling'], wight: ['woodwose'], drowned: ['thornling'], ghoul: ['wolf'], crawler: ['delver'], skel_captain: ['woodwose'] },
     bosses: ['thorn_queen', 'elder_stag', 'hollow_oak'], torches: 0.08,
-    shapes: { round: 4, cave: 4, ell: 1 }, wiggle: 1.2, decor: [['roots', 4], ['glowshroom', 3], ['briar', 2], ['stalagmite', 1]],
+    shapes: { round: 4, cave: 4, ell: 1 }, wiggle: 1.2, decor: [['gr_glowcaps', 4], ['gr_fern', 3], ['gr_rootcurtain', 2], ['gr_boulder', 1]],
     dark: [0.06, 0.09, 0.05], motes: ['#c8f080', '#f0ffc0'], ambient: ['wind_low', 'owl', 'drip', 'whisper'],
-    loot: [['herb', 1, 3, 0.5], ['berries', 1, 3, 0.4], ['mushroom', 1, 2, 0.3], ['longbow', 1, 1, 0.05]],
+    loot: [['herb', 1, 3, 0.5], ['berries', 1, 3, 0.4], ['mushroom', 1, 2, 0.3], ['honeycomb', 1, 2, 0.25], ['longbow', 1, 1, 0.05]],
+    // (Round 100: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/grove.js.)
+    arch: GROVE_ARCH,
   },
   // The forges of the old Kiln-Kings of Kharos, dug into the mountain:
   // halls of basalt brick, slag underfoot, channels of lava let through

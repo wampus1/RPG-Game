@@ -980,3 +980,54 @@ def('kav_crate', { ...sprite, solid: true, interact: 'lore', tool: 'pick', hardn
 def('kav_shards', { ...sprite, solid: false, tool: 'pick', light: 5, hardness: 0.8, drop: [{ item: 'kav_scrap', chance: 0.2 }], label: 'Choir Crystal' });
 def('kav_well', { ...sprite, tall: true, solid: true, interact: 'kav_well', light: 11, hardness: Infinity, drop: null, label: 'Memory Well' });
 def('kav_glyph', { ...sprite, solid: true, rotatable: true, interact: 'kav_glyph', light: 3, hardness: Infinity, drop: null, label: 'Glyph Pillar' });
+
+// (Round 100) The Wildwood Hollow made over (see world/deeps/grove.js): its
+// wall of living roots (with a shelf of glowcaps, of bare earth, the Green
+// Man the Keepers cut, one of the Kept grown into the bark, a knothole with
+// eyes in it, and a door of roots the hob draws back), a bank of earth held
+// by roots and the root-steps up it; its floors (moss, leaf litter, a worn
+// path, the Keepers' flags, leaf mould, a bed of earth in the sun); roots
+// lying across the floor, and the snare among them; and what's set about in
+// it: glowcaps, the toadstools of a fairy ring, ferns, bluebells, a curtain
+// of roots, the rag-root, the offering stone, an antler post, the rule-
+// stone, one of the Kept standing, a puffball, a hornets' nest, a fallen
+// log, the woodcutter's stump and camp, a shaft of daylight, the sun-seed
+// and what it grows, a ladder of roots, a boulder. Last of all, so no block
+// before them changes its number.
+def('gr_roots', { tool: 'axe', hardness: Infinity, drop: null, label: 'Living Roots' });
+def('gr_glowshelf', { hardness: Infinity, drop: null, light: 5, label: 'Glowcap Shelf' });
+def('gr_earth', { hardness: Infinity, drop: null, label: 'Earth' });
+def('gr_greenman', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Green Man' });
+def('gr_kept', { interact: 'lore', hardness: Infinity, drop: null, label: 'One of the Kept' });
+def('gr_knot', { hardness: Infinity, drop: null, light: 1, label: 'Knothole' });
+def('gr_rootdoor', { hardness: Infinity, drop: null, label: 'Living Roots' });
+def('gr_bank', { hardness: Infinity, drop: null, label: 'Bank' });
+def('gr_banksteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'gr_bank', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Root-Steps' });
+def('gr_moss', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Moss' });
+def('gr_litter', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Leaf Litter' });
+def('gr_worn', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Path' });
+def('gr_flags', { hardness: Infinity, drop: null, label: 'Mossy Flags' });
+def('gr_mould', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Leaf Mould' });
+def('gr_sunbed', { interact: 'gr_sunbed', hardness: Infinity, drop: null, light: 6, label: 'Bed of Earth' });
+def('gr_rootflat', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, tool: 'axe', hardness: 0.6, drop: [{ item: 'stick', chance: 0.5 }], label: 'Roots' });
+def('gr_snare', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, tool: 'axe', hardness: 0.6, drop: [{ item: 'stick', chance: 0.5 }], label: 'Roots' });
+def('gr_glowcaps', { ...dressing, rotatable: true, hardness: 0.05, light: 6, drop: [{ item: 'glowcap', chance: 0.5 }], label: 'Glowcaps' });
+def('gr_toadstool', { ...dressing, rotatable: true, hardness: 0.05, light: 1, drop: null, label: 'Toadstools' });
+def('gr_fern', { ...dressing, rotatable: true, hardness: 0.05, drop: null, label: 'Fern' });
+def('gr_bluebells', { ...dressing, rotatable: true, hardness: 0.05, drop: null, label: 'Bluebells' });
+def('gr_rootcurtain', { ...dressing, tall: true, rotatable: true, tool: 'axe', hardness: 0.2, drop: [{ item: 'stick', chance: 0.5 }], label: 'Hanging Roots' });
+def('gr_ragroot', { ...sprite, tall: true, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Rag-Root' });
+def('gr_offering', { ...sprite, solid: true, interact: 'gr_offering', hardness: Infinity, drop: null, label: 'Offering Stone' });
+def('gr_antlerpost', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Antler Post' });
+def('gr_rulestone', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Rule-Stone' });
+def('gr_keptroot', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'One of the Kept' });
+def('gr_puffball', { ...dressing, hardness: 0.1, drop: null, label: 'Puffball' });
+def('gr_hornets', { ...dressing, tall: true, hardness: 0.1, drop: [{ item: 'honeycomb', chance: 0.7, min: 1, max: 2 }], label: 'Hornets\' Nest' });
+def('gr_log', { ...sprite, solid: true, rotatable: true, tool: 'axe', hardness: 3, drop: [{ item: 'log_oak', chance: 0.6 }], label: 'Fallen Log' });
+def('gr_stump', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Notched Stump' });
+def('gr_camp', { ...dressing, interact: 'lore', hardness: Infinity, drop: null, label: 'A Last Camp' });
+def('gr_sunbeam', { ...dressing, tall: true, interact: 'gr_sunbed', hardness: Infinity, light: 10, drop: null, label: 'Daylight' });
+def('gr_seedpod', { ...dressing, interact: 'gr_seedpod', hardness: Infinity, light: 4, drop: null, label: 'Seed Pod' });
+def('gr_sprout', { ...dressing, hardness: Infinity, light: 3, drop: null, label: 'Shoot' });
+def('gr_rootladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder of Roots' });
+def('gr_boulder', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Mossy Boulder' });

@@ -42,6 +42,7 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { packLabel, DungeonRun, DUNGEON_INTERACTS, ownerName } from './dungeon.js';
 import { propBroken } from './minework.js';
+import { groveBroken } from './grovework.js';
 import { cellDoor as holdCellDoor } from './holdwork.js';
 import { startIntro } from './cutscene.js';
 import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
@@ -3951,6 +3952,8 @@ export class Game {
     if (id === B.powder_keg) kegBlast(this, x, y, z);
     // (Round 96: a cracked prop taken down brings the roof with it.)
     if (id === B.cracked_prop) propBroken(this, x, y, z);
+    // (Round 100: a hornets' nest split, a puffball burst, a ring broken.)
+    if (id === B.gr_hornets || id === B.gr_puffball || id === B.gr_toadstool) groveBroken(this, x, y, z, id);
     this.popUnsupported(x, y + 1, z);
     this.popHung(x, y, z);
     if ((b.interact === 'container' || b.display) && this.myChests) notePlaced(this, x, y, z, false);

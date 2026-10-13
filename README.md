@@ -7047,6 +7047,152 @@ gallery along a hall's side, channels sunk in the floor.
     on legs of stone. Its fists are anvils, and its shoulder-stones float
     off it on their own.
 
+## Round 100: The Wildwood Hollow, made over
+
+The sixth of the dungeon overhauls. Every other deep was dug or built; a
+Wildwood Hollow was grown. It is the hollow under the oldest trees near a
+town on Thessa, and it belongs to someone (the Green Lady, the
+Oak-Father, the Antlered One, the Briar Maid, Old Hob of the Wood). The
+town stopped going in long ago, because what goes in is kept. It should
+be the most beautiful place you go under the ground: soft moss, ferns,
+glowcaps lighting the dark green and gold, pollen drifting, a shaft of
+real daylight falling through the roots. Then it's wrong. The roots have
+faces. There are people in the walls. There's milk in a bowl, and a ring
+of toadstools nobody should step in. Its floors are cramped and layered:
+round hollows joined by root tunnels, banks a step or two up held by
+roots, dells sunk a step.
+
+- **Drawn afresh.** Every Hollow tile and thing is painted by hand:
+  - **The walls.** Living root over dark earth, the strands fine and many,
+    with dim roots across the tops. Faces with shelves of glowing fungus,
+    bare earth, a knot, the Green Man cut in the root, one of the Kept
+    grown into the bark, and a door of living roots.
+  - **The floors.** Soft moss, leaf litter, a path worn through the moss,
+    the Keepers' mossy flags, sunk leaf-mould, a bank of earth and its
+    root-steps, and a bed of turned earth in the daylight. Roots and snare
+    roots lie across the floor.
+  - **The things set about.** Glowcaps, toadstools, ferns, bluebells,
+    hanging root curtains, the rag-root, the offering stone and its bowl,
+    antler-posts hung with bone chimes, the rule-stone, the Kept, puffballs,
+    a hornets' nest, fallen logs, a notched stump, a dead camp, the shaft
+    of daylight, the sun-seed's pod and its sprout, roots grown up a bank
+    as a ladder, and mossy boulders.
+- **Rooms a Hollow has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/grove.js`), beside its old rooms (the glade, the
+  thicket, the burrow, the spring, the collapsed room, the shrine, the
+  trapped and treasure rooms, which are now set about with the Hollow's
+  own things):
+  - **The hollow.** The inside of a great trunk, with a bank round its
+    back half climbed by root-steps, root pillars, and things kept up on
+    the bank.
+  - **The rootway.** A long passage under hanging roots, with snare roots
+    across it and a delver under the floor. The wolves hunt it.
+  - **The dell.** A sunk bowl of leaf-mould with water at its heart, a
+    drowsebloom on its rim, thornlings in it, and a delver under it.
+  - **The keepers' shrine.** The Keepers' flags, the Green Man, the
+    rule-stone, antler-posts, and the offering stone with its hob. Behind
+    a door of living roots, what they keep.
+  - **The hall of the Kept.** The people of the town grown into its walls,
+    each named. Some stand out from the wall, and one or two of those are
+    awake.
+  - **The sunwell.** A shaft of daylight falls onto a bed of earth in
+    front of a bank two high, with a chest on top that you can't reach.
+  - **The woodcutters' camp.** A notched stump, a dead fire and bedroll, a
+    fallen log, a hornets' nest overhead, and thornlings.
+  - **The ring's glade.** A glade with an old ring of toadstools has a
+    glade of its own, sealed off from the rest of the floor, with a chest,
+    glowcaps and bluebells in it.
+- **Its works.**
+  - **The ring.** Step inside a ring of toadstools and the light goes
+    green and strange, and you're in its sealed glade. Step on its
+    toadstools there and you're put back. Break a toadstool of a ring and
+    the wood takes it ill: thorns come up round you.
+  - **The offering stone.** Leave it something to eat (whatever food
+    you've got) and the hob nods to you, and the roots in the wall draw
+    back from what they keep.
+  - **The hob.** The Hollow's little housekeeper, in a cap of bark. It
+    never fights. Strike it, and the whole wood turns on you: everything
+    on the floor wakes and comes.
+  - **The sun-seed.** Its pod lies somewhere else on the floor. Plant it
+    in the shaft of daylight and it grows, in a few seconds, into roots
+    that climb the bank like a ladder.
+  - **Snare roots** catch whoever steps on them for a moment, and whatever
+    is sleeping near comes to see.
+  - **Puffballs** burst in a cloud of drowsy spores when trodden on or
+    struck. In it you're slow.
+  - **The hornets' nest.** Break it and the swarm goes after whoever is
+    nearest: you, or whatever you led under it.
+  - What's been done (the bowl filled, the seed grown, the pod taken, the
+    puffballs burst) stays done when you come back to the floor.
+- **What's written there.** Every Hollow has its owner, the rule the town
+  broke (the milk stopped being left, a child stepped in the ring, a
+  woodcutter's axe bit a living root, someone answered when it called
+  their name, someone brought fire in), the Keepers' rules cut in stone
+  (the broken one always among them), and the town above. Its papers come
+  from all of that (see `src/world/deeps/grovelore.js`): the rule-stone,
+  each of the Kept by name and year, the first of the Kept that the town
+  remembers, the rag-root's wishes, the Green Man, the woodcutter's stump
+  notched in sevens, a dead camp, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the thornlings, wolves, moths and wisps stay):
+  - **The Woodwose**: one of the Kept, woken: a hunched figure of bark and
+    moss, with twig antlers and a light of fungus in its chest. Some step
+    out of the wall as you pass. Slow and heavy, it mends on the moss.
+    Badly hurt, it roots: feet planted, blows landing a third as hard,
+    briars bursting up round it, mending.
+  - **The Drowsebloom**: a great drooping flower, rooted. It opens to puff
+    a cloud of drowsy pollen round it, then shuts up tight (half as hard
+    to hurt). The wood's own don't mind the pollen.
+  - **The Glimmer**: a mote of gold with a tail. It never fights. It rides
+    whichever of the wood is hurt worst, mending it and making it quick.
+    Struck, it blinks away to another. Two blows and it's out, so kill
+    the glimmers first or the fight runs on.
+  - **The Delver**: blind, part mole and part root. It goes under the
+    floor (a heave of earth the only sign) and bursts up under you,
+    throwing you aside: into the pollen, the briars, a snare (which
+    catches you). Up, it's slow and soft, and goes back under before long.
+  - **The Hob** (see above).
+  - Together: a delver throws you into the drowsebloom's cloud while the
+    thornlings snag you; a glimmer makes a rooted woodwose quick and
+    mends it; a woodwose rooted in a doorway is a wall the thornlings
+    fight from behind; and the wolves run you down while the pollen has
+    you.
+- **Its three masters, painted by hand.** Each was painted one pixel at
+  a time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Thorn Queen.** She was a girl from the town who stepped in the
+    ring. Tall now, and still: her skin the pale green of new bark,
+    cracked at the cheek; her hair a fall of dark leaves to her waist; a
+    crown of thorns with three roses in it; rose-red eyes. Her gown is the
+    rose itself: a crimson velvet bodice, and a skirt of petals tier over
+    tier, each curling at its edge, briars climbing it with roses open on
+    them. At her wrist is a ribbon, blue once, faded nearly grey. Her
+    staff is a twisted briar that flowers in a great red rose.
+  - **The Elder Stag.** The wood's own king, grey with age: a hump of
+    muscle at the withers, a pale ruff, shag at the belly, long dark legs
+    and pale split hooves. A mantle of moss grows on its back with ferns
+    and glowcaps in it. It has a long grey face, green eyes under a heavy
+    brow, and antlers like a dead tree, with moss hanging off them in
+    strands.
+  - **The Hollow Oak.** The oldest tree, walking on its roots. Its bark
+    is deep-furrowed, with moss on its shoulders, ivy up one side and
+    shelves of fungus on the other. Its face is the hollow age has made in
+    it: knotholes for eyes with a green light in each, gold as it winds
+    up, under a heavy brow; a burl for a nose; and the hollow itself for a
+    mouth, roots across it like teeth, a bone and a coin in the dark
+    behind. Its arms are great boughs, the near one ending in a hand of
+    twigs. Its crown turns with the seasons: blossom in spring, green
+    with hanging moss in summer, fire in autumn, and in winter bare boughs
+    under snow, with frost on its bark, icicles from its brow, and its
+    eyes gone ice-blue.
+- **Fixes.** The sun-seed's shaft of daylight was cleared off most floors
+  as they were finished; it stays now, and the leaf litter no longer
+  covers its bed of earth. A snare or a puffball now catches you even if
+  you walk straight over it. The key-holder of a Hollow is a woodwose now,
+  not a skeleton captain.
+- **Version 1.0.0.** Worlds from 0.99 load as before. Hollow floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -10,6 +10,7 @@ import { mineTop, mineFront, MINE_SPRITES, MINE_ANIM, mineFlat } from './art/min
 import { cryptTop, cryptFront, CRYPT_SPRITES, CRYPT_ANIM, cryptFlat } from './art/crypt_tex.js';
 import { holdTop, holdFront, HOLD_SPRITES, HOLD_ANIM, holdFlat } from './art/hold_tex.js';
 import { kavTop, kavFront, KAV_SPRITES, KAV_ANIM } from './art/kav_tex.js';
+import { groveTop, groveFront, groveFlat, GROVE_SPRITES, GROVE_ANIM } from './art/grove_tex.js';
 
 const TALL = 40;
 const KAV = { dark: '#1c1a2a', plate: '#2a2840', edge: '#3c3a58', seam: '#5ad8f0', glow: '#a8f4ff', rune: '#7ae0ff', deep: '#0e0c18' };
@@ -26,7 +27,7 @@ function massTop(p, pal, rand, bits = null) {
 // --- cube tops ----------------------------------------------------------------
 export function dungeonTop(name, v, rand) {
   // (Round 95: the barrow's own, drawn by hand: see art/barrow_tex.js.)
-  const own = barrowTop(name, v, rand) || mineTop(name, v, rand) || cryptTop(name, v) || holdTop(name, v) || kavTop(name, v);
+  const own = barrowTop(name, v, rand) || mineTop(name, v, rand) || cryptTop(name, v) || holdTop(name, v) || kavTop(name, v) || groveTop(name, v);
   if (own) return own;
   const p = new Px(16, 16);
   switch (name) {
@@ -220,7 +221,7 @@ export function dungeonTop(name, v, rand) {
 
 // --- cube fronts (the wall faces you see) --------------------------------------
 export function dungeonFront(name, v, rand, rot) {
-  const own = barrowFront(name, v, rand) || mineFront(name, v, rand) || cryptFront(name, v) || holdFront(name, v) || kavFront(name, v);
+  const own = barrowFront(name, v, rand) || mineFront(name, v, rand) || cryptFront(name, v) || holdFront(name, v) || kavFront(name, v) || groveFront(name, v);
   if (own) return own;
   const p = new Px(16, LH);
   switch (name) {
@@ -383,7 +384,7 @@ export function dungeonFront(name, v, rand, rot) {
 
 // --- flat things on the floor ---------------------------------------------------
 export function dungeonFlat(name, v, rand) {
-  const own = barrowFlat(name, v, rand) || mineFlat(name, v, rand) || cryptFlat(name) || holdFlat(name);
+  const own = barrowFlat(name, v, rand) || mineFlat(name, v, rand) || cryptFlat(name) || holdFlat(name) || groveFlat(name, v);
   if (own) return own;
   if (name === 'pressure_plate') {
     // A flagstone that sits a hair proud of the rest: hard to see, if you
@@ -1095,5 +1096,5 @@ Object.assign(DSPRITES, {
     return p.outline(OUT);
   },
 });
-Object.assign(DSPRITES, BARROW_SPRITES, MINE_SPRITES, CRYPT_SPRITES, HOLD_SPRITES, KAV_SPRITES);
-export const DANIM = { ...BARROW_ANIM, ...MINE_ANIM, ...CRYPT_ANIM, ...HOLD_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2, ...KAV_ANIM };
+Object.assign(DSPRITES, BARROW_SPRITES, MINE_SPRITES, CRYPT_SPRITES, HOLD_SPRITES, KAV_SPRITES, GROVE_SPRITES);
+export const DANIM = { ...BARROW_ANIM, ...MINE_ANIM, ...CRYPT_ANIM, ...HOLD_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2, ...KAV_ANIM, ...GROVE_ANIM };

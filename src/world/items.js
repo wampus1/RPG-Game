@@ -380,6 +380,10 @@ item('scorpion_sting', { name: 'Scorpion Sting', kind: 'misc', stack: 16, value:
 food('ember_pod', 1, 2, 'Ember Pod');
 food('mangrove_pod', 1, 1, 'Mangrove Pod');
 food('glowcap', 1, 3, 'Glowcap');
+// (Round 100) From the Wildwood Hollow: comb out of a hornets' nest, and a
+// seed that wants the sun.
+food('honeycomb', 2, 5, 'Honeycomb');
+item('sun_seed', { name: 'Sun-Seed', kind: 'misc', stack: 4, value: 12, about: 'A golden seed pod, warm in the hand. It wants the sun.' });
 food('crab_meat', 1, 3, 'Crab Meat');
 food('cooked_crab', 5, 6, 'Cooked Crab');
 // Hot dishes from the pot (and a warm cup) do their good slowly: a little

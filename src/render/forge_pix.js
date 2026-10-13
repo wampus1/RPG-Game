@@ -10,6 +10,7 @@ import { MINE_BOSS_ART } from './art/mine_bosses.js';
 import { CRYPT_BOSS_ART } from './art/crypt_bosses.js';
 import { HOLD_BOSS_ART } from './art/hold_bosses.js';
 import { KAV_BOSS_ART } from './art/kav_bosses.js';
+import { GROVE_BOSS_ART } from './art/grove_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -30,7 +31,9 @@ export function installPix(art) {
       const p = { ...q, at: q.parent ? q.at : (J) => [x, y - (lift ? Math.round(J.b ?? breathOf(J.t || 0, D.breath ?? 1)) : 0)] };
       // (A part with another picture for a state of the master's: its
       // wings' eyes open, say.)
-      if (q.pixVariants) p.variant = (R) => Object.keys(q.pixVariants).find((k) => R.st[k]) || '';
+      // (Or by the forged part's own choosing, when it had one: an oak's
+      // crown by its season, say.)
+      if (q.pixVariants) p.variant = (was[n] && was[n].variant) || ((R) => Object.keys(q.pixVariants).find((k) => R.st[k]) || '');
       // (When it's shown, as the forged part it stands for was: a neck
       // under the water while its master is down there, say.)
       if (!p.show && was[n] && was[n].show) p.show = was[n].show;
@@ -43,6 +46,9 @@ export function installPix(art) {
       parts[n] = p;
     }
     D.parts = parts;
+    // (What the forged one drew over itself that's painted in now: a
+    // stag's moss on its antlers, say.)
+    for (const k of A.drop || []) delete D[k];
   }
 }
 
@@ -51,3 +57,4 @@ installPix(MINE_BOSS_ART);
 installPix(CRYPT_BOSS_ART);
 installPix(HOLD_BOSS_ART);
 installPix(KAV_BOSS_ART);
+installPix(GROVE_BOSS_ART);

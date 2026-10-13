@@ -762,6 +762,12 @@ export const STEPS = [
       log.push('The Kavorent ruins are made over: drawn afresh, with the sleepers\' cradle halls, galleries, the orrery, repair bays, conduit spines and the memory well; sentinel lenses, live cables, new constructs, and their masters redrawn. Kavorent floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.0.0',
+    data(d, log) {
+      log.push('The Wildwood Hollows are made over: drawn afresh, with hollows and their banks, rootways, dells, the keepers\' shrines, the halls of the Kept, sunwells and woodcutters\' camps; the ring and its glade, offering stones and their hob, snares, puffballs and the sun-seed; woodwose, drowsebloom, glimmer and delver; and their masters redrawn. Hollow floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -990,6 +990,21 @@ export function isleIcon(key) {
       p.line(7, 3, 11, 13, '#3e5a2a');
       p.set(6, 3, '#8a6a40');
       break;
+    case 'honeycomb':
+      // A wedge of comb, its cells, honey welling from it.
+      p.rect(3, 5, 10, 8, '#c89030');
+      for (let y = 6; y < 13; y += 2) for (let x = 4 + (y % 4 ? 1 : 0); x < 13; x += 2) p.set(x, y, '#8a5a18');
+      p.hline(3, 12, 5, '#f0c860');
+      p.set(6, 13, '#f0b030');
+      p.set(6, 14, '#c88a20');
+      break;
+    case 'sun_seed':
+      p.ellipse(8, 9, 3, 4, '#c8a030');
+      p.ellipse(7, 8, 1, 2, '#fff0a0');
+      p.vline(8, 6, 12, '#8a6a18');
+      p.line(8, 5, 10, 2, '#4a8a32');
+      p.set(10, 10, '#ffe070');
+      break;
     case 'glowcap':
       p.vline(8, 9, 13, '#e8dccc');
       p.ellipse(8, 8, 5, 3, '#3a8ad0');

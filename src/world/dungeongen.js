@@ -3002,9 +3002,9 @@ function bossHall(ctx, r, boss) {
       const a = (k / 6) * Math.PI * 2 + 0.4;
       const x = Math.round(r.cx + Math.cos(a) * w * 0.33);
       const z = Math.round(r.cz + Math.sin(a) * d * 0.33);
-      if (put(x, z, B.root_wall, 0, true)) put(x + 1, z, B.glowshroom);
+      if (put(x, z, T.wall, 0, true)) put(x + 1, z, B.gr_glowcaps, rng.int(0, 3));
     }
-    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.roots, 0, true);
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.gr_rootcurtain, rng.int(0, 3), true);
   } else if (type === 'forge') {
     // The great forge: crucibles round the walls, anvils, and the floor
     // cut with two cold channels the master can let the fire into.
