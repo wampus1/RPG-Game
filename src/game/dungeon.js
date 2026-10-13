@@ -14,6 +14,7 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
+import { drain as drainTide } from './grottowork.js';
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier, FAR_LOOT } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { farMotes } from './fardeep.js';
@@ -66,7 +67,7 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 const FLOOR_GEN = 6;
 // (Round 95) A kind made over by its own architect (see world/deeps/) lays
 // its floors out its own way: older floors of it are made afresh.
-const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7 };
+const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7, grotto: 7 };
 const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
@@ -87,7 +88,7 @@ export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod', 'fg_singanvil', 'fg_lever', 'fg_kilndoor', 'fg_guilddoor', 'fg_castkey']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod', 'fg_singanvil', 'fg_lever', 'fg_kilndoor', 'fg_guilddoor', 'fg_castkey', 'gt_clam', 'gt_scallop', 'gt_seadoor', 'gt_bell']);
 
 // Each old place's own space apart, out past the map (see
 // config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,
@@ -554,6 +555,8 @@ export class DungeonRun {
     dropFields(this.game);
     // (Nor what a master's done to its hall: see bosskit.js.)
     dropWorks(this.game);
+    // (Nor the tide's water over the flats: see grottowork.js.)
+    drainTide(this);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
     this.rec.floors[this.floor] = { regions, state: this.state, gen: genOf(this.rec), rx0: this.rx0 };
@@ -720,6 +723,14 @@ export class DungeonRun {
     if (o.route) c.route = o.route;
     // (Round 101) An ash-smith's anvil, where it works (see forgemobs.js).
     if (o.anvil) c.anvil = o.anvil;
+    // (Round 102) A moray's hole in the wall, and which way out of it it
+    // lunges; a drowned diver lying in the sand till the tide (see
+    // grottomobs.js).
+    if (o.hole) {
+      c.hole = o.hole;
+      c.holeOut = o.out;
+    }
+    if (o.lying) c.lying = true;
     // (Down here, nothing's minding its own business: see fardeep.js.)
     if (c.S.mode === 'neutral' && !o.peaceful) c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;

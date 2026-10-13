@@ -7322,6 +7322,139 @@ a ladder up it.
 - **Version 1.1.0.** Worlds from 1.0 load as before. Kiln-Deep floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 102: The Tide Grotto, made over
+
+The eighth of the dungeon overhauls. A Tide Grotto is a sea-cave on
+Myrrow. The stilt folk dived it for pearls, and prayed to the Tide-Mother
+for the tide's mercy, leaving her the first pearl of every dive, until
+something went wrong. It should feel full of wonder at first and then
+full of dread as the sea comes back: wet black volcanic rock, the
+high-water mark drawn along every wall in glowing algae, shell sand,
+pools, coral and kelp, and the divers' boardwalks and nets left where
+they were. The tide is what the place is about. It comes in over the
+flats on a clock and goes out again, and what lives there lives by it.
+
+- **Drawn afresh.** Every Tide Grotto tile and thing is painted by hand:
+  - **The walls.** Black volcanic rock in strata, dry and salted above the
+    tide line, glowing algae at it, and barnacles, mussels and weed below.
+    Also mussel beds, coral grown up the rock, glowing algae, the divers'
+    tide-marks, the shrine's wall of set shells, the sea-door, a moray's
+    hole, and the stilt folk's carving of the Tide-Mother.
+  - **The floors.** Shell sand, the wet sand of the flats, wet rock
+    shelves, shingle, the sea-shrine's mosaic (shell laid in black rock
+    in overlapping scales, with no seam between tiles), boardwalk planks
+    on their stilts, and urchin beds.
+  - **The things set about.** Kelp, red branching coral, an orange sea
+    fan, brain coral and tube coral, glowing anemones, giant clams (shut,
+    open, and open with a pearl), the shrine's scallops, nets, baskets, a
+    tide-pole, the divers' bell, rope ladders, diving weights, an upturned
+    hull, shell lanterns, blowholes, bones, cairns, driftwood, a fire ring
+    and boulders.
+- **Rooms a Tide Grotto has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/grotto.js`), beside its old rooms (the
+  tidepool, the reef, the wreck and the rest, now set about with its own
+  things, the coral thinned where they crowded it):
+  - **The tidal flat.** Wet sand that floods, a channel sunk through it,
+    rock shelves raised above it, drowned divers lying face down, jellies.
+  - **The clam bed.** Giant clams, urchins between them, shrimpkin.
+  - **The divers' camp.** A boardwalk with nets, baskets and weights, the
+    tide-pole and the tide-marks (the divers' count, and where it stops),
+    the carving and its law, a fire ring, and the bell.
+  - **The sea-shrine.** The mosaic floor, the shell wall and its prayer,
+    three scallops, lanterns, a cairn, and the sea-door.
+  - **The blowhole.** A rock ledge two high with a chest on it, and the
+    blowhole below it that throws you up there when the tide is in.
+  - **The eel-run.** A long low way with kelp spaced along it, moray
+    holes in its walls, and urchins underfoot.
+  - **The glow-pool.** A deep pool lit by glowing algae and anemones,
+    jellies drifting in it, and the bones of someone who stayed too long.
+- **The tide.** It runs on a clock: low water, flood, high water, ebb.
+  - At the flood the water comes in over the flats, tile by tile, deepest
+    first. You wade slowly, and in the deep places you swim.
+  - At high water the drowned divers rise and the blowholes spout. At low
+    water the clams open and the jellies are left stranded on the sand.
+  - The bells ring as the flood starts. Ring one yourself and it tells you
+    how long you have.
+  - **The clams.** Open at low water. Take the pearl off one, but sometimes
+    it snaps shut on you and holds you.
+  - **The sea-door.** Lay a pearl in each of the shrine's three scallops
+    and the sea-door opens on its cache.
+  - **Urchins** sting and slow whoever steps on them.
+  - What's been done (the pearls taken, the pearls laid, the door opened)
+    stays done when you come back to the floor.
+- **What's written there.** Every Tide Grotto has its stilt folk, their
+  town, what went wrong (the bell that stopped ringing, the Mother
+  forgotten, the storm, greed for the great pearl, the sea-door opened),
+  the law they kept, and its master. Its papers come from all of that
+  (see `src/world/deeps/grottolore.js`): the carving and its law, the
+  tide-marks, the tide-pole, the shell wall's prayer, a diver's log, the
+  cairns, and the last word at the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the reef crabs and bog lurkers stay):
+  - **The Drowned Diver.** One of the stilt folk's pearl divers, drowned
+    and diving still. At low water it lies face down in the sand like the
+    dead thing it is. The tide coming in raises it, and so does a blow. In
+    the water it is quick, and its grab holds you under for a moment.
+  - **The Moray.** It lives in a hole in the wall. Step into its line and
+    it lunges out, bites, and drags you a step toward the wall (onto the
+    urchins, into the channel). In its hole it's hard to hurt. Out and
+    lunging, it's open.
+  - **The Lantern Jelly.** It drifts and glows, and its sting stuns you
+    for a moment. The tide carries it out over the flats; when the tide
+    goes it is stranded where it lies, stinging whoever steps by. Burst,
+    it leaves its stinging threads.
+  - **The Shrimpkin.** Little cleaner shrimp, peaceful. They mend whatever
+    is most hurt near them: the drowned you're fighting, or you. Struck,
+    they scatter.
+  - Together: a moray drags you into the channel just as the tide comes
+    in, and the divers there are quick; a stranded jelly lies in the gap
+    you'd step back into; and the shrimpkin keep mending the diver you
+    almost had, unless you deal with them first (or let them mend you).
+- **Its three masters, painted by hand.** Each was painted one pixel at
+  a time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Tide-Mother.** A sea turtle as old as the reef. Her shell is a
+    hill of plates: the ridge along her back, the great plates down her
+    side, the little ones round the rim, ragged behind. They are dark
+    olive with amber tortoiseshell, each ringed with its years and lit as
+    a raised facet. The reef has grown on her: a red coral standing up off
+    her back like a tree on a hill, an orange fan behind it, a glowing
+    anemone, crusts of barnacles, weed, and kelp trailing off the back of
+    her shell, swaying. Her head is heavy and hook-beaked, its scales
+    dark, each rimmed in pale gold. Her eye is huge, old and gold, and
+    weeps salt. Her flippers are great scaled paddles with a claw on the
+    leading edge. The light of the water plays along her undersides. When
+    she spins across the grotto she is drawn into her shell.
+  - **The Abyssal Clam.** A giant clam the size of a boat, half sunk in
+    the sand. Its two valves are chalk-white and thrown into great folds,
+    frilled along each crest, stained rust in the grooves and crusted with
+    pink coralline and weed. Their lips meet in deep interlocking teeth
+    like a jaw, with dark flesh showing in the gaps. Prised open, its
+    upper valve lifts on its hinge, and its mantle bulges out between:
+    blue going to violet, iridescent, frilled, with glowing green-gold
+    eye-spots, and the great pearl glowing on it.
+  - **The Coral Colossus.** The reef grew over the drowned and their
+    boats until one day it stood up. It is a hunched hulk of blue-black
+    reef rock, shaded in broken facets, its head sunk low with two
+    coral-red eyes in a crevice (white when it winds up). Red coral
+    branches off its shoulders like antlers, with an orange fan and purple
+    tube coral on its back, brain coral on its flanks, and barnacles and
+    weed. In its chest the reef never closed: in the hollow are the ribs
+    of a drowned diver, with glowing anemones grown in them. A boat's
+    planks are sunk in its belly, and its near arm has grown round a
+    ship's anchor, the flukes hooked out under its fist.
+- **Fixes.**
+  - The Abyssal Clam's upper shell opened downward into its own lower
+    shell. It now lifts on its hinge.
+  - A creature can be laid out lying down (a drowned diver face down in
+    the sand), or in a hole in the wall (a moray).
+  - The tide water is drained before a floor is saved, so a saved floor
+    never keeps the sea in it.
+  - The grove's wasps were silent: their buzz has a voice now (and the
+    moray's snap).
+- **Version 1.2.0.** Worlds from 1.1 load as before. Tide Grotto floors
+  you have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

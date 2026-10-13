@@ -79,7 +79,8 @@ export class Entity {
     // (Round 73) Wading a liquid sunk in the floor (acid, quicksilver):
     // slower through it, and down in it to the shins.
     this.wading = wadeOf(this.game.world, nx, ny, nz);
-    this.moveDur = (this.slowT > 0 ? dur * 1.7 : dur) * (this.wading ? 1.35 : 1);
+    // (Round 102: or the tide over the flats: see game/grottowork.js.)
+    this.moveDur = (this.slowT > 0 ? dur * 1.7 : dur) * (this.wading || this.tideT > 0 ? 1.35 : 1);
   }
 
   teleport(x, y, z) {

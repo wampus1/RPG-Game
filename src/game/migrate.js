@@ -774,6 +774,12 @@ export const STEPS = [
       log.push('The Kiln-Deeps are made over: drawn afresh, with great forges and their trip-hammers, casting pits, quench halls, bellows rooms, guild-halls, the king\'s gallery, coal stores and flues; the kiln-key cast in its mould, the singing anvils and the guild-door, steam vents and flaring grates; ash-smiths, bellowsbacks and iron wardens; and their masters redrawn. Kiln-Deep floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.2.0',
+    data(d, log) {
+      log.push('The Tide Grottos are made over: drawn afresh, with tidal flats, clam beds, divers\' camps, sea-shrines, blowholes, eel-runs and glow-pools; the tide coming in and going out on its clock, the clams and their pearls, the shrine\'s scallops and the sea-door, the bells, the urchins; drowned divers, morays, lantern jellies and shrimpkin; and their masters redrawn. Tide Grotto floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -1082,3 +1082,51 @@ def('fg_statue', { ...sprite, tall: true, solid: true, interact: 'lore', hardnes
 def('fg_slag', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 2, light: 2, drop: [{ item: 'obsidian_shard', chance: 0.5 }], label: 'Slag' });
 def('fg_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Iron Ladder' });
 def('fg_castkey', { ...dressing, interact: 'fg_castkey', hardness: Infinity, light: 6, lightWhenState: false, drop: null, label: 'The Kiln-Key' });
+// (Round 102) The Tide Grotto made over (see world/deeps/grotto.js): its wall
+// of black volcanic rock wearing the tide (mussels thick, coral grown up it,
+// the glowing algae, the divers' tide-marks, the shrine's spiral of shells,
+// the sea-door the three pearls open, a moray's hole, the carving of the
+// Tide-Mother), a shelf of rock a step up and its steps, the divers'
+// boardwalk; its floors (shell sand, the wet sand of the flats the tide
+// covers, shingle, the shrine's mosaic, an urchin bed); and what's set about
+// in it: kelp, coral, anemones, the giant clams, the offering shells, nets,
+// baskets, the tide-pole, the tide-bell, a rope ladder, the dive-weights, a
+// wreck's hull, a shell lantern, the blowhole, a diver's bones, a cairn of
+// shells, driftwood, a cold fire, a barnacled boulder. Last of all, so no
+// block before them changes its number.
+def('gt_rock', { tool: 'pick', hardness: Infinity, drop: null, label: 'Sea-Cave Rock' });
+def('gt_mussels', { hardness: Infinity, drop: null, label: 'Mussel Bed' });
+def('gt_coralwall', { hardness: Infinity, drop: null, label: 'Coral-Grown Rock' });
+def('gt_glowwall', { hardness: Infinity, drop: null, light: 5, label: 'Glowing Algae' });
+def('gt_tidemark', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Tide-Marks' });
+def('gt_shellwall', { interact: 'lore', hardness: Infinity, drop: null, light: 2, label: 'The Spiral of Shells' });
+def('gt_seadoor', { interact: 'gt_seadoor', hardness: Infinity, drop: null, label: 'Sea-Door' });
+def('gt_eelhole', { hardness: Infinity, drop: null, label: 'Moray Hole' });
+def('gt_carving', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Tide-Mother, Carved' });
+def('gt_shelf', { hardness: Infinity, drop: null, label: 'Rock Shelf' });
+def('gt_shelfsteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'gt_shelf', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Rock Steps' });
+def('gt_boardwalk', { hardness: Infinity, drop: null, label: 'Boardwalk' });
+def('gt_sand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Shell Sand' });
+def('gt_wetsand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Tidal Flat' });
+def('gt_pebbles', { hardness: Infinity, drop: null, label: 'Shingle' });
+def('gt_mosaic', { hardness: Infinity, drop: null, light: 2, label: 'Shell Mosaic' });
+def('gt_urchins', { hardness: Infinity, drop: null, label: 'Urchin Bed' });
+def('gt_kelp', { ...dressing, tall: true, hardness: 0.1, drop: [{ item: 'kelp', chance: 0.6 }], label: 'Kelp' });
+def('gt_coral', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 1, drop: [{ item: 'coral', chance: 0.7 }], label: 'Coral' });
+def('gt_anemone', { ...dressing, rotatable: true, hardness: Infinity, light: 7, drop: null, label: 'Glowing Anemones' });
+def('gt_clam', { ...sprite, solid: true, rotatable: true, interact: 'gt_clam', hardness: Infinity, drop: null, label: 'Giant Clam' });
+def('gt_scallop', { ...sprite, solid: true, interact: 'gt_scallop', hardness: Infinity, light: 2, lightWhenState: true, drop: null, label: 'Offering Shell' });
+def('gt_net', { ...dressing, tall: true, hardness: 0.3, drop: [{ item: 'string', chance: 0.6, min: 1, max: 2 }], label: 'Diver\'s Net' });
+def('gt_basket', { ...sprite, solid: true, rotatable: true, hardness: 0.3, drop: [{ item: 'pearl', chance: 0.35 }, { item: 'coral', chance: 0.3 }], label: 'Basket of Shells' });
+def('gt_tidepole', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Tide-Pole' });
+def('gt_bell', { ...sprite, tall: true, solid: true, interact: 'gt_bell', hardness: Infinity, drop: null, label: 'Tide-Bell' });
+def('gt_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Rope Ladder' });
+def('gt_weights', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Dive-Weights' });
+def('gt_hull', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Wreck' });
+def('gt_lantern', { ...sprite, solid: true, hardness: Infinity, light: 11, drop: null, label: 'Shell Lantern' });
+def('gt_blowhole', { ...dressing, tall: true, hardness: Infinity, drop: null, label: 'Blowhole' });
+def('gt_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Diver\'s Bones' });
+def('gt_cairn', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Cairn of Shells' });
+def('gt_driftwood', { ...dressing, rotatable: true, hardness: 0.3, drop: [{ item: 'stick', chance: 0.7, min: 1, max: 2 }], label: 'Driftwood' });
+def('gt_firering', { ...dressing, hardness: Infinity, drop: null, label: 'Cold Fire' });
+def('gt_boulder', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Barnacled Boulder' });

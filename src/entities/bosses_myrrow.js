@@ -202,6 +202,10 @@ export const MYRROW_BOSSES = {
   tide_mother: boss({
     name: 'The Tide-Mother', hp: 160, dmg: 6, step: 0.32, big: true, swims: true, brain: 'tideMother', tint: ['#60c8c0', '#e0fff8'], style: 'bite',
     ward: (game, c, src, n) => (c.spinT > 0 ? Math.max(1, Math.round(n * 0.3)) : n),
+    // (Drawn into her shell as she spins: see render/art/grotto_bosses.js.)
+    artSt: (e, st) => {
+      if (e.spinT > 0) st.shell = 1;
+    },
     phaseLines: ['', '', '', ''], drops: [['pearl', 4, 8, 1], ['pearl_necklace', 1, 1, 1], ['gem', 1, 2, 0.8]],
   }),
   abyssal_clam: boss({

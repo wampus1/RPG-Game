@@ -19,6 +19,7 @@ import { FAR_DSTYLE, FAR_BOSSES, FAR_BOSS_HP, FAR_BOSS_DMG, FAR_BOSS_TEMPO, FAR_
 import { ANCIENT_LORE } from './ancient.js';
 import { GROVE_ARCH } from './deeps/grove.js';
 import { FORGE_ARCH } from './deeps/forge.js';
+import { GROTTO_ARCH } from './deeps/grotto.js';
 
 // Where you begin (inside the storm wall, washed up on its beach).
 export const HOME_ISLE = 'thessa';
@@ -135,14 +136,17 @@ export const ISLE_DTYPES = {
   // coral on the rock, shell sand, pools left behind, kelp; the wrecks of
   // boats that came in after pearls and never went out.
   grotto: {
-    name: 'Tide Grotto', isle: 'myrrow', wall: B.coral_rock, floor: B.shell_sand, alt: B.sand, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Tide Grotto', isle: 'myrrow', wall: B.gt_rock, floor: B.gt_sand, alt: B.gt_sand, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['tidepool', 'reef', 'wreck', 'pearlbed', 'tidepool', 'reef', 'collapsed', 'shrine', 'trap', 'treasure'],
-    mobs: [['reef_crab', 4], ['drowned', 2], ['bog_lurker', 1], ['spore_puffer', 1], ['gloam_moth', 1]],
-    swap: { skeleton: ['drowned', 'reef_crab'], wight: ['drowned'], ghoul: ['reef_crab'], crawler: ['reef_crab'], slime: ['reef_crab'] },
+    mobs: [['reef_crab', 3], ['drowned_diver', 2], ['lantern_jelly', 2], ['shrimpkin', 1], ['bog_lurker', 1]],
+    swap: { skeleton: ['drowned_diver', 'reef_crab'], wight: ['drowned_diver'], drowned: ['drowned_diver'], ghoul: ['reef_crab'], crawler: ['reef_crab'], slime: ['lantern_jelly'], skel_captain: ['drowned_diver'] },
     bosses: ['tide_mother', 'abyssal_clam', 'coral_colossus'], torches: 0.05,
-    shapes: { cave: 6, round: 2 }, wiggle: 1.4, decor: [['coral', 4], ['kelp', 3], ['giant_clam', 1], ['rubble', 1]],
+    shapes: { cave: 6, round: 2 }, wiggle: 1.4, decor: [['gt_coral', 3], ['gt_kelp', 3], ['gt_anemone', 2], ['gt_boulder', 1]],
     dark: [0.04, 0.08, 0.1], motes: ['#80d8e8', '#e0ffff'], ambient: ['drip', 'wave', 'drip', 'splash'],
-    loot: [['pearl', 1, 3, 0.5], ['crab_meat', 1, 2, 0.3], ['pearl_necklace', 1, 1, 0.08], ['coral', 1, 2, 0.3]],
+    loot: [['pearl', 1, 3, 0.5], ['crab_meat', 1, 2, 0.3], ['pearl_necklace', 1, 1, 0.08], ['coral', 1, 2, 0.3], ['kelp', 1, 2, 0.2]],
+    // (Round 102: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/grotto.js.)
+    arch: GROTTO_ARCH,
   },
 };
 export const OWN_TYPE = { thessa: 'grove', kharos: 'forge', myrrow: 'grotto' };

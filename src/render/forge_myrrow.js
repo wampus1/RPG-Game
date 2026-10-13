@@ -874,6 +874,8 @@ forge({
       head: {
         w: 26, h: 20, px: 20, py: 12, role: 'head', layer: 'front', z: 4, amp: 1.4,
         at: [17, 42],
+        // (Drawn in while she spins in her shell.)
+        show: (R) => !R.st.shell,
         body(X) {
           const skin = '#6a7a5a';
           X.in(0, 2);
@@ -893,6 +895,7 @@ forge({
       flipper: {
         w: 22, h: 18, px: 16, py: 3, role: 'wing', layer: 'front', z: 6, depth: 0.35, rate: 1.1, lift: 0,
         at: [26, 46],
+        show: (R) => !R.st.shell,
         body(X) {
           X.in(0, 1);
           X.slab([[16, 2], [20, 3], [10, 15], [2, 16], [4, 12]], '#6a7a5a', 'leather', { rz: 2.4, bevel: 1.6 });
@@ -940,7 +943,8 @@ forge({
       shell: {
         w: 62, h: 28, px: 58, py: 22, role: 'none', layer: 'front', z: 4,
         at: [60, 44],
-        extra: (R) => -(R.st.open ? 0.55 : 0.03 + Math.max(0, Math.sin(R.t * 1.4)) * 0.06) - (R.A && R.A.k === 'slam' ? 0.25 * Math.sin(Math.PI * Math.min(1, R.A.t / R.A.dur)) : 0),
+        // (Its hinge at its right, so lifting its lip is a turn clockwise.)
+        extra: (R) => (R.st.open ? 0.55 : 0.03 + Math.max(0, Math.sin(R.t * 1.4)) * 0.06) + (R.A && R.A.k === 'slam' ? 0.25 * Math.sin(Math.PI * Math.min(1, R.A.t / R.A.dur)) : 0),
         body(X) {
           X.in(0, 2);
           X.ball(31, 15, 28, 11, '#6a6a7c', 'shell', { rz: 11 });
