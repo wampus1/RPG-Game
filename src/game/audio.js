@@ -30,7 +30,7 @@ const VOICES_QUIET = 12000;
 // each is given.
 export const SOUND_ALIAS = {
   fire: 'crackle', lava: 'crackle', sizzle: 'hiss', steam: 'hiss', zap: 'pulse', erupt: 'eruption',
-  rain: 'splash', chest_open: 'chest', beep: 'click', page: 'select',
+  rain: 'splash', chest_open: 'chest', beep: 'click', page: 'select', rattle: 'bones', crack: 'crumble',
 };
 
 export class Audio {

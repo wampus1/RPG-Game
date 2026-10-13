@@ -18,6 +18,9 @@ import { SPECIES } from '../src/entities/creature.js';
 import { KAV_SPECIES } from '../src/entities/kavmobs.js';
 import { KAV_MOBS } from '../src/render/art/kav_mobs.js';
 import { KAV_SPRITES } from '../src/render/art/kav_tex.js';
+import { KAV_BOSS_ART } from '../src/render/art/kav_bosses.js';
+import { FORGE, forgePaint } from '../src/render/forge.js';
+import '../src/render/bossbody.js';
 import { kavTop, kavFront } from '../src/render/art/kav_tex.js';
 import { kavLore, GLYPHS } from '../src/world/deeps/kavlore.js';
 import { KAV_OWN } from '../src/world/deeps/kavorent.js';
@@ -353,4 +356,35 @@ test('a reclaimer builds a mite out of a fallen construct', () => {
 test('the version and its step', () => {
   assert.ok(compareVersions(GAME_VERSION, '0.99.0') >= 0);
   assert.ok(stepsFor('0.98.0').some((s) => s.to === '0.99.0'));
+});
+
+test('the Kavorent\'s masters are painted by hand, every part in place', () => {
+  assert.deepEqual(Object.keys(KAV_BOSS_ART).sort(), ['condenser', 'crucible', 'overseer', 'prime']);
+  for (const [k, A] of Object.entries(KAV_BOSS_ART)) {
+    assert.ok(SPECIES[k], `${k} is a species`);
+    assert.ok(FORGE[k] && FORGE[k].pix, `${k} is painted`);
+    assert.equal(A.size, 128);
+    assert.equal(A.body.rows.length, 128, `${k} has a body`);
+    for (const [n, q] of Object.entries(A.parts)) assert.ok(q.pix && q.pix.rows.length, `${k}.${n} has a picture`);
+  }
+  // (What moves of itself goes where its forged part went: the shards and
+  // vanes orbiting, the Prime's stones floating.)
+  for (let i = 0; i < 6; i++) assert.equal(typeof FORGE.overseer.parts[`shard${i}front`].at, 'function');
+  assert.ok(FORGE.overseer.parts.shard0front.show, 'a shard shown only on its side');
+  assert.ok(FORGE.condenser.parts.vane0back.show && FORGE.prime.parts.stoneN.at, 'vanes and stones kept');
+  assert.ok(FORGE.overseer.legs, 'the Overseer still walks on its own legs');
+  assert.ok(FORGE.prime.walk && KAV_BOSS_ART.prime.walk, 'the Prime strides');
+  // (The Crucible's heat in steps: each a picture of its own, and spent,
+  // frosted; its hammers too.)
+  const px = (st) => forgePaint('crucible', 0, st).d.join(',');
+  const cold = px({});
+  const warm = px({ heat: 1 });
+  const hot = px({ heat: 2 });
+  assert.notEqual(cold, warm);
+  assert.notEqual(warm, hot);
+  assert.notEqual(px({ vent: 1 }), cold);
+  assert.ok(KAV_BOSS_ART.crucible.parts.armN.pixVariants.heat && KAV_BOSS_ART.crucible.parts.armN.pixVariants.vent);
+  // (Winding up: the Condenser's lens and the Prime's visor blaze.)
+  assert.notEqual(forgePaint('condenser', 0, { wind: 1 }).d.join(','), forgePaint('condenser', 0, {}).d.join(','));
+  assert.notEqual(forgePaint('prime', 0, { wind: 1 }).d.join(','), forgePaint('prime', 0, {}).d.join(','));
 });

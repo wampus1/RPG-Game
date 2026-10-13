@@ -7019,6 +7019,33 @@ gallery along a hall's side, channels sunk in the floor.
     full it shrugs off blows. Kill it first, or the fight never ends.
   - **The Archivist**: walks from console to console keeping the record,
     and never fights. Strike it and it sounds the alarm and flees.
+- **Its four masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Overseer.** A great banded sphere: an outer band of riveted
+    armour, a ring of polished plates, and a dark bezel where its red eye
+    burns. Eight seams of light run out from the eye, lit two at a time,
+    and a ring of lights chases round it. It has a crest of fins tipped
+    with light and an emitter slung beneath. The shards of its shield
+    still wheel round it.
+  - **The Crucible.** A squat engine on four piston legs, the back pair
+    in shadow. A banded drum sits in its housing, open on molten metal
+    whose crust drifts, with a spout to pour by. Fire burns behind the
+    bars in its belly, gauges sit on its flanks, and two sooted stacks
+    stand behind it. As it heats, the drum's foot goes red; then the
+    whole drum glows and the gauges' needles climb. Spent, it stands
+    frosted with rime. Its hammers glow or frost along with it.
+  - **The Condenser.** A coil tapering to a point, hanging in the air and
+    bobbing. Its bands carry a chasing light, rime crusts them and
+    icicles hang beneath. A crown of storm cloud churns over it, and
+    lightning forks inside the cloud. Its lens blazes as it winds up a
+    blow. Its three vanes turn round it.
+  - **The Prime.** Great facets of violet stone, chipped at the corners,
+    over a core of fire held in a ring of alloy. Cold light runs in the
+    seams between the plates, and Kavorent glyphs are cut in its flanks.
+    Its visor slit burns, and turns white as it winds up a blow. It walks
+    on legs of stone. Its fists are anvils, and its shoulder-stones float
+    off it on their own.
 
 ## Command console
 
