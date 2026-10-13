@@ -7750,6 +7750,134 @@ it so its secrets would die with them. Their ghosts are still there.
 - **Version 1.4.0.** Worlds from 1.3 load as before. Vault floors you have
   already been on are laid out afresh the next time you go down.
 
+## Round 105: The Leviathan's Gut, made over
+
+The eleventh of the dungeon overhauls. The Leviathan's Gut is the inside
+of a whale the size of a hill, cast up on Corrow so long ago that the
+island grew round it. It is not as dead as it looks. The first feeling
+should be wrongness: nothing here was built, the walls are wet flesh in
+folds, and they move. The second is the heartbeat under everything,
+slow and enormous, that the whole place keeps time to. Scale swings from
+cramped winding gut, low and close, to great chambers under the ribs
+arching up like a cathedral's vault. A whaling crew came in after
+ambergris and never came out, and their camp, their ship and their
+dead are still here.
+
+- **Drawn afresh.** Every Leviathan's Gut tile and thing is painted by
+  hand:
+  - **The walls.** Dark red flesh in folds, each fold's crease wandering,
+    wet, veined, with mucus dripping down it. Also:
+    - the throat's pale ridged cartilage, the ribs' bone set in the flesh,
+      and old grey hide;
+    - a gutworm's hole, a vessel throbbing in the wall (it glows), and
+      eggs clustered on the flesh;
+    - a sphincter valve, clenched shut, and a scar the whalers stitched up.
+  - **The floors.** Ridged floor (rugae) in both grains, plain flesh, bone
+    sand, bile sunk in the floor (it glows), amber-grey ground where the
+    ambergris lies, and the swallowed ship's deck.
+  - **The things set about.**
+    - Ribs in pairs, a whaler's skeleton in his oilskins, the whalers'
+      lean-to, their try-pot (lit while it burns), harpoons, casks of oil,
+      a lantern, a rope ladder, the captain's log.
+    - Lumps of ambergris, a clutch of eggs, glowing cysts, polyps.
+    - The swallowed ship's hull, mast, hook and anchor.
+- **Rooms a Leviathan's Gut has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/gut.js`), beside its old rooms (the
+  ribcage, the bile pool, the wreck, the fall, the traps, the treasure).
+  The bile pool's water is now bile sunk in the floor.
+  - **The gullet.** A long low tunnel lined with cartilage, its floor
+    ridged along its length, gutworms in holes in its walls. One on every
+    floor.
+  - **The ribs.** The great hall under the ribcage, the ribs in pairs down
+    its sides on bone sand. The whalers' camp is under them: lean-to,
+    try-pot, harpoons, casks, lanterns and the captain's log. A ledge of
+    bone runs up along the back with a rope ladder to it and the whalers'
+    stash on top. Their bones still walk.
+  - **The stomach.** Bile sunk in its floor in pools, the swallowed ship
+    on its side (hull, mast, deck, and the manifest), bile blisters.
+  - **The valve.** A sphincter in the wall with a cache behind it. The
+    floor before it pushes toward it.
+  - **The nest.** The gutworms' nest: holes in every wall, eggs on the
+    walls and the floor.
+  - **The ambergris.** The pocket where it lies, grey lumps of it, the
+    hermits that wear it, and the whalers' scar in the wall.
+  - **The artery.** Near the heart, on the master's floor: great vessels
+    along the walls, bile, blisters, the beat loud.
+- **What's at work there.**
+  - **The heartbeat.** Under everything, and you feel it in your teeth. It
+    beats faster the deeper you go.
+  - **The valves.** On each beat a sphincter valve slackens for a moment.
+    Go through it then, or wait for the next. It never shuts on whoever's
+    standing in it.
+  - **The ridged floor.** Every third beat it heaves and carries whoever
+    stands on it a tile along its grain, sometimes into the bile. Gutworms
+    and blisters hold fast; you don't.
+  - **The bile.** Wading it burns and slows you. The bone crabs' shells
+    don't mind it, and nor do the blisters, the slimes or the worms.
+  - **The blisters.** Anything that comes by one, or strikes it, bursts it:
+    bile over everyone near, and a puddle that burns for a while. The
+    blisters next to it burst too.
+  - **The scar.** The whalers cut a cache into the wall of the ambergris
+    pocket and stitched it shut. Cut along the stitches and it opens. The
+    captain's log tells you to look for it.
+  - Scars you've cut open stay open when you come back to the floor.
+- **What's written there.** Every Leviathan's Gut has its whale (the Great
+  Whale, the Leviathan, Old Bones, the Whale-Mother, the Drowned King),
+  the town above that won't fish the bay now, and the whaling ship that
+  went in (her name, her captain, her crew by name and by trade). It also
+  has what went wrong: the whale woke under their knives, the captain went
+  deeper for more, the ship was swallowed whole, the worms came out of the
+  walls, or they put a harpoon in its heart. Its papers come from all of
+  that (see `src/world/deeps/gutlore.js`):
+  - the captain's log, the manifest, and the try-master's notes;
+  - a harpooner's tally cut in the bone, a letter home, and the cook's
+    complaint scratched on a cask;
+  - a prayer, farewells scratched in the bone, a dead whaler, and the
+    master's hall.
+- **A new item.** Ambergris: grey, waxy, smelling of the sea. It's worth a
+  great deal to perfumers. The whalers' stash and cache hold it, its lumps
+  break into it, and the hermits carry it.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the bone crabs, bone whalers and slimes stay):
+  - **The Gutworm.** A pale parasite in a hole in the wall, its mouth a
+    ring of hooked teeth. Pass its hole and it lunges and latches on. It
+    holds you fast and drinks from you until you strike it off (a hard
+    enough blow does it) or it's had its fill. In its hole, blows mostly
+    glance off; latched on, it's out and open.
+  - **The Bile Blister.** A swollen sac grown on the gut floor, yellow-green
+    and veined. It bursts on anything that comes by (except a crab) or on a
+    blow.
+  - **The Ambergris Hermit.** A peaceful hermit crab wearing a lump of
+    ambergris for its shell. Still, it looks like another lump. Come near
+    and it gets up and runs. Catch it and the ambergris is yours.
+  - Together:
+    - a gutworm holds you while the ridged floor would have carried you
+      clear, or while the bile you're standing in burns;
+    - the crabs walk through the bile and the bursting blisters without a
+      care, and come at you while you're in it;
+    - the ridged floor carries you into a line of blisters, and they go up
+      one after another.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Leviathan's Heart.** The great whale's heart, as big as a cart,
+    beating still in the bottom of the gut. It's dark red wet muscle: two
+    great chambers side by side, the apex below. The coronary vessels run
+    purple-blue in its grooves with yellowed fat along them. The great
+    vessels rise out of its top, the aorta arching red and the veins blue.
+    The whalers' harpoons are still stuck in it with their lines trailing,
+    over a pool of blood and bile. It beats: at rest, clenched dark, swelled.
+  - **The Gut Wyrm.** Something that came in with something the whale
+    swallowed a hundred years ago, and has been eating its way through it
+    ever since. It is a worm as thick as a barrel and the grey-pink of a
+    thing that's never seen the sun, in rings each lit on its crest and
+    creased dark between, bristled and slick. Its coils heap up out of a
+    crater it tore in the gut floor, with bile pooled in it. Its neck rises
+    to a blunt, eyeless head that is all mouth in front: a round pit ringed
+    with hooked teeth in rows, red inside, its lower lip dropping open.
+- **Version 1.5.0.** Worlds from 1.4 load as before. Gut floors you have
+  already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

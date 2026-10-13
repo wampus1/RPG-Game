@@ -9,6 +9,7 @@ import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
 import { barrowIcon } from './art/barrow_items.js';
+import { gutIcon } from './art/gut_items.js';
 import { BARROW_MOBS } from './art/barrow_mobs.js';
 import { MINE_MOBS } from './art/mine_mobs.js';
 import { CRYPT_MOBS } from './art/crypt_mobs.js';
@@ -19,6 +20,7 @@ import { FORGE_MOBS } from './art/forge_mobs.js';
 import { GROTTO_MOBS } from './art/grotto_mobs.js';
 import { CATA_MOBS } from './art/cata_mobs.js';
 import { VAULT_MOBS } from './art/vault_mobs.js';
+import { GUT_MOBS } from './art/gut_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -260,6 +262,7 @@ for (const [k, def] of Object.entries(FORGE_MOBS)) CREATURE_LOOKS[k] = lookOf(de
 for (const [k, def] of Object.entries(GROTTO_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(CATA_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(VAULT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(GUT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
@@ -813,7 +816,7 @@ function toolIcon(kind, tier) {
 
 function simpleIcon(key) {
   // (Round 95: the old places' own, drawn by hand.)
-  const deep = barrowIcon(key);
+  const deep = barrowIcon(key) || gutIcon(key);
   if (deep) return deep;
   // (The other Dagoni Islands' goods: see isleart.js.)
   const isle = isleIcon(key);

@@ -1253,3 +1253,50 @@ def('tv_armour', { ...sprite, solid: true, hardness: Infinity, drop: null, label
 def('tv_rack', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Rack of Arms' });
 def('tv_beam', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Fallen Beam' });
 def('tv_jars', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'clay', chance: 0.6 }, { item: 'jasmine_tea', chance: 0.2 }], label: 'Storage Jars' });
+
+// (Round 105) The Leviathan's Gut made over (see world/deeps/gut.js): its
+// walls of flesh in their folds; the throat's cartilage, a rib grown
+// through the wall, the barnacled hide, a gutworm's hole, the whalers' scar
+// (cut it open: their cache), the sphincter valve (it opens on the beat),
+// an artery, worm eggs; a ledge of bone up on the ribs; its floors (the
+// ridged gut, its grain either way, that pushes on the beat; flesh; bone
+// sand; bile, that burns; ambergris; the swallowed ship's deck); and what's
+// set about in it: a rib, the dead it's digesting, the whalers' camp (a
+// tent, the try-pot, harpoons, lanterns, oil casks, a rope ladder, the
+// captain's logbook), ambergris, eggs, a glowing cyst, polyps, the ship's
+// hull and mast, a flensing hook, an anchor. Last of all, so no block
+// before them changes its number.
+def('lv_flesh', { tool: 'pick', hardness: Infinity, drop: null, label: 'Flesh' });
+def('lv_cartilage', { hardness: Infinity, drop: null, label: 'Cartilage' });
+def('lv_ribwall', { hardness: Infinity, drop: null, label: 'A Rib in the Flesh' });
+def('lv_hide', { hardness: Infinity, drop: null, label: 'Hide, Barnacled' });
+def('lv_wormhole', { hardness: Infinity, drop: null, label: 'A Hole in the Flesh' });
+def('lv_scar', { interact: 'lv_scar', hardness: Infinity, drop: null, label: 'A Scar, Stitched' });
+def('lv_valve', { interact: 'lv_valve', hardness: Infinity, drop: null, label: 'Sphincter' });
+def('lv_artery', { hardness: Infinity, drop: null, light: 4, label: 'Artery' });
+def('lv_eggs', { hardness: Infinity, drop: null, label: 'Worm Eggs' });
+def('lv_ledge', { hardness: Infinity, drop: null, label: 'Bone Ledge' });
+def('lv_rugae_x', { hardness: Infinity, drop: null, label: 'Ridged Gut' });
+def('lv_rugae_z', { hardness: Infinity, drop: null, label: 'Ridged Gut' });
+def('lv_fleshfloor', { hardness: Infinity, drop: null, label: 'Flesh' });
+def('lv_bonesand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Bone Sand' });
+def('lv_bile', { hardness: Infinity, drop: null, light: 2, label: 'Bile' });
+def('lv_amberfloor', { hardness: Infinity, drop: null, label: 'Ambergris' });
+def('lv_deck', { hardness: Infinity, drop: null, label: 'Wet Deck' });
+def('lv_rib', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Whale Rib' });
+def('lv_skeleton', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Whaler, Half Digested' });
+def('lv_tent', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Whalers\' Lean-To' });
+def('lv_trypot', { ...sprite, solid: true, hardness: Infinity, light: 9, lightWhenState: true, drop: null, label: 'Try-Pot' });
+def('lv_harpoons', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Harpoons' });
+def('lv_lantern', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, light: 10, lightWhenState: true, drop: null, label: 'Whale-Oil Lantern' });
+def('lv_barrels', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: 0.6, drop: [{ item: 'planks', chance: 0.5 }], label: 'Casks of Whale-Oil' });
+def('lv_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Rope Ladder' });
+def('lv_logbook', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Captain\'s Logbook' });
+def('lv_ambergris', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: 1, drop: [{ item: 'ambergris', chance: 1 }], label: 'Ambergris' });
+def('lv_eggclutch', { ...dressing, rotatable: true, hardness: 0.3, drop: null, label: 'Worm Eggs' });
+def('lv_cyst', { ...sprite, solid: true, hardness: Infinity, light: 8, drop: null, label: 'Glowing Cyst' });
+def('lv_polyp', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'Polyps' });
+def('lv_hull', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Ship\'s Hull' });
+def('lv_mast', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Broken Mast' });
+def('lv_hook', { ...sprite, tall: true, solid: false, hardness: Infinity, drop: null, label: 'Flensing Hook' });
+def('lv_anchor', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Anchor' });

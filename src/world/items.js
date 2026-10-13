@@ -282,6 +282,10 @@ item('moth_dust', { name: 'Gloam Dust', value: 4 });
 item('flour', { name: 'Sack of Flour', value: 4 });
 item('pearl', { name: 'Pearl', value: 16 });
 item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 70 });
+// (Round 105) Out of the Leviathan's Gut: the grey wax a whale makes round
+// what it can't digest, worth more than its weight in gold to the
+// perfumers.
+item('ambergris', { name: 'Ambergris', kind: 'misc', stack: 16, value: 60, about: 'A lump of grey wax out of a whale\'s gut, sweet-smelling and worth more than its weight in gold to the perfumers.' });
 // (Round 95) A chieftain's gold, out of the barrows: a twisted torc for the
 // neck, a ring for the arm (given by a ring-giver to their sworn).
 item('gold_torc', { name: 'Gold Torc', kind: 'misc', stack: 8, value: 95 });

@@ -15,6 +15,7 @@ import { FORGE_BOSS_ART } from './art/forge_bosses.js';
 import { GROTTO_BOSS_ART } from './art/grotto_bosses.js';
 import { CATA_BOSS_ART } from './art/cata_bosses.js';
 import { VAULT_BOSS_ART } from './art/vault_bosses.js';
+import { GUT_BOSS_ART } from './art/gut_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -66,3 +67,4 @@ installPix(FORGE_BOSS_ART);
 installPix(GROTTO_BOSS_ART);
 installPix(CATA_BOSS_ART);
 installPix(VAULT_BOSS_ART);
+installPix(GUT_BOSS_ART);

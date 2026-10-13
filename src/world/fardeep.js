@@ -21,6 +21,7 @@
 // (Each's own peril, and what drifts in its air: see game/dungeon.js.)
 import { B } from './blocks.js';
 import { VAULT_ARCH } from './deeps/vault.js';
+import { GUT_ARCH } from './deeps/gut.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -290,14 +291,17 @@ export const FAR_DTYPES = {
   // island grew round it: ribs for walls, bone for floor, the bile pools,
   // the parasites; and it's still, somehow, digesting.
   gut: {
-    name: 'Leviathan\'s Gut', isle: 'corrow', wall: B.whalebone, floor: B.bone_sand, alt: B.mud, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Leviathan\'s Gut', isle: 'corrow', wall: B.lv_flesh, floor: B.lv_fleshfloor, alt: B.lv_bonesand, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['ribcage', 'bilepool', 'ribcage', 'wreck', 'bilepool', 'collapsed', 'trap', 'treasure', 'ribcage', 'guard'],
-    mobs: [['bone_crab', 3], ['bone_whaler', 2], ['drowned', 2], ['slime', 2]],
+    mobs: [['bone_crab', 3], ['bone_whaler', 2], ['slime', 2], ['bile_blister', 1], ['drowned', 1]],
     swap: { skeleton: ['bone_whaler'], wight: ['bone_whaler'], ghoul: ['bone_crab'], crawler: ['bone_crab'] },
-    bosses: ['leviathan_heart', 'gut_wyrm'], torches: 0.1,
-    shapes: { cave: 5, round: 3 }, wiggle: 1.5, decor: [['bones', 4], ['skull_pile', 1], ['kelp', 2], ['rubble', 1]],
-    dark: [0.1, 0.06, 0.06], motes: ['#e8d0c0', '#a8c070'], ambient: ['heart', 'drip', 'creak', 'wave'],
-    loot: [['bone', 3, 6, 0.6], ['whale_stew', 1, 1, 0.2], ['pearl', 1, 2, 0.25], ['harpoon', 1, 1, 0.08]],
+    bosses: ['leviathan_heart', 'gut_wyrm'], torches: 0.05,
+    shapes: { cave: 5, round: 3 }, wiggle: 1.5, decor: [['lv_skeleton', 3], ['lv_polyp', 2], ['lv_eggclutch', 1], ['lv_barrels', 1]],
+    dark: [0.1, 0.05, 0.05], motes: ['#e8d0c0', '#a8c070'], ambient: ['heart', 'drip', 'creak', 'wave'],
+    loot: [['bone', 3, 6, 0.6], ['whale_stew', 1, 1, 0.2], ['pearl', 1, 2, 0.25], ['harpoon', 1, 1, 0.08], ['ambergris', 1, 1, 0.15]],
+    // (Round 105: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/gut.js.)
+    arch: GUT_ARCH,
   },
   // Saltmere's oldest workings, cut down and down until they were
   // cathedrals: white vaults of salt, pillars of crystal, pools of brine,
