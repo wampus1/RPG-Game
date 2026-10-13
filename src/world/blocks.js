@@ -845,3 +845,49 @@ def('runaway_cart', { ...sprite, solid: true, interact: 'cart', hardness: Infini
 def('ore_pile', { ...sprite, solid: true, tool: 'pick', hardness: 1, drop: [{ item: 'iron_ore', chance: 0.6 }, { item: 'coal', chance: 0.5 }, { item: 'gold_ore', chance: 0.15 }], label: 'Heap of Ore' });
 def('rail_switch', { ...sprite, solid: false, interact: 'rail_switch', hardness: Infinity, drop: null, label: 'Points' });
 def('mine_fall', { tool: 'shovel', hardness: 1.2, drop: [{ item: 'cobblestone', chance: 0.5 }], label: 'Fall of Rock' });
+
+// (Round 97) The crypt made over (see world/deeps/crypt.js): its dressed
+// stone (the crypt bricks and flagstones drawn afresh), a carved pilaster,
+// the niches of the dead (open, and sealed with a lettered slab), the
+// ossuary's wall of bones, an iron grille, the chancel's dais and the steps
+// up it, ledger slabs over graves, the nave's marble, a cracked flag over
+// the void and a loose one with a ring in it; and what's set about in it:
+// the vigil candles (lit, and snuffed), tombs with their effigies (shut,
+// and dragged open), the altar, a saint in stone, the Register on its
+// lectern, choir stalls, heaped bones, a keeper's cot, a prayer desk, the
+// reliquary, daylight down a shaft, ferns in it, a vestment press, a
+// pauper's grave-board. Last of all, so no block before them changes its
+// number.
+def('crypt_pilaster', { tool: 'pick', hardness: 7, drop: 'cobblestone', label: 'Pilaster' });
+def('crypt_niche', { tool: 'pick', hardness: 4, drop: [{ item: 'bone', chance: 0.7 }], label: 'Burial Niche' });
+def('crypt_sealed', { tool: 'pick', hardness: 6, drop: 'cobblestone', label: 'Sealed Niche' });
+def('bone_wall', { tool: 'pick', hardness: 3, drop: [{ item: 'bone', chance: 0.8 }], label: 'Wall of Bones' });
+def('crypt_grille', { hardness: Infinity, drop: null, label: 'Iron Grille' });
+def('crypt_dais', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Dais' });
+def('crypt_steps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'crypt_dais', rotatable: true, standable: true, tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Steps' });
+def('crypt_ledger', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Ledger Stone' });
+def('crypt_marble', { tool: 'pick', hardness: 5, drop: 'marble', label: 'Marble Floor' });
+def('crypt_weak', { tool: 'pick', hardness: 0.5, drop: null, label: 'Cracked Flag' });
+def('loose_flag', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, interact: 'loose_flag', hardness: Infinity, drop: null, label: 'Loose Flag' });
+def('vigil_candle', { ...sprite, solid: true, light: 9, interact: 'vigil', hardness: Infinity, drop: null, label: 'Vigil Candle' });
+def('vigil_out', { ...sprite, solid: true, interact: 'vigil', hardness: Infinity, drop: null, label: 'Snuffed Candle' });
+// (A tomb's effigy laid four ways: with a sword, a book, the hands joined,
+// a crozier. Each its own, so the Register's riddle reads the same however
+// you look at it.)
+def('effigy_tomb', { ...sprite, solid: true, interact: 'tomb', hardness: Infinity, drop: null, label: 'Tomb' });
+def('effigy_book', { ...sprite, solid: true, interact: 'tomb', hardness: Infinity, drop: null, label: 'Tomb' });
+def('effigy_prayer', { ...sprite, solid: true, interact: 'tomb', hardness: Infinity, drop: null, label: 'Tomb' });
+def('effigy_crozier', { ...sprite, solid: true, interact: 'tomb', hardness: Infinity, drop: null, label: 'Tomb' });
+def('tomb_open', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Open Tomb' });
+def('crypt_altar', { ...sprite, solid: true, light: 4, interact: 'lore', hardness: Infinity, drop: null, label: 'Altar' });
+def('saint_statue', { ...sprite, tall: true, solid: true, light: 3, interact: 'lore', hardness: Infinity, drop: null, label: 'Saint' });
+def('register_lectern', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Register' });
+def('choir_stall', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Choir Stall' });
+def('ossuary_heap', { ...sprite, solid: true, hardness: 0.6, drop: [{ item: 'bone', chance: 0.9, min: 1, max: 3 }], label: 'Heap of Bones' });
+def('keeper_cot', { ...sprite, solid: true, interact: 'lore', tool: 'axe', hardness: 2, drop: 'planks', label: 'Keeper\'s Cot' });
+def('prayer_desk', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: 'planks', label: 'Prayer Desk' });
+def('reliquary', { ...sprite, solid: true, light: 5, interact: 'reliquary', hardness: Infinity, drop: null, label: 'Reliquary' });
+def('light_shaft', { ...sprite, tall: true, solid: false, light: 13, hardness: Infinity, drop: null, label: 'Daylight' });
+def('crypt_fern', { ...sprite, solid: false, hardness: 0.1, drop: null, label: 'Ferns' });
+def('vestment_press', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Vestment Press' });
+def('grave_board', { ...sprite, solid: true, interact: 'lore', tool: 'axe', hardness: 1, drop: 'planks', label: 'Grave-Board' });

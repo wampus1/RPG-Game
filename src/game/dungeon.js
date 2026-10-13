@@ -57,7 +57,7 @@ export function sunkenPlace(rec) {
   return !!rec && (SUNKEN_TYPES.has(rec.type) || /drown|sunk|sea cave|tide|wreck/i.test(rec.name || ''));
 }
 import { MODS } from '../mod/state.js';
-import { interact as deepInteract, restore as deepRestore, tick as deepTick, touched as deepTouched } from './deeps.js';
+import { interact as deepInteract, restore as deepRestore, tick as deepTick, touched as deepTouched, killed as deepKilled } from './deeps.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
@@ -66,7 +66,7 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 const FLOOR_GEN = 6;
 // (Round 95) A kind made over by its own architect (see world/deeps/) lays
 // its floors out its own way: older floors of it are made afresh.
-const KIND_GEN = { barrow: 7, mine: 7 };
+const KIND_GEN = { barrow: 7, mine: 7, crypt: 7 };
 const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
@@ -87,7 +87,7 @@ export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary']);
 
 // Each old place's own space apart, out past the map (see
 // config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,
@@ -398,7 +398,7 @@ export class DungeonRun {
       if (!s.boss && !s.key && (hash4(this.rec.seed, n, s.id) % 100) / 100 < this.rec.weakened * 0.8) continue;
       if (this.rec.cleared && s.boss) continue;
       const y = game.world.findStandY(s.x, s.z, FY);
-      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected, dormant: s.dormant, group: s.group, rest: s.rest, buried: s.buried, peaceful: s.peaceful, role: s.role, effigy: s.effigy, variant: s.variant });
+      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected, dormant: s.dormant, group: s.group, rest: s.rest, buried: s.buried, peaceful: s.peaceful, role: s.role, effigy: s.effigy, variant: s.variant, vigil: s.vigil, route: s.route });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
       // (A great master stood where all of it fits: never half in a wall.)
       if (c && c.foot && !fits(game, c, c.x, c.y, c.z, true)) {
@@ -714,6 +714,10 @@ export class DungeonRun {
     }
     if (o.role) c.role = o.role;
     if (o.peaceful) c.peaceful = true;
+    // (Round 97) Asleep by the vigil's candles; a walk to go (see
+    // game/cryptwork.js).
+    if (o.vigil) c.vigil = true;
+    if (o.route) c.route = o.route;
     // (Down here, nothing's minding its own business: see fardeep.js.)
     if (c.S.mode === 'neutral' && !o.peaceful) c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
@@ -1491,6 +1495,9 @@ export class DungeonRun {
   onKill(e) {
     const game = this.game;
     if (e.spawnId !== undefined && !this.state.killed.includes(e.spawnId)) this.state.killed.push(e.spawnId);
+    // (Round 97) Its bones, where one of a crypt's dead fell: see
+    // game/cryptwork.js.
+    deepKilled(this, e);
     // One of the Overseer's sentinels: the last of them, and its shield
     // breaks. (The Overseer gone: its sentinels go dark and fall.)
     if (e.sentinel) sentinelDown(game, e);

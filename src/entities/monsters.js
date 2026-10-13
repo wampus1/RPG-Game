@@ -2143,6 +2143,9 @@ export function guardFront(game, target, source, amount) {
     amount = target.S.ward(game, target, source, amount);
     if (amount <= 0) return 0;
   }
+  // (Round 97) One of the crypt's dead while a cantor sings over it: half
+  // the hurt (see entities/cryptmobs.js).
+  if (target.hymnT > 0 && source !== target) amount = Math.max(1, Math.round(amount * 0.5));
   if (target.S.shieldBlock || target.species === 'warden') {
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][target.dir] || [0, 1];
     const front = fx * Math.sign(source.x - target.x) + fz * Math.sign(source.z - target.z) > 0;

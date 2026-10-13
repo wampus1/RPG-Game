@@ -6837,6 +6837,9 @@ export class Game {
     if (target.tunnel && target.tunnel.phase === 'under') return;
     // (A master's summoned things never hurt it, nor it them.)
     if (source && sameSide(source, target)) return;
+    // (Round 97) One of the crypt's dead in a vigil candle's light: its
+    // blows weak (see game/cryptwork.js).
+    if (source && source.hushT > 0) amount = Math.max(1, Math.round(amount * 0.6));
     // A bout just over: a blow still on its way, or swung without seeing
     // it was done, lands on nothing (and is no crime).
     const da = this.duelAfter;

@@ -315,7 +315,8 @@ test('a burial room has a few rows of coffins, not a field of them', () => {
     for (let s = 1; s <= 40; s++) {
       const f = buildFloor({ type, seed: s * 131, depth: 2, level: 2, vaultFloor: 0 }, 0);
       const per = new Map();
-      for (const q of f.coffins) {
+      // (Round 97: a crypt's dead lie in its own tombs.)
+      for (const q of [...f.coffins, ...(f.tombs || [])]) {
         const r = f.plan.room[q.z * f.plan.W + (q.x - f.x0)];
         per.set(r, (per.get(r) || 0) + 1);
       }

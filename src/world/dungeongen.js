@@ -22,6 +22,7 @@ import { starGear } from './quality.js';
 import { cookDish, RECIPE_PREFIX } from './dishes.js';
 import { BARROW_ARCH } from './deeps/barrow.js';
 import { MINE_ARCH } from './deeps/mine.js';
+import { CRYPT_ARCH } from './deeps/crypt.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -53,13 +54,15 @@ export const DTYPES = {
     arch: MINE_ARCH,
   },
   crypt: {
-    name: 'Crypt', wall: B.crypt_brick, floor: B.crypt_floor, alt: B.stone_bricks, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Crypt', wall: B.crypt_brick, floor: B.crypt_floor, alt: B.crypt_floor, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['flooded', 'flooded', 'burial', 'ossuary', 'shrine', 'pillared', 'trap', 'library', 'treasure', 'burial'],
-    mobs: [['drowned', 3], ['skeleton', 2], ['ghoul', 2], ['rat', 2], ['wisp', 1]], bosses: ['priest', 'horror', 'hollow_saint'], torches: 0.3,
+    mobs: [['skeleton', 3], ['drowned', 2], ['ghoul', 1], ['rat', 1], ['mourner', 1], ['wisp', 1]], bosses: ['priest', 'horror', 'hollow_saint'], torches: 0.1,
     // Laid out by masons: eight-sided halls and cross-shaped chapels on
     // straight passages; candles, statues, chains, skulls stacked in niches.
+    // (Round 97: its rooms its own architect's: see deeps/crypt.js.)
     shapes: { octagon: 4, cross: 3, rect: 2, round: 1 }, wiggle: 0, decor: [['candles', 4], ['statue', 2], ['urn', 2], ['skull_pile', 2], ['hanging_chains', 2], ['cobweb', 2]],
     dark: [0.055, 0.068, 0.11], motes: ['#7ac8b0', '#a0e8d0'], ambient: ['drip', 'chains', 'drone', 'whisper'],
+    arch: CRYPT_ARCH,
   },
   holdout: {
     name: 'Holdout', wall: B.cave_rock, floor: B.dirt, alt: B.path, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],

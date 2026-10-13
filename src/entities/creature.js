@@ -10,6 +10,7 @@ import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
 import { FAR_DEEP_SPECIES } from './farmobs.js';
 import { BARROW_SPECIES } from './barrowmobs.js';
 import { MINE_SPECIES } from './minemobs.js';
+import { CRYPT_SPECIES } from './cryptmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -104,6 +105,7 @@ export const SPECIES = {
   ...FAR_DEEP_SPECIES,
   ...BARROW_SPECIES,
   ...MINE_SPECIES,
+  ...CRYPT_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,

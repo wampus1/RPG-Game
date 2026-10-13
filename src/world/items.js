@@ -286,6 +286,11 @@ item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 
 // neck, a ring for the arm (given by a ring-giver to their sworn).
 item('gold_torc', { name: 'Gold Torc', kind: 'misc', stack: 8, value: 95 });
 item('arm_ring', { name: 'Arm-Ring', kind: 'misc', stack: 8, value: 45 });
+// (Round 97) Out of the crypts: an altar's chalice, gilt; and a saint's
+// bones in a little reliquary of their own, worth a great deal to any
+// temple (and to the dead, who wake when they're taken).
+item('gilt_chalice', { name: 'Gilt Chalice', kind: 'misc', stack: 4, value: 85 });
+item('saint_relic', { name: 'Saint\'s Relic', kind: 'misc', stack: 1, value: 220, about: 'A saint\'s bones in a little gilt casket. Any temple would pay well for them, and the crypt they came from is no longer quiet.' });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });

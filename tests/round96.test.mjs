@@ -21,7 +21,7 @@ import '../src/render/bossbody.js';
 import { FORGE } from '../src/render/forge.js';
 import { mineLore } from '../src/world/deeps/minelore.js';
 import { igniteGas, propFall } from '../src/game/minework.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 const rec = (s, isle) => ({ id: `m${s}`, type: 'mine', seed: s * 7919 + 13, depth: 3, level: 1 + (s % 3), isle, name: 'Test Copper Mine', townName: 'Hobb', origin: { y: 211 }, fallen: [] });
@@ -363,7 +363,7 @@ test('the mine\'s masters are all painted by hand, every part in place', () => {
 });
 
 test('the version and its step', () => {
-  assert.equal(GAME_VERSION, '0.96.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.96.0') >= 0);
   const steps = stepsFor('0.95.0');
   assert.ok(steps.some((s) => s.to === '0.96.0'));
 });

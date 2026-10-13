@@ -131,9 +131,11 @@ test('lava down below lies sunk in the floor, and never cuts the way through', (
       for (let n = 0; n < 2; n++) {
         const f = buildFloor({ type, isle: 'kharos', seed: s * 131, depth: 3, level: 1, vaultFloor: 1 }, n);
         const get = getter(f);
+        // (A step up, a crypt's chancel or a dais, is walked up onto.)
+        const step = (x, z) => BLOCKS[get(x, FY, z)].standable !== false && !BLOCKS[get(x, FY + 1, z)].solid && !BLOCKS[get(x, FY + 2, z)].solid;
         const pass = (x, z) => {
           const ft = get(x, FY, z);
-          return !(BLOCKS[ft].solid && !BLOCKS[ft].interact) && ft !== B.lava && get(x, FY - 1, z) !== B.lava;
+          return (!(BLOCKS[ft].solid && !BLOCKS[ft].interact) || step(x, z)) && ft !== B.lava && get(x, FY - 1, z) !== B.lava;
         };
         // From the way in, everywhere's reached without setting foot in it.
         const W = f.W;

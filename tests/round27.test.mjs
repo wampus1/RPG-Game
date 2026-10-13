@@ -272,7 +272,7 @@ test('a sealed room has one way in, and one door across it, the right way round'
 });
 
 test('each kind of place is dressed its own way', () => {
-  const want = { barrow: ['urn', 'roots'], mine: ['stalagmite', 'glowshroom'], crypt: ['candles', 'statue'], holdout: ['weapon_rack', 'war_banner'] };
+  const want = { barrow: ['urn', 'roots'], mine: ['stalagmite', 'glowshroom'], crypt: ['vigil_candle', 'saint_statue'], holdout: ['weapon_rack', 'war_banner'] };
   for (const type of types) {
     const found = new Set();
     for (let s = 1; s <= 4; s++) {

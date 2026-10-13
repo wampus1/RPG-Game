@@ -6704,6 +6704,97 @@ the dead in it are still at work.
 - **Older mine floors are made afresh.** A mine floor saved before this
   version is laid out the new way the next time anyone goes down to it.
 
+## Round 97: The crypt, made over
+
+The third of the dungeon overhauls. The crypt is the undercroft of a
+temple, raised over a saint's bones. For generations an order of keepers
+buried the town's dead in it and kept the **vigil**: candles that never
+went out, so that the dead would sleep. Then the water came up through the
+floor, the candles guttered, and the dead woke. It's built of pale dressed
+stone in courses, with carved pilasters, ledger slabs over graves, marble
+down the nave and the niches of the dead in every wall. The halls are
+large, with many smaller rooms opening off them, and there is little up
+and down: a chancel a step up, the drowned undercroft a step down.
+
+- **The vigil.** Vigil candles stand by the tombs and among the dead.
+  While a candle burns, the dead near it sleep: they won't wake as you walk
+  past, only if you're right on them or you strike them. When a candle goes
+  out, the dead near it get up and its tombs open. The risen in a burning
+  candle's light are **hushed**: slow, and their blows weak. Hold a torch
+  or a lantern and use a snuffed candle to light it again.
+- **Rooms a crypt has.** Crypt floors are laid out by the crypt's own
+  architect (see `src/world/deeps/crypt.js`):
+  - **The nave.** The great hall: two rows of pillars, marble down the
+    middle with vigil candles along it, tombs in the aisles, and at its end
+    the chancel a step up, with the altar, the choir stalls and the cantor.
+  - **The chapels.** An altar against the back wall with candles either
+    side, a prayer desk before it, and a saint in stone, someone's tomb, or
+    both. A great chapel is walled into smaller chapels down each side,
+    each with its own tomb, saint or altar.
+  - **The donors' chapel.** The benefactors' tombs in a row, each effigy
+    laid its own way (with a sword, with a book, hands joined, with a
+    crozier). One of them was buried with the altar's gilt chalice. The
+    Register says how that donor lies. Open the right tomb and the chalice
+    is yours; open a wrong one and its knight climbs out.
+  - **The loculi.** A long gallery with the dead shelved in niches up both
+    walls, two tiers of them, some sealed with lettered slabs. Candles burn
+    down the middle and skeletons lie in the niches. Here and there a flag
+    is cracked over the void.
+  - **The ossuary.** Walls of stacked bones and skulls, heaps of them down
+    the middle, the dead stirring in them, and the sexton who keeps them.
+  - **The undercroft.** The lower crypt, drowned: black water a step down,
+    a causeway of grave slabs through it with candles along it, tombs
+    standing in the water, the drowned in it, and a chest gone under.
+  - **The cells.** The keepers' dormitory: a walk down the middle, cells
+    off it either side, a cot in each. A letter that was never sent lies on
+    one cot, the vigil rota on another.
+  - **The scriptorium** (first floor). The Register of the dead on its
+    lectern, shelves of the order's books, a desk.
+  - **The vigil chapel.** Candles round its walls, every one of them out,
+    a saint in the middle, and an iron grille in one wall. Light every
+    candle and the grille lifts. The Register says how many lights it keeps.
+  - **The light well.** Daylight down a grate from the churchyard above,
+    ferns growing in it, and the paupers buried in its earth under their
+    grave-boards. The dead won't stand in daylight: knocked into it, they
+    burn.
+  - **The sacristy.** Vestment presses and the plate chest.
+  - **The reliquary** (bottom floor). The saint's bones in a gilt casket on
+    a dais, candles at its four corners, and the tombs of those who asked
+    to lie near the saint. Take the bones (a **Saint's Relic**, worth a
+    great deal to any temple) and the vigil goes with them: every candle
+    on the floor goes out, one after another out from where you stand.
+- **The penitent's walk.** On most floors a pale ghost goes from chapel to
+  chapel, kneeling at each, and waits for you to follow. Where it kneels
+  last there's a loose flag. Lift it: there's a hollow under it, and a
+  casket. Strike the penitent and it's gone with a wail, and the candles
+  near you go out.
+- **Cracked flags.** A cracked flag gives way under you, or under anything
+  heavy, into the water under the floor. An entombed knight lured onto one
+  goes through and is stuck a while.
+- **Lore from the world about it.** What's written in a crypt is made from
+  its own history: the god its temple was raised to (the one the town near
+  it keeps), the saint whose bones it was built over, the order that kept
+  the vigil, its prior, the year the water came, and the names of the
+  town's dead in the Register. Read the altars, the saints, the Register,
+  the keepers' letters and rota, the grave-boards, the reliquary and the
+  last page left in the master's hall.
+- **The crypt's own, made to fight together:**
+  - **The Entombed**: a knight out of their tomb, in mail, with the
+    order's lamp on a heater shield. Slow and heavy, and the shield turns
+    most of what comes at them from the front.
+  - **The Mourner**: a tall shade veiled in black crepe. It wants no fight:
+    it slips past you to the vigil candles and pinches them out, and
+    wherever it's been the dead get up. Its touch is cold and slows you.
+  - **The Sexton**: the gravedigger, with spade and sack. Where one of the
+    crypt's dead falls its bones lie a while, and the sexton goes and
+    gathers them and they get up again (not in a burning candle's light).
+  - **The Cantor**: still at the office. While it sings, the dead near it
+    take half the hurt; with two singing, their wounds close too. Strike
+    the cantor and the hymn breaks off for a while.
+  - **The Penitent**: the pale ghost of the walk. It never fights.
+- **Older crypt floors are made afresh.** A crypt floor saved before this
+  version is laid out the new way the next time anyone goes down to it.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
