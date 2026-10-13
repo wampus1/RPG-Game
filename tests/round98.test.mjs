@@ -23,6 +23,9 @@ import { rollKeg } from '../src/game/holdwork.js';
 import { addItem, countItem } from '../src/game/inventory.js';
 import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
+import { HOLD_BOSS_ART } from '../src/render/art/hold_bosses.js';
+import { FORGE } from '../src/render/forge.js';
+import '../src/render/bossbody.js';
 
 const rec = (s, isle) => ({
   id: `h${s}`, type: 'holdout', seed: s * 7919 + 13, depth: 3, level: 1 + (s % 3), isle, name: 'Black Rat Holdout', townName: 'Hobb',
@@ -341,6 +344,28 @@ test('the houndmaster down, his dogs go wild', () => {
   assert.ok(hm.dead);
   for (const h of dogs) assert.ok(h.wild, 'wild');
   d.leave();
+});
+
+test('the holdout\'s chiefs are all painted by hand, every part in place', () => {
+  const names = Object.keys(HOLD_BOSS_ART);
+  assert.equal(names.length, 24, 'the twenty-three, the twins two of them');
+  for (const k of names) {
+    assert.ok(SPECIES[k], `${k} is a species`);
+    const D = FORGE[k];
+    assert.ok(D && D.pix, `${k} is painted`);
+    const A = HOLD_BOSS_ART[k];
+    assert.ok(A.body.rows.length, `${k} has a body`);
+    for (const [n, q] of Object.entries(A.parts || {})) {
+      assert.ok(q.pix && q.pix.rows.length, `${k}.${n} has a picture`);
+      if (q.parent) assert.ok(A.parts[q.parent], `${k}.${n} hangs on ${q.parent}`);
+    }
+  }
+  // (What their effects hang on: the weapons in their hands; the hydra's
+  // heads on their necks; the drake's jaw that breathes fire.)
+  for (const k of ['warlord', 'twins', 'twin_b', 'poisoner', 'bombard_queen', 'the_wrecker', 'sharktooth']) assert.equal(HOLD_BOSS_ART[k].parts.blade.parent, 'armN', `${k}'s weapon is in its hand`);
+  for (let i = 0; i < 3; i++) assert.equal(HOLD_BOSS_ART.lagoon_hydra.parts[`head${i}`].parent, `neck${i}`);
+  assert.equal(HOLD_BOSS_ART.chained_drake.parts.jaw.parent, 'head');
+  for (const k of ['war_eagle', 'thunderbird', 'storm_petrel']) assert.ok(HOLD_BOSS_ART[k].parts.wingN && HOLD_BOSS_ART[k].parts.wingF, `${k} has its wings`);
 });
 
 test('the version and its step', () => {

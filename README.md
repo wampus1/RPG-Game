@@ -6903,6 +6903,26 @@ crack in the floor with a rope bridge over it, pits under hides.
     you; a keg bursts on whatever it meets, the gang's own included.
   - **The Captive**: shackled in the cells. Never fights, and your blows
     never touch them.
+- **The holdout's chiefs, painted by hand.** All twenty-three of them
+  (the Twins are two), every pixel placed: the Warlord, black-bearded
+  under his spiked helm, a red tabard with the gang's black hand over
+  stolen plate, his great axe raised; the Twins, red-haired and alike as
+  two coins, one in plate with a war-hammer, one in studded leather with
+  his knives; Mother Nettle the Poisoner, bent in her green hood, her
+  phials across her, her knife dripping; the Ash Reaver's crest of red
+  horsehair and three-headed flail; the Bombard Queen's goggles, bandana
+  and bomb-tipped crossbow; the Chained Drake on its chain, fire in its
+  jaw; Sharktooth's tricorn, tarred beard and harpoon; the Pearl Queen's
+  shell crown; the Smugglers' Kraken under a snagged net; the Deserter
+  General in dented bronze with his old wound; the legion's War Eagle,
+  still collared in gilt; the Bandit Khan's fox-fur hat, scale coat and
+  horse-tail standard; the Thunderbird with lightning in its wings; the
+  Harpoon Queen in oiled hide; the Bull Walrus and its chipped tusks; the
+  Salt Doge with his ledger; the Lagoon Hydra's three heads; the Burrow
+  Baron's plum velvet and gilt mattock; the Cave Bear; the Fey Reaver,
+  pale silver, her cold-iron blade edged with frost; the White Hart's
+  glowing antlers; the Wrecker with his lantern and hook; and the Storm
+  Petrel.
 - **Fixes along the way.** The ladders up to the ledges in a mine's shafts
   were being cleared away when the floor was finished (they are kept now),
   and a ledge split by a doorway is never left with half of it out of

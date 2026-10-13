@@ -8,6 +8,7 @@ import { FORGE, breathOf } from './forge.js';
 import { BARROW_BOSS_ART } from './art/barrow_bosses.js';
 import { MINE_BOSS_ART } from './art/mine_bosses.js';
 import { CRYPT_BOSS_ART } from './art/crypt_bosses.js';
+import { HOLD_BOSS_ART } from './art/hold_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -47,3 +48,4 @@ export function installPix(art) {
 installPix(BARROW_BOSS_ART);
 installPix(MINE_BOSS_ART);
 installPix(CRYPT_BOSS_ART);
+installPix(HOLD_BOSS_ART);
