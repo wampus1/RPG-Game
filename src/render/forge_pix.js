@@ -6,6 +6,7 @@
 // Each part above the body's breath-line rises and falls with it.
 import { FORGE, breathOf } from './forge.js';
 import { BARROW_BOSS_ART } from './art/barrow_bosses.js';
+import { MINE_BOSS_ART } from './art/mine_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -18,6 +19,7 @@ export function installPix(art) {
     D.walk = !!A.walk;
     D.joints = null;
     const parts = {};
+    const was = D.parts || {};
     for (const [n, q] of Object.entries(A.parts || {})) {
       const [x, y] = q.at;
       // (One hung on another part is placed on that part's picture.)
@@ -26,6 +28,9 @@ export function installPix(art) {
       // (A part with another picture for a state of the master's: its
       // wings' eyes open, say.)
       if (q.pixVariants) p.variant = (R) => Object.keys(q.pixVariants).find((k) => R.st[k]) || '';
+      // (When it's shown, as the forged part it stands for was: a neck
+      // under the water while its master is down there, say.)
+      if (!p.show && was[n] && was[n].show) p.show = was[n].show;
       parts[n] = p;
     }
     D.parts = parts;
@@ -33,3 +38,4 @@ export function installPix(art) {
 }
 
 installPix(BARROW_BOSS_ART);
+installPix(MINE_BOSS_ART);
