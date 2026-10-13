@@ -1434,7 +1434,10 @@ export class Renderer {
         this.drawWallPainting(ctx, game, wx, y, wz, b.painting, metaAt(ci, y), sx, sy, pickable, id);
       } else if (render === 'sprite' || render === 'plant') {
         const meta = metaAt(ci, y);
-        const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
+        // (Round 104: one whose turn says which of its kind it is, not
+        // which way it faces (a bust's ancestor, a soldier's face), stays
+        // that one however the view's turned.)
+        const rot = b.rotatable ? (b.kinds ? meta & META_ROT : ((meta & META_ROT) + view) & 3) : 0;
         const arr = T.sprite[id * 4 + rot];
         const st = meta & META_STATE ? 1 : 0;
         let idx;

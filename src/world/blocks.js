@@ -1171,9 +1171,9 @@ def('cc_bonefloor', { hardness: Infinity, drop: null, label: 'Bones' });
 def('cc_porphyry', { hardness: Infinity, drop: null, label: 'Porphyry' });
 def('cc_lamp', { ...sprite, tall: true, solid: true, interact: 'cc_lamp', hardness: Infinity, light: 11, lightWhenState: true, drop: null, label: 'Bronze Lampstand' });
 def('cc_lucerna', { ...sprite, solid: true, interact: 'cc_lamp', hardness: Infinity, light: 8, lightWhenState: true, drop: null, label: 'Oil Lamp' });
-def('cc_urn', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'old_coin', chance: 0.35 }, { item: 'bone', chance: 0.3 }], label: 'Urn of Ashes' });
+def('cc_urn', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: 0.5, drop: [{ item: 'old_coin', chance: 0.35 }, { item: 'bone', chance: 0.3 }], label: 'Urn of Ashes' });
 def('cc_sarcophagus', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Sarcophagus' });
-def('cc_bust', { ...sprite, tall: true, solid: true, rotatable: true, interact: 'cc_bust', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Bust of an Ancestor' });
+def('cc_bust', { ...sprite, tall: true, solid: true, rotatable: true, kinds: true, interact: 'cc_bust', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Bust of an Ancestor' });
 def('cc_statue', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Statue' });
 def('cc_eagle', { ...sprite, tall: true, solid: true, hardness: Infinity, light: 3, drop: null, label: 'The Legion\'s Eagle' });
 def('cc_column', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Column' });
@@ -1187,3 +1187,69 @@ def('cc_slab', { ...sprite, solid: true, rotatable: true, interact: 'lore', hard
 def('cc_rubble', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Fallen Masonry' });
 def('cc_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder' });
 def('cc_banner', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'The Legion\'s Banner' });
+
+// (Round 104) The Terracotta Vault made over (see world/deeps/vault.js): its
+// wall of rammed earth beaten down in layers (a timber post against it, a
+// crack in it); the palace's black lacquer (cloud scrolls; a gold roundel),
+// the four beasts of the directions on silk, a bronze door with its monster
+// mask, a crossbow's slot in the wall, a stele, the artisans' tally (and
+// the crack beside it, which gives), the workshop's clay heads, a kiln; an
+// earth ridge between the army's trenches, the dais and its steps; its
+// floors (grey brick, loess, black stone, red lacquer, quicksilver, jade in
+// a key pattern, a bronze bridge, a plate that sets off the crossbows); and
+// what's set about in it: the clay soldiers (four kinds, each its face),
+// one broken, a clay horse, a red column, the kneeling girl's lamp, a paper
+// lantern, a bronze cauldron, the bells, the war drum, a screen, the
+// throne, a mountain of the empire in bronze, the jade discs of the five
+// directions (one block a colour), a soldier half made, clay, the bones of
+// one sealed in, stone armour, a rack of arms, a fallen beam, jars. Last of
+// all, so no block before them changes its number.
+def('tv_earth', { tool: 'pick', hardness: Infinity, drop: null, label: 'Rammed Earth' });
+def('tv_lacquer', { hardness: Infinity, drop: null, label: 'Black Lacquer' });
+def('tv_roundel', { hardness: Infinity, drop: null, label: 'Black Lacquer, a Gold Roundel' });
+def('tv_dragon', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Azure Dragon of the East' });
+def('tv_bird', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Vermilion Bird of the South' });
+def('tv_tiger', { interact: 'lore', hardness: Infinity, drop: null, label: 'The White Tiger of the West' });
+def('tv_tortoise', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Black Tortoise of the North' });
+def('tv_bronzedoor', { interact: 'tv_bronzedoor', hardness: Infinity, drop: null, label: 'Bronze Door' });
+def('tv_crossbow', { interact: 'tv_crossbow', hardness: Infinity, drop: null, label: 'A Slot in the Wall' });
+def('tv_stele', { interact: 'lore', hardness: Infinity, drop: null, label: 'Stele' });
+def('tv_tally', { interact: 'lore', hardness: Infinity, drop: null, label: 'Scratched Tally' });
+def('tv_crack', { interact: 'tv_crack', hardness: Infinity, drop: null, label: 'Rammed Earth (cracked)' });
+def('tv_heads', { hardness: Infinity, drop: null, label: 'Shelves of Clay Heads' });
+def('tv_kiln', { hardness: Infinity, drop: null, light: 9, label: 'Kiln' });
+def('tv_ridge', { hardness: Infinity, drop: null, label: 'Earth Ridge' });
+def('tv_dais', { hardness: Infinity, drop: null, light: 1, label: 'Dais' });
+def('tv_daissteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'tv_dais', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Dais Steps' });
+def('tv_brick', { hardness: Infinity, drop: null, label: 'Grey Brick' });
+def('tv_plate', { hardness: Infinity, drop: null, label: 'Grey Brick' });
+def('tv_loess', { tool: 'pick', hardness: Infinity, drop: null, label: 'Loess' });
+def('tv_stone', { hardness: Infinity, drop: null, label: 'Polished Black Stone' });
+def('tv_lacquerfloor', { hardness: Infinity, drop: null, label: 'Red Lacquer' });
+def('tv_mercury', { hardness: Infinity, drop: null, light: 2, label: 'Quicksilver' });
+def('tv_jade', { hardness: Infinity, drop: null, light: 1, label: 'Jade in Black Stone' });
+def('tv_bridge', { hardness: Infinity, drop: null, label: 'Bronze Bridge' });
+def('tv_soldier', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: Infinity, drop: null, label: 'Clay Soldier' });
+def('tv_shards', { ...dressing, rotatable: true, kinds: true, hardness: Infinity, drop: null, label: 'A Broken Clay Soldier' });
+def('tv_horse', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Clay Horse' });
+def('tv_column', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Red Column' });
+def('tv_lamp', { ...sprite, solid: true, interact: 'tv_lamp', hardness: Infinity, light: 9, lightWhenState: true, drop: null, label: 'Bronze Lamp' });
+def('tv_lantern', { ...sprite, tall: true, solid: true, hardness: Infinity, light: 10, lightWhenState: true, drop: null, label: 'Paper Lantern' });
+def('tv_ding', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Bronze Cauldron' });
+def('tv_bells', { ...sprite, solid: true, interact: 'tv_bells', hardness: Infinity, drop: null, label: 'Bronze Bells' });
+def('tv_drum', { ...sprite, solid: true, interact: 'tv_drum', hardness: Infinity, drop: null, label: 'War Drum' });
+def('tv_screen', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Lacquer Screen' });
+def('tv_throne', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Throne' });
+def('tv_mountain', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: Infinity, drop: null, label: 'Bronze Mountain' });
+def('tv_disc_green', { ...sprite, solid: true, interact: 'tv_disc', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Green Jade Disc' });
+def('tv_disc_red', { ...sprite, solid: true, interact: 'tv_disc', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Red Jade Disc' });
+def('tv_disc_white', { ...sprite, solid: true, interact: 'tv_disc', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'White Jade Disc' });
+def('tv_disc_black', { ...sprite, solid: true, interact: 'tv_disc', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Black Jade Disc' });
+def('tv_disc_yellow', { ...sprite, solid: true, interact: 'tv_disc', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Yellow Jade Disc' });
+def('tv_torso', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Soldier Half Made' });
+def('tv_clay', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'clay', chance: 1 }], label: 'Clay' });
+def('tv_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Bones' });
+def('tv_armour', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Stone Armour' });
+def('tv_rack', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Rack of Arms' });
+def('tv_beam', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Fallen Beam' });
+def('tv_jars', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'clay', chance: 0.6 }, { item: 'jasmine_tea', chance: 0.2 }], label: 'Storage Jars' });

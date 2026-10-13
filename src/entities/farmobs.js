@@ -67,6 +67,17 @@ export const FAR_DEEP_SPECIES = {
   terracotta_soldier: {
     name: 'Terracotta Soldier', hp: 26, dmg: 4, step: 0.44, mode: 'hostile', aggro: 9, humanoid: true, look: 'terracotta', arms: 'spear', under: true, construct: true, armoured: true,
     isle: 'ostria', drops: [['clay', 1, 3, 0.7], ['old_coin', 1, 2, 0.3]],
+    // (Round 104) Halted at the bell, it stands as clay: blows glance off
+    // (see entities/vaultmobs.js, the drummer).
+    ward(game, c, src, amt) {
+      if (!(c.haltT > 0)) return amt;
+      if (!(c.clayNote > 0)) {
+        c.clayNote = 1;
+        game.renderer.floatText(c.x, c.y + 2.4, c.z, 'it stands like clay: the blow glances off', '#e0c090');
+      }
+      game.audio?.play('armor_hit', c);
+      return 0;
+    },
     onDeath(game, c) {
       game.renderer.emit(c.x, c.y + 1, c.z, { n: 26, color: CLAY, up: 40, speed: 50, gravity: 200, life: 0.8 });
       game.renderer.floatText(c.x, c.y + 2.2, c.z, 'crumbles', '#d8946a');

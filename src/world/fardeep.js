@@ -20,6 +20,7 @@
 //     the sea came into.
 // (Each's own peril, and what drifts in its air: see game/dungeon.js.)
 import { B } from './blocks.js';
+import { VAULT_ARCH } from './deeps/vault.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -273,14 +274,17 @@ export const FAR_DTYPES = {
   // of terracotta soldiers, red lacquer halls, lanterns, the crossbows of
   // the statues still drawn.
   vault: {
-    name: 'Terracotta Vault', isle: 'ostria', wall: B.adobe_red, floor: B.flagstone, alt: B.planks_lacquer, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Terracotta Vault', isle: 'ostria', wall: B.tv_earth, floor: B.tv_brick, alt: B.tv_loess, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['soldiers', 'lanterns', 'pillared', 'shrine', 'soldiers', 'cache', 'trap', 'treasure', 'guard', 'collapsed'],
-    mobs: [['terracotta_soldier', 4], ['terracotta_archer', 2], ['jade_corpse', 2], ['wisp', 1]],
-    swap: { skeleton: ['terracotta_soldier'], wight: ['jade_corpse'], ghoul: ['terracotta_soldier'], cutthroat: ['terracotta_soldier'], holdout_archer: ['terracotta_archer'], bombarder: ['terracotta_archer'] },
-    bosses: ['terracotta_general', 'jade_dragon'], torches: 0.3,
-    shapes: { rect: 5, cross: 2, octagon: 1 }, wiggle: 0, decor: [['statue', 3], ['candles', 2], ['urn', 2], ['war_banner', 1]],
+    mobs: [['terracotta_soldier', 4], ['terracotta_archer', 2], ['jade_corpse', 2], ['quicksilver', 1]],
+    swap: { skeleton: ['terracotta_soldier'], wight: ['jade_corpse'], ghoul: ['terracotta_soldier'], cutthroat: ['terracotta_soldier'], holdout_archer: ['terracotta_archer'], bombarder: ['terracotta_archer'], wisp: ['quicksilver_bead'] },
+    bosses: ['terracotta_general', 'jade_dragon'], torches: 0.05,
+    shapes: { rect: 5, cross: 2, octagon: 1 }, wiggle: 0, decor: [['tv_jars', 2], ['tv_ding', 1], ['tv_beam', 1], ['tv_shards', 1]],
     dark: [0.1, 0.06, 0.05], motes: ['#ff8060', '#ffd0a0'], ambient: ['drone', 'creak', 'whisper'],
-    loot: [['gem', 1, 2, 0.2], ['gold_ingot', 1, 1, 0.2], ['jasmine_tea', 1, 2, 0.3], ['old_coin', 3, 8, 0.6]],
+    loot: [['gem', 1, 2, 0.2], ['gold_ingot', 1, 1, 0.2], ['jasmine_tea', 1, 2, 0.3], ['old_coin', 3, 8, 0.6], ['clay', 2, 4, 0.3]],
+    // (Round 104: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/vault.js.)
+    arch: VAULT_ARCH,
   },
   // Inside a whale the size of a hill, cast up on Corrow so long ago the
   // island grew round it: ribs for walls, bone for floor, the bile pools,

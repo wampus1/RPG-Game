@@ -39,8 +39,10 @@ export const ISLE_LOOKS = {
   // dead; the Wyrd Isle's fey knights in silver, antlered; the Skerries'
   // wreckers in dark oilskins with their false lanterns.
   legion_shade: { skin: '#a8c0d8', hair: '#c8d8f0', hairStyle: 'bald', shirt: '#8a2a2a', pants: '#6a2020', shoes: '#4a3a24', outfit: 'tunic', accent: '#c83030', hat: 'galea', hatColor: '#b89040', eyes: '#e0f4ff', gear: { body: 'plate:#b89040', legs: 'plate:#9a7a38' } },
-  terracotta: { skin: '#b8643a', hair: '#8a4a2a', hairStyle: 'bald', shirt: '#a85a34', pants: '#9a5030', shoes: '#7a3e24', outfit: 'tunic', accent: '#d8946a', hat: 'clayhelm', hatColor: '#8a4a2a', eyes: '#3a1a10', gear: { body: 'plate:#a85a34' } },
-  terracotta_archer: { skin: '#b8643a', hair: '#8a4a2a', hairStyle: 'bald', shirt: '#9a5434', pants: '#8a4a2c', shoes: '#7a3e24', outfit: 'tunic', accent: '#d8946a', hat: 'clayhelm', hatColor: '#7a4024', eyes: '#3a1a10' },
+  // (Round 104: the fired clay of the vault's statues, grey-buff, so one
+  // that steps down out of its rank looks as it did standing in it.)
+  terracotta: { skin: '#a8886a', hair: '#56402e', hairStyle: 'bald', shirt: '#806248', pants: '#8e7054', shoes: '#56402e', outfit: 'tunic', accent: '#cdb08e', hat: 'clayhelm', hatColor: '#56402e', eyes: '#1e1410', gear: { body: 'plate:#806248' } },
+  terracotta_archer: { skin: '#a8886a', hair: '#56402e', hairStyle: 'bald', shirt: '#806248', pants: '#8e7054', shoes: '#56402e', outfit: 'tunic', accent: '#cdb08e', hat: 'clayhelm', hatColor: '#56402e', eyes: '#1e1410', gear: { body: 'plate:#806248' } },
   jade_corpse: { skin: '#a8c8b0', hair: '#1a2a20', hairStyle: 'ponytail', shirt: '#1e3a5a', pants: '#162a44', shoes: '#0e1a2a', outfit: 'robe_jade', accent: '#d8b040', hat: 'guanmao', hatColor: '#1e2a24', eyes: '#80ffa0', stoop: true },
   bone_whaler: { skin: '#e8e4d4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#2a3a3a', pants: '#24302e', shoes: '#1a2220', outfit: 'skeleton', accent: '#d8b030', hat: 'souwester', hatColor: '#c8a028' },
   salt_wight: { skin: '#f0ecf0', hair: '#ffffff', hairStyle: 'long', shirt: '#e8e0e4', pants: '#d8d0d8', shoes: '#c8c0c8', outfit: 'robe_salt', accent: '#e8a0b8', hat: 'hood', hatColor: '#e0d8e0', eyes: '#a0c8ff', stoop: true },

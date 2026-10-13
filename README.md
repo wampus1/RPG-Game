@@ -7588,6 +7588,168 @@ porphyry. It is lit by oil lamps that someone keeps lighting.
 - **Version 1.3.0.** Worlds from 1.2 load as before. Catacomb floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 104: The Terracotta Vault, made over
+
+The tenth of the dungeon overhauls. A Terracotta Vault is an emperor's
+tomb in Ostria. He was sealed into his hill with an army of clay to guard
+him, eight thousand strong and every face different. The first feeling
+should be scale and stillness: long earthen trenches with the army
+standing in them rank on rank, all facing the way you came in. The
+second is suspicion: some of them aren't clay, and you can't tell which.
+Deeper in is the palace, kept as it was: red and black lacquer, gold,
+bronze and jade, and the whole empire laid out in little with its rivers
+running in quicksilver. It was built by craftsmen who were sealed in with
+it so its secrets would die with them. Their ghosts are still there.
+
+- **Drawn afresh.** Every Terracotta Vault tile and thing is painted by
+  hand:
+  - **The walls.** Rammed earth beaten down in layers (each layer's top
+    paler where the tamper packed it, the tampers' dimples in it), some with
+    a timber post against it or a crack down it. Also:
+    - black lacquer with red cloud scrolls edged in gold, and with a gold
+      roundel;
+    - the four beasts of the directions painted on silk: the Azure Dragon,
+      the Vermilion Bird, the White Tiger and the Black Tortoise;
+    - a bronze door with its monster mask, and a crossbow's slot in the
+      wall;
+    - a stone stele, the artisans' tally of their days, the workshop's
+      shelves of clay heads, and a kiln's mouth.
+  - **The floors.** Grey brick, trodden loess, polished black stone, red
+    lacquer boards, quicksilver, jade laid in black stone in a key pattern
+    (it runs from tile to tile with no seam), and a bronze bridge.
+  - **The things set about.**
+    - The clay soldiers (infantry in armour and in tunics, a kneeling
+      crossbowman, an officer), each with a face of its own and flakes of
+      the paint they were finished in, and one broken into shards.
+    - A clay horse, red columns, a bronze crane lamp, paper lanterns, a
+      bronze cauldron, the bells, the war drum, a lacquer screen and the
+      throne.
+    - Bronze mountains of the empire, and the jade discs of the five
+      directions on their pedestals.
+    - A soldier half made, clay and a potter's wheel, the bones of one of
+      the artisans, stone armour, a rack of halberds, a fallen roof-beam,
+      storage jars.
+- **Rooms a Terracotta Vault has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/vault.js`), beside its old rooms. Those
+  are now set about with its own things: the old soldiers' hall's statues
+  are statues that wake, the lantern hall is lacquered, and the pillared
+  hall has red columns.
+  - **The pit.** The army in its trenches, sunk a step: the soldiers in the
+    far row, an aisle before them, earth ridges between at the floor's
+    height to walk along looking down on them. The front trench is
+    kneeling crossbowmen. The war drum and its drummer stand at the head,
+    with the muster on a stele and fallen roof-beams.
+  - **The stable.** The chariot pit: a team of four clay horses, their
+    officer, crossbowmen kneeling in rows behind.
+  - **The hall.** The palace's court: black lacquer walls, the decree on a
+    stele, red columns in two rows, a dais at its head with the throne and
+    screens, bronze cauldrons, lamps, lanterns, the bells, and the court's
+    jade dead.
+  - **The rivers.** The empire in little: rivers of quicksilver in
+    bronze-lined channels winding across black stone, bronze bridges over
+    them, bronze mountains, and beads of the quicksilver rolling about.
+  - **The workshop.** The artisans': the kiln, shelves of clay heads,
+    soldiers half made, finished ones waiting for their paint, broken ones
+    waiting to be mended, and the artisans still at work.
+  - **The directions.** The shrine of the five directions: jade laid in
+    black stone in a cross, the four beasts on the wall, and five jade
+    discs on pedestals in a cross.
+  - **The gallery.** The crossbow gallery: stone armour and racks of arms,
+    crossbows set in the north wall, and plates in the floor.
+- **What's at work there.**
+  - **The statues.** Some of the clay army isn't clay. Come close to one of
+    those and it steps down at you. They look exactly like the rest.
+  - **The crossbows.** Step on a plate in the gallery floor (its bricks
+    laid square across the course: look for it) and the crossbow in the
+    wall over its line looses a bolt down the line.
+  - **The quicksilver.** Wading it poisons you and slows you. Cross by the
+    bronze bridges.
+  - **The bells and the drum.** Strike the palace's bells and every clay
+    soldier within earshot halts. Strike the war drum and the army
+    answers it: any statue near it that isn't clay steps down.
+  - **The five directions.** Turn each jade disc through the five colours
+    until each quarter has its own (east green, south red, west white,
+    north black) and the centre has the emperor's yellow. Then the bronze
+    doors open on the chamber behind them. The beasts on the wall and the
+    stele tell the colours, and each pedestal tells its quarter.
+  - **The tunnel.** Beside the artisans' tally is a crack in the wall. Push
+    it and the earth gives onto the tunnel they dug, their letter, one of
+    them, and a chest.
+  - What's been done (the statues woken, the tunnel opened, the discs
+    set) stays done when you come back to the floor. A clay soldier you
+    woke and left standing goes back to its place and waits again.
+- **What's written there.** Every Terracotta Vault has its emperor, his
+  army (its general, its count, its order of battle) and the artisans who
+  made it (their master potter and his crew, how many days they worked).
+  It also has the reason the army still stands guard: the artisans sealed
+  in alive, the elixir of quicksilver the emperor drank to live forever,
+  the dragon's pearl taken, the quicksilver rising, or the rebel who broke
+  in and burned the pits. Its papers come from all of that (see
+  `src/world/deeps/vaultlore.js`):
+  - the stele at the way in and the muster;
+  - a potter's mark inside a broken soldier and the artisans' tally;
+  - the map of the empire, the four beasts and the stele of the
+    directions;
+  - the inscription inside a cauldron, a crossbowman's verse, and the
+    decree of sealing;
+  - the throne, the bones of an artisan, the artisans' letter, and the
+    last word at the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the clay soldiers, crossbowmen and jade dead stay):
+  - **The Clay Drummer.** An officer of the clay army with a war drum at
+    his hip and a bronze bell. The old armies advanced to the drum and
+    halted at the bell. At the drum every clay soldier near him comes on
+    at you quick, and a statue near him may step down. At the bell they
+    halt and stand as clay: blows glance off them, while the crossbowmen
+    (who don't halt) keep shooting. He keeps behind the line. Strike the
+    soldiers while they march.
+  - **Quicksilver.** Living mercury out of the rivers, a fist of it,
+    rolling. Struck, it splits into two beads; two beads that touch run
+    together again. Its touch poisons. A bead that rolls up to a statue
+    runs into its cracks, and the statue moves (clay or not), quickened.
+  - **The Sealed Artisan.** A potter's ghost, peaceful, still at his work.
+    Wherever a clay soldier lies broken, he goes to its shards and mends
+    it, and it stands again in its rank, and it isn't clay. Struck, he
+    flees, wailing. Near you, he murmurs about the crack.
+  - Together:
+    - the drummer's bell halts the soldiers just as the crossbowmen loose;
+    - the beads wake the statues you thought were safe;
+    - every soldier you break in the workshop the artisans put back on
+      its feet, unless you deal with them first.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Terracotta General.** The emperor's own general, made in clay a
+    head taller than any man of the army, in the same grey-buff clay as
+    his soldiers, the paint he was finished in flaking off him. He wears:
+    - the general's long coat of plates, its upper breast plain with a
+      brocaded border, knots of rank in red ribbon at his breast and
+      shoulders, the kiln's crack across his chest;
+    - a belt with a bronze hook, the green hem of his robe below the coat,
+      and bound leggings;
+    - the general's black cap with its two tails swept back.
+    His face is broad and calm, his moustache curled up at its ends. He
+    carries his ji: a spear-point and the crescent blade of a dagger-axe
+    on a long red-lacquered haft, a red tassel under them. He strides.
+  - **The Jade Dragon.** Carved from one stone of jade to keep the
+    emperor's pearl, coiled in a pool of quicksilver. Its body lies in two
+    loops, every scale carved, green going to pale celadon in the light,
+    plated in gold beneath. A ridge of gold fins runs down its back, a
+    foreleg and a hind leg grip the coils with ivory claws, and its tail
+    ends in a tuft of flame. Its neck rises out of the coils to its head:
+    a long muzzle, a heavy brow over a gold eye, antlers of ivory, long
+    gold whiskers, a gold mane, and a jaw of teeth.
+- **Fixes.**
+  - A prop whose turn says which one it is rather than which way it
+    faces (a catacomb bust's ancestor, an urn's kind, a clay soldier's
+    face) no longer changes into another when you turn the view. In the
+    Imperial Catacomb the busts could swap faces as the view turned,
+    which made their puzzle hard to read.
+  - The clay soldiers and crossbowmen are now the grey-buff of fired clay,
+    as the statues are, not flat orange.
+- **Version 1.4.0.** Worlds from 1.3 load as before. Vault floors you have
+  already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

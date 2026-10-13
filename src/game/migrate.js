@@ -786,6 +786,12 @@ export const STEPS = [
       log.push('The Imperial Catacombs are made over: drawn afresh, with galleries of shelf-graves, columbaria, the legion\'s basilica, the family\'s cubiculum, the ossuary and the hall of the Triumph; the lamps, the lemures that snuff them and the fossors who light them again; graves to rob (mind the fossors), the busts of the house to honour in order; the aquilifer and the grasping hands; and their masters redrawn. Catacomb floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.4.0',
+    data(d, log) {
+      log.push('The Terracotta Vaults are made over: drawn afresh, with the army in its trenches, the chariot pit, the palace\'s court, the empire in quicksilver, the artisans\' workshop, the shrine of the five directions and the crossbow gallery; statues that aren\'t clay, the drummer\'s drum and bell, the quicksilver that splits and wakes the statues, the sealed artisans who mend the broken, the crossbows in the walls, the discs of the directions and the artisans\' tunnel; and their masters redrawn. Vault floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
