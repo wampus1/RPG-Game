@@ -66,7 +66,7 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 const FLOOR_GEN = 6;
 // (Round 95) A kind made over by its own architect (see world/deeps/) lays
 // its floors out its own way: older floors of it are made afresh.
-const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7 };
+const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7 };
 const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
@@ -87,7 +87,7 @@ export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod', 'fg_singanvil', 'fg_lever', 'fg_kilndoor', 'fg_guilddoor', 'fg_castkey']);
 
 // Each old place's own space apart, out past the map (see
 // config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,
@@ -718,6 +718,8 @@ export class DungeonRun {
     // game/cryptwork.js).
     if (o.vigil) c.vigil = true;
     if (o.route) c.route = o.route;
+    // (Round 101) An ash-smith's anvil, where it works (see forgemobs.js).
+    if (o.anvil) c.anvil = o.anvil;
     // (Down here, nothing's minding its own business: see fardeep.js.)
     if (c.S.mode === 'neutral' && !o.peaceful) c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;

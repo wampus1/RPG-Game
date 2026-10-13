@@ -164,6 +164,10 @@ export const KHAROS_BOSSES = {
   }),
   slag_titan: boss({
     name: 'The Slag Titan', hp: 170, dmg: 8, step: 0.5, big: true, fireproof: true, light: 5, brain: 'slagTitan', tint: ['#ff7030', '#8a7a70'], style: 'bite',
+    // (Drawn with its lodestone awake, blue, while it draws.)
+    artSt: (e, st) => {
+      if (e.charge) st.lode = 1;
+    },
     phaseLines: ['', '', '', ''], drops: [['iron_ingot', 4, 8, 1], ['obsidian_shard', 4, 8, 1], ['gold_ingot', 1, 2, 0.7]],
   }),
   molten_heart: boss({

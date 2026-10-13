@@ -3008,9 +3008,12 @@ function bossHall(ctx, r, boss) {
   } else if (type === 'forge') {
     // The great forge: crucibles round the walls, anvils, and the floor
     // cut with two cold channels the master can let the fire into.
-    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.crucible, 0, true);
-    for (const [fx, fz] of [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7]]) put(Math.round(r.x0 + w * fx), Math.round(r.z0 + d * fz), B.forge_brick, 0, true);
-    for (let k = 0; k < 2; k++) placeIn(ctx, r, B.anvil, 0, true);
+    // (Round 101: its own crucibles, its own stone, its own anvils, and the
+    // chains of the hoists hung over it.)
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.fg_crucible, 0, true);
+    for (const [fx, fz] of [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7]]) put(Math.round(r.x0 + w * fx), Math.round(r.z0 + d * fz), T.wall, 0, true);
+    for (let k = 0; k < 2; k++) placeIn(ctx, r, B.fg_anvil, rng.int(0, 1), true);
+    for (let k = 0; k < 3; k++) placeIn(ctx, r, B.fg_chain);
   } else if (type === 'grotto') {
     // The sea-cave's heart: coral round the walls, kelp, a few clams.
     for (let k = 0; k < 7; k++) placeIn(ctx, r, B.coral, rng.int(0, 3), true);

@@ -15,6 +15,7 @@ import { CRYPT_MOBS } from './art/crypt_mobs.js';
 import { HOLD_MOBS } from './art/hold_mobs.js';
 import { KAV_MOBS } from './art/kav_mobs.js';
 import { GROVE_MOBS } from './art/grove_mobs.js';
+import { FORGE_MOBS } from './art/forge_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -252,6 +253,7 @@ for (const [k, def] of Object.entries(CRYPT_MOBS)) CREATURE_LOOKS[k] = lookOf(de
 for (const [k, def] of Object.entries(HOLD_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(KAV_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(GROVE_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(FORGE_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 

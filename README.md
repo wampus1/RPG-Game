@@ -7193,6 +7193,135 @@ roots, dells sunk a step.
 - **Version 1.0.0.** Worlds from 0.99 load as before. Hollow floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 101: The Kiln-Deep, made over
+
+The seventh of the dungeon overhauls. A Kiln-Deep is the great forge the
+Kiln-Kings of Kharos dug into the mountain. At the last they sealed it
+with their smiths still inside, so no lesser hand would ever work its
+fires, and the town above still hears the hammers. It should feel
+monumental and built: straight lines, hard right angles, halls far bigger
+than a person, doors twice your height. It is old but still burning: soot-black
+basalt and fired brick, banded iron and dull brass, floors of iron
+plate, worn flagstone, and grating over fire. It is lit from below, by the glow of
+channels, grates and crucibles, with the roof lost in smoke. Its floors
+are large and terraced: big halls with rooms off them, pits sunk a step
+into the floor, iron gantries raised along a hall's side, and a flue with
+a ladder up it.
+
+- **Drawn afresh.** Every Kiln-Deep tile and thing is painted by hand:
+  - **The walls.** Soot-black basalt in courses, with a flue, a band of
+    riveted iron, the forge-song cut in relief, the smiths' tally, the
+    guild-roll, a banded kiln-door, the stone guild-door with the guild's
+    mark in bronze, and fired brick lining every pit.
+  - **The floors.** Riveted iron plate, worn flags, grates over fire, coal,
+    ash, brick, the iron gantry and its steps, and the casting mould (and
+    the key mould in it).
+  - **The things set about.** Anvils and the three singing anvils, the
+    crucible and its lever, great bellows, trip-hammers, braziers, blade
+    racks and stacks of ingots, coal heaps and a coal cart, steam vents,
+    plinths for the masterworks, hanging chains, banners, the guild's
+    tables and benches, a king's statue, slag, and the flue's ladder.
+- **Rooms a Kiln-Deep has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/forge.js`), beside its old rooms (the smelter, the
+  anvils, the slag heap and the rest, now set about with its own things):
+  - **The great forge.** A hearth of grates over fire, bellows round it,
+    anvils with ash-smiths at work, trip-hammers, and an iron gantry along
+    the north wall with steps up to it.
+  - **The casting pit.** A pouring platform raised over the floor with the
+    crucible and its lever, a channel sunk in the floor, and the mould at
+    its end.
+  - **The quench hall.** Water troughs, steam vents, blade racks, and the
+    quench-law on the wall. Iron wardens.
+  - **The bellows room.** Great bellows, hot grates, coal, a bellowsback
+    and the cinderlings it fans.
+  - **The guild-hall.** Brick floor, the tally, the guild-roll, the song
+    plaque, banners, long tables and benches with ash-smiths at rest, the
+    three singing anvils, and the guild-door with its cache behind.
+  - **The king's gallery.** Masterworks on plinths, the Great Work's
+    pieces, the king's statue, behind a kiln-door. A warden keeps it.
+  - **The coal store**, and **the flue**: a ladder up to a soot-ledge two
+    high, with a chest on it.
+- **Its works.**
+  - **Trip-hammers** rise and fall on a beat and slam the tile in front of
+    them, whoever's there. Time your crossing.
+  - **Steam vents** hiss, then burst scalding steam on their rhythm.
+  - **Hot grates** flare up every so often, and when a bellowsback breathes
+    on them.
+  - **The casting pit.** Haul the lever and the crucible tips: white
+    metal runs down the channel (don't stand in it), floods the mould, and
+    sets. In the mould is the kiln-key, which opens the gallery's
+    kiln-door. (A floor with no casting pit has its kiln-door open.)
+  - **The singing anvils.** Each rings its own note. Strike them in the
+    order of the forge-song cut on the plaque and the guild-door opens on
+    its cache. Strike them wrong and the ash-smiths look up from their
+    work.
+  - **The work.** The racks and stacks are the ash-smiths'. Break one and
+    they turn on you.
+  - What's been done (the metal poured, the key taken, the doors opened,
+    the song sung) stays done when you come back to the floor.
+- **What's written there.** Every Kiln-Deep has its founder and the year
+  they sealed it, what went wrong (the sealing itself, the smiths'
+  revolt, the great melt, the mountain's heart chained to feed it, the
+  Great Work cursed), the Great Work it was making (a crown, a blade, a
+  bell, a gate, a man of iron), its forge-song, and the town above. Its
+  papers come from all of that (see `src/world/deeps/forgelore.js`): the
+  sealing, the song plaque, the tally and where it stops, the guild-roll,
+  the quench-law, a smith's last letter home, the Great Work and the
+  masterworks, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the slag crabs, cinderlings, magma slugs, glasshides and forge
+  hounds stay):
+  - **The Ash-Smith**: one of the sealed smiths, burnt to ash in the shape
+    of a man, with a leather apron and a hammer. It pays you no mind
+    unless you strike it or rob its racks. At an anvil, every blow of its
+    hammer mends the iron near it: wardens, hounds, bellowsbacks. It
+    falls in a cloud of choking ash.
+  - **The Bellowsback**: a squat construct with a great bellows on its
+    back. Lined up with you, it draws in and breathes a gust down the line
+    that throws you back, and fans the fire: a cinderling in it is
+    stoked (its fire hotter and wider), and a grate flares.
+  - **The Iron Warden**: riveted plate, slow. Cold iron: blows land a
+    third as hard. Through fire it goes red-hot: it burns you when it
+    strikes, but blows land true. Quenched while hot (in a trough, in the
+    steam), it goes brittle and blows land double.
+  - Together: a bellowsback stokes the cinderlings, then throws you
+    through their fire, or under a trip-hammer; an ash-smith at its anvil
+    mends the wardens and hounds you're fighting; and a magma slug's trail
+    heats a warden red, while the steam vent beside it can make it brittle.
+- **Its three masters, painted by hand.** Each was painted one pixel at
+  a time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Kiln-King.** The king who sealed the forge, come down at the last
+    to finish the Great Work himself. He is broad as a door, in black plate he forged
+    himself, under a scorched leather apron burnt through at the hem, with a
+    gold-buckled belt. His mane and great forked beard are the colour of flame,
+    braided, with iron rings in the braids. His eyes are coals under a brow like an
+    anvil's heel, and his gold crown has a coal for its jewel. His forge
+    hammer's striking faces still glow from the fire.
+  - **The Slag Titan.** Everything the forge ever threw away, risen up
+    and walking: a hunched ape of dross and clinker, glassy where it
+    cooled fast, rust-stained where the iron in it bled, and shaded in broken facets
+    like split stone. Its head is sunk low between its shoulders, with coals for
+    eyes, a slab of underjaw, and molten drool. It goes on its knuckles,
+    with a shackle still on one wrist. A broken blade juts from its hump, a
+    chain is slung over its back, and a chimney of clinker smokes on its
+    shoulders. Molten seams run through all of it. In its side the slag has
+    split open on a fire, and in the fire is a dark lodestone. When the
+    lodestone draws, it wakes blue-white, and every seam in the titan goes
+    blue with it.
+  - **The Molten Heart.** The mountain's own heart: fire under a crust
+    cooled to plates of black-red rock, fire in every crack between them.
+    Its great vessels are torn off short, open, with fire welling in them,
+    and a band of iron is hammered round its middle, with rings where its
+    chains are fast. It bleeds fire from its apex. It beats twice and rests: each beat
+    swells it and turns its cracks white-hot, then it eases and dims.
+- **Fixes.** Ash-smiths no longer flee as if hunted: a creature that's
+  peaceful until provoked can now go about its own work (`calm` in its
+  species). An ash-smith set at an anvil keeps to it. A Kiln-Deep's
+  key-holder is an iron warden now, not a skeleton captain.
+- **Version 1.1.0.** Worlds from 1.0 load as before. Kiln-Deep floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

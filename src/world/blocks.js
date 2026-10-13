@@ -1031,3 +1031,54 @@ def('gr_seedpod', { ...dressing, interact: 'gr_seedpod', hardness: Infinity, lig
 def('gr_sprout', { ...dressing, hardness: Infinity, light: 3, drop: null, label: 'Shoot' });
 def('gr_rootladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder of Roots' });
 def('gr_boulder', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Mossy Boulder' });
+// (Round 101) The Kiln-Deep made over (see world/deeps/forge.js): its wall of
+// dressed basalt (a flue's mouth, an iron band, the guild's mark, the tally
+// of the days, the guild-roll, the kiln-door the kiln-key opens, the
+// guild-door the singing anvils open), the gantry along a hall and its iron
+// stair; its floors (iron plate, basalt flags, a grate over fire, coal, ash,
+// fired brick, a casting mould and the master's mould); and what's set about
+// in it: the anvils (the three that sing), the crucible and its lever, the
+// bellows, the trip-hammer, a brazier, racks of blades and stacks of ingots
+// (the work: the smiths' own), coal heaps, a cart, a steam vent, plinths of
+// masterworks, a hoist chain, the guild's banner, tables and benches, a
+// Kiln-King in stone, slag, an iron ladder, the kiln-key fresh from its
+// mould. Last of all, so no block before them changes its number.
+def('fg_wall', { tool: 'pick', hardness: Infinity, drop: null, label: 'Dressed Basalt' });
+def('fg_flue', { hardness: Infinity, drop: null, light: 6, label: 'Flue' });
+def('fg_ironband', { hardness: Infinity, drop: null, label: 'Banded Basalt' });
+def('fg_relief', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Guild\'s Mark' });
+def('fg_tally', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Tally' });
+def('fg_roll', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Guild-Roll' });
+def('fg_kilndoor', { interact: 'fg_kilndoor', hardness: Infinity, drop: null, light: 1, label: 'Kiln-Door' });
+def('fg_guilddoor', { interact: 'fg_guilddoor', hardness: Infinity, drop: null, label: 'Guild-Door' });
+def('fg_gantry', { hardness: Infinity, drop: null, label: 'Gantry' });
+def('fg_gantrysteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'fg_gantry', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Iron Stair' });
+def('fg_plate', { hardness: Infinity, drop: null, label: 'Iron Plate' });
+def('fg_flags', { hardness: Infinity, drop: null, label: 'Basalt Flags' });
+def('fg_grate', { hardness: Infinity, drop: null, light: 8, label: 'Fire Grate' });
+def('fg_coal', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Coal' });
+def('fg_ash', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Ash' });
+def('fg_brick', { hardness: Infinity, drop: null, label: 'Fired Brick' });
+def('fg_mould', { hardness: Infinity, drop: null, label: 'Casting Mould' });
+def('fg_keymould', { hardness: Infinity, drop: null, light: 2, label: 'The Master\'s Mould' });
+def('fg_anvil', { ...sprite, solid: true, rotatable: true, interact: 'anvil', tool: 'pick', hardness: Infinity, drop: null, label: 'Anvil' });
+def('fg_singanvil', { ...sprite, solid: true, rotatable: true, interact: 'fg_singanvil', hardness: Infinity, drop: null, light: 1, lightWhenState: true, label: 'Singing Anvil' });
+def('fg_crucible', { ...sprite, solid: true, hardness: Infinity, light: 10, drop: null, label: 'Crucible' });
+def('fg_bellows', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Bellows' });
+def('fg_hammer', { ...dressing, tall: true, hardness: Infinity, drop: null, label: 'Trip-Hammer' });
+def('fg_brazier', { ...sprite, solid: true, hardness: Infinity, light: 13, drop: null, label: 'Brazier' });
+def('fg_rack', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 1.5, drop: [{ item: 'iron_ingot', chance: 0.6, min: 1, max: 2 }], label: 'Rack of Blades' });
+def('fg_ingots', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 1.5, drop: [{ item: 'iron_ingot', chance: 1, min: 1, max: 3 }, { item: 'gold_ingot', chance: 0.25 }], label: 'Ingots' });
+def('fg_coalheap', { ...dressing, rotatable: true, tool: 'shovel', hardness: 0.4, light: 2, drop: [{ item: 'coal', chance: 1, min: 1, max: 3 }], label: 'Coal Heap' });
+def('fg_cart', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Coal Cart' });
+def('fg_vent', { ...dressing, hardness: Infinity, drop: null, label: 'Steam Vent' });
+def('fg_lever', { ...sprite, solid: true, interact: 'fg_lever', hardness: Infinity, drop: null, label: 'Pouring Lever' });
+def('fg_plinth', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Masterwork' });
+def('fg_chain', { ...dressing, tall: true, hardness: Infinity, drop: null, label: 'Hoist Chain' });
+def('fg_banner', { ...dressing, tall: true, hardness: 0.5, drop: null, label: 'Guild Banner' });
+def('fg_table', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Long Table' });
+def('fg_bench', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'Bench' });
+def('fg_statue', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Kiln-King in Stone' });
+def('fg_slag', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 2, light: 2, drop: [{ item: 'obsidian_shard', chance: 0.5 }], label: 'Slag' });
+def('fg_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Iron Ladder' });
+def('fg_castkey', { ...dressing, interact: 'fg_castkey', hardness: Infinity, light: 6, lightWhenState: false, drop: null, label: 'The Kiln-Key' });

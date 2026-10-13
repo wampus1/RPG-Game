@@ -14,6 +14,7 @@ import { CRYPT_SPECIES } from './cryptmobs.js';
 import { HOLD_SPECIES } from './holdmobs.js';
 import { KAV_SPECIES } from './kavmobs.js';
 import { GROVE_SPECIES } from './grovemobs.js';
+import { FORGE_SPECIES } from './forgemobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -112,6 +113,7 @@ export const SPECIES = {
   ...HOLD_SPECIES,
   ...KAV_SPECIES,
   ...GROVE_SPECIES,
+  ...FORGE_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,
@@ -336,6 +338,10 @@ export class Creature extends Entity {
     } else if (this.S.modBrain && game.modBrainOf?.(this, dt)) {
       // (Round 62) A mod's person or beast at its own business.
       return;
+    } else if (this.S.calm && BRAINS[this.S.calm](this, dt)) {
+      // (Round 101) One with its own business while it's left be (an
+      // ash-smith at its anvil): never shy of you, nor wandering off.
+      return;
     } else if (this.S.mode === 'passive') {
       // Hurt (an arrow from afar as much as a blow): off, away from
       // whoever did it, for a good while; otherwise shy of anyone close.
@@ -517,11 +523,13 @@ function cinderBurst(game, from, x, z, y) {
       game.renderer.floatText(e.x, e.y + 2, e.z, 'dodged', '#ffd8a0');
       continue;
     }
-    game.damage(e, Math.max(1, Math.round(from.S.dmg * (e.x === x && e.z === z ? 1 : 0.6))), from);
+    game.damage(e, Math.max(1, Math.round(from.S.dmg * (from.dmgMult || 1) * (e.x === x && e.z === z ? 1 : 0.6))), from);
     e.burnT = Math.max(e.burnT || 0, 2);
     e.burnSrc = from;
   }
   groundFire(game, x, z, y, from, false, 0);
+  // (Round 101: a cinderling stoked by a bellowsback's gust: its fire wider.)
+  if (from.stokedT > 0) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) groundFire(game, x + ox, z + oz, y, from, false, 0);
   game.renderer.emit(x + 0.5, y + 0.6, z + 0.5, { n: 16, color: ['#ff8030', '#ffd060', '#ff4020'], up: 30, speed: 40, life: 0.7, glow: true, gravity: -10 });
   game.audio?.play('impact', { x, y, z });
 }

@@ -18,6 +18,7 @@ import { B } from './blocks.js';
 import { FAR_DSTYLE, FAR_BOSSES, FAR_BOSS_HP, FAR_BOSS_DMG, FAR_BOSS_TEMPO, FAR_TYPE_LORE } from './fardeep.js';
 import { ANCIENT_LORE } from './ancient.js';
 import { GROVE_ARCH } from './deeps/grove.js';
+import { FORGE_ARCH } from './deeps/forge.js';
 
 // Where you begin (inside the storm wall, washed up on its beach).
 export const HOME_ISLE = 'thessa';
@@ -118,14 +119,17 @@ export const ISLE_DTYPES = {
   // halls of basalt brick, slag underfoot, channels of lava let through
   // them still, anvils, crucibles; the old smiths' work still walking.
   forge: {
-    name: 'Kiln-Deep', isle: 'kharos', wall: B.forge_brick, floor: B.slag, alt: B.basalt, beam: null, regions: [2, 2], floors: [1, 3], pool: B.lava,
+    name: 'Kiln-Deep', isle: 'kharos', wall: B.fg_wall, floor: B.fg_plate, alt: B.fg_flags, beam: null, regions: [2, 2], floors: [1, 3], pool: B.lava,
     kits: ['smelter', 'anvils', 'slagheap', 'cooling', 'smelter', 'anvils', 'pillared', 'guard', 'trap', 'treasure'],
-    mobs: [['slag_crab', 3], ['cinderling', 2], ['magma_slug', 2], ['glasshide', 1], ['forge_hound', 2]],
-    swap: { skeleton: ['forge_hound', 'cinderling'], wight: ['glasshide'], ghoul: ['magma_slug'], drowned: ['magma_slug'], crawler: ['slag_crab'] },
-    bosses: ['kiln_king', 'slag_titan', 'molten_heart'], torches: 0.4,
-    shapes: { rect: 4, octagon: 2, cross: 1 }, wiggle: 0, decor: [['anvil', 2], ['crucible', 2], ['ash_brazier', 2], ['hanging_chains', 2], ['rubble', 1]],
+    mobs: [['slag_crab', 2], ['cinderling', 2], ['magma_slug', 1], ['glasshide', 1], ['forge_hound', 2], ['iron_warden', 1], ['bellowsback', 1]],
+    swap: { skeleton: ['forge_hound', 'cinderling'], wight: ['glasshide', 'iron_warden'], ghoul: ['magma_slug'], drowned: ['magma_slug'], crawler: ['slag_crab'], skel_captain: ['iron_warden'] },
+    bosses: ['kiln_king', 'slag_titan', 'molten_heart'], torches: 0.2,
+    shapes: { rect: 4, octagon: 2, cross: 1 }, wiggle: 0, decor: [['fg_brazier', 2], ['fg_chain', 2], ['fg_slag', 1], ['fg_coalheap', 1]],
     dark: [0.13, 0.07, 0.04], motes: ['#ffb040', '#ff6020'], ambient: ['crackle', 'tink', 'rumble', 'hiss'],
-    loot: [['iron_ingot', 1, 3, 0.5], ['obsidian_shard', 1, 3, 0.4], ['gold_ingot', 1, 1, 0.15], ['obsidian_blade', 1, 1, 0.08]],
+    loot: [['iron_ingot', 1, 3, 0.5], ['obsidian_shard', 1, 3, 0.4], ['coal', 1, 3, 0.3], ['gold_ingot', 1, 1, 0.15], ['obsidian_blade', 1, 1, 0.08]],
+    // (Round 101: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/forge.js.)
+    arch: FORGE_ARCH,
   },
   // Sea caves on Myrrow's coast that the tide comes into and goes out of:
   // coral on the rock, shell sand, pools left behind, kelp; the wrecks of

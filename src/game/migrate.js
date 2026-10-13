@@ -768,6 +768,12 @@ export const STEPS = [
       log.push('The Wildwood Hollows are made over: drawn afresh, with hollows and their banks, rootways, dells, the keepers\' shrines, the halls of the Kept, sunwells and woodcutters\' camps; the ring and its glade, offering stones and their hob, snares, puffballs and the sun-seed; woodwose, drowsebloom, glimmer and delver; and their masters redrawn. Hollow floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.1.0',
+    data(d, log) {
+      log.push('The Kiln-Deeps are made over: drawn afresh, with great forges and their trip-hammers, casting pits, quench halls, bellows rooms, guild-halls, the king\'s gallery, coal stores and flues; the kiln-key cast in its mould, the singing anvils and the guild-door, steam vents and flaring grates; ash-smiths, bellowsbacks and iron wardens; and their masters redrawn. Kiln-Deep floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

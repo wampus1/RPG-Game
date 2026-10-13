@@ -998,6 +998,17 @@ export function isleIcon(key) {
       p.set(6, 13, '#f0b030');
       p.set(6, 14, '#c88a20');
       break;
+    case 'kiln_key':
+      // A key of black iron, its bow a flame, a glow still in it.
+      p.ellipse(5, 6, 3, 3, '#2a2a32');
+      p.ellipse(5, 6, 1, 1, '#ff8030');
+      p.set(5, 3, '#ffb040');
+      p.line(7, 8, 12, 13, '#3a3a44');
+      p.line(8, 8, 13, 13, '#24242c');
+      p.hline(11, 13, 11, '#3a3a44');
+      p.set(13, 12, '#3a3a44');
+      p.set(4, 4, '#6a6a7a');
+      break;
     case 'sun_seed':
       p.ellipse(8, 9, 3, 4, '#c8a030');
       p.ellipse(7, 8, 1, 2, '#fff0a0');

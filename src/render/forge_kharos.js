@@ -1044,18 +1044,20 @@ forge({
     },
     fx(R, ctx, pose) {
       const t = R.r.time;
-      const wake = R.st.wind || R.st.eyes;
+      // (Its lodestone drawing; see the Slag Titan's `artSt`.)
+      const wake = R.st.lode || R.st.wind || R.st.eyes;
       inPose(R, ctx, pose, () => {
         if (wake) {
-          // Iron filings drawn to its heart, wheeling in.
+          // Iron filings drawn to its heart (in its side), wheeling in.
           for (let i = 0; i < 10; i++) {
             const a = (i / 10) * TAU + t * 2;
             const k = (t * 1.5 + i / 10) % 1;
-            dot(ctx, R.ox + 34 + Math.cos(a) * (22 - k * 18), R.oy + 32 + Math.sin(a) * (14 - k * 10), '#a0e8ff', 0.9);
+            dot(ctx, R.ox + 40 + Math.cos(a) * (22 - k * 18), R.oy + 31 + Math.sin(a) * (14 - k * 10), '#a0e8ff', 0.9);
           }
         }
-        embers(ctx, R.ox + 24, R.oy + 40, 24, t, { n: 4, rise: 30, speed: 0.35 });
-        smoke(ctx, R.ox + 42, R.oy + 18, t, { n: 3, rise: 14, a: 0.3 });
+        embers(ctx, R.ox + 30, R.oy + 40, 24, t, { n: 4, rise: 30, speed: 0.35 });
+        // (The smoke of the chimney of clinker on its shoulders.)
+        smoke(ctx, R.ox + 35, R.oy + 5, t, { n: 3, rise: 14, a: 0.3 });
       });
     },
   },

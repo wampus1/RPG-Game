@@ -384,6 +384,8 @@ food('glowcap', 1, 3, 'Glowcap');
 // seed that wants the sun.
 food('honeycomb', 2, 5, 'Honeycomb');
 item('sun_seed', { name: 'Sun-Seed', kind: 'misc', stack: 4, value: 12, about: 'A golden seed pod, warm in the hand. It wants the sun.' });
+// (Round 101) The Kiln-Deep's: the key cast in the master's mould.
+item('kiln_key', { name: 'Kiln-Key', kind: 'misc', stack: 4, value: 30, about: 'A key of black iron, still warm, its bow a flame. Cast in the master\'s mould; it opens a kiln-door.' });
 food('crab_meat', 1, 3, 'Crab Meat');
 food('cooked_crab', 5, 6, 'Cooked Crab');
 // Hot dishes from the pot (and a warm cup) do their good slowly: a little
