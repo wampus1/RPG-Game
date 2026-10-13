@@ -10,6 +10,7 @@ import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
 import { barrowIcon } from './art/barrow_items.js';
 import { BARROW_MOBS } from './art/barrow_mobs.js';
+import { MINE_MOBS } from './art/mine_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -242,6 +243,7 @@ export const CREATURE_LOOKS = {
 Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES, FAR_CREATURES, ANCIENT_CREATURES);
 // (Round 95) The old places' own, painted by hand (see render/art/).
 for (const [k, def] of Object.entries(BARROW_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(MINE_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 

@@ -41,6 +41,7 @@ import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, fly
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { packLabel, DungeonRun, DUNGEON_INTERACTS, ownerName } from './dungeon.js';
+import { propBroken } from './minework.js';
 import { startIntro } from './cutscene.js';
 import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
 import { newFeats, noteIsle } from './achievements.js';
@@ -3947,6 +3948,8 @@ export class Game {
     this.audio?.play(id === B.urn || id === B.skull_pile ? 'shatter' : b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
     // (A powder keg broken open goes up.)
     if (id === B.powder_keg) kegBlast(this, x, y, z);
+    // (Round 96: a cracked prop taken down brings the roof with it.)
+    if (id === B.cracked_prop) propBroken(this, x, y, z);
     this.popUnsupported(x, y + 1, z);
     this.popHung(x, y, z);
     if ((b.interact === 'container' || b.display) && this.myChests) notePlaced(this, x, y, z, false);

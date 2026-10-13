@@ -6,6 +6,7 @@ import { Px, shade } from './pixel.js';
 import { speckle, frontify, cobble, bricks, randomWalk, spr, P, OUT } from './textures.js';
 import { LH } from '../config.js';
 import { barrowTop, barrowFront, BARROW_SPRITES, BARROW_ANIM, barrowFlat } from './art/barrow_tex.js';
+import { mineTop, mineFront, MINE_SPRITES, MINE_ANIM, mineFlat } from './art/mine_tex.js';
 
 const TALL = 40;
 const KAV = { dark: '#1c1a2a', plate: '#2a2840', edge: '#3c3a58', seam: '#5ad8f0', glow: '#a8f4ff', rune: '#7ae0ff', deep: '#0e0c18' };
@@ -22,7 +23,7 @@ function massTop(p, pal, rand, bits = null) {
 // --- cube tops ----------------------------------------------------------------
 export function dungeonTop(name, v, rand) {
   // (Round 95: the barrow's own, drawn by hand: see art/barrow_tex.js.)
-  const own = barrowTop(name, v, rand);
+  const own = barrowTop(name, v, rand) || mineTop(name, v, rand);
   if (own) return own;
   const p = new Px(16, 16);
   switch (name) {
@@ -260,7 +261,7 @@ export function dungeonTop(name, v, rand) {
 
 // --- cube fronts (the wall faces you see) --------------------------------------
 export function dungeonFront(name, v, rand, rot) {
-  const own = barrowFront(name, v, rand);
+  const own = barrowFront(name, v, rand) || mineFront(name, v, rand);
   if (own) return own;
   const p = new Px(16, LH);
   switch (name) {
@@ -448,7 +449,7 @@ export function dungeonFront(name, v, rand, rot) {
 
 // --- flat things on the floor ---------------------------------------------------
 export function dungeonFlat(name, v, rand) {
-  const own = barrowFlat(name, v, rand);
+  const own = barrowFlat(name, v, rand) || mineFlat(name, v, rand);
   if (own) return own;
   if (name === 'pressure_plate') {
     // A flagstone that sits a hair proud of the rest: hard to see, if you
@@ -1353,5 +1354,5 @@ Object.assign(DSPRITES, {
     return p;
   },
 });
-Object.assign(DSPRITES, BARROW_SPRITES);
-export const DANIM = { ...BARROW_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2 };
+Object.assign(DSPRITES, BARROW_SPRITES, MINE_SPRITES);
+export const DANIM = { ...BARROW_ANIM, ...MINE_ANIM, brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4, kav_statue: 2, kav_monolith: 4, kav_holo: 4, kav_conduit: 4, kav_husk: 4, kav_vent: 2, satchel: 2, idol: 2 };

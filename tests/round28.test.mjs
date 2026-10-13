@@ -312,11 +312,20 @@ test('deeper down, now and then a chest has teeth; killed, it gives up what it h
 
 test('spikes in a passage come up in their turn, and hurt whoever stands on them', () => {
   const { game, p } = start();
+  // (Some floor of some old place with spikes in it: not always the first.)
   let rec = null;
-  for (const q of game.sim.dungeons.all) if (q.type !== 'kavorent' && buildFloor(q, 0).spikes.length) rec = rec || { ...q, floors: {}, cleared: false };
+  let floor = 0;
+  for (const q of game.sim.dungeons.all) {
+    for (let n = 0; n < q.depth && !rec; n++) {
+      if (q.type === 'kavorent' || !buildFloor(q, n).spikes.length) continue;
+      rec = { ...q, floors: {}, cleared: false };
+      floor = n;
+    }
+  }
   assert.ok(rec);
   const d = new DungeonRun(game, rec);
   d.enter();
+  for (let n = 0; n < floor; n++) d.changeFloor(1);
   const sp = d.data.spikes[0];
   assert.equal(game.world.getBlock(sp.x, FY, sp.z), B.spikes);
   p.teleport(sp.x, FY, sp.z);

@@ -90,6 +90,10 @@ export function tellScale(dur, ref) {
   return Math.max(0.4, Math.min(1.4, dur / ref));
 }
 
+// (Round 96) Called with every hazard as it goes off (firedamp lit, props
+// brought down: see game/minework.js).
+export const BLAST_HOOKS = [];
+
 export function addHazard(game, h) {
   h.t = 0;
   h.y ??= h.by ? h.by.y : game.player.y;
@@ -201,6 +205,8 @@ function fireHazard(game, h) {
     game.audio?.play('splash', mid);
   }
   if (h.onFire) h.onFire(game, h, hit);
+  // (Round 96) What else a blast or a fire sets off: see game/minework.js.
+  for (const f of BLAST_HOOKS) f(game, h);
   // (Fire or a blast on a powder keg sets it off.)
   if (h.kind === 'fire' || h.kind === 'burst' || h.kind === 'blast') {
     for (const t of h.tiles) if (game.world.getBlock(t.x, h.y, t.z) === BLOCKS_ID.powder_keg) kegBlast(game, t.x, h.y, t.z, 0.5);

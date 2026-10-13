@@ -804,3 +804,44 @@ def('grave_goods', { ...sprite, solid: true, interact: 'container', hardness: In
 // sigils (rolled back by the spiral stones: see game/deeps.js).
 def('spiral_seal', { tool: 'pick', hardness: Infinity, drop: null, label: 'Sealing Stone' });
 def('snare_rune', { solid: false, opaque: false, render: 'flat', standable: false, support: true, hardness: Infinity, drop: null, light: 1, label: 'Snare Rune' });
+
+// (Round 96) The mine made over (see world/deeps/mine.js): its trodden
+// spoil and the rock it's hewn from (a vein of quartz in it here and
+// there, the wet where water seeps down it, a rich seam, a miner's chalk
+// cross on a soft place), the timbering of its drifts, benches cut in the
+// rock and steps up them, boards laid over a sump, rails down its drifts,
+// and the rubble that chokes a passage (only a runaway cart clears it); and
+// what's set about in it: the miners' lamps, the tally board, the
+// headframe over the shaft, the pump at the sump, a prop cracking under
+// the roof, the shaft bell, bunks, a cold stove, a rack of tools, firedamp
+// hanging in the air, a crawler's eggs, the surveyor's table, a cart that
+// runs, a heap of ore, the points at a junction. Last of all, so no block
+// before them changes its number.
+def('mine_floor', { tool: 'shovel', hardness: 2, drop: 'gravel', label: 'Spoil' });
+def('mine_timber', { tool: 'axe', hardness: 4, drop: 'planks', label: 'Timbered Rock' });
+def('mine_quartz', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Quartz-Veined Rock' });
+def('mine_seep', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Seeping Rock' });
+def('rich_vein', { tool: 'pick', hardness: 4, drop: [{ item: 'gold_ore', chance: 0.8 }, { item: 'gem', chance: 0.25 }], label: 'Rich Seam' });
+def('chalk_mark', { tool: 'pick', hardness: 0.8, drop: 'cobblestone', label: 'Chalk-Marked Rock' });
+def('cart_choke', { hardness: Infinity, drop: null, label: 'Choked Passage' });
+def('mine_bench', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Cut Bench' });
+def('mine_steps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'mine_bench', rotatable: true, standable: true, tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Cut Steps' });
+def('mine_boards', { tool: 'axe', hardness: 1.5, drop: 'planks', label: 'Sump Boards' });
+def('mine_rail', { solid: false, opaque: false, render: 'flat', rug: true, standable: false, support: true, tool: 'pick', hardness: 1, drop: [{ item: 'iron_ingot', chance: 0.3 }], label: 'Rails' });
+def('pit_lamp', { ...sprite, solid: true, light: 10, tool: 'pick', hardness: 1, drop: null, label: 'Miner\'s Lamp' });
+def('tally_board', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Tally Board' });
+def('headframe', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Headframe' });
+def('mine_pump', { ...sprite, solid: true, interact: 'pump', hardness: Infinity, drop: null, label: 'Sump Pump' });
+def('cracked_prop', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'planks', chance: 0.5 }], label: 'Cracked Prop' });
+def('shaft_bell', { ...sprite, solid: true, interact: 'shaft_bell', hardness: Infinity, drop: null, label: 'Shaft Bell' });
+def('miner_bunk', { ...sprite, solid: true, interact: 'lore', tool: 'axe', hardness: 2, drop: 'planks', label: 'Bunk' });
+def('cold_stove', { ...sprite, solid: true, tool: 'pick', hardness: 3, drop: [{ item: 'iron_ingot', chance: 0.4 }], label: 'Cold Stove' });
+def('tool_rack', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'iron_pickaxe', chance: 0.15 }, { item: 'stick', chance: 0.5 }], label: 'Tool Rack' });
+def('firedamp', { ...sprite, solid: false, standable: false, support: false, hardness: Infinity, drop: null, gas: true, label: 'Firedamp' });
+def('egg_sac', { ...sprite, solid: true, tool: 'axe', hardness: 0.3, drop: null, label: 'Crawler Eggs' });
+def('survey_table', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Surveyor\'s Table' });
+def('lamp_tin', { ...sprite, solid: false, interact: 'lore', hardness: Infinity, drop: null, label: 'Lamp-Tin' });
+def('runaway_cart', { ...sprite, solid: true, interact: 'cart', hardness: Infinity, drop: null, label: 'Ore Cart' });
+def('ore_pile', { ...sprite, solid: true, tool: 'pick', hardness: 1, drop: [{ item: 'iron_ore', chance: 0.6 }, { item: 'coal', chance: 0.5 }, { item: 'gold_ore', chance: 0.15 }], label: 'Heap of Ore' });
+def('rail_switch', { ...sprite, solid: false, interact: 'rail_switch', hardness: Infinity, drop: null, label: 'Points' });
+def('mine_fall', { tool: 'shovel', hardness: 1.2, drop: [{ item: 'cobblestone', chance: 0.5 }], label: 'Fall of Rock' });

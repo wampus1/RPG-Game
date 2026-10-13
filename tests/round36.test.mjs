@@ -215,10 +215,15 @@ test('stairs stand out of the way: never on a passage or across a room, with roo
         // With the stairs walked round (not through), every room's still
         // reached from where you come in.
         const stairs = new Set([f.up, f.down].filter(Boolean).map((q) => q.z * P.W + (q.x - f.x0)));
+        // (Round 96: a bench or a ledge stood on as much as the floor.)
+        const passY = (x, y, z) => {
+          const bl = BLOCKS[blockAt(f, x, y, z)];
+          return !bl.solid || ['sealed', 'portcullis', 'boss_gate'].includes(bl.interact) || bl.name === 'weak_wall';
+        };
         const pass = (x, z) => {
           if (!P.open[z * P.W + x] || stairs.has(z * P.W + x)) return false;
-          const bl = BLOCKS[blockAt(f, x, FY, z)];
-          return !bl.solid || ['sealed', 'portcullis', 'boss_gate'].includes(bl.interact) || bl.name === 'weak_wall';
+          for (let y = FY; y <= FY + 2; y++) if (passY(x, y, z) && passY(x, y + 1, z)) return true;
+          return false;
         };
         const seen = new Uint8Array(P.W * P.D);
         const st = [[f.upAt.x - f.x0, f.upAt.z]];

@@ -38,10 +38,16 @@ function metaAt(f, x, y, z) {
 // counting as ways through).
 function unreached(f) {
   const P = f.plan;
+  // (Round 96: floors with heights in them now, a bench or a ledge stood
+  // on as much as the floor.)
+  const passY = (x, y, z) => {
+    const bl = BLOCKS[blockAt(f, x, y, z)];
+    return !bl.solid || ['sealed', 'portcullis', 'boss_gate'].includes(bl.interact) || bl.name === 'weak_wall';
+  };
   const pass = (x, z) => {
     if (!P.open[z * P.W + x]) return false;
-    const bl = BLOCKS[blockAt(f, x, FY, z)];
-    return !bl.solid || ['sealed', 'portcullis', 'boss_gate'].includes(bl.interact) || bl.name === 'weak_wall';
+    for (let y = FY; y <= FY + 2; y++) if (passY(x, y, z) && passY(x, y + 1, z)) return true;
+    return false;
   };
   const seen = new Uint8Array(P.W * P.D);
   const st = [[f.entry.x - f.x0, f.entry.z]];

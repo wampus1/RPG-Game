@@ -6607,6 +6607,91 @@ with their things about them, and the cold still keeping it.
   the new plan of the floor, its stairs included, so it can't be kept.)
   Other kinds of old place keep their floors as they were.
 
+## Round 96: The mine, made over
+
+The second of the dungeon overhauls. The mine is a working that fell in
+with its last shift still down it: timbered drifts and cut benches, rails
+along the main way, lamps where the miners hung them, and the bad air
+pooled in the dead ends. It's narrow and dark, with drops and ledges, and
+the dead in it are still at work.
+
+- **Rooms a mine has.** Mine floors are laid out by the mine's own
+  architect (see `src/world/deeps/mine.js`):
+  - **The old workings.** A hall worked out room-and-pillar, the pillars
+    left standing to hold the roof, ore heaped, a cart left where it
+    stood, and the shift still wandering it.
+  - **The stope.** The face being worked, cut back in benches with steps
+    up them. A rich seam shows in the rock. The shift is still at it: you
+    hear their picks before you see them.
+  - **The sump.** A flooded pit with boards laid over it and a strongbox at
+    the bottom. Work the pump at its edge and the water drains, and
+    whatever was down in it comes up.
+  - **The powder store.** Kegs, a nest of blast beetles, a chest of
+    dynamite, and a cracked prop holding the roof up over all of it.
+  - **The bunkroom.** Bunks, a cold stove, miners resting where they lay
+    down, and a letter on a bunk that was never sent.
+  - **The foreman's office** (first floor). The survey table with the
+    foreman's ledger, the pay chest, the company's notice.
+  - **The shaft.** A ledge two high up the rock with a ladder to it, and
+    something left on the ledge.
+  - **The gas drift.** A drift full of firedamp.
+  - **The cave-in.** Half the room under a fall of rock, cracked props
+    round its edge, the trapped shift's note scratched on a lamp-tin. What's
+    under the fall digs out when you come near.
+  - **The breakthrough** (bottom floor). The cave the deep drift broke
+    into, that nobody dug: glowing caps, and crawlers' eggs in rows.
+- **The pithead.** The headframe over the shaft, the tally board with the
+  tags of the ones who never came up, the shaft bell, a rack of tools.
+- **Firedamp.** The gas pools in dead-end drifts. Breathing it doesn't
+  hurt you, but any open flame lights it, and then the whole pocket goes up
+  at once, the flame running through it from where it caught. A torch in
+  your hand lights it. A **lantern** doesn't: it's a safety lamp, and its
+  flame only burns tall and blue in the gas. You get a warning the first
+  time you come near it. Fire, a blast, dynamite, a blast beetle and a lost
+  miner's lamp all light it too.
+- **Cracked props.** A blast or a heavy blow near one, or an axe taken to
+  it, and the roof round it comes down after a creak and a fall of dust.
+- **The cart run.** A drift choked with fall, rails leading from it to an
+  ore cart, and points halfway along with a spur off to one side. Push the
+  cart. If the points are thrown right it runs down the line, hits
+  anything in its way, and smashes through the fall to what the trapped
+  shift left behind. If they're thrown wrong it runs off down the spur, and
+  you have to haul it back. Which way they should go is in the surveyor's
+  notes.
+- **The chalk cross.** Somewhere on a floor the miners sealed up their
+  richest pocket behind a thin face of rock and chalked a cross on it.
+  Break it open.
+- **The shaft bell.** Ring it and every lost miner on the floor comes to
+  it, which can draw them out of your way. They ring it too.
+- **Lore from the world about it.** What's written in a mine is made from
+  its own history: what it was dug for, the company that owned it, the
+  foreman, the town that sent its people down, the year it fell in and how
+  many it kept, and what the deep shift broke into (which matches the
+  master waiting at the bottom). Read the tally board, the headframe's
+  plate, the ledger, the letter, the notice, the survey and the lamp-tins.
+- **The mine's own, made to fight together, and against each other:**
+  - **Lost Miners**: the shift that never came up, with pick and lamp.
+    When one sees you, it knocks on the rock for its shift and all of them
+    near it come, or it runs for the shaft bell and brings the whole floor.
+    Its lamp lights any firedamp it walks into, with you in it or not.
+    When it falls, the lamp sets the floor alight where it lies.
+  - **Blast Beetles**: fat black beetles full of the blasting powder
+    they've been eating. Close to you, one lights itself and goes off.
+    Strike one and it curls up and rolls away from the blow with its fuse
+    lit, so knock it into the others. Anything caught in a beetle's blast
+    sets off the next. They come for a naked flame from further off.
+  - **Firedamp**: the gas, drifting of itself. It leaves a trail of
+    firedamp behind it, and its touch chokes you (slowed and out of
+    breath). Burst it and it leaves a cloud of gas; bring a flame near it
+    and it goes off, lighting its trail.
+  - **Knockers**: the little grey folk who were friends of the miners.
+    They aren't hostile. They knock where the rock is hollow, where the
+    roof is bad and where the air is wrong. Hurt one and the roof comes
+    down on you.
+  - Crawlers hatch from the eggs at the breakthrough when you come near.
+- **Older mine floors are made afresh.** A mine floor saved before this
+  version is laid out the new way the next time anyone goes down to it.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

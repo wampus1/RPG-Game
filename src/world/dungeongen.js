@@ -21,6 +21,7 @@ import { ANCIENT_DTYPES } from './ancient.js';
 import { starGear } from './quality.js';
 import { cookDish, RECIPE_PREFIX } from './dishes.js';
 import { BARROW_ARCH } from './deeps/barrow.js';
+import { MINE_ARCH } from './deeps/mine.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -42,13 +43,14 @@ export const DTYPES = {
     arch: BARROW_ARCH,
   },
   mine: {
-    name: 'Mine', wall: B.mine_rock, floor: B.gravel, alt: B.stone, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
+    name: 'Mine', wall: B.mine_rock, floor: B.mine_floor, alt: B.mine_floor, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
     kits: ['gallery', 'gallery', 'camp', 'flooded', 'collapsed', 'collapsed', 'shaft', 'trap', 'treasure', 'gallery'],
-    mobs: [['crawler', 3], ['rat', 3], ['skeleton', 1], ['moth', 2], ['slime', 1]], bosses: ['worm', 'foreman', 'brood_mother'], torches: 0.2,
+    mobs: [['lost_miner', 3], ['crawler', 2], ['rat', 2], ['blast_beetle', 2], ['moth', 1], ['firedamp', 1]], bosses: ['worm', 'foreman', 'brood_mother'], torches: 0.2,
     // Ragged caverns and long galleries joined by winding drifts; carts and
     // props left where they stood, glowing fungus, powder nobody came back for.
     shapes: { cave: 6, ell: 2, rect: 1 }, wiggle: 1.6, decor: [['stalagmite', 4], ['glowshroom', 3], ['mine_cart', 2], ['rubble', 3], ['powder_keg', 1], ['cobweb', 1]],
     dark: [0.085, 0.068, 0.05], motes: ['#8a7a5a', '#6a5a40'], ambient: ['rumble', 'skitter', 'drip', 'tink'],
+    arch: MINE_ARCH,
   },
   crypt: {
     name: 'Crypt', wall: B.crypt_brick, floor: B.crypt_floor, alt: B.stone_bricks, beam: null, regions: [2, 2], floors: [1, 3],
@@ -1110,7 +1112,14 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   for (let i = 1; i < R.length; i++) if (!R[i].sealed && dep[i] !== Infinity && dep[i] > dep[far]) far = i;
   const boss = R.find((r) => r.kit === 'boss');
   if (last && boss) far = boss.id;
-  if (far !== 1 && R[1] && R[1].kit === 'exit') R[1].kit = T.arch && T.arch.spare ? T.arch.spare(rng, n) : rng.pick(T.kits.filter((k) => !SEALED.has(k)));
+  if (far !== 1 && R[1] && R[1].kit === 'exit') R[1].kit = T.arch && T.arch.spare ? T.arch.spare(rng, n, R.map((q) => q.kit)) : rng.pick(T.kits.filter((k) => !SEALED.has(k)));
+  // (Round 96: a room the architect means every such floor to have, moved
+  // to another room rather than lost under the way down.)
+  const keep = T.arch && T.arch.keep;
+  if (keep && !(last && boss) && keep.has(R[far].kit)) {
+    const j = R.findIndex((r, i) => i > 0 && i !== far && !r.sealed && !keep.has(r.kit) && !['exit', 'boss', 'vault', 'hidden'].includes(r.kit));
+    if (j > 0) R[j].kit = R[far].kit;
+  }
   if (!(last && boss)) R[far].kit = last ? 'boss' : 'exit';
   entry.kit = 'entry';
   const b = new Builder(W, D, rx0);
@@ -1619,7 +1628,10 @@ function dressBase(ctx, r) {
         }
         if (own(ctx.plan, r, tx, tz) && !doorBlocked(ctx.plan, r, tx, tz) && b.get(tx, FY, tz) === B.air) b.set(tx, FY, tz, big ? B.kav_glow : B.brazier, META_STATE);
       }
-      const boss = rng.pick(T.bosses.filter((k) => !BENCHED.has(k)));
+      // (Round 96: an architect may choose it from the place's own seed,
+      // so what's written on every floor can tell of it: see deeps/mine.js.)
+      const chosen = T.arch && T.arch.boss ? T.arch.boss(ctx) : null;
+      const boss = chosen && !BENCHED.has(chosen) ? chosen : rng.pick(T.bosses.filter((k) => !BENCHED.has(k)));
       out.spawns.push({ id: out.spawns.length, species: boss, x: b.x0 + r.cx, z: r.cz, room: r.id, boss: true });
       // (The Twins: two of them, one bar between them.)
       if (boss === 'twins') out.spawns.push({ id: out.spawns.length, species: 'twin_b', x: b.x0 + r.cx + 2, z: r.cz, room: r.id, boss: true, twin: true });

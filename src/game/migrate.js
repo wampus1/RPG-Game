@@ -739,6 +739,12 @@ export const STEPS = [
       log.push('Barrows are made over: new rooms, puzzles, lore and creatures, and every barrow master redrawn. Barrow floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '0.96.0',
+    data(d, log) {
+      log.push('Mines are made over: new rooms, firedamp, carts, pumps and bells, new creatures, and every mine master redrawn. Mine floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
