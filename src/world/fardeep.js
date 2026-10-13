@@ -20,6 +20,7 @@
 //     the sea came into.
 // (Each's own peril, and what drifts in its air: see game/dungeon.js.)
 import { B } from './blocks.js';
+import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
 export const FAR_DSTYLE = {
@@ -256,14 +257,17 @@ export const FAR_DTYPES = {
   // travertine and marble, mosaics of the legions' victories on the
   // floors, the dead laid out in ranks; and the ranks get up.
   catacomb: {
-    name: 'Imperial Catacomb', isle: 'velmarch', wall: B.travertine, floor: B.marble, alt: B.turquoise_tile, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Imperial Catacomb', isle: 'velmarch', wall: B.cc_tufa, floor: B.cc_flags, alt: B.cc_flags, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['legion', 'mosaic', 'ossuary', 'shrine', 'legion', 'pillared', 'burial', 'trap', 'treasure', 'guard'],
-    mobs: [['legion_shade', 5], ['skeleton', 2], ['wisp', 1]],
-    swap: { wight: ['legion_shade'], ghoul: ['legion_shade'], drowned: ['legion_shade'] },
-    bosses: ['last_emperor', 'bronze_wolf'], torches: 0.35,
-    shapes: { rect: 4, octagon: 2, cross: 2 }, wiggle: 0, decor: [['statue', 3], ['urn', 2], ['candles', 3], ['war_banner', 2]],
+    mobs: [['legion_shade', 4], ['lemur', 2], ['skeleton', 1]],
+    swap: { wight: ['legion_shade'], ghoul: ['legion_shade', 'lemur'], drowned: ['legion_shade'], wisp: ['lemur'] },
+    bosses: ['last_emperor', 'bronze_wolf'], torches: 0.05,
+    shapes: { rect: 4, octagon: 2, cross: 2 }, wiggle: 0, decor: [['cc_urn', 2], ['cc_lucerna', 2], ['cc_statue', 1], ['cc_bones', 2]],
     dark: [0.1, 0.085, 0.06], motes: ['#ffe090', '#fff8e0'], ambient: ['drone', 'chains', 'whisper', 'march'],
     loot: [['gold_ingot', 1, 2, 0.3], ['old_coin', 3, 8, 0.6], ['marble', 2, 4, 0.3], ['gem', 1, 1, 0.12]],
+    // (Round 103: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/catacomb.js.)
+    arch: CATA_ARCH,
   },
   // An emperor's tomb in Ostria, guarded by his army in clay: rank on rank
   // of terracotta soldiers, red lacquer halls, lanterns, the crossbows of

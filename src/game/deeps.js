@@ -20,6 +20,7 @@ import * as KW from './kavwork.js';
 import * as GW from './grovework.js';
 import * as FW from './forgework.js';
 import * as TW from './grottowork.js';
+import * as AW from './catawork.js';
 
 const key = (x, z) => `${x},${z}`;
 const near = (a, b, r) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= r;
@@ -52,6 +53,8 @@ export function restore(run) {
   if (run.rec.type === 'forge') FW.restore(run);
   // (Round 102) The Tide Grotto's: see grottowork.js.
   if (run.rec.type === 'grotto') TW.restore(run);
+  // (Round 103) The Imperial Catacomb's: see catawork.js.
+  if (run.rec.type === 'catacomb') AW.restore(run);
 }
 
 // Something of the architect's clicked (true if it was).
@@ -61,7 +64,7 @@ export function interact(run, x, y, z, b) {
     case 'lore': {
       const t = (run.data.lore || []).find((q) => q.x === x && q.z === z);
       if (t) game.ui.openSign(t.lines, t.title);
-      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
+      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || AW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
       return true;
     }
     case 'spiral':
@@ -71,7 +74,7 @@ export function interact(run, x, y, z, b) {
       takeOffering(run, x, z);
       return true;
   }
-  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b);
+  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b) || AW.interact(run, x, y, z, b);
 }
 
 // One of the place's own fallen (the crypt's bones: see cryptwork.js; the
@@ -83,6 +86,7 @@ export function killed(run, e) {
   if (run.rec.type === 'grove') GW.onKill(run, e);
   if (run.rec.type === 'forge') FW.onKill(run, e);
   if (run.rec.type === 'grotto') TW.onKill(run, e);
+  if (run.rec.type === 'catacomb') AW.onKill(run, e);
 }
 
 // A spiral stone turned to its next sigil; if that sets the ring in its
@@ -210,6 +214,7 @@ export function tick(run, dt, party) {
   GW.tick(run, dt, party);
   FW.tick(run, dt, party);
   TW.tick(run, dt, party);
+  AW.tick(run, dt, party);
 }
 
 // The old hound: trotting ahead of you to where it means to go, looking

@@ -780,6 +780,12 @@ export const STEPS = [
       log.push('The Tide Grottos are made over: drawn afresh, with tidal flats, clam beds, divers\' camps, sea-shrines, blowholes, eel-runs and glow-pools; the tide coming in and going out on its clock, the clams and their pearls, the shrine\'s scallops and the sea-door, the bells, the urchins; drowned divers, morays, lantern jellies and shrimpkin; and their masters redrawn. Tide Grotto floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  {
+    to: '1.3.0',
+    data(d, log) {
+      log.push('The Imperial Catacombs are made over: drawn afresh, with galleries of shelf-graves, columbaria, the legion\'s basilica, the family\'s cubiculum, the ossuary and the hall of the Triumph; the lamps, the lemures that snuff them and the fossors who light them again; graves to rob (mind the fossors), the busts of the house to honour in order; the aquilifer and the grasping hands; and their masters redrawn. Catacomb floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

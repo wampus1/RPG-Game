@@ -51,7 +51,10 @@ export const FAR_DEEP_SPECIES = {
     under: true, undead: true, light: 2, isle: 'velmarch', drops: [['old_coin', 1, 3, 0.6], ['bone', 1, 2, 0.4]],
     // Shields locked with the shade beside it: most of a blow turned.
     ward(game, c, src, amt) {
-      const mate = game.creatures.some((o) => o !== c && !o.dead && o.species === 'legion_shade' && dist(o, c) <= 1);
+      // (Round 103: its ranks dressed by an aquilifer, a comrade two paces
+      // off will do: see catamobs.js.)
+      const reach = c.rankedT > 0 ? 2 : 1;
+      const mate = game.creatures.some((o) => o !== c && !o.dead && o.species === 'legion_shade' && dist(o, c) <= reach);
       if (!mate || c.stunT > 0) return amt;
       if (!(c.wallNote > 0)) {
         c.wallNote = 1.2;

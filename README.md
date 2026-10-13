@@ -7455,6 +7455,139 @@ flats on a clock and goes out again, and what lives there lives by it.
 - **Version 1.2.0.** Worlds from 1.1 load as before. Tide Grotto floors
   you have already been on are laid out afresh the next time you go down.
 
+## Round 103: The Imperial Catacomb, made over
+
+The ninth of the dungeon overhauls. An Imperial Catacomb lies under the
+Velmarch hills. An emperor was laid there, and his legion swore to guard
+him past death. Walking in should feel like walking into a cathedral:
+hushed, ordered, vast, built by people who believed they would last
+forever. Then you notice the dead are standing in lines, and the lines
+are straight. Its galleries are cut in soft brown tufa, faced in a net
+of little stones under travertine cornices. Its halls are marble and
+porphyry. It is lit by oil lamps that someone keeps lighting.
+
+- **Drawn afresh.** Every Imperial Catacomb tile and thing is painted by
+  hand:
+  - **The walls.** Tufa faced in a stone net (*opus reticulatum*) under a
+    travertine cornice, one kind keeping its red plaster. Also:
+    - shelf-graves sealed with tiles or a slab, broken open, or broken in
+      from inside;
+    - a columbarium of little urn niches;
+    - frescoes of a garden and of a dove;
+    - the ossuary's stacked skulls;
+    - an inscription, the family tree, and the relief of the Triumph;
+    - an arched tomb (*arcosolium*) and the family tomb's marble doors;
+    - the faces of the portico and the tribunal.
+  - **The floors.** Inlaid marble (*opus sectile*: porphyry discs ringed in
+    serpentine, laid so the pattern runs across the tiles with no seam),
+    two black-and-white mosaics (interlaced circles and a diamond net),
+    travertine flags, trodden tufa, the ossuary's bones, and polished
+    porphyry for the tribunal.
+  - **The things set about.**
+    - Tall bronze lamp stands and little clay lamps, lit or out.
+    - Urns, a marble sarcophagus, the four busts of the house (their gold
+      fillets shine when honoured), a statue, the legion's eagle, columns
+      and a trophy of arms.
+    - An altar, bones and skull piles, an amphora of lamp oil, a fossor's
+      tools, an inscribed slab, rubble, ladders and banners.
+- **Rooms an Imperial Catacomb has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/catacomb.js`), beside its old rooms.
+  Those are now set about with its own things: the legion's flagged
+  halls, the mosaic room laid as a carpet, and the pillared hall with
+  marble columns.
+  - **The galleria.** A long gallery between walls of shelf-graves, lamps
+    in niches, epitaphs on the slabs, a dead hand or two, and the fossors
+    at work.
+  - **The columbarium.** Walls of urn niches over the mosaic net, an
+    altar, a ring of urns.
+  - **The basilica.** The legion's hall:
+    - a nave of inlaid marble down its travertine;
+    - a portico raised a step along either side, with its columns on it;
+    - the tribunal raised at its head, with the eagle on it, the
+      emperor's decree cut in the wall behind and the aquilifer standing
+      on it;
+    - the shades ranked down the nave.
+  - **The cubiculum.** A family's chamber: the four busts on their
+    pillars, the family tree on the wall, arched tombs with their
+    epitaphs, a sarcophagus, and the family tomb behind its marble doors.
+  - **The ossuary.** Skull walls, a loft along the back reached by a
+    ladder (a chest and a sarcophagus up there), and a bone pit sunk in
+    the floor with arms reaching up out of it.
+  - **The Triumph.** A hall for the emperor's victories: the relief of
+    each, statues, the trophy of arms, banners, and a parade of the dead.
+- **What's at work there.**
+  - **The lamps.** They light the halls. Where they're out, the lemures
+    can't be touched, so keep them lit (you can light one again yourself).
+  - **The graves.** Break a shelf-grave open for its grave goods: old
+    coins, and sometimes a gem or a little gold. But a hand may close on
+    your wrist. The first time, the fossors stop work to stare at you.
+    Rob another and they come for you with their picks.
+  - **The busts of the house.** Honour them in the order of descent (the
+    family tree on the wall says it) and the family tomb opens on its
+    chest. Out of turn, the fillets go dark and the dead of the house come
+    to see who dares.
+  - What's been done (the graves robbed, the busts honoured, the tomb
+    opened) stays done when you come back to the floor.
+- **What's written there.** Every Imperial Catacomb has its emperor, its
+  legion and its victories (one fought in the fields below the town
+  above), the house of the cubiculum and its four generations, and why
+  the legion still stands its post: an oath, a plague, a mutiny, a
+  triumph never held, or an usurper. Its papers come from all of that
+  (see `src/world/deeps/catalore.js`):
+  - the dedication over the gate;
+  - epitaphs, the fossors' ledger and a fossor's tools;
+  - the Triumph's reliefs and the family tree;
+  - graffiti, the emperor's decree and a sarcophagus;
+  - the last word at the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the legion shades stay):
+  - **The Aquilifer.** The legion's skeleton standard-bearer, in a lion's
+    pelt with the gilt eagle on its pole. While it stands, the shades
+    near it dress their ranks: their shields lock with a comrade two
+    paces off, not just one, and they come on quicker. It keeps behind
+    the line. Bring the eagle down and the shades waver.
+  - **The Grasping Hand.** A dead arm out of a broken shelf-grave, or up
+    out of the ossuary's bones. Pass by and it grabs you and holds you
+    for a moment.
+  - **The Lemur.** A restless grey shade of the unburied. It snuffs every
+    lamp it passes, and in the dark blows go through it. In lamplight it
+    can be hurt. Its touch chills you.
+  - **The Fossor.** A gravedigger's ghost with his pick and his lamp, still
+    at work and peaceful. He relights the lamps the lemures put out.
+  - Together:
+    - the lemures put the lamps out ahead of the shades, so you fight the
+      line in the dark;
+    - a hand holds you in front of the spears;
+    - kill a fossor and his fellows come for you, and nobody lights the
+      lamps again.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Last Emperor.** Gaunt, his skin the grey-blue of the long dead,
+    his eyes two coals of gold, the gold laurel on his bald head with its
+    ribbons down his neck. He wears:
+    - a gilt cuirass sculpted with the muscles he no longer has, the
+      Gorgon on its breast;
+    - leather strips tipped with gold at its waist;
+    - the purple toga slung over his far shoulder, its gold-embroidered
+      edge across him, rotted to rags at its hem;
+    - the general's purple cloak lined with gold.
+    In his hand is the eagle sceptre of ivory and gold, the eagle spread
+    on its globe.
+  - **The Bronze Wolf.** The she-wolf of the founding, cast in bronze and
+    risen. She is lean, her ribs standing out and her belly drawn up, the
+    mane of her neck cast in rows of tight curls. She is green with
+    verdigris in the hollows and rubbed gold at her brow, muzzle and
+    shoulder. Her eyes are fire under a heavy brow and her lip is drawn
+    back from her fangs. There is a crack down her flank with the fire
+    showing through it. She strides.
+- **Changes.**
+  - A legion shade's shield wall now needs a comrade within one pace, or
+    two while an aquilifer dresses the ranks.
+  - The catacomb's amphora was redrawn so it reads as a jar.
+- **Version 1.3.0.** Worlds from 1.2 load as before. Catacomb floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

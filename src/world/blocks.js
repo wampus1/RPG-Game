@@ -1130,3 +1130,60 @@ def('gt_cairn', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, 
 def('gt_driftwood', { ...dressing, rotatable: true, hardness: 0.3, drop: [{ item: 'stick', chance: 0.7, min: 1, max: 2 }], label: 'Driftwood' });
 def('gt_firering', { ...dressing, hardness: Infinity, drop: null, label: 'Cold Fire' });
 def('gt_boulder', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Barnacled Boulder' });
+// (Round 103) The Imperial Catacomb made over (see world/deeps/catacomb.js):
+// its wall of tufa laid in opus reticulatum under a travertine cornice; the
+// galleries' shelf-graves (sealed, a name on each: broken open for what's
+// in them; one broken open already; one with a dead arm in it), a
+// columbarium's niches, two frescoes, the ossuary's skulls, an inscription,
+// the stemma of the family, the relief of the Triumph, an arcosolium, the
+// family tomb's door; a portico raised a step and the tribunal raised at
+// the head of the legion's hall, and their steps; its floors (opus
+// sectile, black-and-white mosaic, travertine flags, the galleries' tufa,
+// the ossuary's bones, the tribunal's porphyry); and what's set about in
+// it: the lamps (lit, or snuffed), urns, a sarcophagus, the busts of the
+// ancestors, a statue, the legion's eagle, a column, a trophy of arms, an
+// altar, bones, a pyramid of skulls, the fossors' oil, tools and slabs,
+// fallen masonry, a ladder, the legion's banner. Last of all, so no block
+// before them changes its number.
+def('cc_tufa', { tool: 'pick', hardness: Infinity, drop: null, label: 'Tufa, Laid in a Net' });
+def('cc_loculi', { interact: 'cc_loculus', hardness: Infinity, drop: null, label: 'Shelf-Graves (sealed)' });
+def('cc_loculi_open', { hardness: Infinity, drop: null, label: 'Shelf-Graves (broken open)' });
+def('cc_handhole', { hardness: Infinity, drop: null, label: 'A Broken Grave' });
+def('cc_columbarium', { hardness: Infinity, drop: null, label: 'Columbarium' });
+def('cc_fresco', { hardness: Infinity, drop: null, label: 'Fresco' });
+def('cc_dove', { hardness: Infinity, drop: null, label: 'Fresco of a Dove' });
+def('cc_skulls', { hardness: Infinity, drop: null, label: 'Wall of Skulls' });
+def('cc_inscription', { interact: 'lore', hardness: Infinity, drop: null, label: 'Inscription' });
+def('cc_stemma', { interact: 'lore', hardness: Infinity, drop: null, label: 'The Family Tree' });
+def('cc_relief', { interact: 'lore', hardness: Infinity, drop: null, light: 2, label: 'The Triumph, in Relief' });
+def('cc_arcosolium', { interact: 'lore', hardness: Infinity, drop: null, label: 'Arched Tomb' });
+def('cc_tombdoor', { interact: 'cc_tombdoor', hardness: Infinity, drop: null, label: 'Door of the Family Tomb' });
+def('cc_portico', { hardness: Infinity, drop: null, label: 'Portico' });
+def('cc_portsteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'cc_portico', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Portico Steps' });
+def('cc_tribunal', { hardness: Infinity, drop: null, light: 1, label: 'Tribunal' });
+def('cc_tribsteps', { solid: true, opaque: false, render: 'stair', stair: true, stairOf: 'cc_tribunal', rotatable: true, standable: true, hardness: Infinity, drop: null, label: 'Tribunal Steps' });
+def('cc_sectile', { hardness: Infinity, drop: null, label: 'Inlaid Marble' });
+def('cc_mosaic', { hardness: Infinity, drop: null, label: 'Mosaic' });
+def('cc_mosaicnet', { hardness: Infinity, drop: null, label: 'Mosaic' });
+def('cc_flags', { hardness: Infinity, drop: null, label: 'Travertine Flags' });
+def('cc_tufafloor', { tool: 'pick', hardness: Infinity, drop: null, label: 'Tufa Floor' });
+def('cc_bonefloor', { hardness: Infinity, drop: null, label: 'Bones' });
+def('cc_porphyry', { hardness: Infinity, drop: null, label: 'Porphyry' });
+def('cc_lamp', { ...sprite, tall: true, solid: true, interact: 'cc_lamp', hardness: Infinity, light: 11, lightWhenState: true, drop: null, label: 'Bronze Lampstand' });
+def('cc_lucerna', { ...sprite, solid: true, interact: 'cc_lamp', hardness: Infinity, light: 8, lightWhenState: true, drop: null, label: 'Oil Lamp' });
+def('cc_urn', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'old_coin', chance: 0.35 }, { item: 'bone', chance: 0.3 }], label: 'Urn of Ashes' });
+def('cc_sarcophagus', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Sarcophagus' });
+def('cc_bust', { ...sprite, tall: true, solid: true, rotatable: true, interact: 'cc_bust', hardness: Infinity, light: 3, lightWhenState: true, drop: null, label: 'Bust of an Ancestor' });
+def('cc_statue', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Statue' });
+def('cc_eagle', { ...sprite, tall: true, solid: true, hardness: Infinity, light: 3, drop: null, label: 'The Legion\'s Eagle' });
+def('cc_column', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Column' });
+def('cc_tropaeum', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Trophy of Arms' });
+def('cc_altar', { ...sprite, solid: true, hardness: Infinity, light: 5, drop: null, label: 'Altar' });
+def('cc_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Bones' });
+def('cc_skullpile', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'Skulls' });
+def('cc_amphora', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'clay', chance: 0.6 }], label: 'Amphorae of Lamp Oil' });
+def('cc_tools', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Fossor\'s Tools' });
+def('cc_slab', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Epitaph' });
+def('cc_rubble', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Fallen Masonry' });
+def('cc_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder' });
+def('cc_banner', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'The Legion\'s Banner' });
