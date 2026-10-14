@@ -8773,6 +8773,126 @@ is one stage of what happened:
 - **Version 1.11.0.** Worlds from 1.10 load as before. Hall floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 112: The Sundered Reach, made over
+
+The eighteenth of the dungeon overhauls, and the third of the ancient
+places. The Reach is in the red country of Ostria: a mesa where the
+Sky-Watchers lived in the rock and read the stars from the top, until one
+night the sky split over it and something climbed down on long legs and cut
+its way in. The feeling is vertigo and wrongness, and a lost people: warm
+red stone in its strata, adobe, painted pots and woven blankets, against
+the cold black glass of the void growing through it with the stars inside.
+Each floor is one stage of what the void has done:
+
+- the Mesa, the dwellings mostly whole, glass only in the cracks;
+- the Fault, the stone crazed, chasms open to the nothing;
+- the Between, black glass underfoot (only the homes still on stone),
+  rocks floating loose, the tear.
+
+- **Drawn afresh.** Every tile and thing in the Reach is painted by hand.
+  - **The walls.** Red sandstone in its strata, in three cuts (one with a
+    seam of the glass through it). Also:
+    - murals of the sky-disc and the people under it;
+    - niches with a jar and a bowl;
+    - the Watchers' star chart;
+    - the stone gone to black glass, stars moving in it;
+    - a seam with nothing behind it.
+  - **The floors.** Sandstone slabs laid as they split, each its own tone,
+    in four cuts so no two rooms look tiled. The same crazed with veins
+    of glass. Faceted black glass, lit along its edges. The abyss (black,
+    and the stars far down in it). The phase-bridge of violet light. A
+    woven rug, and the kiva's lid. The glass and the abyss look nothing
+    alike, so you can always tell what will hold you.
+  - **The things set about.** Void crystals, painted pots, the grinding
+    stone, the loom, the hearth, spirit figures, the four sighting-stones
+    (each turns through its four signs, and lights when set), rocks
+    floating in the air, the tear stood up in the middle of a room,
+    offering bowls, baskets, bones, shards of glass, braziers, the
+    elder's sky-journal, and sighting cairns.
+- **Rooms the Reach has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/rift.js`), beside its old rooms. Every floor
+  keeps at least one of the old works (the rift pairs, the fractures, the
+  echoes, the shards, the shard-storms, the gravity wells, the flicker),
+  and the old rooms are dressed in its own things.
+  - **The dwelling.** On every floor: the hearth with a rug before it,
+    the grinding stone, the loom and the pots. A loft runs along the back
+    wall, two high, up a ladder, with baskets and pots up there. Watchers'
+    echoes at their chores.
+  - **The observatory.** The kiva's lid sunk in the middle of the floor,
+    with the four sighting-stones round it at the quarters. Also the star
+    chart on the wall, the elder's journal, cairns and a brazier.
+  - **The fault.** A chasm of the abyss right across the room, two wide,
+    with two phase-bridges well apart. Crystals either side, and a
+    stalker on each bank.
+  - **The crystals.** A cavern grown full of the void's crystals, black
+    glass at its heart, shardbacks grazing and a weaver among them.
+  - **The shrine.** Spirit figures and offering bowls along the back
+    wall, murals, a rug, braziers, watchers' echoes knelt.
+  - **The breach.** Where the sky came down: the tear in the middle,
+    black glass round it, rocks floating, and a rift pair either side.
+    Stalkers and motes.
+- **What's at work there** (see `src/game/riftwork.js`).
+  - **The sky-dial.** Turn each sighting-stone to the sign that stood at
+    its quarter the night the sky split, as the elder's journal and the
+    star chart have it. With the last, the kiva's lid falls in on what
+    the Watchers hid down there, and what's scratched on the kiva wall.
+    It stays open when you come back.
+  - **The chasms.** Step onto the abyss and you fall: you come to where
+    you last stood, hurt. Anything that walks and is knocked in is gone,
+    so drive them in. Nothing walks into it, or paths over it, of itself.
+  - **The phase-bridges.** There a while, then they shimmer, then they're
+    gone, then back. The two over one chasm keep different time.
+  - **The threads.** A weaver strings a thread across the floor at you
+    that sticks you where you step in it. While you're stuck, the
+    stalkers come for you.
+  - **Bursts.** A shard mote going up snaps the threads near it and
+    turns the shardbacks near it.
+  - **The shardbacks.** Let be, they graze. Struck, or near a burst, they
+    turn on whoever's nearest. Killed, their crystals go up and cut
+    whatever's beside them, yours or not.
+  - **The watchers' echoes.** Come near one and it lives a moment of
+    their last evening at you. Kill one and what was in it comes back
+    wrong.
+- **What's written there.** Every Reach has the mesa's name in the old
+  tongue, the Watchers' elder, potter, weaver and a child, and how the sky
+  stood that night (the same on every floor). Its papers come from all of
+  that (see `src/world/deeps/riftlore.js`): the elder's sky-journal, the
+  star chart, the murals, the potter's marks, the spirit figures, what's
+  scratched in the kiva, where the sky came down, and the echoes'
+  memories.
+- **Its new creatures**, each painted by hand and made to work with the
+  others. The void stalker and the shard mote are repainted; the echo
+  shade stays.
+  - **The Rift Weaver.** A long-legged thing the size of a dog, its body
+    a lantern of black glass with stars inside. It keeps off and strings
+    threads.
+  - **The Shardback.** A beetle as big as a pony, its shell of the mesa's
+    red stone with three of the void's crystals grown out of it. Neutral.
+  - **The Sky-Watcher's Echo.** One of the Watchers in warm light, a
+    woven blanket on their shoulders, an arm raised to point out a star,
+    fading away below. Peaceful.
+- **Its master, painted by hand.** The Rift Crawler is now painted at its
+  full 128 pixels:
+  - a long plated thorax of blue-black chitin, each plate lapped over the
+    next, spines of void-glass along its back;
+  - a ringed neck lit cold at each joint;
+  - a head crowned with horns of glass and six eyes;
+  - two arms out of its head ending in curved blades of glass;
+  - an abdomen of the void, stars inside it and the rift down it opening
+    and closing as it breathes.
+
+  Risen, the rift tears wide and the void spills out of it. Winding up,
+  its mandibles spread and its mouth lights. Its long legs are still the
+  game's own, stepping each foot where it falls.
+- **Fixes along the way.**
+  - Some of the old places' papers (the Champion's battles, the grove's
+    wishes, and now the Watchers' names) shuffled their word lists in
+    place. The same place could then tell its story differently from one
+    visit to the next. Each now keeps its own.
+  - Nothing that walks will step or path onto the abyss.
+- **Version 1.12.0.** Worlds from 1.11 load as before. Reach floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

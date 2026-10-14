@@ -58,7 +58,7 @@ export function championLore(rec, n, boss = null) {
   // (The order of his oath: the kneeling-stones, knelt at in it, open the
   // oath-door. The same through the whole Hall.)
   const oath = fixed.shuffle([0, 1, 2, 3]);
-  const battles = fixed.shuffle(PLACES).slice(0, 5).map((p, i) => `${FIELDS[(i + fixed.int(0, 5)) % FIELDS.length]} ${i === 0 ? town : p}`);
+  const battles = fixed.shuffle([...PLACES]).slice(0, 5).map((p, i) => `${FIELDS[(i + fixed.int(0, 5)) % FIELDS.length]} ${i === 0 ? town : p}`);
   const stage = STAGES[Math.min(n, STAGES.length - 1)];
   return {
     who, town, year, hero, bane: bane.name, huntress, priest, shield, squire, oath, battles, stage: stage.key,

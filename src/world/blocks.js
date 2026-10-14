@@ -1587,3 +1587,45 @@ def('ch_lectern', { ...sprite, solid: true, rotatable: true, interact: 'lore', h
 def('ch_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'Votive Candles' });
 def('ch_barricade', { ...sprite, solid: true, rotatable: true, hardness: 1.2, drop: [{ item: 'planks', min: 1, max: 3 }], label: 'A Barricade' });
 def('ch_fallen', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Fallen Man-at-Arms' });
+
+// (Round 112) The Sundered Reach made over (see world/deeps/rift.js): the
+// mesa's red sandstone in its strata, and cracked with the void's black
+// glass; the Sky-Watchers' murals; a niche of pots; their star chart; the
+// wall gone to glass; the tear; the adobe step; its floors (red flags, the
+// same crazed with glass, black glass, the abyss you fall into, the
+// phase-bridge, a woven rug, the kiva's lid); and what's set about in it:
+// void crystals, the Watchers' pots, a grinding stone, a loom, the hearth,
+// a spirit figure, the sighting-stones of the sky-dial, rocks floating
+// loose, the tear stood up in the air, offering bowls, baskets, bones,
+// glass shards, braziers, a watcher's journal, a sighting cairn. Last of
+// all, so no block before them changes its number.
+def('rf_stone', { tool: 'pick', hardness: Infinity, drop: null, label: 'Red Sandstone' });
+def('rf_mural', { interact: 'lore', hardness: Infinity, drop: null, label: 'A Watchers\' Mural' });
+def('rf_niche', { interact: 'lore', hardness: Infinity, drop: null, label: 'A Niche of Pots' });
+def('rf_chart', { interact: 'lore', hardness: Infinity, drop: null, light: 2, label: 'The Star Chart' });
+def('rf_glasswall', { hardness: Infinity, drop: null, light: 2, label: 'Void-Glass' });
+def('rf_tearwall', { hardness: Infinity, drop: null, light: 9, label: 'The Tear' });
+def('rf_dais', { hardness: Infinity, drop: null, label: 'An Adobe Step' });
+def('rf_sand', { hardness: Infinity, drop: null, label: 'Sandstone Flags' });
+def('rf_crazed', { hardness: Infinity, drop: null, label: 'Crazed Flags' });
+def('rf_glass', { hardness: Infinity, drop: null, light: 1, label: 'Black Glass' });
+def('rf_abyss', { hardness: Infinity, drop: null, abyss: true, light: 1, label: 'The Abyss' });
+def('rf_bridge', { hardness: Infinity, drop: null, light: 5, label: 'A Phase-Bridge' });
+def('rf_rug', { hardness: Infinity, drop: null, label: 'A Woven Rug' });
+def('rf_lid', { interact: 'rf_lid', hardness: Infinity, drop: null, label: 'The Kiva\'s Lid' });
+def('rf_crystal', { ...sprite, solid: true, rotatable: true, hardness: Infinity, light: 6, drop: null, label: 'Void Crystals' });
+def('rf_pots', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'clay', min: 1, max: 2 }], label: 'The Watchers\' Pots' });
+def('rf_metate', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Grinding Stone' });
+def('rf_loom', { ...sprite, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'cloth', min: 1, max: 2 }], label: 'A Loom' });
+def('rf_hearth', { ...sprite, solid: true, hardness: Infinity, light: 10, drop: null, label: 'A Hearth' });
+def('rf_kachina', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Spirit Figure' });
+def('rf_dial', { ...sprite, solid: true, rotatable: true, interact: 'rf_dial', hardness: Infinity, light: 6, lightWhenState: true, drop: null, label: 'A Sighting-Stone' });
+def('rf_float', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, light: 3, drop: null, label: 'A Rock, Floating' });
+def('rf_tear', { ...sprite, tall: true, solid: true, hardness: Infinity, light: 12, drop: null, label: 'The Tear' });
+def('rf_bowl', { ...sprite, solid: true, rotatable: true, hardness: 0.3, drop: [{ item: 'gem', min: 0, max: 1 }], label: 'An Offering Bowl' });
+def('rf_baskets', { ...sprite, solid: true, rotatable: true, hardness: 0.3, drop: [{ item: 'wheat', min: 1, max: 2 }], label: 'Baskets' });
+def('rf_bones', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'bone', min: 1, max: 2 }], label: 'Bones' });
+def('rf_shards', { ...sprite, solid: false, rotatable: true, hardness: 0.1, drop: [{ item: 'glass', min: 0, max: 1 }], label: 'Shards of Glass' });
+def('rf_brazier', { ...sprite, solid: true, hardness: Infinity, light: 11, drop: null, label: 'A Clay Brazier' });
+def('rf_journal', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Watcher\'s Journal' });
+def('rf_cairn', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Sighting Cairn' });

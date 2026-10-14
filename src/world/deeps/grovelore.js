@@ -103,7 +103,7 @@ export function groveLore(rec, n, boss = null) {
     },
     // The rag-root: the town's wishes, tied on it.
     rags() {
-      const ws = rng.shuffle(WISH).slice(0, 3);
+      const ws = rng.shuffle([...WISH]).slice(0, 3);
       return {
         title: 'The Rag-Root',
         lines: ['A dead root hung with rags, hundreds of them, some rotted to threads, some new this year. Words on the newer ones, in ink and charcoal and thread:', ...ws.map((w) => `"${w}"`), `Folk from ${town} still come to the edge of the wood to tie them. Somebody brings them down here.`],

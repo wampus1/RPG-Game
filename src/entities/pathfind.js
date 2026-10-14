@@ -55,6 +55,8 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       const feet = BLOCKS[world.getBlock(nx, ny, nz)];
       // (Nobody walks into lava on purpose, save what lives in fire.)
       if (feet.lava && !opts.fireproof) continue;
+      // (Nor off the edge into the abyss, save what floats: see world/deeps/rift.js.)
+      if (BLOCKS[floor]?.abyss && !opts.floats) continue;
       let cost = ROAD_BLOCKS.has(floor) ? 0.65 : 1;
       if (feet.liquid) {
         if (dry) continue;

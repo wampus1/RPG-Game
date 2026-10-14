@@ -26,6 +26,7 @@ import { RNG, hash4 } from '../util/rng.js';
 import { MAP_W, MAP_H, REGION_W, REGION_D } from '../config.js';
 import { ATHANOR_ARCH } from './deeps/athanor.js';
 import { CHAMPION_ARCH } from './deeps/champion.js';
+import { RIFT_ARCH } from './deeps/rift.js';
 
 // The kinds of ancient place (as the far lands' own: see fardeep.js
 // FAR_DTYPES), each with its one master.
@@ -59,13 +60,19 @@ export const ANCIENT_DTYPES = {
     arch: CHAMPION_ARCH,
   },
   rift: {
-    name: 'Sundered Reach', isle: 'ostria', ancient: true, wall: B.obsidian, floor: B.rock_void, alt: B.blight_floor, beam: null, regions: [2, 2], floors: [3, 3],
+    name: 'Sundered Reach', isle: 'ostria', ancient: true, wall: B.rf_stone, floor: B.rf_sand, alt: B.rf_crazed, beam: null, regions: [2, 2], floors: [3, 3],
     kits: ['portals', 'fracture', 'echo', 'shards', 'shardstorm', 'portals', 'gravity', 'flicker', 'trap', 'treasure', 'guard', 'fracture', 'shardstorm', 'flicker'],
-    mobs: [['void_stalker', 3], ['shard_mote', 3], ['echo_shade', 3]], only: true,
+    // (Round 112: and the weavers; the shardbacks and the watchers' echoes
+    // set out where they graze and keep.)
+    mobs: [['void_stalker', 3], ['shard_mote', 3], ['echo_shade', 3], ['rift_weaver', 2]], only: true, kept: ['sky_watcher', 'shardback'],
     bosses: ['rift_crawler'], torches: 0.05,
-    shapes: { star: 2, diamond: 2, crescent: 2, zigzag: 1, teeth: 1, cave: 2 }, wiggle: 0.6, decor: [['glow_crystal', 4], ['void_bloom', 2], ['eye_stalk', 1], ['tendril', 2], ['obsidian', 1]],
+    shapes: { star: 2, diamond: 2, crescent: 2, zigzag: 1, teeth: 1, cave: 2 }, wiggle: 0.6, decor: [['rf_crystal', 3], ['rf_shards', 2], ['rf_pots', 1], ['rf_cairn', 1], ['rf_bones', 1]],
     dark: [0.06, 0.04, 0.1], motes: ['#c8a0ff', '#5ad8f0', '#ffffff'], ambient: ['hum', 'whisper', 'pulse', 'drone'],
     loot: [['gem', 1, 3, 0.4], ['frost_crystal', 1, 2, 0.3], ['old_coin', 3, 8, 0.6], ['gold_ingot', 1, 1, 0.2]],
+    // (Round 112: its own rooms its own architect's, the old ones set about
+    // with its own, a floor to each of what the void has done: see
+    // deeps/rift.js.)
+    arch: RIFT_ARCH,
   },
   gullet: {
     name: 'Gullet of the World', isle: 'ostria', ancient: true, wall: B.cave_rock, floor: B.mud, alt: B.bone_sand, beam: B.log_acacia, regions: [2, 2], floors: [3, 3],

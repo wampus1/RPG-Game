@@ -842,6 +842,14 @@ export const STEPS = [
       log.push('The Halls of the Last Champion are made over: sandstone and bronze and his faded banners, a floor to each of what it was (the Hall of Honours, the Hall of Trials, the Sealed Barrow), with the hall of honours and its gallery, the feast-hall, the oath chapel and its door, the barracks, the wound and its wards, and the hall of the fallen; the oath, the wards, the memorials and the keeners; the huntress\'s shades, the curselings, and the dead getting up again cursed; and the Hero redrawn. Hall floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 112) The Sundered Reach made over (its floors laid out afresh:
+  // its generator raised: see dungeon.js KIND_GEN).
+  {
+    to: '1.12.0',
+    data(d, log) {
+      log.push('The Sundered Reach is made over: the red mesa of the Sky-Watchers and the black glass of the void growing through it, a floor to each of what the void has done (the Mesa, the Fault, the Between), with the dwellings and their lofts up ladders, the observatory and the kiva under its sighting-stones, the fault and its chasm and phase-bridges, the crystal-caverns, the shrine, and the breach; the rift weavers and their threads, the shardbacks, and the watchers\' echoes; and the Rift Crawler redrawn. Reach floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

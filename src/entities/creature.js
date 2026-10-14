@@ -25,6 +25,7 @@ import { MOUND_SPECIES } from './moundmobs.js';
 import { BROCH_SPECIES } from './brochmobs.js';
 import { ATHANOR_SPECIES } from './athanormobs.js';
 import { CHAMPION_SPECIES } from './championmobs.js';
+import { RIFT_SPECIES } from './riftmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -43,7 +44,7 @@ import { ITEMS } from '../world/items.js';
 import { FLEE } from '../config.js';
 import { modStat } from '../mod/stat.js';
 import { companionTick } from '../mod/chargen.js';
-import { B } from '../world/blocks.js';
+import { B, BLOCKS } from '../world/blocks.js';
 
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
@@ -138,6 +139,7 @@ export const SPECIES = {
   ...ATHANOR_SPECIES,
   // (Round 111: the Champion's Hall's own.)
   ...CHAMPION_SPECIES,
+  ...RIFT_SPECIES,
   ...FAR_BOSS_SPECIES,
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,
@@ -402,6 +404,8 @@ export class Creature extends Entity {
     if (w.isWaterAt(nx, ny, nz) && this.species !== 'slime' && !this.S.swims) return false;
     // (And lava, unless it's at home in the fire.)
     if (w.getBlock(nx, ny, nz) === B.lava && !this.S.fireproof && !this.S.floats) return false;
+    // (Round 112: and the abyss, unless it floats over it.)
+    if (BLOCKS[w.getBlock(nx, ny - 1, nz)]?.abyss && !this.S.floats) return false;
     this.face(nx, nz);
     this.startMove(nx, ny, nz, dur);
     return true;
@@ -439,12 +443,12 @@ export class Creature extends Entity {
       // (The Overseer, with no way round a wall of force, turns it off and
       // goes through: see fields.js.)
       const soft = walksFields(this) ? fieldWay(this.game) : null;
-      this.path = soft ? findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, through, clear }) : null;
+      this.path = soft ? findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, through, clear, floats: !!this.S.floats }) : null;
       if (soft && !(this.path && this.path.length)) {
         const way = through ? (x, y, z) => through(x, y, z) || soft(x, y, z) : soft;
-        this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through: way, clear: big ? (x, y, z) => fits(this.game, this, x, y, z, true, soft) : null });
+        this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through: way, clear: big ? (x, y, z) => fits(this.game, this, x, y, z, true, soft) : null, floats: !!this.S.floats });
       }
-      if (!(this.path && this.path.length)) this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through, clear });
+      if (!(this.path && this.path.length)) this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through, clear, floats: !!this.S.floats });
       this.pathI = 0;
       if (!this.path || !this.path.length) {
         this.path = null;
