@@ -23,6 +23,7 @@ import { B } from './blocks.js';
 import { VAULT_ARCH } from './deeps/vault.js';
 import { GUT_ARCH } from './deeps/gut.js';
 import { SALT_ARCH } from './deeps/saltworks.js';
+import { WARREN_ARCH } from './deeps/warren.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -324,14 +325,17 @@ export const FAR_DTYPES = {
   // whatever was digging then: tunnels round as pipes, larders, rooms of
   // roots, the lantern pods grown in them; and the floor's hollow too.
   warren: {
-    name: 'Deep Warren', isle: 'hollowmark', wall: B.cob, floor: B.moss, alt: B.dirt, beam: B.log_oak, regions: [2, 2], floors: [1, 3],
+    name: 'Deep Warren', isle: 'hollowmark', wall: B.wr_loam, floor: B.wr_floor, alt: B.wr_moss, beam: B.log_oak, regions: [2, 2], floors: [1, 3],
     kits: ['burrow', 'lanternroom', 'roots', 'larder', 'burrow', 'collapsed', 'trap', 'treasure', 'lanternroom', 'guard'],
-    mobs: [['tunneler', 4], ['badger', 2], ['cave_moth', 2], ['rat', 2]],
-    swap: { skeleton: ['tunneler'], wight: ['tunneler'], ghoul: ['badger'], crawler: ['tunneler'], wolf: ['badger', 'tunneler'], moth: ['cave_moth'] },
+    mobs: [['tunneler', 4], ['badger', 1], ['rat', 2], ['rootbound', 2], ['gloom_moth', 1], ['cave_moth', 1]],
+    swap: { skeleton: ['tunneler'], wight: ['rootbound'], ghoul: ['badger'], crawler: ['tunneler'], wolf: ['badger', 'tunneler'], moth: ['gloom_moth'] },
     bosses: ['first_digger', 'thing_below'], torches: 0.15,
-    shapes: { round: 5, cave: 3 }, wiggle: 1.3, decor: [['roots', 4], ['glowshroom', 3], ['barrel', 1], ['rubble', 1]],
+    shapes: { round: 5, cave: 3 }, wiggle: 1.3, decor: [['wr_hangroots', 3], ['wr_glowcap', 2], ['wr_clods', 2], ['wr_casks', 1]],
     dark: [0.08, 0.07, 0.04], motes: ['#ffd070', '#c8a060'], ambient: ['skitter', 'drip', 'rumble', 'whisper'],
-    loot: [['lantern_pod', 2, 4, 0.5], ['glowberries', 1, 3, 0.4], ['gold_ore', 1, 2, 0.2], ['gem', 1, 1, 0.12]],
+    loot: [['lantern_pod', 2, 4, 0.5], ['glowberries', 1, 3, 0.4], ['gold_ore', 1, 2, 0.2], ['gem', 1, 1, 0.12], ['root_stew', 1, 1, 0.2]],
+    // (Round 107: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/warren.js.)
+    arch: WARREN_ARCH,
   },
   // A court of the fair folk under one of the Wyrd Isle's mounds: halls of
   // drystone with the heath growing through, rings of toadstools, the

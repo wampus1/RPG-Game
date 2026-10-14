@@ -8032,6 +8032,147 @@ stairs, the shaft's loft up a ladder, and the brine lake is sunk below.
 - **Version 1.6.0.** Worlds from 1.5 load as before. Salt Cathedral floors
   you have already been on are laid out afresh the next time you go down.
 
+## Round 107: The Deep Warren, made over
+
+The thirteenth of the dungeon overhauls. A Deep Warren is under
+Hollowmark. A delve of the Hollowfolk dug down into a burrow far older than
+any of theirs: round tunnels going down further than anyone has dared
+follow. The Hollowfolk stopped it up again in a hurry. The first feeling
+should be cosy, then wrong. The Hollowfolk's home comes first: round doors,
+wattle, boards and rag rugs, a hearth, shelves of jars, and warm amber
+light from the lantern pods. But it was abandoned mid-supper, and one door
+is scored from the inside. Deeper is the old burrow: clay scraped in rings
+by claws, round as a pipe, scree underfoot, no light but glowworms, and
+the sound of digging under the floor. It is cramped and deep: a sleeping
+loft up a ladder, the moot's tiers stepped up round its hall, and pits
+where the floor has given way.
+
+- **Drawn afresh.** Every Deep Warren tile and thing is painted by hand:
+  - **The walls.** Loam in its strata, with pebbles and pale roots
+    threading it. Also:
+    - the Hollowfolk's work: wattle and daub in a timber frame, a round
+      green door with a brass knob (and one scored deep from the inside),
+      shelves of jars, and a stone hearth with its fire;
+    - the old burrow's clay scraped in rings by claws, and glowworms in
+      the dark;
+    - the pantry's little round door, and the stopper: earth heaped in the
+      way with a warning board nailed over it.
+  - **The floors.** Loam, moss, a braided rag rug, scree, floorboards,
+    cracked earth, mushroom beds, roots, and the fallen earth of a pit.
+  - **The things set about.**
+    - Lantern pods hung from roots, glowing amber (or gone dark), and
+      glowcaps.
+    - The delve's round table with supper on it, stools, a dresser of
+      crockery, a bed with a patchwork quilt, and books on stands.
+    - Casks of mushroom ale, a rack of hams and onions, and root bins.
+    - Pillars of twisted roots, hanging roots, the speaking-stone, the
+      moot's benches, the dead delvers, a ladder, the tunnelers' nest,
+      spades and a barrow, the huge bones of an old digger, and clods.
+- **Rooms a Deep Warren has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/warren.js`), beside its old rooms. Those are now
+  set about with its own things: the old lanterns are lantern pods, the
+  glowshrooms are glowcaps, and the root walls are pillars of roots.
+  - **The delve.** A Hollowfolk home, on every first floor. It has boards
+    and a rug, round doors, shelves and wattle in the walls, the hearth,
+    the table laid for supper, and a sleeping loft up a ladder with the
+    bed and a child's drawing on it. A dresser stands across the pantry's
+    little door. The family's diary is here.
+  - **The stores.** The delve's larder: shelves of jars, casks, hams and
+    onions hung, root bins, the recipe, and the grubs in the bins.
+  - **The moot.** The Moot-hall, dug round. Its tiers are stepped up all
+    round the walls (two steps), with benches on them and the ways in kept
+    level. The speaking-stone is in the middle with pods hung round it. The
+    rootbound are here.
+  - **The tunnel.** The old round tunnel, on every floor: scree loud
+    underfoot with a quiet run of loam down its middle, ring-scraped walls,
+    glowworms, the tunnelers' nest with the tunnelers asleep in it, the old
+    bones, and the stopper in its wall.
+  - **The root hall.** Roots down out of the roof in pillars and
+    curtains, a floor of roots, loam and moss, cracked where it's hollow
+    underneath, and the rootbound.
+  - **The garden.** The Hollowfolk's mushroom beds in rows with moss paths
+    between, glowcaps, pods on their vines, and the gloom moths.
+- **What's at work there.**
+  - **Noise.** The tunnelers are blind and hunt by your footfalls. Scree
+    and floorboards are loud: step on them and everything that listens a
+    long way off hears you and comes up after you. Moss, loam and rugs are
+    quiet.
+  - **The lantern pods.** They give the warren its light. The gloom moths
+    smother them. Rub a dark pod and it glows again.
+  - **The hollow floor.** Cracked earth gives way a moment after you step
+    on it, dropping you into the pit below, hurt. The noise wakes what's
+    under the floor. Now and then the old diggers left something in the
+    pit.
+  - **The pantry.** Push the dresser along the wall and the pantry's
+    little round door is behind it, with the family's best stores. The
+    diary tells you where.
+  - **The stopper.** Read the Hollowfolk's warning board, then dig the
+    earth out. Behind it is the old cell they stopped up, with its dead
+    and its chest. Everything under the floor hears you do it.
+  - What's been done (the pods as you left them, the floors fallen in,
+    the dressers pushed, the pantries and stoppers opened) stays done when
+    you come back to the floor.
+- **What's written there.** Every Deep Warren has its old digger (the
+  First Digger, the Old Mole, the Root-King, the Deep Sleeper, the Lantern
+  Mother), the Hollowfolk family who dug the delve (its delve-master, its
+  lamplighter, its youngest), the Moot that sent them down, and the town
+  above. It also has what went wrong: they broke through into the round
+  tunnels, the lamps went out one by one, the floor of the Moot gave way,
+  the Moot voted to dig on for the glow-seeds, or they heard digging under
+  them and dug toward it. Its papers come from all of that (see
+  `src/world/deeps/warrenlore.js`):
+  - the family's diary, a child's drawing, and a letter;
+  - the moot-book, the lamplighter's rounds, a recipe for cave-root stew,
+    and what's scratched on a cask;
+  - a prayer, a dead delver, the old bones, what's scratched in the
+    stopped-up cell, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the tunnelers, badgers, rats and cave moths stay):
+  - **The Gloom Moth.** A great dun moth come up out of the old tunnels,
+    drawn to light. It flies to the nearest lit pod, settles on it and puts
+    it out. It doesn't fight; struck, it bursts in a cloud of dust that
+    blinds whoever is next to it.
+  - **The Larder Grub.** A fat, pale, peaceful grub of the stores. A
+    tunneler that comes by one stops to eat it, and is healed by it (and
+    busy a moment).
+  - **The Rootbound.** One of the delvers, taken by the roots and wrapped
+    in them. It creeps, and sends roots along the floor that come up where
+    you stand and hold you fast.
+  - Together:
+    - the moths put out the light, and the dark is nothing to the blind
+      tunnelers;
+    - the rootbound holds you still while the tunnelers come up under you;
+    - running from them over the scree calls more;
+    - a wounded tunneler heals itself on the larder's grubs, unless you use
+      the grubs to keep it busy.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The First Digger.** The tunnelers' first mother, older than the
+    island's trees, who dug the round tunnels when there was nothing on
+    Hollowmark to dig them for. It is:
+    - vast, low and long, hairless, its pink-grey hide wrinkled in deep
+      folds along its body;
+    - bristled, scarred, earth caked on its back and roots grown over it;
+    - blind but for slits, with a star of fleshy pink feelers round the
+      end of its long muzzle;
+    - armed with yellow incisors long as spades and forefeet like great
+      shovels with long ivory claws;
+    - short-tailed and naked.
+    It digs its way forward.
+  - **The Thing Below.** What everything down here was digging away from.
+    It has risen up out of a hole it tore in the floor, the earth heaved up
+    in a broken rim round it, roots snapped:
+    - a mass of dark root-flesh, knotted and fibrous;
+    - pale tendrils feeling about;
+    - a slit of a mouth down its front ringed with teeth, opening as it
+      breathes;
+    - amber eyes in clusters, opening and shutting;
+    - up over it on long bending stalks, lures that glow like lantern
+      pods. The Hollowfolk's lantern trees are its children.
+- **Version 1.7.0.** Worlds from 1.6 load as before. Deep Warren floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

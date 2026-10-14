@@ -23,6 +23,7 @@ import { CATA_MOBS } from './art/cata_mobs.js';
 import { VAULT_MOBS } from './art/vault_mobs.js';
 import { GUT_MOBS } from './art/gut_mobs.js';
 import { SALT_MOBS } from './art/salt_mobs.js';
+import { WARREN_MOBS } from './art/warren_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -266,6 +267,7 @@ for (const [k, def] of Object.entries(CATA_MOBS)) CREATURE_LOOKS[k] = lookOf(def
 for (const [k, def] of Object.entries(VAULT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(GUT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(SALT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(WARREN_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 

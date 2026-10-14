@@ -804,6 +804,12 @@ export const STEPS = [
       log.push('The Salt Cathedrals are made over: drawn afresh, with the miners\' chapel, the brine lake and its sluice, the workings and their gallery, the shaft and its loft, the brine pans and the singing hall; the brine that crusts you fast and mends the salt dead, the chandeliers on their ropes, the singing crystals, the drowned chapel behind the flooded arch, the bricked-up chapel, the rakers, the blooms and the pale flamingos; and their masters redrawn. Salt Cathedral floors you have already been on are laid out afresh the next time you go down. (And the rope ladders up to the ledges of the Leviathan\'s Gut are there now.)');
     },
   },
+  {
+    to: '1.7.0',
+    data(d, log) {
+      log.push('The Deep Warrens are made over: drawn afresh, with the Hollowfolk\'s delve and its loft, the stores, the moot and its tiers, the old round tunnel and its stopper, the root hall and the mushroom garden; the noise of the scree and the boards that the blind tunnelers hear, the lantern pods, the hollow floor, the pantry behind the dresser, the gloom moths, the larder grubs and the rootbound; and their masters redrawn. Deep Warren floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

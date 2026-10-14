@@ -1354,3 +1354,55 @@ def('sw_pan', { ...sprite, solid: true, hardness: Infinity, light: 9, lightWhenS
 def('sw_boat', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Miners\' Boat' });
 def('sw_singer', { ...sprite, tall: true, solid: true, interact: 'sw_singer', hardness: Infinity, light: 7, drop: null, label: 'Singing Crystal' });
 def('sw_growth', { ...sprite, solid: true, rotatable: true, kinds: true, hardness: 0.6, drop: [{ item: 'salt', chance: 0.5 }], label: 'Salt Growth' });
+
+// (Round 107) The Deep Warren made over (see world/deeps/warren.js): its
+// walls of loam in their strata, pebbles and roots in them; the
+// Hollowfolk's wattle, their round doors (one scored from the inside),
+// shelves of jars, a hearth; the old burrow's clay scraped in rings;
+// glowworms; the pantry's little door (behind the dresser) and the stopper
+// (dig it out); a tier of the moot; its floors (loam, moss and
+// a rag rug, quiet underfoot; scree and boards, loud; cracked earth, that
+// gives way; mushroom beds; roots; a pit's bottom); and what's set about in
+// it: lantern pods, glowcaps, the delve's table, stools, dresser, bed and
+// books, casks, hams, bins, root pillars, hanging roots, the speaking-stone,
+// benches, the dead, a ladder, the tunnelers' nest, tools, old bones,
+// clods. Last of all, so no block before them changes its number.
+def('wr_loam', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Loam' });
+def('wr_wattle', { hardness: Infinity, drop: null, label: 'Wattle and Daub' });
+def('wr_door', { interact: 'wr_door', hardness: Infinity, drop: null, label: 'A Round Door' });
+def('wr_shelf', { hardness: Infinity, drop: null, label: 'Shelves of Jars' });
+def('wr_hearth', { hardness: Infinity, drop: null, light: 9, label: 'Hearth' });
+def('wr_rings', { hardness: Infinity, drop: null, label: 'Clay, Scraped in Rings' });
+def('wr_smalldoor', { interact: 'wr_smalldoor', hardness: Infinity, drop: null, label: 'A Little Round Door' });
+def('wr_stopper', { interact: 'wr_stopper', hardness: Infinity, drop: null, label: 'Earth Heaped in the Way' });
+def('wr_glow', { hardness: Infinity, drop: null, light: 4, label: 'Glowworms' });
+def('wr_tier', { hardness: Infinity, drop: null, label: 'A Tier of the Moot' });
+def('wr_floor', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Loam' });
+def('wr_moss', { hardness: Infinity, drop: null, label: 'Moss' });
+def('wr_scree', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Scree' });
+def('wr_boards', { hardness: Infinity, drop: null, label: 'Floorboards' });
+def('wr_rug', { hardness: Infinity, drop: null, label: 'A Rag Rug' });
+def('wr_cracked', { hardness: Infinity, drop: null, label: 'Cracked Earth' });
+def('wr_bed', { hardness: Infinity, drop: null, label: 'A Mushroom Bed' });
+def('wr_roots', { hardness: Infinity, drop: null, label: 'Roots' });
+def('wr_pitbed', { hardness: Infinity, drop: null, label: 'Fallen Earth' });
+def('wr_pod', { ...sprite, tall: true, solid: false, interact: 'wr_pod', hardness: Infinity, light: 11, lightWhenState: true, drop: null, label: 'Lantern Pod' });
+def('wr_glowcap', { ...sprite, solid: true, hardness: 1, light: 7, drop: [{ item: 'glowcap', chance: 0.6 }], label: 'Glowcap' });
+def('wr_table', { ...sprite, solid: true, hardness: Infinity, light: 4, drop: null, label: 'A Round Table' });
+def('wr_stool', { ...sprite, solid: true, rotatable: true, hardness: 0.4, drop: [{ item: 'planks', chance: 0.5 }], label: 'Stool' });
+def('wr_dresser', { ...sprite, solid: true, rotatable: true, interact: 'wr_dresser', hardness: Infinity, drop: null, label: 'Dresser' });
+def('wr_bedstead', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Hollowfolk Bed' });
+def('wr_book', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Book on a Stand' });
+def('wr_casks', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Casks of Mushroom Ale' });
+def('wr_hams', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Hams and Onions' });
+def('wr_bins', { ...sprite, solid: true, rotatable: true, hardness: 0.6, drop: [{ item: 'carrot', min: 1, max: 3 }], label: 'Root Bins' });
+def('wr_rootpillar', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Roots, Twisted' });
+def('wr_hangroots', { ...sprite, tall: true, solid: false, rotatable: true, hardness: Infinity, drop: null, label: 'Hanging Roots' });
+def('wr_speakstone', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Speaking-Stone' });
+def('wr_bench', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Bench' });
+def('wr_dead', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Delver, Dead' });
+def('wr_ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, hardness: Infinity, drop: null, label: 'Ladder' });
+def('wr_nest', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'A Nest' });
+def('wr_spades', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Spades and a Barrow' });
+def('wr_bones', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Old Bones, Huge' });
+def('wr_clods', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'Clods' });

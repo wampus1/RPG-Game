@@ -24,6 +24,7 @@ import * as AW from './catawork.js';
 import * as VW from './vaultwork.js';
 import * as LW from './gutwork.js';
 import * as SW from './saltwork.js';
+import * as WW from './warrenwork.js';
 
 const key = (x, z) => `${x},${z}`;
 const near = (a, b, r) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= r;
@@ -64,6 +65,8 @@ export function restore(run) {
   if (run.rec.type === 'gut') LW.restore(run);
   // (Round 106) The Salt Cathedral's: see saltwork.js.
   if (run.rec.type === 'saltworks') SW.restore(run);
+  // (Round 107) The Deep Warren's: see warrenwork.js.
+  if (run.rec.type === 'warren') WW.restore(run);
 }
 
 // Something of the architect's clicked (true if it was).
@@ -73,7 +76,7 @@ export function interact(run, x, y, z, b) {
     case 'lore': {
       const t = (run.data.lore || []).find((q) => q.x === x && q.z === z);
       if (t) game.ui.openSign(t.lines, t.title);
-      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || AW.sayOf(b) || VW.sayOf(b) || LW.sayOf(b) || SW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
+      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || AW.sayOf(b) || VW.sayOf(b) || LW.sayOf(b) || SW.sayOf(b) || WW.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
       return true;
     }
     case 'spiral':
@@ -83,7 +86,7 @@ export function interact(run, x, y, z, b) {
       takeOffering(run, x, z);
       return true;
   }
-  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b) || AW.interact(run, x, y, z, b) || VW.interact(run, x, y, z, b) || LW.interact(run, x, y, z, b) || SW.interact(run, x, y, z, b);
+  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b) || AW.interact(run, x, y, z, b) || VW.interact(run, x, y, z, b) || LW.interact(run, x, y, z, b) || SW.interact(run, x, y, z, b) || WW.interact(run, x, y, z, b);
 }
 
 // One of the place's own fallen (the crypt's bones: see cryptwork.js; the
@@ -228,6 +231,7 @@ export function tick(run, dt, party) {
   VW.tick(run, dt, party);
   LW.tick(run, dt, party);
   SW.tick(run, dt, party);
+  WW.tick(run, dt, party);
 }
 
 // The old hound: trotting ahead of you to where it means to go, looking
