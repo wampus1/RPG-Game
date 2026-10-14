@@ -8322,6 +8322,162 @@ in the hill comes out somewhere else.
 - **Version 1.8.0.** Worlds from 1.7 load as before. Hollow Hill floors
   you have already been on are laid out afresh the next time you go down.
 
+## Round 109: The Drowned Broch, made over
+
+The fifteenth of the dungeon overhauls. A Drowned Broch is one of the
+broken sea towers of the Skerries: a hollow round tower of dry-laid
+flagstone, double-walled, with its stairs and galleries inside the
+thickness of the wall. The great storm broke it and the sea came into its
+stair. The feeling is cold, wet, wind-battered and watched, and tight and
+tall rather than wide: ledges up round the walls, a gallery that climbs
+over itself, wall-cells, and below, the drowned stair going down into
+black water. The gale comes in at the slits in gusts you can hear coming.
+The lamps gutter. Grey stone, slate, wrack, barnacles, driftwood patching,
+fish-oil; and the wreckers' work, plunder from ships and false lights on
+poles.
+
+- **Drawn afresh.** Every Drowned Broch tile and thing is painted by hand:
+  - **The walls.** Flagstone laid dry in long thin courses, blue-grey,
+    each slab lit along its top. Also:
+    - wrack hung on the lower courses, with barnacles;
+    - a breach patched with driftwood, and a slit window with the grey
+      sea-light and the spray through it;
+    - the low lintelled door of a wall-cell, and a cruisie lamp in its
+      niche;
+    - Pictish symbol stones (the crescent and V-rod, or the salmon);
+    - a door of ship's planks, barred and padlocked;
+    - the scarcement ledge's face and a step's.
+  - **The floors.** Flagstones worn pale, wet flags with pools and wrack,
+    slate, shingle, the hearth's peat-ash, and driftwood planks.
+  - **The things set about.**
+    - The beacon (an iron fire-basket on its stand, cold or roaring), the
+      wreckers' false lights (a lantern on a pole, lit or smashed), and
+      cruisie lamps on their stands (lit or out).
+    - Oil casks (full or broached), peat stacks, a quern, sea-kists and
+      the keeper's own kist, the keeper's box-bed.
+    - Creels, nets drying, a rack of fish, a coil of tarred rope, an
+      anchor.
+    - A wreck's ribs, a figurehead, a whale's jawbones, plunder, a
+      fulmar's nest, kelp, and a drowned sailor's bones.
+- **Rooms a Drowned Broch has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/broch.js`), beside its old rooms. Those
+  are now set about with its own things: the old braziers and candles
+  are cruisie lamps, the kelp and bones the broch's own, the rubble peat.
+  - **The court.** The broch's round court, on every first floor and
+    often after: the hearth in its middle and the quern, and the
+    scarcement ledge up along its back wall with a step onto it and the
+    fulmars nesting on it. Slits over the ledge, wall-cells, lamps, a
+    symbol stone; the drowned; a trowie by its cell.
+  - **The wheelhouse.** A round house with four stone piers out from its
+    walls making bays, each bay its own use (a box-bed, peat, creels, a
+    kist, nets, a fish rack, a quern, plunder). The trowies are in the
+    bays.
+  - **The gallery.** The passage in the wall's thickness, on every floor.
+    It climbs up a step, along a raised stretch and down again; a slit at
+    its far end sends the gale down the whole of it. Cells off it to
+    shelter in, a drowned sailor in one and a kist in another. Trowies.
+  - **The stair.** The drowned stair: its far side gone down into the
+    black water, shallow at the edge and deep in the middle, a shingle
+    bank down one side with kelp and the seals on it. The drowned asleep
+    in the shallows; a wrecker's false light at the water's edge with its
+    bearer.
+  - **The den.** The wreckers' den: planks, plunder, kists (their tally
+    on one), the casks of fish-oil they took off the keeper, a false light
+    ready to carry out. Behind its wall, the strongroom, barred and
+    padlocked; one of the wreckers carries the key.
+  - **The beacon.** The beacon up on its dais, cold. The keeper's box-bed
+    with his log, his kist (locked till the light's lit), his empty casks,
+    peat.
+  - **The noust.** The boat-shed: shingle and planks, the slip of water
+    along its foot, a wreck's ribs standing, a figurehead, an anchor,
+    creels, nets, a rack of fish, the whale's jawbones, oil casks, and the
+    seals on the shingle.
+- **What's at work there** (see `src/game/brochwork.js`).
+  - **The gale.** Every few seconds the wind comes in at a slit. There's
+    a whistle and spray first, then the gust down its line: everyone in
+    it is knocked two paces along (off the scarcement if you're on it, and
+    hurt by the fall), and every lamp it passes is blown out. Step out of
+    its line, or into a cell.
+  - **The lamps.** Light a cruisie again by hand.
+  - **The beacon.** Draw a jar of fish-oil off a full cask (one jar a
+    cask) and bring it up to the beacon: it goes up with a roar. Every
+    false light on the floor dies, the drowned near it are scorched and
+    shrink back, and the keeper's kist comes unlocked. The keeper's log
+    says where the oil is kept.
+  - **The false lights.** While one burns near the water, the drowned
+    rise out of it every so often to come to it. Smash the light and they
+    stop.
+  - **The strongroom.** Kill the wrecker with the key and it drops it;
+    the door opens with it.
+  - **The wall-cells.** Put your hand into one and you get the trowies'
+    hoard, or, if a trowie lives in it, a bite and a trowie (then the
+    hoard).
+  - What's been done (lamps as you left them, beacons lit, casks
+    broached, false lights smashed, strongrooms opened, cells searched and
+    what the trowies put back in them) stays done when you come back to
+    the floor.
+- **What's written there.** Every Drowned Broch has its keeper (the
+  Beacon-Keeper Erling, the Storm Giant, the Wreckers, Old Finnman, the
+  Selkie Mother), its last keeper by name, the wreckers' captain, a ship
+  that broke on the rocks below and her master, and the town. It also has
+  what went wrong: the keeper let the light go out, the wreckers showed a
+  false light, the keeper took the wreckers' silver, the trows came up out
+  of the walls, or the sea took the stair in the great storm. Its papers
+  come from all of that (see `src/world/deeps/brochlore.js`):
+  - the keeper's log, the keeper's notice by the door, and what's
+    scratched in his box-bed;
+  - the wreckers' tally, a sailor's letter never sent, a drowned sailor,
+    what's in a sea-kist, the figurehead, the symbol stones;
+  - what's scratched by the strongroom's bar, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the drowned, wreckers, crawlers and grey seals stay):
+  - **The Trowie.** A little grey trow up out of the wall-cells, all
+    knees and nose and long fingers. It won't come within two paces of a
+    lit lamp, nor go for you while you stand by one. When the gale blows
+    the lamps out, it comes. Its bite takes coin from your purse, and off
+    it goes to its cell and into the wall with it; the coin's in its
+    hoard, to be got back.
+  - **The Lantern-Bearer.** A wrecker's boy with a false light on a pole.
+    He won't fight. He keeps out of your reach holding the light up, and
+    the drowned near him are quickened and more of them rise out of the
+    water to it. Kill him and the light falls and goes out.
+  - **The Fulmar.** A grey sea-bird nesting on the ledges, harmless till
+    you come near its nest: then it spits stinking oil at you. Oiled,
+    you're slowed, and the first fire you come near (a wrecker's lantern,
+    a false light, a lamp, the beacon) sets you alight.
+  - Together:
+    - the gale blows the lamps out, and the trowies come;
+    - the seals bark at you, and the drowned asleep in the shallows wake;
+    - the bearers and the false lights quicken the drowned and call more
+      up;
+    - the fulmars' oil and the wreckers' lanterns set you burning;
+    - the beacon, lit, turns all of it back.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Beacon-Keeper.** The keeper of the skerry light, drowned when
+    the storm took the broch, who would not let the light go. He is:
+    - tall, gaunt and stooped, his skin the blue-grey of the deep, his
+      eyes white and lit from inside;
+    - bearded with kelp, long and streaming;
+    - in his keeper's oilskins gone to old mustard, sodden and streaming,
+      the sou'wester's brim down his neck, barnacles crusting the hem and
+      the brim, a rope belt, and sea-boots;
+    - carrying the beacon's great iron lantern on its pole, its glass
+      blazing amber.
+  - **The Sea Trow.** The trows' big cousin out of the sea, up the
+    flooded stair, hoarding what the sea brings it. It is:
+    - hulking and hunched, its hide grey-green and warty, paler on its
+      pot-belly, limpets and barnacles crusting its shoulders;
+    - low-headed, with a nose like a drooping gourd, little pale eyes
+      under a heavy brow, tusks up over its lip, ragged fin ears, and wrack
+      for hair;
+    - hung with a necklace of fish-bones, in a loincloth of torn sail;
+    - swinging a ship's anchor by its ring for a club, its chain
+      dangling.
+- **Version 1.9.0.** Worlds from 1.8 load as before. Drowned Broch floors
+  you have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

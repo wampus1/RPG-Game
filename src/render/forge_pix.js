@@ -19,6 +19,7 @@ import { GUT_BOSS_ART } from './art/gut_bosses.js';
 import { SALT_BOSS_ART } from './art/salt_bosses.js';
 import { WARREN_BOSS_ART } from './art/warren_bosses.js';
 import { MOUND_BOSS_ART } from './art/mound_bosses.js';
+import { BROCH_BOSS_ART } from './art/broch_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -74,3 +75,4 @@ installPix(GUT_BOSS_ART);
 installPix(SALT_BOSS_ART);
 installPix(WARREN_BOSS_ART);
 installPix(MOUND_BOSS_ART);
+installPix(BROCH_BOSS_ART);

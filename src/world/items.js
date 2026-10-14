@@ -285,6 +285,9 @@ item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 
 // (Round 105) Out of the Leviathan's Gut: the grey wax a whale makes round
 // what it can't digest, worth more than its weight in gold to the
 // perfumers.
+// (Round 109) Fish-oil, from the Drowned Broch's casks: the beacon's fuel.
+item('wreckers_key', { name: 'The Wreckers\' Key', kind: 'misc', stack: 1, value: 2, about: 'A big iron key on a greasy cord. It opens the padlock on the wreckers\' strongroom.' });
+item('fish_oil', { name: 'Jar of Fish-Oil', kind: 'misc', stack: 8, value: 4, fuel: true, about: 'A stoneware jar of stinking fish-oil, stoppered with a rag. It burns bright and long: the old keepers fed the beacon on it.' });
 item('ambergris', { name: 'Ambergris', kind: 'misc', stack: 16, value: 60, about: 'A lump of grey wax out of a whale\'s gut, sweet-smelling and worth more than its weight in gold to the perfumers.' });
 // (Round 106) Out of the Salt Cathedral: a tear of the Mother's, a drop of
 // brine set hard and clear as glass, pink at its heart.

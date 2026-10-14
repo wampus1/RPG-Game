@@ -1111,7 +1111,7 @@ def('gt_wetsand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Tida
 def('gt_pebbles', { hardness: Infinity, drop: null, label: 'Shingle' });
 def('gt_mosaic', { hardness: Infinity, drop: null, light: 2, label: 'Shell Mosaic' });
 def('gt_urchins', { hardness: Infinity, drop: null, label: 'Urchin Bed' });
-def('gt_kelp', { ...dressing, tall: true, hardness: 0.1, drop: [{ item: 'kelp', chance: 0.6 }], label: 'Kelp' });
+def('gt_kelp', { ...dressing, tall: true, hardness: 0.1, drop: null, label: 'Kelp' });
 def('gt_coral', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 1, drop: [{ item: 'coral', chance: 0.7 }], label: 'Coral' });
 def('gt_anemone', { ...dressing, rotatable: true, hardness: Infinity, light: 7, drop: null, label: 'Glowing Anemones' });
 def('gt_clam', { ...sprite, solid: true, rotatable: true, interact: 'gt_clam', hardness: Infinity, drop: null, label: 'Giant Clam' });
@@ -1451,3 +1451,54 @@ def('hh_piper', { ...dressing, rotatable: true, interact: 'lore', hardness: Infi
 def('hh_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Bones, Garlanded' });
 def('hh_offering', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'An Offering' });
 def('hh_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'Candle-Tree' });
+
+// (Round 109) The Drowned Broch made over (see world/deeps/broch.js): its
+// flagstone laid dry in long thin courses (wrack on its lower courses where
+// the sea comes in, a breach patched with driftwood); a slit window, the
+// gale through it; the low door of a wall-cell; a Pictish symbol stone; a
+// cruisie lamp in its niche; a door barred from the far side; the
+// scarcement ledge and the step up to it; its floors (flagstones, wet
+// flags, slate, shingle, the hearth, driftwood planks); and what's set
+// about in it: the beacon, the wreckers' false lights, cruisie lamps on
+// their stands, oil casks, peat, a quern, sea-kists and the keeper's,
+// creels, nets, a fish rack, rope, an anchor, a wreck's ribs, a
+// figurehead, a whale's jawbones, the keeper's box-bed, plunder, a fulmar's
+// nest, kelp, a drowned sailor's bones. Last of all, so no block before
+// them changes its number.
+def('bc_flagstone', { tool: 'pick', hardness: Infinity, drop: null, label: 'Flagstone, Laid Dry' });
+def('bc_wrackwall', { hardness: Infinity, drop: null, label: 'Wrack-Hung Stone' });
+def('bc_patch', { interact: 'lore', hardness: Infinity, drop: null, label: 'A Breach, Patched' });
+def('bc_slit', { hardness: Infinity, drop: null, light: 3, label: 'A Slit Window' });
+def('bc_cell', { interact: 'bc_cell', hardness: Infinity, drop: null, label: 'A Wall-Cell' });
+def('bc_symbol', { kinds: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Symbol Stone' });
+def('bc_lampniche', { hardness: Infinity, drop: null, light: 6, label: 'A Cruisie Lamp, in its Niche' });
+def('bc_bardoor', { interact: 'bc_bardoor', hardness: Infinity, drop: null, label: 'A Barred Door' });
+def('bc_ledge', { hardness: Infinity, drop: null, label: 'The Scarcement' });
+def('bc_step', { hardness: Infinity, drop: null, label: 'A Step' });
+def('bc_flags', { hardness: Infinity, drop: null, label: 'Flagstones' });
+def('bc_wet', { hardness: Infinity, drop: null, label: 'Wet Flagstones' });
+def('bc_slate', { hardness: Infinity, drop: null, label: 'Slate' });
+def('bc_shingle', { hardness: Infinity, drop: null, label: 'Shingle' });
+def('bc_hearth', { hardness: Infinity, drop: null, light: 2, label: 'The Hearth' });
+def('bc_planks', { hardness: Infinity, drop: null, label: 'Driftwood Planks' });
+def('bc_beacon', { ...sprite, tall: true, solid: true, interact: 'bc_beacon', hardness: Infinity, light: 15, lightWhenState: true, drop: null, label: 'The Beacon' });
+def('bc_falselight', { ...sprite, tall: true, solid: true, interact: 'bc_falselight', hardness: Infinity, light: 9, lightWhenState: true, drop: null, label: 'A False Light' });
+def('bc_lamp', { ...sprite, solid: true, interact: 'bc_lamp', hardness: Infinity, light: 8, lightWhenState: true, drop: null, label: 'A Cruisie Lamp' });
+def('bc_oilcask', { ...sprite, solid: true, rotatable: true, interact: 'bc_oilcask', hardness: Infinity, drop: null, label: 'A Cask of Fish-Oil' });
+def('bc_peat', { ...sprite, solid: true, hardness: 0.8, drop: [{ item: 'peat_turf', min: 2, max: 4 }], label: 'A Peat Stack' });
+def('bc_quern', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'A Quern' });
+def('bc_kist', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Sea-Kist' });
+def('bc_keeperkist', { ...sprite, solid: true, interact: 'bc_keeperkist', hardness: Infinity, drop: null, label: 'The Keeper\'s Kist' });
+def('bc_creels', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Creels' });
+def('bc_nets', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Nets, Drying' });
+def('bc_rack', { ...sprite, solid: true, rotatable: true, hardness: 0.6, drop: [{ item: 'fish', min: 1, max: 3 }], label: 'A Fish Rack' });
+def('bc_rope', { ...dressing, rotatable: true, hardness: 0.3, drop: [{ item: 'lead', chance: 0.4 }], label: 'A Coil of Rope' });
+def('bc_anchor', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'An Anchor' });
+def('bc_ribs', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Wreck\'s Ribs' });
+def('bc_figurehead', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Figurehead' });
+def('bc_jawbone', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'A Whale\'s Jawbones' });
+def('bc_bunk', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Keeper\'s Box-Bed' });
+def('bc_plunder', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Plunder' });
+def('bc_nest', { ...dressing, rotatable: true, hardness: 0.2, drop: [{ item: 'feather', min: 1, max: 2 }], label: 'A Fulmar\'s Nest' });
+def('bc_kelp', { ...dressing, rotatable: true, hardness: 0.2, drop: null, label: 'Kelp' });
+def('bc_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Drowned Sailor' });

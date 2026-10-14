@@ -25,6 +25,7 @@ import { GUT_MOBS } from './art/gut_mobs.js';
 import { SALT_MOBS } from './art/salt_mobs.js';
 import { WARREN_MOBS } from './art/warren_mobs.js';
 import { MOUND_MOBS } from './art/mound_mobs.js';
+import { BROCH_MOBS } from './art/broch_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -270,6 +271,7 @@ for (const [k, def] of Object.entries(GUT_MOBS)) CREATURE_LOOKS[k] = lookOf(def)
 for (const [k, def] of Object.entries(SALT_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(WARREN_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(MOUND_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(BROCH_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
@@ -1603,6 +1605,26 @@ function simpleIcon(key) {
       }
       p.line(8, 6, 9, 3, '#4a6a2a');
       p.set(10, 3, '#5aa83a');
+      break;
+    case 'wreckers_key':
+      // A big iron key on a greasy cord.
+      p.ellipse(5, 5, 3, 3, '#5a626c');
+      p.ellipse(5, 5, 1.5, 1.5, '#1e2228');
+      p.line(7, 7, 13, 13, '#7a848e');
+      p.line(8, 7, 14, 13, '#3e444c');
+      p.rect(11, 12, 2, 3, '#5a626c');
+      p.line(2, 2, 1, 9, '#8a7040');
+      break;
+    case 'fish_oil':
+      // A stoneware jar, stoppered with a rag, the oil run down its side.
+      p.ellipse(8, 10, 4, 4.5, '#8a7a62');
+      p.ellipse(7, 9, 2.5, 3, '#a89878');
+      p.rect(6, 4, 4, 2, '#6a5a44');
+      p.rect(6, 3, 4, 1, '#d8ccb0');
+      p.set(11, 9, '#b08428');
+      p.set(11, 10, '#e0b850');
+      p.set(11, 11, '#b08428');
+      p.hline(5, 11, 14, '#4a3e2e');
       break;
     case 'lantern_pod':
       p.ellipse(8, 9, 3.5, 4.5, '#ff9030');

@@ -25,6 +25,7 @@ import { GUT_ARCH } from './deeps/gut.js';
 import { SALT_ARCH } from './deeps/saltworks.js';
 import { WARREN_ARCH } from './deeps/warren.js';
 import { MOUND_ARCH } from './deeps/mound.js';
+import { BROCH_ARCH } from './deeps/broch.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -358,14 +359,17 @@ export const FAR_DTYPES = {
   // drystone, the sea in the stair, weed on everything, the old beacon
   // keepers' stores; and the gale comes in through the slits.
   broch: {
-    name: 'Drowned Broch', isle: 'skerries', wall: B.drystone, floor: B.stone, alt: B.gravel, beam: B.planks_dark, regions: [2, 2], floors: [1, 3],
+    name: 'Drowned Broch', isle: 'skerries', wall: B.bc_flagstone, floor: B.bc_flags, alt: B.bc_slate, beam: B.planks_dark, regions: [2, 2], floors: [1, 3],
     kits: ['flooded', 'beaconroom', 'storehouse', 'wreck', 'flooded', 'collapsed', 'trap', 'treasure', 'beaconroom', 'guard'],
-    mobs: [['drowned', 4], ['wrecker', 2], ['crawler', 1], ['skeleton', 1]],
-    swap: { skeleton: ['drowned'], wight: ['drowned'], ghoul: ['wrecker'], cutthroat: ['wrecker'] },
-    bosses: ['beacon_keeper', 'sea_trow'], torches: 0.2,
-    shapes: { round: 5, octagon: 2 }, wiggle: 0.3, decor: [['kelp', 3], ['barrel', 2], ['rubble', 2], ['hanging_chains', 1]],
+    mobs: [['drowned', 4], ['wrecker', 2], ['trowie', 1], ['lantern_bearer', 1], ['crawler', 1]],
+    swap: { skeleton: ['drowned'], wight: ['drowned'], ghoul: ['wrecker'], cutthroat: ['wrecker'], skel_captain: ['wrecker'], rat: ['trowie'] },
+    bosses: ['beacon_keeper', 'sea_trow'], torches: 0.1,
+    shapes: { round: 5, octagon: 2 }, wiggle: 0.3, decor: [['bc_kelp', 2], ['bc_peat', 1], ['bc_creels', 1], ['bc_rope', 1]],
     dark: [0.06, 0.07, 0.09], motes: ['#a0c8e0', '#ffffff'], ambient: ['wave', 'wind_low', 'sea_bell', 'creak'],
-    loot: [['fish_pie', 1, 1, 0.2], ['gem', 1, 1, 0.15], ['iron_ingot', 1, 2, 0.3], ['old_coin', 2, 6, 0.5]],
+    loot: [['fish_pie', 1, 1, 0.2], ['gem', 1, 1, 0.15], ['iron_ingot', 1, 2, 0.3], ['old_coin', 2, 6, 0.5], ['fish_oil', 1, 2, 0.3]],
+    // (Round 109: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/broch.js.)
+    arch: BROCH_ARCH,
   },
 };
 export const FAR_OWN_TYPE = { velmarch: 'catacomb', ostria: 'vault', corrow: 'gut', saltmere: 'saltworks', hollowmark: 'warren', wyrd: 'mound', skerries: 'broch' };

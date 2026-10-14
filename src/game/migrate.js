@@ -818,6 +818,14 @@ export const STEPS = [
       log.push('The Hollow Hills are made over: drawn afresh, with the court\'s hall and its throne, the feast you mustn\'t eat, the ring that takes you dancing, the five standing stones and the cairn they open, the passage tomb, the birchwood and the bower behind its door; the hill-doors, each with its twin somewhere else in the hill; the golden harp; the fey lanterns the wisps drink dark and the hob lights again; the changelings and the witch-hares; and their masters redrawn. Hollow Hill floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 109) The Drowned Broch made over (its floors' make raised: see
+  // dungeon.js KIND_GEN).
+  {
+    to: '1.9.0',
+    data(d, log) {
+      log.push('The Drowned Brochs are made over: drawn afresh, with the court and its scarcement ledge, the wheelhouse and its bays, the gallery climbing in the wall, the drowned stair going down into the water, the wreckers\' den and its strongroom, the beacon on its dais and the boat-noust; the gale through the slits, the cruisie lamps, the beacon fed with fish-oil, the false lights the drowned rise to, the wall-cells and the trowies\' hoards; the trowies, the lantern-bearers and the fulmars; and their masters redrawn. Drowned Broch floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
