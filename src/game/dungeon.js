@@ -69,7 +69,7 @@ const FLOOR_GEN = 6;
 // (Round 95) A kind made over by its own architect (see world/deeps/) lays
 // its floors out its own way: older floors of it are made afresh.
 // (Round 106: the gut's 8, its rope ladders up to its ledges kept now.)
-const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7, grotto: 7, catacomb: 7, vault: 7, gut: 8, saltworks: 7, warren: 7, mound: 7, broch: 7 };
+const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7, grotto: 7, catacomb: 7, vault: 7, gut: 8, saltworks: 7, warren: 7, mound: 7, broch: 7, athanor: 7 };
 const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
@@ -90,7 +90,7 @@ export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod', 'fg_singanvil', 'fg_lever', 'fg_kilndoor', 'fg_guilddoor', 'fg_castkey', 'gt_clam', 'gt_scallop', 'gt_seadoor', 'gt_bell', 'cc_loculus', 'cc_lamp', 'cc_bust', 'cc_tombdoor', 'tv_disc', 'tv_crack', 'tv_bronzedoor', 'tv_crossbow', 'tv_lamp', 'tv_bells', 'tv_drum', 'lv_scar', 'lv_valve', 'sw_cleat', 'sw_wheel', 'sw_singer', 'sw_bricked', 'wr_door', 'wr_smalldoor', 'wr_dresser', 'wr_stopper', 'wr_pod', 'hh_hilldoor', 'hh_slab', 'hh_stone', 'hh_ringcap', 'hh_harp', 'hh_feast', 'bc_cell', 'bc_bardoor', 'bc_beacon', 'bc_falselight', 'bc_lamp', 'bc_oilcask', 'bc_keeperkist']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol', 'lore', 'spiral', 'offering', 'pump', 'cart', 'rail_switch', 'shaft_bell', 'vigil', 'tomb', 'loose_flag', 'reliquary', 'plunder', 'stash', 'powder', 'kav_glyph', 'kav_well', 'gr_offering', 'gr_sunbed', 'gr_seedpod', 'fg_singanvil', 'fg_lever', 'fg_kilndoor', 'fg_guilddoor', 'fg_castkey', 'gt_clam', 'gt_scallop', 'gt_seadoor', 'gt_bell', 'cc_loculus', 'cc_lamp', 'cc_bust', 'cc_tombdoor', 'tv_disc', 'tv_crack', 'tv_bronzedoor', 'tv_crossbow', 'tv_lamp', 'tv_bells', 'tv_drum', 'lv_scar', 'lv_valve', 'sw_cleat', 'sw_wheel', 'sw_singer', 'sw_bricked', 'wr_door', 'wr_smalldoor', 'wr_dresser', 'wr_stopper', 'wr_pod', 'hh_hilldoor', 'hh_slab', 'hh_stone', 'hh_ringcap', 'hh_harp', 'hh_feast', 'bc_cell', 'bc_bardoor', 'bc_beacon', 'bc_falselight', 'bc_lamp', 'bc_oilcask', 'bc_keeperkist', 'an_seal', 'an_athanor', 'an_vat', 'an_mirror', 'an_sunlamp', 'an_transmute']);
 
 // Each old place's own space apart, out past the map (see
 // config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,

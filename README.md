@@ -8478,6 +8478,154 @@ poles.
 - **Version 1.9.0.** Worlds from 1.8 load as before. Drowned Broch floors
   you have already been on are laid out afresh the next time you go down.
 
+## Round 110: The Athanor, made over
+
+The sixteenth of the dungeon overhauls, and the first of the ancient
+places. The Athanor is the furnace-vault of the Divine Alchemist under the
+hills of Velmarch: a temple-laboratory older than the empire, and still
+working. The feeling is awe and unease: white and gold marble, glass and
+brass, the great work bubbling, everything faintly luminous and humming,
+and something enormous looking at you from below. It is wide rather than
+tall: great halls opening into many small rooms (alcoves, cells,
+side-chapels of the art). It goes down through the stages of the Work, one
+floor each: the nigredo (black marble and ash), the albedo (white and
+silver) and the rubedo (red porphyry and gold).
+
+- **Drawn afresh.** Every Athanor tile and thing is painted by hand:
+  - **The walls.** White marble in great dressed blocks, grey veins
+    running through them, a string-course of gold. Also:
+    - a fluted pilaster with its gilt capital and base;
+    - an arched niche with a flask of the Work glowing in it;
+    - shelves of jars and phials, and the Emerald Tablet in its gold
+      frame, its writing lit;
+    - a rose window of stained glass, and the mouth of a wall-furnace;
+    - the sanctum's seal, a gold disc of the planets round the sun;
+    - the dais's gold-edged face.
+  - **The floors.** A chequer of black marble and ash (the nigredo), of
+    white marble flecked with silver (the albedo), slabs of red porphyry
+    with gold let into the joints (the rubedo), and the ouroboros in
+    mosaic. The tops of the walls are grey marble, so the rooms stand out
+    from the stone round them.
+  - **The things set about.**
+    - The great athanor (a tower-furnace of brick and brass, its egg
+      dark or glowing), alembics bubbling, workbenches, the transmutation
+      table (its circle dark or gold), and vats with something curled in
+      them (or smashed).
+    - Mirrors on turning stands (each turned one of two ways, lit when
+      the beam is on them), the sun-lamp, lecterns, armillary spheres.
+    - Silver trees of Diana, the shepherds turned to salt where they
+      stood, marble columns, the quicksilver fountain, candelabra, heaps
+      of coal and sulphur, and jars.
+  - **The floors inlaid.** Rooms get a band of the other marble a pace
+    in from the walls, a cross of it through the middle, or a medallion
+    with the serpent at its heart, chosen room by room.
+- **Rooms an Athanor has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/athanor.js`), beside its old rooms. Every floor
+  keeps at least one of the old works (an orrery, a salt garden, a
+  circle, a still, a quicksilver pool), and the old rooms are set about
+  with its own things.
+  - **The laboratorium.** On every floor: a long hall with workbenches
+    and alembics down its middle and the transmutation table at its end.
+    Shelves, niches and the Emerald Tablet are in its walls, and three
+    alcoves are dug off it: one with an alembic and jars, one with an
+    adept's diary, one with a letter or the ingredients list. Adepts and
+    homunculi at the Work.
+  - **The furnace.** The great athanor up on its three-by-three dais,
+    coal and sulphur heaped by it, wall-furnaces, the rule of the furnace
+    on a lectern. Imps, sometimes a golem.
+  - **The cloister.** A colonnade round a court, the quicksilver fountain
+    in its middle and its pool, trees of Diana, a salt man with his name
+    at his feet. Homunculi in the quicksilver; a leaden sentinel.
+  - **The speculum.** The sun-lamp, three mirrors and the sanctum's seal
+    in one of the walls, the sanctum behind it (a chest with the Red
+    Tincture in it, and the last page of the Book of the Work). An adept
+    keeps watch.
+  - **The vat-hall.** The vats in rows with what's growing in them, the
+    vat-tender going among them, homunculi and a golem.
+  - **The garden of metals.** Salt underfoot, silver trees, crystals, and
+    the shepherds the Work turned to salt.
+- **What's at work there** (see `src/game/athanorwork.js`).
+  - **The speculum.** The sun-lamp throws a beam of light across the
+    floor; it is drawn as a bright line from tile to tile. Each mirror
+    turns two ways, `/` or `\`; turn them so the beam goes from one to
+    the next and onto the seal, and the sanctum opens. The beam scorches
+    whatever stands in it, adepts included.
+  - **The transmutation table.** Lay lead (two gold ingots) or iron (one)
+    in its circle and it comes up gold, once. But the Work sees what is
+    done in its name, and two adepts come out of the shadows.
+  - **The athanor.** Feed it coal or sulphur and it burns. Stay by it and
+    its egg ripens over about half a minute; the imps come to its fire,
+    and every one that gets to the furnace eats the heat out of it and
+    sets the egg back. Ripe, the egg cracks and gives up the **Red
+    Tincture**, a draught worth half again a Draught of Vigor.
+  - **The vats.** Look into one, then smash it, and what was in it climbs
+    out. Kill the vat-tender and every vat in its hall breaks at once.
+  - **The quicksilver.** The adepts' quicksilver drags at you and chills
+    you, and the homunculi mend standing in it (in the old pools too). An
+    imp's fire on it, or your own burning, boils it into a poison fume
+    that chokes anyone in it.
+  - What's been done (mirrors as you left them, seals opened, tables
+    used, eggs taken, vats broken) stays done when you come back to the
+    floor.
+- **What's written there.** Every Athanor has its master (the Divine
+  Alchemist, the First Transmuter, the Gilded Eye, the Twelve-Handed
+  One). It also has its master-adept, a brother and a sister of the art
+  by their names in it, the grinder of the mirrors, and the town whose
+  shepherds were taken. And it has what the Work wanted at the end: a
+  living philosopher, the whole town, its own master, or the sun itself.
+  Its papers come from all of that (see `src/world/deeps/athanorlore.js`):
+  - an adept's diary, the recipe for a homunculus, the Emerald Tablet,
+    the speculum's teaching, the ingredients received;
+  - a shepherd's name cut at his salt feet, the stage of the Work each
+    floor is at, the rule of the furnace;
+  - a letter never sent, the words on the table's rim, the last page of
+    the Book of the Work, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others. The quicksilver homunculi, alembic golems and sulphur imps
+  stay, repainted at the new size, and now have somewhere to go:
+  - **The Adept.** One of the Work's own, still at it a thousand years
+    on: a white robe hemmed in gold, a red stole, the hood up, and in its
+    dark only two silver eyes. It keeps its distance and calls
+    quicksilver up out of the floor under you.
+  - **The Leaden Sentinel.** A blocky statue of lead, slow and heavy.
+    Beat it to half and it gilds: its lead turns to gold, it gets quicker
+    and hits harder, and it drops a gold ingot when it falls. It also
+    drops lead for the table.
+  - **The Vat-Tender.** A stooped grey thing in a leather apron and
+    copper-rimmed goggles, with a dipper. It never fights. It goes to
+    whatever of the Work is hurt nearby and mends it, your enemies too.
+    Kill it and every vat in its hall breaks.
+  - Together:
+    - the adepts' quicksilver slows you while the homunculi run to it to
+      mend;
+    - lure the imps onto the quicksilver and it fumes, choking the
+      adepts;
+    - lure the adepts into the speculum's beam;
+    - the tender keeps the golems and sentinels up, until you deal with
+      it and let out everything in the vats;
+    - the imps want the athanor's fire more than they want you.
+- **Its master, painted by hand.** The Divine Alchemist is now painted
+  one pixel at a time, at its full 128 pixels: an eye as big as a cart,
+  its iris a vortex of gold and violet turning in on itself around a
+  pupil like a hole in the world. It has:
+  - a bezel of gold, ridged and studded, with twelve sockets round it and
+    a gem of each element in each (its arms still come out of them);
+  - the three rings of a great armillary turning round it, each in its
+    own tilt, the far halves behind the eye and the near halves over it,
+    over eight frames;
+  - a crown of three alembics bubbling over it, a pendant spire with a
+    violet gem under it, and two phials swinging on chains;
+  - its vortex trailing down to the floor.
+  Risen, its eye goes to blood and fire, and its rings keep turning.
+- **Fixes along the way.**
+  - A furniture stack two blocks high in a room is now cleared whole
+    when a room is opened up for walking.
+  - The ancient places now keep the creatures their architect sets out
+    on purpose, so the vat-tenders are no longer swapped for something
+    else.
+- **Version 1.10.0.** Worlds from 1.9 load as before. Athanor floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

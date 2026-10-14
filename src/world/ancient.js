@@ -24,19 +24,24 @@
 import { B, META_STATE } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { MAP_W, MAP_H, REGION_W, REGION_D } from '../config.js';
+import { ATHANOR_ARCH } from './deeps/athanor.js';
 
 // The kinds of ancient place (as the far lands' own: see fardeep.js
 // FAR_DTYPES), each with its one master.
 export const ANCIENT_DTYPES = {
   athanor: {
-    name: 'Athanor', isle: 'velmarch', ancient: true, wall: B.marble, floor: B.tile_blue, alt: B.kiln_tile, beam: null, regions: [2, 2], floors: [3, 3],
+    name: 'Athanor', isle: 'velmarch', ancient: true, wall: B.an_marble, floor: B.an_albedo, alt: B.an_nigredo, beam: null, regions: [2, 2], floors: [3, 3],
     kits: ['circle', 'distillery', 'mercury', 'crucibles', 'library', 'observatory', 'circle', 'vats', 'salt_garden', 'furnace', 'trap', 'treasure', 'guard', 'distillery', 'observatory'],
     // (Round 73: its own, and nothing borrowed: see entities/ancientmobs.js.)
-    mobs: [['quicksilver_homunculus', 3], ['alembic_golem', 2], ['sulphur_imp', 3]], only: true,
+    // (Round 110: and its adepts, its sentinels.)
+    mobs: [['quicksilver_homunculus', 3], ['alembic_golem', 2], ['sulphur_imp', 3], ['adept', 2], ['leaden_sentinel', 1]], only: true, kept: ['vat_tender'],
     bosses: ['divine_alchemist'], torches: 0.3,
-    shapes: { octagon: 3, round: 2, hex: 2, rect: 2, star: 1 }, wiggle: 0.2, decor: [['crucible', 2], ['candles', 3], ['glass_lamp', 2], ['statue', 1], ['marble_column', 1], ['bookshelf', 1]],
+    shapes: { octagon: 3, round: 2, hex: 2, rect: 2, star: 1 }, wiggle: 0.2, decor: [['an_candles', 2], ['an_jars', 2], ['an_alembic', 1], ['an_armillary', 1], ['an_column', 1]],
     dark: [0.1, 0.08, 0.12], motes: ['#ffd070', '#c8a0ff', '#80e8ff'], ambient: ['drone', 'drip', 'chime', 'hum'],
-    loot: [['gem', 1, 2, 0.35], ['gold_ingot', 1, 2, 0.35], ['frost_crystal', 1, 2, 0.25], ['old_coin', 3, 8, 0.6]],
+    loot: [['gem', 1, 2, 0.35], ['gold_ingot', 1, 2, 0.35], ['frost_crystal', 1, 2, 0.25], ['old_coin', 3, 8, 0.6], ['sulfur', 1, 3, 0.3]],
+    // (Round 110: its own rooms its own architect's, the old ones set about
+    // with its own, a floor to each stage of the Work: see deeps/athanor.js.)
+    arch: ATHANOR_ARCH,
   },
   champion: {
     name: 'Hall of the Last Champion', isle: 'velmarch', ancient: true, wall: B.mossy_bricks, floor: B.flagstone, alt: B.cracked_bricks, beam: B.planks_dark, regions: [2, 2], floors: [3, 3],

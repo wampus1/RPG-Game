@@ -26,6 +26,7 @@ import { SALT_MOBS } from './art/salt_mobs.js';
 import { WARREN_MOBS } from './art/warren_mobs.js';
 import { MOUND_MOBS } from './art/mound_mobs.js';
 import { BROCH_MOBS } from './art/broch_mobs.js';
+import { ATHANOR_MOBS } from './art/athanor_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -272,6 +273,7 @@ for (const [k, def] of Object.entries(SALT_MOBS)) CREATURE_LOOKS[k] = lookOf(def
 for (const [k, def] of Object.entries(WARREN_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(MOUND_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(BROCH_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(ATHANOR_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
@@ -283,6 +285,12 @@ export function lookFrame(kind, e, time) {
   const G = L && L.groups;
   if (!G) return null;
   const at = (g, k) => g[0] + Math.min(g[1] - 1, Math.max(0, Math.floor(k * g[1])));
+  // (Round 110) Something it's become (a sentinel gilded): its own frames,
+  // walked through as it moves.
+  if (e.altLook && G[e.altLook]) {
+    const A = G[e.altLook];
+    return at(A, e.moving ? (time / (A[2] > 0 ? A[2] : 1 / 1.6)) % 1 : 0);
+  }
   const w = e.windup && !e.windup.dash ? e.windup : e.swing || null;
   if (G.attack && w && w.dur > 0) return at(G.attack, (Math.min(1, w.t / w.dur)) * 0.45);
   if (G.attack && e.strike && e.strike.dur > 0) return at(G.attack, 0.45 + Math.min(1, e.strike.t / e.strike.dur) * 0.55);
@@ -1861,7 +1869,7 @@ const iconCache = new Map();
 function potionIcon(it) {
   const p = new Px(16, 16);
   const e = it.effect || {};
-  const col = e.sight ? '#7ae0c8' : e.blue ? '#58a8ff' : e.heal ? '#e05050' : e.combat ? { breath: '#f0e060', wind: '#70f0c0', fury: '#d01838', haste: '#d8d8ff' }[e.combat] : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
+  const col = e.red ? '#e03a20' : e.sight ? '#7ae0c8' : e.blue ? '#58a8ff' : e.heal ? '#e05050' : e.combat ? { breath: '#f0e060', wind: '#70f0c0', fury: '#d01838', haste: '#d8d8ff' }[e.combat] : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
   if (e.heal) {
     // A salve: a little pot.
     p.rect(4, 7, 8, 6, '#c8b890');

@@ -4219,6 +4219,44 @@ export class Renderer {
         } else if (z.kind === 'whirl' && z.pull) {
           const a = this.time * 4 + (t.x - z.pull.x) + (t.z - z.pull.z);
           ctx.fillRect(sx + 7 + Math.round(Math.cos(a) * 5), sy + 7 + Math.round(Math.sin(a) * 5), 2, 1);
+        } else if (z.kind === 'quick') {
+          // (Round 110) Quicksilver welled up: a heavy bright pool, its
+          // shine sliding over it.
+          ctx.fillStyle = `rgba(150,154,168,${0.75 * fade})`;
+          ctx.fillRect(sx + 3, sy + 2, 10, 12);
+          ctx.fillRect(sx + 2, sy + 4, 12, 8);
+          ctx.fillStyle = `rgba(214,218,230,${0.8 * fade})`;
+          ctx.fillRect(sx + 4, sy + 3, 7, 4);
+          ctx.fillRect(sx + 3, sy + 5, 3, 4);
+          const k = (this.time * 0.8 + (t.x * 3 + t.z * 5) * 0.11) % 1;
+          ctx.fillStyle = `rgba(255,255,255,${0.9 * fade})`;
+          ctx.fillRect(sx + 4 + Math.floor(k * 7), sy + 4, 2, 1);
+          ctx.fillRect(sx + 10 - Math.floor(k * 5), sy + 10, 1, 1);
+        } else if (z.kind === 'fume') {
+          const k = Math.floor(this.time * 4 + t.x * 2 + t.z) % 5;
+          ctx.fillRect(sx + 2 + k * 2, sy + 3 + ((k * 4) % 9), 3, 2);
+          ctx.fillRect(sx + 12 - k * 2, sy + 11 - ((k * 3) % 7), 2, 2);
+        }
+      }
+    }
+    // (Round 110) Light thrown across a floor in a beam (the Athanor's
+    // speculum): from tile to tile, its glow, then its white core,
+    // shimmering.
+    for (const L of game.lightBeams || []) {
+      if (!L.tiles.length || !near(L.tiles[0])) continue;
+      const pts = L.tiles.map((t) => this.worldToScreen(t.x, L.y, t.z));
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const n = Math.max(1, Math.round(Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y))));
+        for (let j = 0; j < n; j++) {
+          const x = Math.round(a.x + 7 + ((b.x - a.x) * j) / n);
+          const y = Math.round(a.y + 7 + ((b.y - a.y) * j) / n);
+          const sh = 0.75 + 0.25 * Math.sin(this.time * 9 + (i * 16 + j) * 0.4);
+          ctx.fillStyle = `rgba(255,216,96,${0.35 * sh})`;
+          ctx.fillRect(x - 1, y - 1, 4, 4);
+          ctx.fillStyle = `rgba(255,250,220,${0.9 * sh})`;
+          ctx.fillRect(x, y, 2, 2);
         }
       }
     }

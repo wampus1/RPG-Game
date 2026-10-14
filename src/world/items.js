@@ -621,6 +621,9 @@ potion('potion_haste', 'Quicksilver Draught', 26, { combat: 'haste', n: 0.35, ho
 // A Mirefolk sporewright's tincture of glowcap: the dark goes grey and
 // clear for a few hours.
 potion('spore_tincture', 'Fogsight Tincture', 20, { sight: true, hours: 4 });
+// (Round 110) What the great athanor gives up when its egg ripens: the
+// Red Tincture, the stone dissolved (see game/athanorwork.js).
+potion('red_tincture', 'The Red Tincture', 60, { blue: 6, red: true });
 
 // --- the scribe's trade -----------------------------------------------------------
 item('paper', { value: 2 });

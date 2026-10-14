@@ -1502,3 +1502,43 @@ def('bc_plunder', { ...sprite, solid: true, rotatable: true, hardness: Infinity,
 def('bc_nest', { ...dressing, rotatable: true, hardness: 0.2, drop: [{ item: 'feather', min: 1, max: 2 }], label: 'A Fulmar\'s Nest' });
 def('bc_kelp', { ...dressing, rotatable: true, hardness: 0.2, drop: null, label: 'Kelp' });
 def('bc_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Drowned Sailor' });
+
+// (Round 110) The Athanor made over (see world/deeps/athanor.js): its
+// white marble in great ashlar blocks; a fluted pilaster; a niche with a
+// flask of the Work glowing in it; shelves of jars; the Emerald Tablet; a
+// rose window; a wall-furnace; the sanctum's seal; the dais; its floors, a
+// stage of the Work each (nigredo, albedo, rubedo) and the ouroboros; and
+// what's set about in it: the great athanor, alembics, workbenches, vats,
+// the speculum's mirrors and its sun-lamp, lecterns, armillaries, the tree
+// of Diana, a shepherd turned to salt, the cloister's columns, the
+// quicksilver fountain, the transmutation table, candelabra, coal, jars.
+// Last of all, so no block before them changes its number.
+def('an_marble', { tool: 'pick', hardness: Infinity, drop: null, label: 'Marble' });
+def('an_pilaster', { hardness: Infinity, drop: null, label: 'A Pilaster' });
+def('an_niche', { kinds: true, hardness: Infinity, drop: null, light: 6, label: 'A Flask of the Work' });
+def('an_shelves', { hardness: Infinity, drop: null, label: 'Shelves of Jars' });
+def('an_tablet', { interact: 'lore', hardness: Infinity, drop: null, light: 3, label: 'The Emerald Tablet' });
+def('an_rose', { hardness: Infinity, drop: null, light: 5, label: 'A Rose Window' });
+def('an_furnace', { hardness: Infinity, drop: null, light: 9, label: 'A Wall-Furnace' });
+def('an_seal', { interact: 'an_seal', hardness: Infinity, drop: null, light: 4, label: 'The Sanctum\'s Seal' });
+def('an_dais', { hardness: Infinity, drop: null, label: 'The Dais' });
+def('an_nigredo', { hardness: Infinity, drop: null, label: 'Black Marble' });
+def('an_albedo', { hardness: Infinity, drop: null, label: 'White Marble' });
+def('an_rubedo', { hardness: Infinity, drop: null, label: 'Porphyry' });
+def('an_ouroboros', { hardness: Infinity, drop: null, light: 2, label: 'The Ouroboros' });
+def('an_athanor', { ...sprite, tall: true, solid: true, interact: 'an_athanor', hardness: Infinity, light: 12, lightWhenState: true, drop: null, label: 'The Athanor' });
+def('an_alembic', { ...sprite, solid: true, rotatable: true, hardness: Infinity, light: 4, drop: null, label: 'An Alembic' });
+def('an_table', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Workbench' });
+def('an_vat', { ...sprite, tall: true, solid: true, interact: 'an_vat', hardness: Infinity, light: 5, lightWhenState: true, drop: null, label: 'A Vat' });
+def('an_mirror', { ...sprite, solid: true, rotatable: true, interact: 'an_mirror', hardness: Infinity, light: 4, lightWhenState: true, drop: null, label: 'A Mirror' });
+def('an_sunlamp', { ...sprite, solid: true, rotatable: true, interact: 'an_sunlamp', hardness: Infinity, light: 10, drop: null, label: 'The Sun-Lamp' });
+def('an_lectern', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Lectern' });
+def('an_armillary', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'An Armillary' });
+def('an_tree', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, light: 3, drop: null, label: 'The Tree of Diana' });
+def('an_saltman', { ...sprite, tall: true, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Shepherd, Salt' });
+def('an_column', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'A Column' });
+def('an_fountain', { ...sprite, solid: true, hardness: Infinity, light: 3, drop: null, label: 'The Quicksilver Fountain' });
+def('an_transmute', { ...sprite, solid: true, interact: 'an_transmute', hardness: Infinity, drop: null, label: 'The Transmutation Table' });
+def('an_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'A Candelabrum' });
+def('an_coal', { ...sprite, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'coal', min: 2, max: 4 }, { item: 'sulfur', min: 1, max: 2 }], label: 'Coal and Sulphur' });
+def('an_jars', { ...sprite, solid: true, rotatable: true, hardness: 0.3, drop: [{ item: 'glass', min: 1, max: 2 }], label: 'Jars' });

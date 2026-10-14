@@ -1285,7 +1285,9 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   // out (an ambush in the walls, a guard) is one of its own instead.
   if (T.only) {
     for (const sp of out.spawns) {
-      if (sp.boss || sp.guardian || sp.twin || T.mobs.some(([k]) => k === sp.species)) continue;
+      // (Round 110: or one its architect set out on purpose, never rolled
+      // for: the Athanor's vat-tenders.)
+      if (sp.boss || sp.guardian || sp.twin || T.mobs.some(([k]) => k === sp.species) || (T.kept || []).includes(sp.species)) continue;
       sp.species = rng.weighted(T.mobs.map(([k, w]) => [k, w]));
     }
   }
@@ -1595,7 +1597,7 @@ function anc(ctx) {
 const box = (b, r) => ({ x0: b.x0 + r.x0, z0: r.z0, x1: b.x0 + r.x1, z1: r.z1 });
 
 // (Round 95) What an architect (see deeps/) is lent to lay out its rooms.
-export const HELP = { FY, freeIn, placeIn, spawnIn, chestIn, own, doorBlocked, byWall, wallsOf, doorways, fill, lootFor, foundIn, tierOf };
+export const HELP = { FY, freeIn, placeIn, spawnIn, chestIn, own, doorBlocked, byWall, wallsOf, doorways, fill, lootFor, foundIn, tierOf, anc, box };
 
 // --------------------------------------------------------------- kits
 // (Round 95) A kind of place with an architect of its own (see deeps/):

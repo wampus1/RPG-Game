@@ -85,7 +85,9 @@ function pixBody(D, f, st) {
   // (A picture of its own for a state of it: eyes lit as it winds up, a
   // mouth open as it breathes in; or one for each step of a state that
   // has steps, as a list by its value: the Crucible's heat, say.)
-  if (P.states) for (const [name, n] of Object.entries(P.states)) if (st[name]) k = Array.isArray(n) ? n[Math.min(n.length - 1, st[name] | 0)] : n;
+  // (Round 110: or a run of its own it cycles through as it stands, as
+  // `idle` does: the Alchemist's rings turning round its eye gone red.)
+  if (P.states) for (const [name, n] of Object.entries(P.states)) if (st[name]) k = Array.isArray(n) ? n[Math.min(n.length - 1, st[name] | 0)] : n && n.idle ? n.idle[0] + (Math.floor(t * n.idle[1]) % n.idle[1]) : n;
   const base = grid({ ...P.body, w: D.size, h: D.size }, frameRows(P.body, k));
   const b = P.breathY ? Math.round(breathOf(t, D.breath ?? 1)) : 0;
   if (!b) return base;

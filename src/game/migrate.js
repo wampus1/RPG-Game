@@ -826,6 +826,14 @@ export const STEPS = [
       log.push('The Drowned Brochs are made over: drawn afresh, with the court and its scarcement ledge, the wheelhouse and its bays, the gallery climbing in the wall, the drowned stair going down into the water, the wreckers\' den and its strongroom, the beacon on its dais and the boat-noust; the gale through the slits, the cruisie lamps, the beacon fed with fish-oil, the false lights the drowned rise to, the wall-cells and the trowies\' hoards; the trowies, the lantern-bearers and the fulmars; and their masters redrawn. Drowned Broch floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 110) The Athanor made over (its floors' make raised: see
+  // dungeon.js KIND_GEN).
+  {
+    to: '1.10.0',
+    data(d, log) {
+      log.push('The Athanors are made over: white and gold marble, a stage of the Work to each floor (the nigredo, the albedo, the rubedo), with the laboratorium and its alcoves, the great athanor on its dais, the cloister and its fountain, the speculum and its sanctum, the vat-hall and the garden of metals; the sun-lamp\'s beam and its mirrors, the transmutation table, the athanor\'s egg and the Red Tincture, the vats, and the quicksilver and its fumes; the adepts, the leaden sentinels and the vat-tenders; and the Divine Alchemist redrawn. Athanor floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
