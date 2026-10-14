@@ -1629,3 +1629,54 @@ def('rf_shards', { ...sprite, solid: false, rotatable: true, hardness: 0.1, drop
 def('rf_brazier', { ...sprite, solid: true, hardness: Infinity, light: 11, drop: null, label: 'A Clay Brazier' });
 def('rf_journal', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Watcher\'s Journal' });
 def('rf_cairn', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Sighting Cairn' });
+// (Round 113) The Gullet of the World made over (see
+// world/deeps/gullet.js): the earth the worm bored through, packed by its
+// passing, and where the bore cut through the swallowed city; the city's
+// own walls of mudbrick (a glazed frieze, a house's doorway, the river god
+// in relief, a tablet set in the wall, a doorway bricked up); the belly's
+// earth, runnelled; a terrace's glazed face, a flat roof; its floors
+// (packed earth, the city's paving, the belly's slick, the silt the river
+// left, the temple's glazed tiles, a barge's deck); and what's set about
+// in it: the worm's eggs, a broken column, a fallen slab of the lion
+// frieze, storage jars, a bread oven, a well, a market stall, a cart, the
+// god's offering table, the river god, the sluice wheel, a sunk barge, a
+// shed skin, the swallowed hoard, the king's throne, tablets, roots, the
+// grit under a cracked roof, a clay lamp, the bones of the swallowed. Last
+// of all, so no block before them changes its number.
+def('gl_earth', { tool: 'pick', hardness: Infinity, drop: null, label: 'Packed Earth' });
+def('gl_city', { hardness: Infinity, drop: null, label: 'Mudbrick' });
+def('gl_frieze', { hardness: Infinity, drop: null, label: 'A Glazed Frieze' });
+def('gl_doorway', { hardness: Infinity, drop: null, label: 'A House Door' });
+def('gl_relief', { interact: 'lore', hardness: Infinity, drop: null, label: 'The River God' });
+def('gl_tablet', { interact: 'lore', hardness: Infinity, drop: null, label: 'A Clay Tablet' });
+def('gl_bricked', { interact: 'gl_bricked', hardness: Infinity, drop: null, label: 'A Bricked-Up Door' });
+def('gl_cut', { hardness: Infinity, drop: null, label: 'The Bore\'s Cut' });
+def('gl_etched', { hardness: Infinity, drop: null, light: 1, label: 'Etched Earth' });
+def('gl_terrace', { hardness: Infinity, drop: null, label: 'A Glazed Terrace' });
+def('gl_roof', { hardness: Infinity, drop: null, label: 'A Flat Roof' });
+def('gl_dirt', { hardness: Infinity, drop: null, label: 'Packed Earth' });
+def('gl_paving', { hardness: Infinity, drop: null, label: 'Brick Paving' });
+def('gl_slick', { hardness: Infinity, drop: null, label: 'Slick Earth' });
+def('gl_silt', { hardness: Infinity, drop: null, label: 'River Silt' });
+def('gl_glazed', { hardness: Infinity, drop: null, label: 'Glazed Tiles' });
+def('gl_deck', { hardness: Infinity, drop: null, label: 'A Reed Deck' });
+def('gl_eggs', { ...sprite, solid: true, rotatable: true, hardness: 0.3, light: 2, drop: null, label: 'The Worm\'s Eggs' });
+def('gl_column', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Broken Column' });
+def('gl_lion', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Glazed Lion' });
+def('gl_jars', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'wheat', min: 0, max: 2 }], label: 'Storage Jars' });
+def('gl_oven', { ...sprite, solid: true, rotatable: true, hardness: Infinity, light: 7, drop: null, label: 'A Bread Oven' });
+def('gl_well', { ...sprite, solid: true, hardness: Infinity, drop: null, label: 'A Well' });
+def('gl_stall', { ...sprite, tall: true, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'stick', min: 1, max: 2 }], label: 'A Market Stall' });
+def('gl_cart', { ...sprite, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'planks', min: 1, max: 2 }], label: 'A Cart' });
+def('gl_offering', { ...sprite, solid: true, interact: 'gl_offering', hardness: Infinity, light: 4, lightWhenState: true, drop: null, label: 'The God\'s Table' });
+def('gl_god', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The River God' });
+def('gl_wheel', { ...sprite, solid: true, interact: 'gl_wheel', hardness: Infinity, drop: null, label: 'The Sluice Wheel' });
+def('gl_barge', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Sunk Barge' });
+def('gl_skin', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Shed Skin' });
+def('gl_hoard', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'gold_ore', min: 1, max: 3 }], label: 'The Swallowed Hoard' });
+def('gl_throne', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The King\'s Chair' });
+def('gl_tablets', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Clay Tablets' });
+def('gl_roots', { ...sprite, tall: true, solid: false, rotatable: true, hardness: 0.2, drop: null, label: 'Hanging Roots' });
+def('gl_grit', { ...sprite, solid: false, rotatable: true, hardness: 0.1, drop: null, label: 'Fallen Grit' });
+def('gl_lamp', { ...sprite, solid: true, rotatable: true, hardness: 0.3, light: 8, drop: [{ item: 'clay', min: 0, max: 1 }], label: 'A Clay Lamp' });
+def('gl_bones', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'bone', min: 1, max: 2 }], label: 'The Swallowed\'s Bones' });

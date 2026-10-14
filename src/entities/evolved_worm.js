@@ -477,6 +477,11 @@ export const WORM_BOSSES = {
     name: 'The Alinelidan', hp: 260, dmg: 7, step: 0.28, mode: 'hostile', aggro: 24, under: true, boss: true, big: true, evolved: true, anim: true,
     light: 4, brain: 'alinelidan', phases: 5, foot: 1, riseHp: 0.6, beamY: 60,
     tint: ['#c8e070', '#c86050'], sayColor: '#c8e070',
+    // (Round 113: its jaws open as it bites, screams, spits: its painted
+    // head's own picture for it: see render/art/gullet_bosses.js.)
+    artSt: (e, st) => {
+      if (e.jawT > 0) st.wind = 1;
+    },
     phaseLines: ['', '', 'It shudders, and the earth with it.', 'It has learned you. It is learning still.', 'The Gullet opens wider.', 'IT. IS. HUNGRY.'],
     riseLine: '*the whole of the earth heaves, and it comes up again out of it*',
     tick: (c, dt) => {

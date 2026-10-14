@@ -30,6 +30,7 @@ import * as BW from './brochwork.js';
 import * as NW from './athanorwork.js';
 import * as CH from './championwork.js';
 import * as RF from './riftwork.js';
+import * as GL from './gulletwork.js';
 
 const key = (x, z) => `${x},${z}`;
 const near = (a, b, r) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= r;
@@ -82,6 +83,8 @@ export function restore(run) {
   if (run.rec.type === 'champion') CH.restore(run);
   // (Round 112) The Sundered Reach's: see riftwork.js.
   if (run.rec.type === 'rift') RF.restore(run);
+  // (Round 113) The Gullet of the World's: see gulletwork.js.
+  if (run.rec.type === 'gullet') GL.restore(run);
 }
 
 // Something of the architect's clicked (true if it was).
@@ -93,7 +96,7 @@ export function interact(run, x, y, z, b) {
       if (MD.offer(run, x, y, z, b, game.player)) return true;
       const t = (run.data.lore || []).find((q) => q.x === x && q.z === z);
       if (t) game.ui.openSign(t.lines, t.title);
-      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || AW.sayOf(b) || VW.sayOf(b) || LW.sayOf(b) || SW.sayOf(b) || WW.sayOf(b) || MD.sayOf(b) || BW.sayOf(b) || NW.sayOf(b) || CH.sayOf(b) || RF.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
+      else game.ui.msg(b.id === B.cold_hearth ? 'Ashes, long cold. Something glows in them still.' : MW.sayOf(b) || CW.sayOf(b) || HW.sayOf(b) || KW.sayOf(b) || GW.sayOf(b) || FW.sayOf(b) || TW.sayOf(b) || AW.sayOf(b) || VW.sayOf(b) || LW.sayOf(b) || SW.sayOf(b) || WW.sayOf(b) || MD.sayOf(b) || BW.sayOf(b) || NW.sayOf(b) || CH.sayOf(b) || RF.sayOf(b) || GL.sayOf(b) || 'The carving is worn past reading.', '#c8c8b8');
       return true;
     }
     case 'spiral':
@@ -103,7 +106,7 @@ export function interact(run, x, y, z, b) {
       takeOffering(run, x, z);
       return true;
   }
-  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b) || AW.interact(run, x, y, z, b) || VW.interact(run, x, y, z, b) || LW.interact(run, x, y, z, b) || SW.interact(run, x, y, z, b) || WW.interact(run, x, y, z, b) || MD.interact(run, x, y, z, b) || BW.interact(run, x, y, z, b) || NW.interact(run, x, y, z, b) || CH.interact(run, x, y, z, b) || RF.interact(run, x, y, z, b);
+  return MW.interact(run, x, y, z, b) || CW.interact(run, x, y, z, b) || HW.interact(run, x, y, z, b) || KW.interact(run, x, y, z, b) || GW.interact(run, x, y, z, b) || FW.interact(run, x, y, z, b) || TW.interact(run, x, y, z, b) || AW.interact(run, x, y, z, b) || VW.interact(run, x, y, z, b) || LW.interact(run, x, y, z, b) || SW.interact(run, x, y, z, b) || WW.interact(run, x, y, z, b) || MD.interact(run, x, y, z, b) || BW.interact(run, x, y, z, b) || NW.interact(run, x, y, z, b) || CH.interact(run, x, y, z, b) || RF.interact(run, x, y, z, b) || GL.interact(run, x, y, z, b);
 }
 
 // One of the place's own fallen (the crypt's bones: see cryptwork.js; the
@@ -119,6 +122,7 @@ export function killed(run, e) {
   if (run.rec.type === 'vault') VW.onKill(run, e);
   if (run.rec.type === 'champion') CH.onKill(run, e);
   if (run.rec.type === 'rift') RF.onKill(run, e);
+  if (run.rec.type === 'gullet') GL.onKill(run, e);
 }
 
 // A spiral stone turned to its next sigil; if that sets the ring in its
@@ -259,6 +263,7 @@ export function tick(run, dt, party) {
   NW.tick(run, dt, party);
   CH.tick(run, dt, party);
   RF.tick(run, dt, party);
+  GL.tick(run, dt, party);
 }
 
 // The old hound: trotting ahead of you to where it means to go, looking

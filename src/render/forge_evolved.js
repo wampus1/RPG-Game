@@ -19,6 +19,8 @@ import { TILE, LH } from '../config.js';
 import { hex, mix, shade } from './pixel.js';
 import { hash2 } from './paint.js';
 import { seam, crease, rivets, fringe } from './forgekit.js';
+import { grid } from './pixart.js';
+import { ALINELIDAN_RINGS } from './art/gullet_bosses.js';
 
 const TAU = Math.PI * 2;
 const GOLD = '#d8a838';
@@ -1157,8 +1159,27 @@ forge({
 });
 
 // Its body, ring after ring behind its head, each where its head has
-// been; sinking into the floor as it dives.
+// been; sinking into the floor as it dives. (Round 113: painted by hand,
+// at four sizes, the nearest for each: see art/gullet_bosses.js.)
+const PAINTED_RINGS = new Map();
+function paintedRing(size) {
+  const sizes = Object.keys(ALINELIDAN_RINGS).map(Number);
+  if (!sizes.length || typeof document === 'undefined') return null;
+  const k = sizes.reduce((a, q) => (Math.abs(q - size) < Math.abs(a - size) ? q : a), sizes[0]);
+  let s = PAINTED_RINGS.get(k);
+  if (s) return s;
+  const px = grid(ALINELIDAN_RINGS[k]);
+  const cv = document.createElement('canvas');
+  cv.width = px.w;
+  cv.height = px.h;
+  cv.getContext('2d').putImageData(px.toImageData(), 0, 0);
+  s = { cv, w: px.w, h: px.h };
+  PAINTED_RINGS.set(k, s);
+  return s;
+}
 function wormRing(size) {
+  const painted = paintedRing(size);
+  if (painted) return painted;
   return sculpted(`wring${size}`, size + 4, size + 4, (X) => {
     const c = (size + 4) / 2;
     X.in(0, 2);

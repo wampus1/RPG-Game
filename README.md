@@ -8893,6 +8893,140 @@ Each floor is one stage of what the void has done:
 - **Version 1.12.0.** Worlds from 1.11 load as before. Reach floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 113: The Gullet of the World, made over
+
+The nineteenth of the dungeon overhauls, and the last of the ancient
+places. The World-Worm ate the first kingdom of Ostria whole, its city and
+its river and its king, and went down into the earth to sleep it off. The
+Gullet is its bore, down through the earth and through the swallowed city.
+The feeling is weight and warmth and a whole people swallowed. Earth packed
+hard by the worm's passing, scored by its rings, with roots let down
+through the roof and grit trickling. Caught in it, or lying whole in the
+dark, the river kingdom's city: mudbrick under flaking plaster, friezes of
+lapis-glazed brick with yellow lions striding, flat roofs up ladders, the
+temple's stepped terraces, the canal. It is cramped bores between bigger
+chambers, its heights the city's own. Each floor is one stage of how far
+down:
+
+- the Bore, the worm's tunnels, the city glimpsed in their walls;
+- the Swallowed City, its streets, its temple, its canal;
+- the Belly, slick with what it digests, its eggs and its shed skins.
+
+- **Drawn afresh.** Every tile and thing in the Gullet is painted by hand.
+  - **The walls.** Packed earth (three of it), its ring-grooves, pebbles,
+    roots. Also:
+    - where the bore cut through the city, a slice of mudbrick and a
+      glazed course caught in the earth;
+    - the city's mudbrick under flaking plaster;
+    - a glazed frieze of a striding lion, or of rosettes;
+    - a house's doorway under its palm-log lintel;
+    - the river god in relief, the waters streaming from his vase;
+    - a clay tablet set in the wall;
+    - a doorway bricked up in haste, bitumen in the joints and a clay seal
+      over them;
+    - the belly's earth, runnelled by what drips down it;
+    - a terrace's glazed face, and a sunk floor's.
+  - **The floors.** Packed earth, the city's brick paving laid in squares,
+    the belly's slick earth, the silt the river leaves, the temple's
+    glazed tiles, a barge's reed deck.
+  - **The things set about.** The worm's eggs, a broken column with its
+    bronze palm capital, a fallen slab of the lion frieze, storage jars, a
+    bread oven, a well, a market stall, a cart, the god's offering table,
+    the river god, the sluice wheel, a sunk reed barge, the worm's shed
+    skins, the swallowed hoard, the king's chair, clay tablets, hanging
+    roots, the grit under a cracked roof, clay lamps, the bones of the
+    swallowed.
+- **Rooms the Gullet has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/gullet.js`), beside its old rooms. Every floor
+  keeps at least one of the old works (the acid, the eggs, the quakes,
+  the leech-pools, the throats, the nests), and the old rooms are dressed
+  in its own things, their eggs the worm's own.
+  - **The bore.** On every floor: a long passage of the worm's, roots
+    hanging, the roof cracked in places, and a column or a slab of frieze
+    it brought down with it. Borers under the floor.
+  - **The street.** The city's paving, the house fronts along the back
+    with their flat roofs two high up a ladder (jars and a lamp up there).
+    A well, ovens, a stall, a cart. The Swallowed at the well, a spitter
+    on the roofs, a leech below. A household's bricked-up door off it.
+  - **The temple.** The god's terraces of glazed brick in the middle of
+    the floor, a step and then two up. His table and his statue are at
+    the top, the king's annals and the friezes on the walls. The Swallowed
+    kneel on the steps.
+  - **The canal.** A channel of acid down its length where the river was,
+    a footbridge of brick across it, and a barge sunk out in the middle
+    with its cargo aboard. The sluice wheel stands at the channel's head.
+  - **The clutch.** The worm's eggs in clutches, the clutch-mother among
+    them, larvae.
+  - **The shed.** The worm's old skins standing in rings, the roof
+    cracked.
+  - **The hoard.** What the kingdom kept, swallowed: gold going green,
+    the king's chair, columns, the lion frieze fallen. Its guards.
+- **What's at work there** (see `src/game/gulletwork.js`).
+  - **The tremors.** Now and then the Sleeper turns over. Where the
+    roof's cracked (grit lies under it), it comes in a breath after the
+    ground shows it coming, on whoever's under it, yours or theirs. Lure
+    them under.
+  - **The sluice.** Turn the canal's wheel and the river runs again. Its
+    acid washes away, what lived in it drowns, and the barge's cargo is
+    there for the walking out. It stays turned.
+  - **The god's table.** Lay something to eat on it and the river god's
+    favour is on you a while: acid can't burn you, anywhere. Fish keeps
+    it on you twice as long.
+  - **The bricked-up door.** A household bricked themselves in behind it,
+    with their bread and their lamp, until it passed. Break it in: three
+    blows. Every one is loud: what sleeps near wakes, and the roof shifts.
+    Behind it are their cache and their last words.
+  - **The clutches.** The eggs hatch as you come near. A borer coming up
+    under them, or their mother screaming, hatches the lot at once.
+  - **The Swallowed.** Come near one and it leads you to the bricked door
+    its people have always known about, or to the god. Hurt one and
+    they're gone, all of them, for the floor.
+  - What's been done (doors broken in, sluices turned, the god fed) stays
+    done when you come back to the floor.
+- **What's written there.** Every Gullet has its kingdom's name in the old
+  tongue, its city, its last king and which year of his reign it was, the
+  river god's name, a scribe, a household. Its papers come from all of
+  that, and from the town nearest it (see `src/world/deeps/gulletlore.js`):
+  - the king's annals, accounts, a school tablet, a letter never sent;
+  - the god in relief and on his statue, the sluice's post, the king's
+    chair;
+  - the household's last words, where the kingdom went;
+  - what the Swallowed whisper.
+- **Its new creatures**, each painted by hand and made to work with the
+  others. The gut leech, the acid spitter and the maw larva are repainted.
+  - **The Borer.** A ringed, eyeless worm the length of a man, the worm's
+    own young. Under the floor you see only the earth humping up where it
+    goes. It comes up under you (the ground cracks a breath first: step
+    off it) and throws you off your feet.
+  - **The Clutch-Mother.** A great pale grub bloated with eggs. She lays
+    one every little while, and hurt badly she screams and every egg near
+    her hatches.
+  - **One of the Swallowed.** The children's children's children of the
+    people the worm ate, grey-pale and big-eyed, keeping the lamps lit.
+    They never fight.
+  - Together:
+    - a borer throws you off your feet for the leeches and the spitters;
+    - a borer coming up under a clutch hatches it;
+    - the mothers keep the larvae coming;
+    - the roof comes in on them as much as on you.
+- **Its master, painted by hand.** The Alinelidan's head is painted at its
+  full 128 pixels:
+  - a great blunt mass of grey-pink hide in folds, ring on ring;
+  - a crest of old bone plates with horns out of them;
+  - pale blind spots where its eyes were;
+  - its round maw, shut by four toothed jaws.
+
+  Biting or winding up, the jaws peel back on the rings of its teeth going
+  down into its throat, the bile glowing and its tongues writhing out.
+  Risen, its hide flushes dark and the bile runs out between its lips. The
+  rings of its body behind it in the world are painted too, at four sizes.
+- **Fixes along the way.**
+  - The river god's favour keeps acid off you everywhere it burns.
+  - The Gullet's old works speak of earth and the worm turning, not of a
+    gut.
+- **Version 1.13.0.** Worlds from 1.12 load as before. Gullet floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

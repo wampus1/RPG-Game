@@ -35,6 +35,7 @@ import { work, drag } from '../entities/bosskit.js';
 import { addRift, addBouncer } from '../entities/evolved.js';
 import { knock } from './combat.js';
 import { desecrated } from './championwork.js';
+import { favoured } from './gulletwork.js';
 
 const ELEMENTS = [
   { kind: 'fire', burn: 2, color: [255, 120, 40], puff: ['#ff8030', '#ffd060', '#ffffff'], word: 'fire' },
@@ -242,6 +243,8 @@ export function ancientTick(run, dt) {
   for (const Q of A.acid) {
     for (const p of here(Q.box)) {
       if (!Q.tiles.some((q) => q.x === p.x && q.z === p.z) || p.rollT > 0) continue;
+      // (Round 113: not one the river god favours: see gulletwork.js.)
+      if (favoured(game, p)) continue;
       p.acidT = (p.acidT || 0) - dt;
       if (Math.random() < dt * 6) r.emit(p.x, p.y + 0.1, p.z, { n: 1, color: ['#c8e070', '#a8c040'], up: 10, speed: 4, life: 0.5, shape: 'puff' });
       if (p.acidT > 0) continue;
@@ -261,7 +264,9 @@ export function ancientTick(run, dt) {
   for (const G of A.eggs) {
     const hatch = (e, p) => {
       e.hatched = true;
-      if (game.world.getBlock(e.x, FY, e.z) !== B.void_bloom) return;
+      // (Round 113: or the worm's own, in its made-over Gullet.)
+      const eb = game.world.getBlock(e.x, FY, e.z);
+      if (eb !== B.void_bloom && eb !== B.gl_eggs) return;
       game.world.setBlock(e.x, FY, e.z, B.air);
       r.emit(e.x, FY + 0.6, e.z, { n: 16, color: ['#c8e070', '#e8d8b0', '#8a6a4a'], up: 30, speed: 30, life: 0.7 });
       game.audio?.play('splash', e);
@@ -507,7 +512,7 @@ export function ancientTick(run, dt) {
     for (let i = 0; i < 6; i++) r.emit(bx.x0 + Math.random() * (bx.x1 - bx.x0), FY + 0.3, bx.z0 + Math.random() * (bx.z1 - bx.z0), { n: 1, color: ['#a07a50', '#c8a080'], up: 10, speed: 6, life: 0.7, shape: 'puff' });
     game.shake = Math.min(1, (game.shake || 0) + 0.3);
     game.audio?.play('rumble', in_[0]);
-    say(in_[0], 'throat', 'The walls of the gut clench and heave, and carry you along it, one way and then the other! (plant your feet between heaves)', '#c8a080');
+    say(in_[0], 'throat', 'The whole bore heaves as the worm turns over, and the floor carries you along it, one way and then the other! (plant your feet between heaves)', '#c8a080');
   }
 }
 
@@ -651,7 +656,7 @@ export function ancientDanger(run, type, p, dmg) {
       return true;
     }
     case 'gullet': {
-      // The gut heaves: the floor drags you along, and leeches drop.
+      // The ground heaves: the floor drags you along, and leeches drop.
       const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
       drag(game, p, { x: p.x + dir[0] * 3, z: p.z + dir[1] * 3 }, 2);
       game.shake = Math.min(1, (game.shake || 0) + 0.45);
@@ -668,7 +673,7 @@ export function ancientDanger(run, type, p, dmg) {
           n++;
         }
       }
-      say('heave', `The whole gut heaves and drags you along it${n ? ', and leeches drop from the roof!' : '!'}`, '#c8a080');
+      say('heave', `The ground heaves as the worm turns over in its sleep, and drags you along${n ? ', and leeches drop from the roof!' : '!'}`, '#c8a080');
       return true;
     }
   }
@@ -745,6 +750,7 @@ export function wadeTick(game, dt) {
       chill(e, 0.5);
       continue;
     }
+    if (favoured(game, e)) continue;
     e.acidT = (e.acidT ?? 0.4) - dt;
     if (Math.random() < dt * 6) game.renderer.emit(e.x, e.y + 0.15, e.z, { n: 1, color: ['#c8f070', '#90d040', '#ffffff'], up: 14, speed: 6, life: 0.5, shape: 'puff' });
     if (e.acidT > 0) continue;

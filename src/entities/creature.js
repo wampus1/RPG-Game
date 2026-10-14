@@ -26,6 +26,7 @@ import { BROCH_SPECIES } from './brochmobs.js';
 import { ATHANOR_SPECIES } from './athanormobs.js';
 import { CHAMPION_SPECIES } from './championmobs.js';
 import { RIFT_SPECIES } from './riftmobs.js';
+import { GULLET_SPECIES } from './gulletmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -140,6 +141,7 @@ export const SPECIES = {
   // (Round 111: the Champion's Hall's own.)
   ...CHAMPION_SPECIES,
   ...RIFT_SPECIES,
+  ...GULLET_SPECIES,
   ...FAR_BOSS_SPECIES,
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,

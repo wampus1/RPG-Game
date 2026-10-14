@@ -27,6 +27,7 @@ import { MAP_W, MAP_H, REGION_W, REGION_D } from '../config.js';
 import { ATHANOR_ARCH } from './deeps/athanor.js';
 import { CHAMPION_ARCH } from './deeps/champion.js';
 import { RIFT_ARCH } from './deeps/rift.js';
+import { GULLET_ARCH } from './deeps/gullet.js';
 
 // The kinds of ancient place (as the far lands' own: see fardeep.js
 // FAR_DTYPES), each with its one master.
@@ -75,13 +76,18 @@ export const ANCIENT_DTYPES = {
     arch: RIFT_ARCH,
   },
   gullet: {
-    name: 'Gullet of the World', isle: 'ostria', ancient: true, wall: B.cave_rock, floor: B.mud, alt: B.bone_sand, beam: B.log_acacia, regions: [2, 2], floors: [3, 3],
+    name: 'Gullet of the World', isle: 'ostria', ancient: true, wall: B.gl_earth, floor: B.gl_dirt, alt: B.gl_slick, beam: B.log_acacia, regions: [2, 2], floors: [3, 3],
     kits: ['acid', 'eggs', 'quake', 'bones', 'leech_pool', 'acid', 'tunnel', 'throat', 'nest', 'trap', 'treasure', 'guard', 'eggs', 'throat'],
-    mobs: [['gut_leech', 3], ['acid_spitter', 2], ['maw_larva', 4]], only: true,
+    // (Round 113: and the borers, the clutch-mothers; the Swallowed set out
+    // where they keep their lamps.)
+    mobs: [['gut_leech', 3], ['acid_spitter', 2], ['maw_larva', 3], ['borer', 1], ['clutch_mother', 1]], only: true, kept: ['swallowed_one'],
     bosses: ['alinelidan'], torches: 0.05,
-    shapes: { cave: 5, round: 3 }, wiggle: 1.6, decor: [['bones', 4], ['roots', 2], ['rubble', 2], ['skull_pile', 1], ['stalagmite', 2], ['whale_rib', 1]],
+    shapes: { cave: 5, round: 3 }, wiggle: 1.6, decor: [['gl_bones', 3], ['gl_roots', 2], ['gl_jars', 1], ['gl_column', 1], ['stalagmite', 1]],
     dark: [0.07, 0.06, 0.04], motes: ['#c8e070', '#a07a50'], ambient: ['heart', 'rumble', 'drip', 'skitter'],
     loot: [['bone', 3, 6, 0.6], ['gem', 1, 2, 0.3], ['gold_ore', 1, 3, 0.35], ['old_coin', 3, 8, 0.5]],
+    // (Round 113: its own rooms its own architect's, the old ones set about
+    // with its own, a floor to each of how far down: see deeps/gullet.js.)
+    arch: GULLET_ARCH,
   },
 };
 export const ANCIENT_TYPES = Object.keys(ANCIENT_DTYPES);

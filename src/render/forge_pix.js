@@ -23,6 +23,7 @@ import { BROCH_BOSS_ART } from './art/broch_bosses.js';
 import { ATHANOR_BOSS_ART } from './art/athanor_bosses.js';
 import { CHAMPION_BOSS_ART } from './art/champion_bosses.js';
 import { RIFT_BOSS_ART } from './art/rift_bosses.js';
+import { GULLET_BOSS_ART } from './art/gullet_bosses.js';
 
 export function installPix(art) {
   for (const [k, A] of Object.entries(art)) {
@@ -82,3 +83,4 @@ installPix(BROCH_BOSS_ART);
 installPix(ATHANOR_BOSS_ART);
 installPix(CHAMPION_BOSS_ART);
 installPix(RIFT_BOSS_ART);
+installPix(GULLET_BOSS_ART);

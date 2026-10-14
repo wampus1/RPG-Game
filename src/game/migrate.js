@@ -850,6 +850,14 @@ export const STEPS = [
       log.push('The Sundered Reach is made over: the red mesa of the Sky-Watchers and the black glass of the void growing through it, a floor to each of what the void has done (the Mesa, the Fault, the Between), with the dwellings and their lofts up ladders, the observatory and the kiva under its sighting-stones, the fault and its chasm and phase-bridges, the crystal-caverns, the shrine, and the breach; the rift weavers and their threads, the shardbacks, and the watchers\' echoes; and the Rift Crawler redrawn. Reach floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 113) The Gullet of the World made over (its floors laid out
+  // afresh: its generator raised: see dungeon.js KIND_GEN).
+  {
+    to: '1.13.0',
+    data(d, log) {
+      log.push('The Gullet of the World is made over: the worm\'s bore through the earth and through the first kingdom of Ostria it swallowed, a floor to each of how far down (the Bore, the Swallowed City, the Belly), with the bore and its cracked roof, the street and its roofs up ladders, the temple\'s terraces and the god\'s table, the canal and its sluice, the clutch, the shed skins, and the hoard; the tremors, the river god\'s favour, the bricked-up doors; the borers, the clutch-mothers, and the Swallowed who lead you; and the Alinelidan redrawn. Gullet floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
