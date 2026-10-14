@@ -15,6 +15,7 @@
 // shopkeepers who can't stand each other. And people move: for work, for
 // love, for a better mayor than the one they've got.
 import { alive, ledger, setOverride, DAY, st } from './econ.js';
+import { B } from '../world/blocks.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { retrain, workplaceTypeFor } from '../entities/npcgen.js';
 
@@ -787,9 +788,35 @@ export class Society {
     }
   }
 
+  // (Round 114) Let out of the cell (its lock picked, or the door broken
+  // in): they see the door standing open, and go, quick, before the watch
+  // notices.
+  escapeCell(n) {
+    const lf = lifeOf(n.rec);
+    lf.jailUntil = null;
+    lf.held = false;
+    lf.escaped = this.game.day;
+    n.state = 'routine';
+    n.sleeping = false;
+    n.activity = null;
+    n.path = null;
+    n.say(n.rng.pick(['The door\'s open! I\'m off!', 'Thank you, friend. I was never here.', 'Not a word to the watch!']), 3, '#e8e0a0');
+  }
+
   jailedTick(n, dt = 0.1) {
     const lf = n.rec.life || {};
     const now = this.sim.abs;
+    // (Round 114) The cell door broken in, or left standing open by whoever
+    // let them out: they go.
+    const J0 = n.layout.jail;
+    if (J0 && J0.door && this.game.world.regionAt(J0.door.x, J0.door.z)) {
+      const d = this.game.world.getBlock(J0.door.x, J0.y, J0.door.z);
+      if (d === B.cell_door || d === B.cell_door_open) n.cellSeen = true;
+      else if (n.cellSeen && d === B.air) {
+        this.escapeCell(n);
+        return;
+      }
+    }
     if (!lf.held && !(lf.jailUntil && lf.jailUntil > now)) {
       this.release(n.layout, n.rec);
       return;

@@ -867,6 +867,10 @@ class Builder {
     if (x < 0 || z < 0 || x >= this.rw * REGION_W || z >= this.rd * REGION_D || y < 0 || y >= WORLD_Y) return B.bedrock;
     return this.region(x, z).get(x % REGION_W, y, z % REGION_D);
   }
+  meta(x, y, z) {
+    if (x < 0 || z < 0 || x >= this.rw * REGION_W || z >= this.rd * REGION_D || y < 0 || y >= WORLD_Y) return 0;
+    return this.region(x, z).meta[Region.idx(x % REGION_W, y, z % REGION_D)];
+  }
   container(x, y, z, slots) {
     const r = this.region(x, z);
     r.containers.set(Region.idx(x % REGION_W, y, z % REGION_D), slots);
@@ -1070,6 +1074,10 @@ export const FOUNDRY_FLOOR = 2;
 function tierOf(ctx) {
   return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5 + (FAR_LOOT[ctx.rec.isle] || 0) + ((ctx.rec.tier || 1) - 1);
 }
+// (Round 114) How many foes one room's fight holds at most, by the place's
+// tier (as a time crystal turns it: 1 to 4).
+export const ENCOUNTER_CAP = [3, 3, 4, 4, 5];
+export const encounterCap = (rec) => ENCOUNTER_CAP[Math.max(1, Math.min(4, rec.tier || 1))];
 // The old places of the far islands keep better things than Thessa's: as
 // if a good half-floor further down.
 // (Round 68: the far lands' better again, a whole floor's worth.)
@@ -1274,7 +1282,7 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
       b.set(c.x, FY - 1, c.z, c.floor);
     }
   }
-  for (const d of out.drains) d.water = d.water.filter((q) => q.y === undefined || b.get(q.x - b.x0, q.y, q.z) === B.lava);
+  for (const d of out.drains) d.water = d.water.filter((q) => q.y === undefined || BLOCKS[b.get(q.x - b.x0, q.y, q.z)].liquid);
   // Who's about, besides: a few wandering on their own.
   for (let i = 0; i < (big ? 10 : 5); i++) {
     const r = R[rng.int(1, R.length - 1)];
@@ -1291,6 +1299,25 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
       sp.species = rng.weighted(T.mobs.map(([k, w]) => [k, w]));
     }
   }
+  // (Round 114) No one fight too many: a room's foes at most three in a
+  // first-tier place, four at the second and third, five at the fourth
+  // (see ENCOUNTER_CAP); the first set out kept, the wanderers after them
+  // let go first. Not its master, nor what's not there to fight.
+  {
+    const cap = encounterCap(rec);
+    const count = new Map();
+    out.spawns = out.spawns.filter((sp) => {
+      if (sp.boss || sp.twin || sp.guardian || sp.peaceful || (T.kept || []).includes(sp.species)) return true;
+      const room = R[sp.room];
+      if (room && room.kit === 'boss') return true;
+      const k = count.get(sp.room) || 0;
+      if (k >= cap) return false;
+      count.set(sp.room, k + 1);
+      return true;
+    });
+  }
+  dryUnder(ctx);
+  turnStairs(ctx);
   b.finish();
   out.regions = b.regions;
   out.depth = rec.depth;
@@ -1582,6 +1609,31 @@ function ring(ctx, r, rad, put) {
     if (freeIn(ctx, r, x, z)) put(x, z);
   }
 }
+// (Round 114) A pool let into the floor, flush with it (never water stood
+// on top of the floor): the floor's own tile at (x, z) turned to it, if
+// nothing's there; what was under it kept, to dry out under whatever's
+// set over it after (see dryUnder). True if it was.
+function poolAt(ctx, x, z, id = B.water) {
+  const { b } = ctx;
+  if (b.get(x, FY, z) !== B.air) return false;
+  const under = b.get(x, FY - 1, z);
+  if (!BLOCKS[under] || !BLOCKS[under].solid || !BLOCKS[b.get(x, FY - 2, z)].solid) return false;
+  (ctx.pools ||= new Map()).set(z * ctx.plan.W + x, under);
+  b.set(x, FY - 1, z, id);
+  return true;
+}
+// Wherever something's been set over a pool since (a chest, a lever, an
+// urn), the floor under it dry again.
+function dryUnder(ctx) {
+  const { b } = ctx;
+  for (const [k, floor] of ctx.pools || []) {
+    const x = k % ctx.plan.W;
+    const z = (k / ctx.plan.W) | 0;
+    const top = BLOCKS[b.get(x, FY, z)];
+    if (top && top.name !== 'air' && !top.liquid && BLOCKS[b.get(x, FY - 1, z)].liquid) b.set(x, FY - 1, z, floor);
+  }
+}
+
 function scatter(ctx, r, p, id) {
   for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (ctx.rng.chance(p) && freeIn(ctx, r, x, z) && Math.hypot(x - r.cx, z - r.cz) > 1.5) ctx.b.set(x, FY, z, id());
 }
@@ -2182,10 +2234,13 @@ function dressBase(ctx, r) {
           water.length = 0;
         } else ctx.lavaRooms.push({ r, cells: water.map((q) => ({ x: q.x - b.x0, z: q.z, floor: q.floor })) });
       } else {
+        // (Round 114: let into the floor, the floor's own tiles under it,
+        // never stood on top of it.)
         for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
-          if (b.get(x, FY, z) !== B.air) continue;
-          b.set(x, FY, z, pool);
-          water.push({ x: b.x0 + x, z });
+          if (!own(ctx.plan, r, x, z) || ctx.reserved?.has(z * ctx.plan.W + x)) continue;
+          const floor = b.get(x, FY - 1, z);
+          if (!poolAt(ctx, x, z, pool)) continue;
+          water.push({ x: b.x0 + x, z, y: FY - 1, floor });
         }
       }
       const lv = water.length ? placeIn(ctx, r, B.lever, 0, true) || null : null;
@@ -2415,7 +2470,7 @@ function dressBase(ctx, r) {
       break;
     case 'spring':
       // A spring welling up in the middle, glowcaps round it.
-      blob(ctx, r, r.cx, r.cz, 2.2, (x, z) => b.set(x, FY, z, B.water));
+      blob(ctx, r, r.cx, r.cz, 2.2, (x, z) => poolAt(ctx, x, z));
       for (let i = 0; i < 4; i++) placeIn(ctx, r, B.glowshroom);
       group('moth', 1, 2);
       if (rng.chance(0.35)) chestIn(ctx, r, 1);
@@ -2465,7 +2520,7 @@ function dressBase(ctx, r) {
         for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const tx = x + ox;
           const tz = z + oz;
-          if (own(ctx.plan, r, tx, tz) && !doorBlocked(ctx.plan, r, tx, tz) && b.get(tx, FY, tz) === B.air && rng.chance(0.35)) b.set(tx, FY, tz, B.water);
+          if (own(ctx.plan, r, tx, tz) && !doorBlocked(ctx.plan, r, tx, tz) && b.get(tx, FY, tz) === B.air && rng.chance(0.35)) poolAt(ctx, tx, tz);
         }
       }
       group(pickMob(ctx), 1, 2);
@@ -2474,7 +2529,7 @@ function dressBase(ctx, r) {
     // ------------------------------------------------ a Tide Grotto
     case 'tidepool':
       // Pools the tide left behind, kelp in them, and what lurks.
-      for (let i = 0; i < 3; i++) blob(ctx, r, rng.int(r.x0 + 1, r.x1 - 1), rng.int(r.z0 + 1, r.z1 - 1), rng.float(1, 2), (x, z) => b.set(x, FY, z, B.water));
+      for (let i = 0; i < 3; i++) blob(ctx, r, rng.int(r.x0 + 1, r.x1 - 1), rng.int(r.z0 + 1, r.z1 - 1), rng.float(1, 2), (x, z) => poolAt(ctx, x, z));
       for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kelp);
       group('reef_crab', 1, 2);
       if (rng.chance(0.5)) spawnIn(ctx, r, 'bog_lurker', 1);
@@ -2501,7 +2556,7 @@ function dressBase(ctx, r) {
     case 'pearlbed':
       // Giant clams on the sand, shallow water over them.
       for (let i = 0; i < rng.int(3, 5); i++) placeIn(ctx, r, B.giant_clam, rng.int(0, 3));
-      scatter(ctx, r, 0.2, () => B.water);
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (rng.chance(0.2) && freeIn(ctx, r, x, z) && Math.hypot(x - r.cx, z - r.cz) > 1.5) poolAt(ctx, x, z);
       group('reef_crab', 1, 2);
       break;
     // ------------------------------------------------ an Imperial Catacomb
@@ -2577,8 +2632,8 @@ function dressBase(ctx, r) {
       // A pool of bile in the floor of the gut, and what wallows in it.
       const pool = [];
       blob(ctx, r, r.cx, r.cz, Math.max(1.6, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.25), (x, z) => pool.push({ x, z }));
-      for (const q of pool) b.set(q.x, FY, q.z, B.water);
-      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air) b.set(q.x + ox, FY - 1, q.z + oz, B.mud);
+      for (const q of pool) poolAt(ctx, q.x, q.z);
+      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air && !BLOCKS[b.get(q.x + ox, FY - 1, q.z + oz)].liquid) b.set(q.x + ox, FY - 1, q.z + oz, B.mud);
       group('slime', 1, 2);
       group('drowned', 0, 1);
       break;
@@ -2598,8 +2653,8 @@ function dressBase(ctx, r) {
       // A pool of brine welling up, crusted round with salt.
       const pool = [];
       blob(ctx, r, r.cx, r.cz, Math.max(1.5, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.22), (x, z) => pool.push({ x, z }));
-      for (const q of pool) b.set(q.x, FY, q.z, B.water);
-      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air) b.set(q.x + ox, FY - 1, q.z + oz, B.salt_crust);
+      for (const q of pool) poolAt(ctx, q.x, q.z);
+      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air && !BLOCKS[b.get(q.x + ox, FY - 1, q.z + oz)].liquid) b.set(q.x + ox, FY - 1, q.z + oz, B.salt_crust);
       for (let i = 0; i < 3; i++) placeIn(ctx, r, B.salt_crystal, 0, true);
       group('brine_scorpion', 1, 2);
       break;
@@ -2784,6 +2839,49 @@ function thinKav(ctx, r) {
       else break;
     }
     taken--;
+  }
+}
+
+// (Round 114) Every stair on the floor turned to climb the way the floor
+// does: its high side toward whichever of its sides you stand higher on
+// than the one across from it (so however an architect set it down, it's
+// never back to front). Its turn's kept where it's already right.
+const STAIR_DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+export function turnStairs(ctx) {
+  const { b, plan } = ctx;
+  const solidAt = (x, y, z) => {
+    const k = BLOCKS[b.get(x, y, z)];
+    return !!(k && k.solid && k.interact !== 'door' && k.interact !== 'gate');
+  };
+  const standAt = (x, z) => {
+    if (!plan.at(x, z)) return null;
+    for (let y = FY + 2; y >= FY - 2; y--) if (!solidAt(x, y, z) && !solidAt(x, y + 1, z) && solidAt(x, y - 1, z)) return y;
+    return null;
+  };
+  for (let z = 0; z < plan.D; z++) {
+    for (let x = 0; x < plan.W; x++) {
+      if (!plan.at(x, z)) continue;
+      for (let y = FY - 1; y <= FY + 1; y++) {
+        const id = b.get(x, y, z);
+        if (!BLOCKS[id]?.stair) continue;
+        const m = b.meta(x, y, z);
+        let best = -1;
+        let rise = 0;
+        let keep = false;
+        for (let d = 0; d < 4; d++) {
+          const [dx, dz] = STAIR_DIRS[d];
+          const hi = standAt(x + dx, z + dz);
+          const lo = standAt(x - dx, z - dz);
+          if (hi === null || lo === null || hi <= lo) continue;
+          if (d === (m & 3)) keep = true;
+          if (hi - lo > rise) {
+            rise = hi - lo;
+            best = d;
+          }
+        }
+        if (!keep && best >= 0) b.set(x, y, z, id, (m & ~3) | best);
+      }
+    }
   }
 }
 

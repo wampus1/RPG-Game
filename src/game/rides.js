@@ -11,7 +11,7 @@
 // its way is long; `rideInfo` is, for the line on the screen), and its
 // coach or ferry is a prop in game.props, so everyone sees it go by.
 import { GROUND, REGION_W, REGION_D, WORLD_Y } from '../config.js';
-import { coachStand, arrivalSpot, wayTime, harbourWay } from '../sim/coaches.js';
+import { coachStand, arrivalSpot, wayTime, harbourWay, sendCoach, COACHMAN } from '../sim/coaches.js';
 import { seaOff, seaRoute } from './shipfleets.js';
 import { countItem, removeItem, addItem } from './inventory.js';
 import { shippable, FERRY_CARRIES } from './stalls.js';
@@ -388,6 +388,13 @@ export function startRide(game, link) {
   }
   if (link.kind === 'ferry' && link.extras) shipExtras(game, p, R, link.extras);
   p._ride = R;
+  // (Round 114) The coach at the stand is the one you've climbed into: it
+  // leaves (none left standing behind it), its coachman driving, and it's
+  // gone till it's been there and back.
+  if (link.kind !== 'ferry') {
+    sendCoach(game, from.id, Math.min(mins * 2, 12 * 60));
+    game.props.delete(`coach:${from.id}`);
+  }
   makeProp(game, p, R);
   game.audio?.play(link.kind === 'ferry' ? 'ship_bell' : 'horn');
   game.ui.msg(link.kind === 'ferry'
@@ -519,8 +526,9 @@ function makeProp(game, p, R) {
   return prop;
 }
 
-// (Whoever drives the coach: an old hand in a hat.)
-const DRIVER = { skin: '#d8a880', hair: '#8a8a8a', hairStyle: 'short', shirt: '#5a4a3a', pants: '#3a3028', shoes: '#2a1a10', outfit: 'plain', accent: '#7a5a30', beard: true, hat: 'wide', hatColor: '#4a3a28' };
+// (Whoever drives the coach: an old hand in a hat, the coachman from the
+// stand.)
+const DRIVER = COACHMAN;
 
 // ------------------------------------------------------------ on the way
 // Each frame, for the one riding: along the way as the time goes by.

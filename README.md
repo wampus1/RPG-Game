@@ -9027,6 +9027,77 @@ down:
 - **Version 1.13.0.** Worlds from 1.12 load as before. Gullet floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 114: Fixes, and the barrow's heights
+
+A round of fixes from play, and a barrow with more ups and downs.
+
+- **The barrow.**
+  - **The ship.** Its hold has a ladder up the inside of the hull, aft, so
+    you can climb out again. Its sides are planked all the way down, and
+    so are the stem, the stern and any gap where the hold met a doorway.
+    No earth shows in the hold.
+  - **Heights within a floor.** Guard rooms raise a gallery at the back for
+    the spears. Shrines and hoards keep what they hold up a step at the
+    back. Pillared halls let their nave down a step between the pillars,
+    and a long hall has a gallery at the back as well: down and up again.
+    The charnel's bones lie deepest in a sunken bone-pit. Every raised or
+    sunken floor has steps up or down, in every land's barrow (its own
+    flags, or flagstone).
+  - **The corpse-light** drifts slower, keeps a few paces off, and throws
+    cold fire at you every few seconds. It burns and slows you, and you
+    can roll out of it.
+  - **The tomb rats** bite. They no longer skulk forever waiting for a pack
+    of three.
+  - **The old hound** no longer jumps about: it walks wherever it leads
+    you. It doesn't run from you holding a bone. It comes up wagging, and
+    if you drop bones it goes to them and eats them.
+- **Every old place.**
+  - **Floors.** The plain tile is laid most (half the floor), the ones with
+    something in them less and less. Where one floor meets another, a
+    ragged dithered edge of the one blends into the other.
+  - **Stairs** everywhere climb toward the higher side. Many were back to
+    front in the mines, crypts, catacombs, groves, forges and vaults.
+  - **Pools.** Pools, troughs, tidepools, springs, bile and brine, and the
+    flooded halls, lie in the floor, flush with it. They no longer sit on
+    top of it. A drained flooded hall leaves its floor. The sea cave no
+    longer builds its benches out of water.
+  - **Encounters.** No room sets more foes on you than its tier allows:
+    three at the first tier, four at the second and third, five at the
+    fourth. A master and its guardians aren't counted.
+- **The time crystal.** If the way in, rebuilt round you, would shut you
+  in, you're set down on open ground just outside it.
+- **Cells.**
+  - A town's cell door is locked while anyone is in there: a prisoner of
+    war, one of the town's own, or you.
+  - With a lockpick, clicking it opens the lock window (a jail's lock is a
+    good one).
+  - Let out, a prisoner sees the door open and goes: a prisoner of war
+    runs for home, a townsfolk prisoner slips away. A broken-down door
+    does the same.
+  - If the watch sees you do it, it's a new crime: freeing a prisoner.
+- **Houses.** Standing in someone's doorway at night (after knocking, say)
+  no longer counts as trespassing. Only inside the walls does.
+- **The coach.**
+  - The coachman sits on the bench of his coach at the stand from six in
+    the morning until nine at night. Only then will he take you anywhere.
+    After that the coach stands empty.
+  - The coach you climb into is the one from the stand, with him driving.
+    No second coach appears, and he doesn't pop up on it.
+  - The stand stays empty until the coach is back from the trip.
+- **The weather.** From one kind into another (out of a thunderstorm into
+  a blizzard, rain into snow as you come up into the cold), what's falling
+  eases off over a few seconds, the storm's wind with it, and then the new
+  weather builds.
+- **Speed.**
+  - **Skipping days** no longer seems to freeze the game. The work is
+    spread over frames, a town at a time, instead of six hours of a
+    hundred towns in one frame (a few seconds each, on a long skip).
+  - **Weddings** no longer stall. Food with bites out of it on the tables
+    was read back off the screen to cut the bites, over a second at a time
+    for each new dish. It's now cut out directly.
+- **Version 1.14.0.** Worlds from 1.13 load as before. Floors of old places
+  you have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -700,6 +700,16 @@ export function captiveTick(n, dt) {
   const c = n.captive;
   const g = n.game;
   if (!c) return;
+  // (Round 114) The cell door broken down or standing open (not by the
+  // watch: they'd be out on the gang): they see their chance and go.
+  if (c.door) {
+    const d = g.world.getBlock(c.door.x, c.y, c.door.z);
+    if (d === B.cell_door || d === B.cell_door_open) c.doorSeen = true;
+    if ((d === B.air && c.doorSeen) || (d === B.cell_door_open && c.freed)) {
+      breakOut(n, c.freed || 'door');
+      return;
+    }
+  }
   const m = g.minute;
   const night = m < 360 || m >= 1260;
   // Over to the cot at night, up to the bars by day: a step or two (only
@@ -728,6 +738,15 @@ export function captiveTick(n, dt) {
   if (c.door && w.getBlock(c.door.x, c.y, c.door.z) === B.cell_door) w.setBlock(c.door.x, c.y, c.door.z, B.cell_door_open, 0);
   g.renderer.emit(c.door.x, c.y + 1, c.door.z, { n: 8, color: ['#8a8a98', '#5a5a68'], up: 20, speed: 30, life: 0.5 });
   g.audio?.play('break', n);
+  breakOut(n);
+}
+
+// (Round 114) Out of the cell and away (forced it, or let out: `by`, whoever
+// opened it for them): running for home, the watch after them.
+export function breakOut(n, by = null) {
+  const c = n.captive;
+  const g = n.game;
+  if (!c) return;
   const town = c.p ? g.world.ow.settlements[c.p.at] : null;
   const b = town ? town.bounds : null;
   const home = b ? { x: n.x < (b.x0 + b.x1) / 2 ? b.x0 - 20 : b.x1 + 20, z: Math.round((b.z0 + b.z1) / 2) } : { x: n.x + 40, z: n.z };
@@ -736,6 +755,12 @@ export function captiveTick(n, dt) {
   n.warband = { kind: 'escape', foe: true, phase: 'flee', home, civ: n.settlement.civ ? n.settlement.civ.id : null, prisoner: c.p ? c.p.id : null };
   n.hostileNow = true;
   n.captive = null;
-  n.say('Now! Run!', 2, '#ffb080');
-  if (town && g.currentSettlement === town) g.ui.msg(`A prisoner has broken out of the cells!`, '#ffb080');
+  n.path = null;
+  if (by) {
+    n.say(n.rng.pick(['You... you\'re letting me out? Thank you!', 'Bless you, stranger. I\'m gone!', 'The door\'s open! Run!']), 2.5, '#e8e0a0');
+    if (town && g.currentSettlement === town) g.ui.msg(`The prisoner slips out of the cell and makes a run for it.`, '#e8e0a0');
+  } else {
+    n.say('Now! Run!', 2, '#ffb080');
+    if (town && g.currentSettlement === town) g.ui.msg(`A prisoner has broken out of the cells!`, '#ffb080');
+  }
 }

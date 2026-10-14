@@ -28,6 +28,8 @@ export const CRIMES = {
   assault_guard: { label: 'Assaulting a guard', sev: 'moderate', fine: 60 },
   resisting: { label: 'Resisting arrest', sev: 'moderate', fine: 30 },
   jailbreak: { label: 'Escaping jail', sev: 'moderate', fine: 60 },
+  // (Round 114) Picking a cell's lock to let someone out (see game/cells.js).
+  freeing: { label: 'Freeing a prisoner', sev: 'moderate', fine: 60 },
   murder: { label: 'Murder', sev: 'severe', fine: 250 },
   desertion: { label: 'Desertion', sev: 'severe', fine: 120 },
   // (Round 79) A forged paper, spotted (see saga/resolve.js).
@@ -48,6 +50,7 @@ const SHOUTS = {
   assault_guard: ['They attacked a guard!', 'Guard down! Help!'],
   resisting: ['They\'re resisting!', 'Get them!'],
   jailbreak: ['The prisoner\'s escaping!', 'Jailbreak! Stop them!'],
+  freeing: ['They\'re letting the prisoners out! GUARDS!', 'Jailbreak! Stop them!'],
   murder: ['MURDER! Murder in the streets!', 'They killed them! GUARDS!'],
   desertion: ['Deserter! Seize them!', 'There\'s the one who ran from the war!'],
 };
@@ -1083,7 +1086,10 @@ export class Justice {
     const b = this.game.buildingAtPlayer?.();
     const c = this.sim.citizen;
     const mine = b && c && c.sid === s.id && (b.id === c.home || b.id === c.host);
-    if (night && b && b.residential && !mine) {
+    // (Round 114: inside its walls, not standing in its doorway: on the
+    // threshold after a knock, say, you're not in anyone's house.)
+    const within = b && p.x > b.x0 && p.x < b.x1 && p.z > b.z0 && p.z < b.z1;
+    if (night && within && b.residential && !mine) {
       const residents = a.npcs.filter((n) => n.rec.home === b.id && !n.sleeping && !n.dead && n.x >= b.x0 && n.x <= b.x1 && n.z >= b.z0 && n.z <= b.z1);
       if (residents.length) {
         if (!this.trespass || this.trespass.b !== b.id) {

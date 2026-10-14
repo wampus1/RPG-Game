@@ -268,15 +268,75 @@ export function tick(run, dt, party) {
 
 // The old hound: trotting ahead of you to where it means to go, looking
 // back when you fall behind; there, it lies down, and is gone.
+// (Round 114) A step toward somewhere, along a path kept between steps.
+function houndStep(run, c, to, near0 = 1) {
+  const game = run.game;
+  if (c.moving) return true;
+  if (!c.houndPath || c.houndI >= c.houndPath.length || c.houndTo !== `${to.x},${to.z}`) {
+    c.houndPath = findPath(game.world, c.x, c.y, c.z, to.x, FY, to.z, { maxNodes: 3000, near: near0, partial: true, blocked: (x, z) => game.occupiedBySolid(x, c.y, z, c) });
+    c.houndI = 0;
+    c.houndTo = `${to.x},${to.z}`;
+    if (!c.houndPath || !c.houndPath.length) return false;
+  }
+  const [nx, , nz] = c.houndPath[c.houndI];
+  if (c.tryStep(nx, nz, c.S.step)) c.houndI++;
+  else c.houndPath = null;
+  return true;
+}
+// (Round 114) A bone on the ground near it: it goes for it, and eats it.
+function houndBone(run, c, dt) {
+  const game = run.game;
+  if (c.eatT > 0) {
+    c.eatT -= dt;
+    if (Math.random() < dt * 6) game.renderer.emit(c.x, c.y + 0.4, c.z, { n: 1, color: ['#e8e0c8', '#a8cce4'], up: 6, speed: 4, life: 0.4 });
+    return true;
+  }
+  const bone = (game.drops || []).filter((d) => !d.dead && d.item === 'bone' && Math.abs(d.y - c.y) <= 1 && near(c, d, 8)).sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.z - c.z) - (Math.abs(b.x - c.x) + Math.abs(b.z - c.z)))[0];
+  if (!bone) return false;
+  if (near(c, bone, 0) || (near(c, bone, 1) && !c.moving && c.houndBoneT > 2)) {
+    bone.count -= 1;
+    if (bone.count <= 0) bone.dead = true;
+    c.eatT = 2;
+    c.houndBoneT = 0;
+    c.fed = (c.fed || 0) + 1;
+    c.face(bone.x, bone.z);
+    game.renderer.floatText(c.x, c.y + 1.6, c.z, 'crunch', '#e8e0c8');
+    game.audio?.play('eat', c);
+    if (!run.toldHoundBone) {
+      run.toldHoundBone = true;
+      game.ui.msg('The old hound noses the bone, picks it up, and lies down to crunch it, its ghostly tail thumping the floor.', '#a8cce4', true);
+    }
+    return true;
+  }
+  c.houndBoneT = (c.houndBoneT || 0) + dt;
+  c.lying = false;
+  houndStep(run, c, bone, 0);
+  return true;
+}
 function hound(run, dt, party) {
   const game = run.game;
   const goal = run.data.hound;
   for (const c of run.creatures()) {
     if (c.species !== 'old_hound' || c.dead) continue;
     c.thinkT = 9;
-    if (!goal) continue;
+    // (A bone dropped near it: it goes for it first.)
+    if (houndBone(run, c, dt)) continue;
     const p = party.filter((q) => !q.dead).sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.z - c.z) - (Math.abs(b.x - c.x) + Math.abs(b.z - c.z)))[0];
     if (!p) continue;
+    // (A bone in your hand: it comes up to you, wagging, and waits by you.)
+    if (p.heldItem?.() === 'bone' && near(c, p, 6)) {
+      c.lying = false;
+      if (!run.toldHoundHeld) {
+        run.toldHoundHeld = true;
+        game.ui.msg('The old hound\'s ears prick up at the bone in your hand, and it comes to you, wagging. (Drop it, and it\'s his.)', '#a8cce4', true);
+      }
+      if (near(c, p, 1)) {
+        c.face(p.x, p.z);
+        if (Math.random() < dt * 3) game.renderer.emit(c.x, c.y + 0.8, c.z, { n: 1, color: ['#a8cce4', '#dcf2ff'], up: 8, speed: 6, life: 0.6, glow: true });
+      } else houndStep(run, c, p, 1);
+      continue;
+    }
+    if (!goal) continue;
     if (near(c, goal, 1)) {
       c.lying = true;
       c.face(p.x, p.z);
@@ -302,13 +362,6 @@ function hound(run, dt, party) {
       }
       continue;
     }
-    if (!c.houndPath || c.houndI >= c.houndPath.length) {
-      c.houndPath = findPath(game.world, c.x, c.y, c.z, goal.x, FY, goal.z, { maxNodes: 3000, near: 1, partial: true });
-      c.houndI = 0;
-      if (!c.houndPath || !c.houndPath.length) continue;
-    }
-    const [nx, , nz] = c.houndPath[c.houndI];
-    if (c.tryStep(nx, nz, c.S.step)) c.houndI++;
-    else c.houndPath = null;
+    houndStep(run, c, goal, 1);
   }
 }

@@ -858,6 +858,17 @@ export const STEPS = [
       log.push('The Gullet of the World is made over: the worm\'s bore through the earth and through the first kingdom of Ostria it swallowed, a floor to each of how far down (the Bore, the Swallowed City, the Belly), with the bore and its cracked roof, the street and its roofs up ladders, the temple\'s terraces and the god\'s table, the canal and its sluice, the clutch, the shed skins, and the hoard; the tremors, the river god\'s favour, the bricked-up doors; the borers, the clutch-mothers, and the Swallowed who lead you; and the Alinelidan redrawn. Gullet floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 114) Fixes and the barrow's heights: every kind of old place's
+  // floors laid afresh (its stairs the right way round, its pools in the
+  // floor, its rooms no more crowded than its tier allows). Nothing else
+  // in a save to change: a coach away on the road isn't kept, and a cell
+  // with someone in it is locked from now on.
+  {
+    to: '1.14.0',
+    data(d, log) {
+      log.push('Fixes: the barrow\'s ship has a ladder out of its hold and wooden sides; barrow floors have raised galleries and sunken floors with steps; dungeon floors blend and mostly use their plain tiles; stairs everywhere climb the right way; pools sit in the floor; no more than 3 to 5 foes to a room by tier; the corpse-light throws cold fire; the old hound stays put and eats the bones you drop; the time crystal never shuts you in the way it rebuilds; cells are locked while anyone\'s in them (a lockpick opens them, and prisoners let out run for it); a doorway is not a house; the coachman drives his own coach and keeps his hours; weather changes gently; skipping days and weddings no longer freeze the game. Floors of old places you have been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

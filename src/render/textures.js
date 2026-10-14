@@ -307,7 +307,7 @@ function straw(p, pal, rand, rot = 0) {
 }
 
 // --- cube faces -------------------------------------------------------------
-function cubeTop(name, v, rand, rot) {
+export function cubeTop(name, v, rand, rot) {
   const dt = dungeonTop(name, v, rand, rot);
   if (dt) return dt;
   const it = isleTop(name, v, rand, rot);

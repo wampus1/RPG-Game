@@ -52,7 +52,8 @@ import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore
 // the niches are Thessa's own; elsewhere their own stone stands in).
 export function matsOf(T) {
   const thessa = T.wall === B.crypt_brick;
-  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k]) ?? T.floor;
+  // (Round 114: never a liquid, a place whose second floor is water.)
+  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k] && !BLOCKS[k].liquid) ?? T.floor;
   return {
     thessa,
     wall: T.wall,

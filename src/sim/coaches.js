@@ -225,6 +225,34 @@ export function coachStand(L) {
   return { key: `coach:${L.settlement.id}`, type: 'wagon', x: at.x, z: at.z, face: 1, hood: true, horse: { coat: L.settlement.id % 4, saddle: false }, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'coach', sid: L.settlement.id } };
 }
 
+// (Round 114) The coachman: up on the bench of his coach at the stand from
+// six in the morning till nine at night (home to bed after), and nowhere
+// to be had while his coach is away on the road (taken there and back: see
+// rides.startRide). Only while he's there will he take you anywhere.
+export const COACH_HOURS = [6 * 60, 21 * 60];
+export const COACHMAN = { skin: '#d8a880', hair: '#8a8a8a', hairStyle: 'short', shirt: '#5a4a3a', pants: '#3a3028', shoes: '#2a1a10', outfit: 'plain', accent: '#7a5a30', beard: true, hat: 'wide', hatColor: '#4a3a28' };
+const nowOf = (game) => game.day * 1440 + game.minute;
+// Is the coach from town `sid` away on the road (and till when)?
+export function coachAway(game, sid) {
+  const until = game.coachAway && game.coachAway.get(sid);
+  if (until === undefined) return null;
+  if (nowOf(game) >= until) {
+    game.coachAway.delete(sid);
+    return null;
+  }
+  return until;
+}
+// Sent off on the road from `sid`, back in `mins` (there and back).
+export function sendCoach(game, sid, mins) {
+  (game.coachAway ||= new Map()).set(sid, nowOf(game) + Math.round(mins));
+}
+// Is the coachman at his coach now? 'here', 'night' (gone home), or 'away'.
+export function coachmanAt(game, sid) {
+  if (coachAway(game, sid) !== null) return 'away';
+  const m = game.minute;
+  return m >= COACH_HOURS[0] && m < COACH_HOURS[1] ? 'here' : 'night';
+}
+
 // Where the ferry lies, off the end of the town's pier, or null.
 export function ferryStand(game, L) {
   const P = game.sim.ships && game.sim.ships.ports[L.settlement.id];

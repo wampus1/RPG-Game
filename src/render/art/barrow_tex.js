@@ -100,6 +100,10 @@ const EARTH_C = [
   'eeeeeeeeedeEeeee',
   'eEeeeeeeeeeeeeEe',
 ];
+// (Round 114) The same trodden earth with nothing in it, most of the floor.
+const plainOf = (rows) => rows.map((r) => r.replace(/[PplkbrK]/g, 'e'));
+const EARTH_PLAIN = plainOf(EARTH_A);
+const EARTH_PLAIN_B = plainOf(EARTH_B);
 // Worn flags, from above: big slabs, the cracks between them dark, their
 // middles worn smooth and paler.
 const FLAG = { K: '#171511', k: '#221f1a', S: '#2f2c26', s: '#3a372f', o: '#444037', O: '#4c483e', L: '#565145', m: '#2f3d1d' };
@@ -222,7 +226,9 @@ export function barrowTop(name, v, rand = Math.random) {
     case 'barrow_stone':
       return mound(v, rand);
     case 'barrow_earth': {
-      const rows = [EARTH_A, EARTH_B, EARTH_C, flipX(EARTH_B)][v % 4];
+      // (Round 114: the plain earth most often; a pebble now and then; a
+      // bone least: see Renderer.variantAt.)
+      const rows = [EARTH_PLAIN, flipX(EARTH_PLAIN_B), EARTH_A, EARTH_C][v % 4];
       return grid({ pal: EARTH, rows });
     }
     case 'barrow_flags':
@@ -242,7 +248,7 @@ export function barrowFront(name, v) {
     case 'barrow_stone':
       return grid([T_A, T_B, { ...T_A, rows: flipX(WALL_A) }, { ...T_B, rows: flipX(WALL_B) }][v % 4]);
     case 'barrow_earth':
-      return grid({ pal: EARTH, rows: EARTH_A.slice(0, 12) });
+      return grid({ pal: EARTH, rows: EARTH_PLAIN.slice(0, 12) });
     case 'barrow_flags':
       return grid({ pal: FLAG, rows: v % 2 ? flipX(FLAG_FRONT) : FLAG_FRONT });
     case 'barrow_ortho':

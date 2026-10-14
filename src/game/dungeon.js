@@ -69,7 +69,10 @@ const FLOOR_GEN = 6;
 // (Round 95) A kind made over by its own architect (see world/deeps/) lays
 // its floors out its own way: older floors of it are made afresh.
 // (Round 106: the gut's 8, its rope ladders up to its ledges kept now.)
-const KIND_GEN = { barrow: 7, mine: 7, crypt: 7, holdout: 7, kavorent: 7, grove: 7, forge: 7, grotto: 7, catacomb: 7, vault: 7, gut: 8, saltworks: 7, warren: 7, mound: 7, broch: 7, athanor: 7, champion: 7, rift: 7, gullet: 7 };
+// (Round 114: all of them a step on: their stairs turned the right way,
+// their pools let into the floor, no room with more foes than its tier
+// allows, and the barrow's terraces and sunken floors.)
+const KIND_GEN = { barrow: 8, mine: 8, crypt: 8, holdout: 8, kavorent: 8, grove: 8, forge: 8, grotto: 8, catacomb: 8, vault: 8, gut: 9, saltworks: 8, warren: 8, mound: 8, broch: 8, athanor: 8, champion: 8, rift: 8, gullet: 8 };
 const genOf = (rec) => KIND_GEN[rec.type] ?? FLOOR_GEN;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
@@ -1366,7 +1369,8 @@ export class DungeonRun {
           for (const q of dr.water) {
             const y = q.y ?? FY;
             const cur = w.getBlock(q.x, y, q.z);
-            if (cur === B.water || cur === B.lava) w.setBlock(q.x, y, q.z, q.y !== undefined ? (B.basalt ?? q.floor ?? B.stone) : B.air);
+            // (Round 114: water let into the floor leaves its floor.)
+            if (cur === B.water || cur === B.lava) w.setBlock(q.x, y, q.z, q.y === undefined ? B.air : cur === B.lava ? (B.basalt ?? q.floor ?? B.stone) : (q.floor ?? B.stone));
           }
           // (On Kharos the pool's of lava: drained, it runs off down a
           // channel somewhere below.)

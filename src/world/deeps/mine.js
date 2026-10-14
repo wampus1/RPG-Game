@@ -43,7 +43,8 @@ import { key, raise, sink, put, isUp, free, near, lvlOf, mainDoor, groupOf, lore
 // are Thessa's; elsewhere their own rock and timber stand in).
 export function matsOf(T) {
   const thessa = T.wall === B.mine_rock;
-  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k]) ?? T.floor;
+  // (Round 114: never a liquid, a place whose second floor is water.)
+  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k] && !BLOCKS[k].liquid) ?? T.floor;
   return {
     thessa,
     wall: T.wall,

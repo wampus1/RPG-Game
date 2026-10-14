@@ -275,7 +275,8 @@ export class Riding {
     // (Round 90: everyone sat in it, not only you.)
     const inIt = this.everyone().filter((q) => q.inWagon === prop || (prop.own && q.inWagonId === prop.own.id));
     const bench = inIt.find((q) => q.wagonSeat === 'bench');
-    prop.bench = bench ? bench.look : null;
+    // (Round 114: a coach at its stand, its coachman up on the bench.)
+    prop.bench = bench ? bench.look : prop.coachman || null;
     prop.riders = inIt.filter((q) => q !== bench).map((q) => q.look);
   }
 

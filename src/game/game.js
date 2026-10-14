@@ -26,6 +26,7 @@ import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
 import { PortalWindow } from '../ui/portal.js';
 import { LockWindow } from '../ui/lockpick.js';
+import { useCellDoor } from './cells.js';
 import { lockTier, RELOCK_DAYS } from './lockpick.js';
 import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
 import { tickFires } from './fire.js';
@@ -84,7 +85,7 @@ import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
 import { TravelWindow, CoachMapWindow } from '../ui/travel.js';
 import { chairTable, moveChair } from './chairs.js';
-import { coachStand, ferryStand, arrivalSpot, wayTime } from '../sim/coaches.js';
+import { coachStand, ferryStand, arrivalSpot, wayTime, coachmanAt, COACHMAN } from '../sim/coaches.js';
 import { InstrumentWindow } from '../ui/instrument.js';
 import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
 import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
@@ -1768,22 +1769,35 @@ export class Game {
     return true;
   }
 
+  // (Round 114) An hour of it at a time, and each town's share of the hour
+  // one town at a time, as much as goes in a moment of each frame: never a
+  // frame held up for seconds while a hundred towns live out six hours (the
+  // game seemed to freeze, a skip of weeks).
   updateSkip() {
     const sk = this.skipping;
     const sim = this.sim;
-    for (let h = 0; h < 6 && sk.left > 0; h++, sk.left--) {
-      this.minute += 60;
-      if (this.minute >= DAY_MINUTES) {
-        this.minute -= DAY_MINUTES;
-        this.day++;
+    const t0 = performance.now();
+    const BUDGET = 70;
+    while (sk.left > 0 && performance.now() - t0 < BUDGET) {
+      if (!sk.queue) {
+        this.minute += 60;
+        if (this.minute >= DAY_MINUTES) {
+          this.minute -= DAY_MINUTES;
+          this.day++;
+        }
+        sk.queue = [...this.world.layouts.values()].filter((L) => L.econ);
+        sk.qi = 0;
       }
-      for (const L of this.world.layouts.values()) if (L.econ) simulateTo(sim, L, sim.abs);
+      while (sk.qi < sk.queue.length && performance.now() - t0 < BUDGET) simulateTo(sim, sk.queue[sk.qi++], sim.abs);
+      if (sk.qi < sk.queue.length) break;
+      sk.queue = null;
       // (Everything that keeps its own days: realms, wars, bandits, markets.)
       sim.tickT = 0;
       sim.update(0.5);
+      sk.left--;
+      const done = sk.total - sk.left;
+      if (!sk.journey && (done % 24 === 0 || !sk.left)) this.ui.msg(`Day ${this.day}...`, '#c8d8ff', true);
     }
-    const done = sk.total - sk.left;
-    if (!sk.journey && (done % 24 === 0 || !sk.left)) this.ui.msg(`Day ${this.day}...`, '#c8d8ff', true);
     if (sk.left > 0) return;
     this.skipping = null;
     if (sk.journey) return this.endJourney(sk.journey);
@@ -3586,6 +3600,12 @@ export class Game {
         this.ui.msg(c.entity.stop.kind === 'ferry' ? 'Go down to the pier to take the ferry.' : 'Walk over to the coach to take it.', '#a0c8ff');
         return;
       }
+      // (Round 114) Only the coachman takes you anywhere, and only while
+      // he's there.
+      if (c.entity.stop.kind === 'coach' && coachmanAt(this, c.entity.stop.sid) !== 'here') {
+        this.ui.msg(coachmanAt(this, c.entity.stop.sid) === 'night' ? 'The coach stands empty: its coachman has gone home for the night. He\'s back on the bench at six in the morning.' : 'The coach is away on the road.', '#c8c8c8');
+        return;
+      }
       this.ui.open(c.entity.stop.kind === 'coach' ? new CoachMapWindow(this.ui, c.entity.stop) : new TravelWindow(this.ui, c.entity.stop));
       return;
     }
@@ -4404,8 +4424,11 @@ export class Game {
       }
       // (Round 77) The coach out of town, and the ferry off the pier.
       if (!L.settlement.deserted && L.settlement.condition !== 'abandoned') {
+        // (Round 114: not while it's away on the road; its coachman up on
+        // the bench while he's on.)
         const cs = coachStand(L);
-        if (cs) add(cs);
+        const at = cs ? coachmanAt(this, L.settlement.id) : 'away';
+        if (cs && at !== 'away') add({ ...cs, bench: at === 'here' ? COACHMAN : null });
         const fs = ferryStand(this, L);
         if (fs) add(fs);
       }
@@ -4458,7 +4481,7 @@ export class Game {
       sp = { ...sp, x: near.x, z: near.z };
       if (sp.type === 'wagon') {
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
-        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, ang: sp.ang, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null, stop: sp.stop || null });
+        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, ang: sp.ang, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null, stop: sp.stop || null, coachman: sp.bench || null });
       } else if (this.tied.has(k) && !this.tied.get(k).dead) {
         // (Saddled by the handler while you watched.)
         const c = this.tied.get(k);
@@ -4904,13 +4927,9 @@ export class Game {
         // (Round 98: a cell in a holdout, locked till you've the jailer's
         // keys or a pick: see holdwork.cellDoor.)
         if (this.dungeon && this.dungeon.rec.type === 'holdout' && holdCellDoor(this.dungeon, x, y, z, p)) break;
-        const j = this.sim.justice.jail;
-        const L = this.jailLayoutAt(x, z);
-        if (j && L && j.sid === L.settlement.id) {
-          this.ui.msg('The cell door is locked.', '#ffb080');
-          this.audio?.play('error');
-          break;
-        }
+        // (Round 114) Locked while anyone's in there (you, or a prisoner):
+        // a lockpick opens it, and whoever's inside goes. See cells.js.
+        if (useCellDoor(this, x, y, z, id)) break;
         const open = id === B.cell_door_open;
         w.setBlock(x, y, z, open ? B.cell_door : B.cell_door_open, 0);
         if (w.getBlock(x, y + 1, z) === B.iron_bars) w.setBlock(x, y + 1, z, B.cell_door_top, 0);
@@ -6128,10 +6147,18 @@ export class Game {
       const was = w.severe || null;
       // (Round 88: no word of it in the messages: the weather's there to
       // be seen and heard.)
-      if (kind !== w.kind) w.kind = kind;
-      if (severe !== was) {
-        w.severe = severe;
+      // (Round 114) From one kind of weather straight into another (out of
+      // a thunderstorm into a blizzard, rain turning to snow as you come
+      // up into the cold): what's falling eases off first, over a few
+      // seconds, the storm's wind with it, and only then does the new set
+      // in, building as it does. Not all at once.
+      const swap = (w.kind !== kind && w.kind !== 'clear' && kind !== 'clear') || (!!severe && !!was && severe !== was);
+      if (swap && (w.level > 0.05 || (w.blowRaw || 0) > 0.05)) w.next = { kind, severe };
+      else {
+        w.next = null;
+        if (kind !== w.kind) w.kind = kind;
         // (The wind gets up, and drops, over half a minute or so.)
+        if (severe !== was) w.severe = severe;
       }
       w.seen = true;
       // (Round 84) Into another province of a great continent: said.
@@ -6152,7 +6179,10 @@ export class Game {
     // gusting as it blows (w.gust, 0 to 1: see Renderer.windSway).
     const SV = w.severe ? STORMS[w.severe] : null;
     const b0 = w.blowRaw ?? w.blow ?? 0;
-    w.blowRaw = b0 + Math.sign((SV ? 1 : 0) - b0) * Math.min(Math.abs((SV ? 1 : 0) - b0), (dt * fast) / 20);
+    // (Round 114: easing off for what's coming instead, quicker.)
+    const easing = !!w.next;
+    const bw = SV && !easing ? 1 : 0;
+    w.blowRaw = b0 + Math.sign(bw - b0) * Math.min(Math.abs(bw - b0), (dt * fast) / (easing ? 3 : 20));
     // (Kept to twentieths, the wind and its gusts: what's drawn, and sent
     // to whoever else is playing, changes only as much as it's seen to.)
     w.blow = Math.round(w.blowRaw * 20) / 20;
@@ -6160,8 +6190,14 @@ export class Game {
     w.gust = Math.round(20 * w.blow * (0.55 + 0.45 * Math.max(0, Math.sin(this.gustClock * 0.9) * Math.sin(this.gustClock * 0.37 + 1.3)))) / 20;
     const sw = SV ? 1 + (SV.wind - 1) * w.blow * (0.7 + 0.3 * w.gust) : w.blow > 0 ? 1 + w.blow : 0;
     w.wind = sn > 0 || sw > 0 ? Math.max(sn > 0 ? 1 + sn * 2.6 : 0, sw) : undefined;
-    const target = w.kind === 'clear' && !(SV && SV.base === 'clear') ? 0 : Math.max(SV ? 1 + (SV.level - 1) * w.blow : 1, sn * 1.5);
-    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / (sn > 0.12 ? 2 : 8));
+    const target = easing || (w.kind === 'clear' && !(SV && SV.base === 'clear')) ? 0 : Math.max(SV ? 1 + (SV.level - 1) * w.blow : 1, sn * 1.5);
+    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / (sn > 0.12 ? 2 : easing ? 2.5 : 8));
+    // (Eased right off: now the new weather comes in.)
+    if (easing && w.level <= 0.05 && (w.blowRaw || 0) <= 0.05) {
+      w.kind = w.next.kind;
+      w.severe = w.next.severe;
+      w.next = null;
+    }
     // (Round 84: on this screen only, the lightning and thunder, not for
     // each of you playing: theirs is on their own screens.)
     if (sn > 0.45 && local) {

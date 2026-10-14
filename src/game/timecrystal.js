@@ -8,7 +8,8 @@
 // its master waiting again, at a tier above the crystal's (the third at
 // most): everything in it harder, its chests richer, its master stronger.
 import { VIEW_W, VIEW_H } from '../config.js';
-import { restamp } from '../world/sites.js';
+import { restamp, siteBlocks } from '../world/sites.js';
+import { BLOCKS } from '../world/blocks.js';
 import { ledger } from '../sim/econ.js';
 import { TIER_MAX, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { pidOf } from '../sim/saga/refs.js';
@@ -125,11 +126,88 @@ export function restoreDungeon(game, rec, tier) {
   if (site) {
     site.state = { cleared: false, open: rec.spire ? rec.spire.open : null, beaten: false };
     restamp(game.world, site);
+    stepOut(game, site);
   }
   game.lightDirty = true;
   const L = rec.town !== null && rec.town !== undefined ? game.sim.layoutOf(rec.town) : null;
   if (L && L.econ) ledger(L, game.day, `${game.playerName} turned ${rec.name} back to what it was before anyone went down. Folk say its master is stronger than ever.`);
   return rec;
+}
+
+// (Round 114) Whoever was standing in the way in as it stood back up
+// round them is stepped out in front of it, never shut up inside its
+// stones: everyone within its bounds put on the nearest open ground
+// outside them.
+// (Can whoever's standing at (x, y, z) walk out of the bounds by
+// themselves, a step at a time?)
+function canWalkOut(w, x, y, z, inside) {
+  if (!w.canStand(x, y, z, true)) return false;
+  const seen = new Set([`${x},${y},${z}`]);
+  const q = [[x, y, z]];
+  while (q.length && seen.size < 600) {
+    const [cx, cy, cz] = q.shift();
+    if (!inside(cx, cz)) return true;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ny = w.stepTarget(cx, cy, cz, cx + dx, cz + dz, true);
+      if (ny < 0) continue;
+      const k = `${cx + dx},${ny},${cz + dz}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      q.push([cx + dx, ny, cz + dz]);
+    }
+  }
+  return false;
+}
+export function stepOut(game, site) {
+  const w = game.world;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let z0 = Infinity;
+  let z1 = -Infinity;
+  let y1 = -Infinity;
+  for (const [dx, y, dz, id] of siteBlocks(site, site.state || {})) {
+    if (!id || !BLOCKS[id] || BLOCKS[id].name === 'air') continue;
+    x0 = Math.min(x0, site.x + dx);
+    x1 = Math.max(x1, site.x + dx);
+    z0 = Math.min(z0, site.z + dz);
+    z1 = Math.max(z1, site.z + dz);
+    y1 = Math.max(y1, y);
+  }
+  if (x0 > x1) return [];
+  const inside = (x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+  const moved = [];
+  for (const q of game.everyone ? game.everyone() : [game.player]) {
+    if (!q || q.dead) continue;
+    const px = Math.floor(q.x);
+    const pz = Math.floor(q.z);
+    if (!inside(px, pz) || q.y > y1 + 2) continue;
+    if (canWalkOut(w, px, Math.round(q.y), pz, inside)) continue;
+    // (The nearest open ground outside, ring by ring out from them.)
+    let spot = null;
+    for (let r = 1; r < 24 && !spot; r++) {
+      let bd = Infinity;
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const x = px + dx;
+          const z = pz + dz;
+          if (inside(x, z)) continue;
+          const y = w.findStandY(x, z, site.h + 1);
+          if (!(y > 0) || w.isWaterAt(x, y, z)) continue;
+          const d = Math.hypot(dx, dz);
+          if (d < bd) {
+            bd = d;
+            spot = { x, y, z };
+          }
+        }
+      }
+    }
+    if (!spot) continue;
+    if (game.asPlayer && game.teleportPlayer) game.asPlayer(q, () => game.teleportPlayer(spot.x, spot.y, spot.z));
+    else q.teleport?.(spot.x, spot.y, spot.z);
+    moved.push(q);
+  }
+  return moved;
 }
 
 // The scene: about seven seconds, everyone else held still.

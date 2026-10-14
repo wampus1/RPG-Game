@@ -32,20 +32,25 @@
 // in their seats, who rise when something's taken.
 import { B, BLOCKS } from '../blocks.js';
 import { barrowLore } from './lore.js';
+import { backOf, at2 } from './common.js';
 
 // Each region's barrow in its own stuff (the carved stones and the oak are
 // Thessa's own; elsewhere their own stone and timber stand in).
 export function matsOf(T) {
   const thessa = T.wall === B.barrow_stone;
-  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k]) ?? T.floor;
+  // (Round 114: never a liquid, a place whose second floor is water.)
+  const pick = (...ks) => ks.find((k) => k !== undefined && k !== null && BLOCKS[k] && !BLOCKS[k].liquid) ?? T.floor;
+  const flags = thessa ? B.barrow_flags : pick(T.alt, T.floor);
   return {
     thessa,
     wall: T.wall,
     floor: T.floor,
-    flags: thessa ? B.barrow_flags : pick(T.alt, T.floor),
+    flags,
     ortho: thessa ? B.barrow_ortho : T.wall,
     oak: thessa ? B.barrow_oak : pick(T.beam, B.planks_dark),
-    steps: thessa ? B.barrow_flags_stairs : null,
+    // (Round 114: steps in every land's, cut from its own flags where
+    // there's a stair of them, plain flagstone where not.)
+    steps: thessa ? B.barrow_flags_stairs : (B[`${BLOCKS[flags]?.name}_stairs`] ?? B.flagstone_stairs),
     hull: B.planks_dark,
     lamp: thessa ? B.corpse_lantern : pick(B.ash_brazier !== undefined && T.motes && T.motes[0] === '#c8502a' ? B.ash_brazier : null, B.fog_lantern, B.corpse_lantern),
   };
@@ -108,6 +113,115 @@ function sink(ctx, H, x, z, floor) {
   b.set(x, H.FY - 2, z, floor);
   (ctx.sunk ||= new Set()).add(key(ctx, x, z));
   ctx.reserved.add(key(ctx, x, z));
+}
+// (Round 114) A stair's turn, by which way its high side lies: (0, 1)
+// toward +z, (-1, 0) toward -x, (0, -1) toward -z, (1, 0) toward +x.
+export const stepRot = (dx, dz) => (dz > 0 ? 0 : dx < 0 ? 1 : dz < 0 ? 2 : 3);
+const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// Can this tile be raised a step and still be got up onto from every side
+// it's open to (room over it, and over whoever steps up from beside it:
+// never hard by a doorway's low lintel, nor a pit's edge)?
+function liftable(ctx, H, r, x, z) {
+  const { b, plan } = ctx;
+  if (!free(ctx, H, r, x, z) || BLOCKS[b.get(x, H.FY + 2, z)].solid || BLOCKS[b.get(x, H.FY + 3, z)].solid) return false;
+  for (const [dx, dz] of N4) {
+    const nx = x + dx;
+    const nz = z + dz;
+    if (!plan.at(nx, nz)) continue;
+    if (!H.own(plan, r, nx, nz) || ctx.sunk?.has(key(ctx, nx, nz)) || BLOCKS[b.get(nx, H.FY + 2, nz)].solid) return false;
+  }
+  return true;
+}
+// (Round 114) A terrace: the back of the room raised a step, `deep` rows
+// of it, and steps up onto it from the floor in front (its middle, and one
+// end); what's set out up there stands on it. Null if the room won't take
+// one.
+function terrace(ctx, H, r, M, deep = 2) {
+  const { b, rng } = ctx;
+  const S = backOf(ctx, H, r);
+  if ((S.along ? r.z1 - r.z0 : r.x1 - r.x0) < deep + 4) return null;
+  const lo = (S.along ? r.x0 : r.z0) + 1;
+  const hi = (S.along ? r.x1 : r.z1) - 1;
+  const tiles = [];
+  for (let k = 0; k < deep; k++) {
+    for (let a = lo; a <= hi; a++) {
+      const t = at2(S, a, S.back + S.out * k);
+      if (liftable(ctx, H, r, t.x, t.z)) tiles.push({ ...t, a, k });
+    }
+  }
+  if (tiles.length < Math.max(4, (hi - lo + 1) * deep * 0.5)) return null;
+  for (const t of tiles) raise(ctx, H, t.x, t.z, M.flags);
+  // The steps: high side toward the back wall.
+  const rot = S.along ? stepRot(0, -S.out) : stepRot(-S.out, 0);
+  const steps = [];
+  const mid = Math.round((lo + hi) / 2);
+  // (Its middle and one end first; failing those, wherever along its front
+  // there's room.)
+  const rest = [];
+  for (let a = lo; a <= hi; a++) rest.push(a);
+  rest.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid));
+  for (const a of [mid, rng.chance(0.5) ? lo + 1 : hi - 1, ...rest]) {
+    if (steps.length >= 2) break;
+    const t = at2(S, a, S.back + S.out * deep);
+    const up = at2(S, a, S.back + S.out * (deep - 1));
+    if (!ctx.lifted?.has(key(ctx, up.x, up.z)) || !free(ctx, H, r, t.x, t.z) || steps.some((q) => Math.abs(q.a - a) < 2)) continue;
+    if (BLOCKS[b.get(t.x, H.FY + 2, t.z)].solid) continue;
+    b.set(t.x, H.FY, t.z, M.steps, rot);
+    ctx.lifted.add(key(ctx, t.x, t.z));
+    steps.push({ ...t, a });
+  }
+  // (No room for a step anywhere in front of it: no gallery, then.)
+  if (!steps.length) {
+    for (const t of tiles) {
+      b.set(t.x, H.FY, t.z, B.air);
+      ctx.lifted.delete(key(ctx, t.x, t.z));
+    }
+    return null;
+  }
+  (ctx.out.terraces ||= []).push({ room: r.id, tiles: tiles.length, steps: steps.map((q) => ({ x: b.x0 + q.x, z: q.z })) });
+  return { S, tiles, steps };
+}
+// (Round 114) A sunken floor: the middle of the room let down a step
+// (`inset` paces in from its walls), its edge kerbed with flags, steps
+// down into it on the side nearest the way in and on the far side. Null
+// if the room won't take one.
+function sunken(ctx, H, r, M, inset = 2, floor = M.floor) {
+  const { b, plan } = ctx;
+  const tiles = [];
+  for (let z = r.z0 + inset; z <= r.z1 - inset; z++) {
+    for (let x = r.x0 + inset; x <= r.x1 - inset; x++) {
+      if (!free(ctx, H, r, x, z)) continue;
+      // (Never hard by a raised tile: two steps is too far to climb.)
+      if (N4.some(([dx, dz]) => ctx.lifted?.has(key(ctx, x + dx, z + dz)) || ctx.ledge?.has(key(ctx, x + dx, z + dz)))) continue;
+      tiles.push({ x, z });
+    }
+  }
+  if (tiles.length < 6) return null;
+  for (const t of tiles) sink(ctx, H, t.x, t.z, floor);
+  // Its kerb: the floor round its edge, flags.
+  const rim = [];
+  for (const t of tiles) {
+    for (const [dx, dz] of N4) {
+      const nx = t.x + dx;
+      const nz = t.z + dz;
+      if (!plan.at(nx, nz) || ctx.sunk.has(key(ctx, nx, nz))) continue;
+      if (H.own(plan, r, nx, nz) && BLOCKS[b.get(nx, H.FY - 1, nz)].solid && !ctx.lifted?.has(key(ctx, nx, nz))) b.set(nx, H.FY - 1, nz, M.flags);
+      // (A place for steps down: the floor beside it open to stand on, the
+      // pit behind it.)
+      if (H.own(plan, r, nx, nz) && b.get(nx, H.FY, nz) === B.air && !ctx.lifted?.has(key(ctx, nx, nz)) && ctx.sunk.has(key(ctx, t.x - dx, t.z - dz))) rim.push({ x: t.x, z: t.z, ox: dx, oz: dz });
+    }
+  }
+  const door = mainDoor(ctx, H, r) || { x: r.cx, z: r.cz };
+  const by = (q) => Math.hypot(q.x - door.x, q.z - door.z);
+  rim.sort((a, c) => by(a) - by(c));
+  const steps = [];
+  for (const q of [rim[0], rim[rim.length - 1]]) {
+    if (!q || steps.some((s) => Math.abs(s.x - q.x) + Math.abs(s.z - q.z) < 3)) continue;
+    b.set(q.x, H.FY - 1, q.z, M.steps, stepRot(q.ox, q.oz));
+    steps.push(q);
+  }
+  (ctx.out.sunken ||= []).push({ room: r.id, tiles: tiles.length, steps: steps.map((q) => ({ x: b.x0 + q.x, z: q.z })) });
+  return { tiles, steps };
 }
 // Someone set out exactly there (`o`: dormant, its group, its role).
 // (In another land's barrow, its own in their place, and its own look on
@@ -225,15 +339,56 @@ function dress(ctx, r, H) {
           const z = along ? mid + w : a;
           if (!H.own(ctx.plan, r, x, z) || H.doorBlocked(ctx.plan, r, x, z)) continue;
           if (Math.abs(w) === half + 1) {
+            // (Planked down to the hold's floor: the sides of the hold are
+            // the hull, not the earth under it.)
             b.set(x, FY, z, M.hull);
+            b.set(x, FY - 1, z, M.hull);
             hull.push({ x, z });
           } else sink(ctx, H, x, z, M.hull);
         }
       }
-      // The dragon at the stem.
+      // The dragon at the stem; the sternpost at the other end (the ends of
+      // the hold planked too).
       const sx = along ? a0 - 1 : mid;
       const sz = along ? mid : a0 - 1;
-      if (H.own(ctx.plan, r, sx, sz)) b.set(sx, FY, sz, B.ship_prow);
+      if (H.own(ctx.plan, r, sx, sz)) {
+        b.set(sx, FY, sz, B.ship_prow);
+        b.set(sx, FY - 1, sz, M.hull);
+      }
+      const tx = along ? a0 + len : mid;
+      const tz = along ? mid : a0 + len;
+      if (H.own(ctx.plan, r, tx, tz) && !H.doorBlocked(ctx.plan, r, tx, tz)) {
+        b.set(tx, FY, tz, M.hull);
+        b.set(tx, FY - 1, tz, M.hull);
+        hull.push({ x: tx, z: tz });
+      }
+      // (Wherever the hold's edge isn't a side (a doorway's gap, the room's
+      // own edge), the earth there that faces into it planked too.)
+      for (const k of ctx.sunk || []) {
+        const x = k % ctx.W;
+        const z = (k / ctx.W) | 0;
+        if (!H.own(ctx.plan, r, x, z)) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx;
+          const nz = z + dz;
+          if (ctx.sunk.has(key(ctx, nx, nz)) || !ctx.plan.at(nx, nz)) continue;
+          if (BLOCKS[b.get(nx, FY - 1, nz)].solid) b.set(nx, FY - 1, nz, M.hull);
+        }
+      }
+      // A ladder up the inside of the hull, aft, so whoever goes down into
+      // the hold can climb out again.
+      {
+        const i = Math.max(1, len - 3);
+        const half = i === 0 || i === len - 1 ? 0 : i === 1 || i === len - 2 ? 1 : 2;
+        const lx = along ? a0 + i : mid + half;
+        const lz = along ? mid + half : a0 + i;
+        if (ctx.sunk?.has(key(ctx, lx, lz))) {
+          // (Facing the side it's against.)
+          const d = along ? 0 : 3;
+          for (const y of [FY - 1, FY]) b.set(lx, y, lz, B.ladder, d);
+          ctx.shipLadder = { x: lx, z: lz };
+        }
+      }
       // Amidships, the bier; goods fore and aft.
       const bx = along ? a0 + Math.floor(len / 2) : mid;
       const bz = along ? mid : a0 + Math.floor(len / 2);
@@ -311,7 +466,7 @@ function dress(ctx, r, H) {
         const sx = r.cx;
         const sz = farZ + step * 2;
         if (M.steps && free(ctx, H, r, sx, sz)) {
-          b.set(sx, FY, sz, M.steps, step > 0 ? 0 : 2);
+          b.set(sx, FY, sz, M.steps, stepRot(0, -step));
           (ctx.lifted ||= new Set()).add(key(ctx, sx, sz));
         }
         const g = groupOf(ctx, r, 'vigil');
@@ -366,6 +521,12 @@ function dress(ctx, r, H) {
     }
     // The charnel: bones heaped all about, and a corpse-light over them.
     case 'charnel': {
+      // (Round 114) The bone-pit: the middle of it let down a step, steps
+      // down into it, the bones deepest there.
+      if (rng.chance(0.75)) {
+        const pit = sunken(ctx, H, r, M, 2);
+        if (pit) for (const t of pit.tiles) if (rng.chance(0.4) && !pit.steps.some((q) => q.x === t.x && q.z === t.z)) b.set(t.x, FY - 1, t.z, B.bones);
+      }
       for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (rng.chance(0.2) && free(ctx, H, r, x, z)) b.set(x, FY, z, B.bones);
       for (let i = 0; i < 2; i++) H.placeIn(ctx, r, B.skull_pile, 0, true);
       put(ctx, 'corpse_light', r.cx, r.cz, r, {});
@@ -472,6 +633,17 @@ function extra(ctx, r, H) {
       }
     }
     H.placeIn(ctx, r, B.shield_rack, 0, true);
+    // (Round 114) Its back raised a step, a gallery for the spears.
+    if (rng.chance(0.75)) terrace(ctx, H, r, M, 2);
+  } else if (r.kit === 'pillared') {
+    // (Round 114) The nave between the pillars let down a step, and in a
+    // long enough hall a gallery at its back above it: down, and up again.
+    if ((r.x1 - r.x0) * (r.z1 - r.z0) >= 80 && rng.chance(0.5)) terrace(ctx, H, r, M, 2);
+    sunken(ctx, H, r, M, 2);
+  } else if (r.kit === 'shrine' || r.kit === 'treasure') {
+    // (Round 114) What's kept here, up a step at the back.
+    if (rng.chance(r.kit === 'shrine' ? 0.6 : 0.5)) terrace(ctx, H, r, M, 2);
+    if (r.kit === 'shrine' && rng.chance(0.6)) H.placeIn(ctx, r, M.lamp, 0, true);
   } else if (r.kit === 'boss') {
     // The chief's own hall: a dais at the back with their bier on it,
     // broken open (they rose from it), a kerb of carved stones round the
@@ -480,7 +652,7 @@ function extra(ctx, r, H) {
     for (let x = r.cx - 2; x <= r.cx + 2; x++) for (const z of [backZ, backZ + 1]) if (free(ctx, H, r, x, z)) raise(ctx, H, x, z, M.flags);
     if (ctx.lifted?.has(key(ctx, r.cx, backZ))) b.set(r.cx, FY + 1, backZ, B.bier, 0);
     if (M.steps) for (const dx of [-1, 1]) if (free(ctx, H, r, r.cx + dx, backZ + 2)) {
-      b.set(r.cx + dx, FY, backZ + 2, M.steps, 0);
+      b.set(r.cx + dx, FY, backZ + 2, M.steps, stepRot(0, -1));
       (ctx.lifted ||= new Set()).add(key(ctx, r.cx + dx, backZ + 2));
     }
     const slab = near(ctx, H, r, r.cx + 3, backZ + 2, 2);
@@ -495,8 +667,6 @@ function extra(ctx, r, H) {
   } else if (r.kit === 'exit' && rng.chance(0.5)) {
     const at = H.placeIn(ctx, r, B.rune_slab, 0, true);
     if (at) lore(ctx, at.x, at.z, L.hearthguard());
-  } else if (r.kit === 'shrine' && rng.chance(0.6)) {
-    H.placeIn(ctx, r, M.lamp, 0, true);
   }
 }
 

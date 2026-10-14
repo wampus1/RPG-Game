@@ -45,6 +45,26 @@ import { GroundFx } from './groundfx.js';
 import { steedSprite, dirAngle, easeAngle, steedSlices, steedRows } from './steeds.js';
 import { chairTable } from '../game/chairs.js';
 
+// (Round 114) Which floors fray into their neighbours (see
+// Renderer.blendEdges): earth, stone, sand, moss and the like; not what's
+// laid in squares on purpose (rugs, decks, planks, bridges, tiles, trims,
+// grates, stairs), nor liquids.
+// (Round 114) Which of a block's four drawings a tile wears: the first,
+// most often (it's the plain one), the last, least (the one with a pebble
+// in it, a bone, a flower): half, a quarter, and the rest between the two.
+const VAR_PICK = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3];
+export const variantAt = (x, y, z) => VAR_PICK[hash4(x, y, z) % VAR_PICK.length] % VARIANTS;
+const NO_FRAY = /rug|carpet|plank|board|deck|bridge|lid|trim|tile|glazed|inlay|mosaic|sectile|runner|grate|stair|abyss|door|seal|gilt|marble|rubedo|albedo|nigredo/;
+const FRAYS = new Map();
+function floorBlends(id) {
+  let f = FRAYS.get(id);
+  if (f !== undefined) return f;
+  const b = BLOCKS[id];
+  f = !!(b && b.render === 'cube' && b.opaque && !b.liquid && !b.sprite && !NO_FRAY.test(b.name));
+  FRAYS.set(id, f);
+  return f;
+}
+
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
   c.width = w;
@@ -738,7 +758,7 @@ export class Renderer {
     const tops = TEX.top[id * 4];
     const fronts = TEX.front[id * 4];
     if (!tops || !fronts) return;
-    const v = hash4(wx, y, wz) % VARIANTS;
+    const v = variantAt(wx, y, wz);
     ctx.globalAlpha = 0.2;
     const ab = BLOCKS[above];
     if (!(ab && ab.opaque && ab.render === 'cube')) {
@@ -1128,6 +1148,7 @@ export class Renderer {
     const world = game.world;
     // (Round 84) A storm's wind in the plants and the trees (see windSway).
     const wt = game.weather;
+    this.blendFloors = !!game.dungeon;
     this.swayAmp = wt && !game.dungeon && !this.noEnvFx ? Math.min(2.2, ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * (0.65 + 0.35 * (wt.gust || 0))) : 0;
     this.swayLean = wt ? wt.gust || 0 : 0;
     const atlas = this.atlas;
@@ -1340,7 +1361,7 @@ export class Renderer {
       if (alpha < 1) ctx.globalAlpha = alpha;
       // Blocks faded out because they hide the player can be clicked through.
       const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
-      const v = hash4(wx, y, wz) % VARIANTS;
+      const v = variantAt(wx, y, wz);
       const render = b.render;
       // (Round 82) A door mid-swing: drawn turning (see drawSwing).
       const swing = render === 'door' && this.swings.size ? this.swings.get(`${wx},${y},${wz}`) : null;
@@ -1735,7 +1756,7 @@ export class Renderer {
       const lk = lookedId()[id] === 1 ? this.lookAt(game, wx, wz) : 0;
       const T = lk ? TEX.look[lk] || TEX : craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
       const sx = (u - cu0) * TILE;
-      const vr = hash4(wx, y, wz) % VARIANTS;
+      const vr = variantAt(wx, y, wz);
       const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
       if (show & 1) {
         const tops = T.top[id * 4 + rot];
@@ -1979,6 +2000,65 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255,255,255,0.12)';
       ctx.fillRect(sx, sy, 16, 1);
     }
+    // (Round 114) Below ground, where one floor meets another, the one
+    // frays a little into the other, so they lie together rather than in
+    // squares: see blendEdges.
+    if (this.blendFloors) this.blendEdges(ctx, getAt, ci, W, y, sx, sy, id);
+  }
+
+  // (Round 114) Two different floors side by side: the one with the lower
+  // id let into this tile along their shared edge in a ragged, dithered
+  // band of its own texture (each edge done once, by the tile with the
+  // higher id). Not where either is a made thing laid in squares (a rug,
+  // a deck, a bridge, tiles): those keep their edges.
+  blendEdges(ctx, getAt, ci, W, y, sx, sy, id) {
+    if (!floorBlends(id)) return;
+    for (let side = 0; side < 4; side++) {
+      const off = side === 0 ? -1 : side === 1 ? 1 : side === 2 ? -W : W;
+      const n = getAt(ci + off, y);
+      if (n >= id || !floorBlends(n)) continue;
+      const up = BLOCKS[getAt(ci + off, y + 1)];
+      if (up && up.solid) continue;
+      const img = this.fringeOf(n, side, (ci * 7 + y * 3 + side) & 3);
+      if (img) ctx.drawImage(img, sx, sy);
+    }
+  }
+
+  // A floor's top cut to a ragged band along one side (0 left, 1 right,
+  // 2 top, 3 bottom), its edge dithered; kept.
+  fringeOf(id, side, k) {
+    if (this.fringeAtlas !== this.atlas) {
+      this.fringes = new Map();
+      this.fringeAtlas = this.atlas;
+    }
+    const key = (id * 4 + side) * 4 + k;
+    let c = this.fringes.get(key);
+    if (c !== undefined) return c;
+    c = null;
+    const tops = TEX.top[id * 4];
+    const s = tops && tops[k % tops.length];
+    if (s && typeof document !== 'undefined') {
+      c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      const g = c.getContext('2d');
+      // (Only the pixels kept copied over: never read back off a canvas,
+      // which stalls the frame.)
+      for (let py = 0; py < 16; py++) {
+        for (let px = 0; px < 16; px++) {
+          const along = side < 2 ? py : px;
+          const into = side === 0 ? px : side === 1 ? 15 - px : side === 2 ? py : 15 - py;
+          if (into > 3) continue;
+          // (How far in it reaches here: one to three pixels, wavering.)
+          const h = hash4(along, side, k, id);
+          const d = 1 + ((h >>> 3) % 3);
+          const keep = into < d - 1 || (into === d - 1 && (h & 1)) || (into === d && ((h >>> 1) & 3) === 0);
+          if (keep) g.drawImage(this.atlas, s.x + px, s.y + py, 1, 1, px, py, 1, 1);
+        }
+      }
+    }
+    this.fringes.set(key, c);
+    return c;
   }
 
   // Which way something seen side-on faces on screen (left, or right):

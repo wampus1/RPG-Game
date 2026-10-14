@@ -2042,15 +2042,14 @@ export function bittenIcon(key, bites) {
   c.height = 16;
   const ctx = c.getContext('2d');
   ctx.drawImage(src, 0, 0);
-  const img = ctx.getImageData(0, 0, 16, 16);
-  const d = img.data;
   // Round bites out of the right-hand side, one a little further in each time.
+  // (Round 114: cut out, never read back off the canvas: a read back stalls
+  // the frame, over a second of it at a feast with every dish half eaten.)
   for (let b = 0; b < Math.min(3, bites); b++) {
     const cx = 13 - b * 3;
     const cy = 6 + ((b * 5) % 6);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= 6) d[(y * 16 + x) * 4 + 3] = 0;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= 6) ctx.clearRect(x, y, 1, 1);
   }
-  ctx.putImageData(img, 0, 0);
   bitten.set(k, c);
   return c;
 }
