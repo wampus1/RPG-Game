@@ -24,6 +24,7 @@ import { VAULT_ARCH } from './deeps/vault.js';
 import { GUT_ARCH } from './deeps/gut.js';
 import { SALT_ARCH } from './deeps/saltworks.js';
 import { WARREN_ARCH } from './deeps/warren.js';
+import { MOUND_ARCH } from './deeps/mound.js';
 import { CATA_ARCH } from './deeps/catacomb.js';
 
 // The usual kinds, as each far land makes them.
@@ -341,14 +342,17 @@ export const FAR_DTYPES = {
   // drystone with the heath growing through, rings of toadstools, the
   // standing stones; and nothing stays where it was put, you included.
   mound: {
-    name: 'Hollow Hill', isle: 'wyrd', wall: B.drystone, floor: B.heath, alt: B.moss, beam: null, regions: [2, 2], floors: [1, 3],
+    name: 'Hollow Hill', isle: 'wyrd', wall: B.hh_drystone, floor: B.hh_heath, alt: B.hh_moss, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['ring', 'court', 'glade', 'shrine', 'ring', 'pillared', 'trap', 'treasure', 'court', 'guard'],
-    mobs: [['fey_knight', 4], ['wisp', 3], ['grave_raven', 1]],
-    swap: { skeleton: ['fey_knight'], wight: ['fey_knight'], ghoul: ['wisp'], drowned: ['fey_knight'], thornling: ['fey_knight', 'wisp'], moth: ['grave_raven'] },
-    bosses: ['fair_king', 'hill_sleeper'], torches: 0.1,
-    shapes: { round: 4, octagon: 2, cave: 2 }, wiggle: 0.8, decor: [['standing_stone', 3], ['glowshroom', 3], ['candles', 1], ['roots', 2]],
+    mobs: [['fey_knight', 4], ['wisp', 2], ['witch_hare', 2], ['grave_raven', 1]],
+    swap: { skeleton: ['fey_knight'], wight: ['fey_knight'], ghoul: ['witch_hare'], drowned: ['fey_knight'], thornling: ['fey_knight', 'wisp'], moth: ['wisp'], wolf: ['witch_hare'], skel_captain: ['fey_knight'] },
+    bosses: ['fair_king', 'hill_sleeper'], torches: 0.05,
+    shapes: { round: 4, octagon: 2, cave: 2 }, wiggle: 0.8, decor: [['hh_cairn', 2], ['hh_toadstools', 1], ['hh_bones', 1], ['hh_candles', 1]],
     dark: [0.06, 0.05, 0.1], motes: ['#c8a0ff', '#80ffd0', '#ffffff'], ambient: ['whisper', 'drone', 'chime'],
-    loot: [['gem', 1, 2, 0.25], ['frost_crystal', 1, 2, 0.3], ['seer_stew', 1, 1, 0.2], ['old_coin', 2, 6, 0.5]],
+    loot: [['gem', 1, 2, 0.25], ['frost_crystal', 1, 2, 0.3], ['seer_stew', 1, 1, 0.2], ['old_coin', 2, 6, 0.5], ['berries', 1, 3, 0.4]],
+    // (Round 108: its own rooms its own architect's, and the old ones set
+    // about with its own: see deeps/mound.js.)
+    arch: MOUND_ARCH,
   },
   // The broken sea towers of the Skerries, flooded to their second floors:
   // drystone, the sea in the stair, weed on everything, the old beacon

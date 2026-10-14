@@ -810,6 +810,14 @@ export const STEPS = [
       log.push('The Deep Warrens are made over: drawn afresh, with the Hollowfolk\'s delve and its loft, the stores, the moot and its tiers, the old round tunnel and its stopper, the root hall and the mushroom garden; the noise of the scree and the boards that the blind tunnelers hear, the lantern pods, the hollow floor, the pantry behind the dresser, the gloom moths, the larder grubs and the rootbound; and their masters redrawn. Deep Warren floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 108) The Hollow Hill made over (its floors' make raised: see
+  // dungeon.js KIND_GEN).
+  {
+    to: '1.8.0',
+    data(d, log) {
+      log.push('The Hollow Hills are made over: drawn afresh, with the court\'s hall and its throne, the feast you mustn\'t eat, the ring that takes you dancing, the five standing stones and the cairn they open, the passage tomb, the birchwood and the bower behind its door; the hill-doors, each with its twin somewhere else in the hill; the golden harp; the fey lanterns the wisps drink dark and the hob lights again; the changelings and the witch-hares; and their masters redrawn. Hollow Hill floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

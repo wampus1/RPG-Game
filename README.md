@@ -8173,6 +8173,155 @@ where the floor has given way.
 - **Version 1.7.0.** Worlds from 1.6 load as before. Deep Warren floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 108: The Hollow Hill, made over
+
+The fourteenth of the dungeon overhauls. A Hollow Hill is a court of the
+fair folk under one of the Wyrd Isle's mounds. Everyone there knows the
+story: a piper of the town followed music into the hill and came out the
+next morning, he said; but it was a hundred years later. The feeling
+should be beautiful first, then uneasy. It is always twilight in there,
+and the light comes from nowhere. Drystone and turf, the heath growing
+through the floor, spirals pecked in the kerbstones, ogham on the
+standing stones, silver birches growing indoors, a feast laid that
+nobody eats. Nothing stays where it was put, you included: every door
+in the hill comes out somewhere else.
+
+- **Drawn afresh.** Every Hollow Hill tile and thing is painted by hand:
+  - **The walls.** Drystone with lichen, turf tufts along its top. Also:
+    - kerbstones pecked with a great spiral, and ogham stones;
+    - the hill-doors: little round doors of turf and stone, a light in
+      them;
+    - the cairn's slab, niches with candles in them, and woven hangings.
+  - **The floors.** Heath grass and heather, pale flagstones, the court's
+    floor of dark stone with stars in it and petals strewn on it, the
+    fairy ring's band of dark lush grass with its little pale caps, moss,
+    birch-leaf litter, and the pool of stars.
+  - **The things set about.**
+    - The five standing stones, one for each tree of the ogham's first
+      five, dark or woken and glowing.
+    - The throne of living wood with antlers growing out of it, fey
+      lanterns (lit, or drunk dark), the golden harp, birch benches.
+    - The feast: honeycomb, roast apples, bread, cream in a silver jug.
+    - Birches and hazels, toadstools, the ring's toadstools (standing, or
+      kicked over), cairns, stone basins, candle-trees, offerings, the
+      bones of the taken in garlands, and the piper, asleep.
+- **Rooms a Hollow Hill has.** Its floors are laid out by its own
+  architect (see `src/world/deeps/mound.js`), beside its old rooms. Those
+  are now set about with its own things: the old standing stones are
+  cairns, the glowshrooms toadstools, the bone throne the throne of living
+  wood.
+  - **The hall.** The court, on every first floor and often after. A
+    starlit floor, the dais up at its head with the throne on it, birches
+    in two rows down the hall, lanterns, the harp, a hill-door; the
+    knights at court, and the hob.
+  - **The feast.** The long table laid, benches down both sides,
+    candle-trees, the piper asleep against the wall; the knights asleep at
+    the table, and a child crying by the wall.
+  - **The dance.** A ring in the heath, its toadstools standing round it,
+    the wisps dancing in it, a knight watching, the bones of one who
+    danced.
+  - **The stones.** A mound in the middle with the five standing stones
+    on it, in an order of the hill's own. In the wall, the cairn's slab,
+    with its chamber and its chest behind. The seer's verse is at the
+    offering; the witch-hares keep the stones.
+  - **The passage.** The passage tomb, on every floor: long, its kerbstones
+    carved, basins, cairns, a hill-door, and the ravens.
+  - **The birchwood.** A wood under the hill: birches, hazels, toadstools,
+    heath through the leaf-litter, and a pool of stars. Behind it is the
+    queen's bower, whose only door is a hill-door: its twin is somewhere
+    else on the floor.
+- **What's at work there** (see `src/game/moundwork.js`).
+  - **The hill-doors.** Every door has its twin somewhere else in the
+    hill. Go in at one and you come out of the other.
+  - **The stones.** Touch them in the trees' order (birch, rowan, alder,
+    willow, ash) and each wakes and glows. When all five are awake the
+    cairn's slab grinds back. Touch one out of order and they all go
+    dark, a shock runs up your arm, and the witch-hares come. The seer's
+    verse tells the order.
+  - **The ring.** Step in it and the music has you: you're danced round
+    and round it, then thrown out dizzy (slowed). Kick over all its
+    toadstools and it's only grass. The ring's own don't like that.
+  - **The feast.** Use it once and you're warned. Use it again to eat: it
+    heals every hurt you have, then you can't stop eating, and when you
+    look up the court is awake and looking at you.
+  - **The golden harp.** Pluck it and it plays itself after. Every fair
+    one in earshot stops, listens, and forgets what it was doing for a
+    while (not the master). Then the strings need a while to settle.
+  - **The lanterns.** The wisps settle on the fey lanterns and drink them
+    dark, healing themselves. The hob goes about lighting them again.
+  - **The offering.** Use one with food in your hand and you leave it for
+    the good neighbours. If the hob is about it leaves you a gift, and its
+    luck is on you: the witch-hares' hexes won't mark you.
+  - **The hob, struck.** The hill remembers. Everything on the floor wakes
+    and comes for you, and you are marked.
+  - What's been done (toadstools kicked, rings broken, stones woken, slabs
+    rolled back, feasts eaten, lanterns as you left them, offerings
+    given) stays done when you come back to the floor.
+- **What's written there.** Every Hollow Hill has its court (the Fair
+  King, the Antlered One, the Raven Queen, the Sleeper Under the Hill, the
+  Fey Court), its piper, the seer who knew the stones' order, and the
+  town below. It also has what went wrong: the piper followed the music
+  in, the town stopped leaving the bread and milk, the fair folk took a
+  child and left one of theirs, a smith brought iron in, or one night in
+  the hill was a hundred years outside. Its papers come from all of that
+  (see `src/world/deeps/moundlore.js`):
+  - the Wyrdfolk's rules for going under the hill, and the seer's verse;
+  - an offering, the piper asleep, the bones of the taken, the basins'
+    word on the doors, and a mother's note about her changeling;
+  - the throne's word, what's cut in the cairn, and the master's hall.
+- **Its new creatures**, each painted by hand and made to work with the
+  others (the fey knights, wisps and ravens stay):
+  - **The Changeling.** One of theirs left in a cradle: a child's size, a
+    shawl drawn over its head, its eyes huge and black and old. It doesn't
+    fight. It sits and cries; come close and it's into your pack and away
+    with something of yours, laughing, to the nearest hill-door and
+    through it. Catch it first: struck down, it's only a carved log, and
+    what it took lies beside it.
+  - **The Witch-Hare.** A great grey-brown hare with a red thread round
+    its neck and a violet eye. It keeps its distance, bounding off when
+    you come close, and from there it rears up, thumps, and hexes you:
+    slowed, and marked.
+  - **The Hob** (the grove's, here too). Peaceful; it lights the lanterns
+    and answers an offering.
+  - Together:
+    - the hares mark you, and the knights' blows land harder on the
+      marked;
+    - the wisps drink the light, and the hob puts it back;
+    - the changeling uses the doors you're still learning;
+    - the harp, the hob's luck and a broken ring all turn the hill's own
+      against it.
+- **Its two masters, painted by hand.** Each was painted one pixel at a
+  time: silhouette first, then palette, texture, shade, and last its
+  outline and highlights. The moving parts of each are separate pictures.
+  - **The Fair King.** Lord of the Hollow Hills: tall, slender and
+    ageless. He has:
+    - moon-pale skin, a sharp face, a long pointed ear, silver hair down
+      his back, and eyes of moonlight;
+    - a stag's antlers growing out of a silver circlet, with ivy and white
+      flowers at their roots;
+    - a mantle of autumn leaves laid like shingles, russet, gold and the
+      last green, falling to the floor behind him;
+    - a forest-green robe worked with silver, open on a pale gown, and a
+      belt of silver leaves;
+    - the moonlight blade: long, slender, leaf-shaped and glowing, with a
+      guard of two silver leaves and a moonstone at its pommel.
+  - **The Hill Sleeper.** The hill itself, which got up. It is:
+    - a hulk of drystone and boulder, hunched like an ape, its head low
+      between its shoulders;
+    - turfed over its back and shoulders with heath and heather, the earth
+      torn where it pulled loose;
+    - pierced at the shoulder by a leaning standing stone, cut with ogham
+      and spotted with lichen, with a birch sapling growing out of its
+      back;
+    - lit by two will-o'-the-wisp eyes in a crevice of a face, with a
+      beard of hanging roots;
+    - opened in the chest by a passage-tomb's door, lintel and spiral
+      kerbstone, with the court's light inside;
+    - armed with boulder fists.
+    When it winds up, its eyes and its door blaze.
+- **Version 1.8.0.** Worlds from 1.7 load as before. Hollow Hill floors
+  you have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

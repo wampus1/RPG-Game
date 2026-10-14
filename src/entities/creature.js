@@ -21,6 +21,7 @@ import { VAULT_SPECIES } from './vaultmobs.js';
 import { GUT_SPECIES } from './gutmobs.js';
 import { SALT_SPECIES } from './saltmobs.js';
 import { WARREN_SPECIES } from './warrenmobs.js';
+import { MOUND_SPECIES } from './moundmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -126,6 +127,7 @@ export const SPECIES = {
   ...GUT_SPECIES,
   ...SALT_SPECIES,
   ...WARREN_SPECIES,
+  ...MOUND_SPECIES,
   // (Round 73: and the ancient places' own: see ancientmobs.js.)
   ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,

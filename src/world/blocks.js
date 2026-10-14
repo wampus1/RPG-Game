@@ -1406,3 +1406,48 @@ def('wr_nest', { ...dressing, rotatable: true, hardness: Infinity, drop: null, l
 def('wr_spades', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Spades and a Barrow' });
 def('wr_bones', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Old Bones, Huge' });
 def('wr_clods', { ...dressing, rotatable: true, hardness: Infinity, drop: null, label: 'Clods' });
+
+// (Round 108) The Hollow Hill made over (see world/deeps/mound.js): its
+// walls of drystone laid without mortar, lichen on them, heather out of
+// their joints, turf over them; a kerbstone carved with the spiral; the
+// hill-doors (step through one, and out of its pair); a stone cut with
+// ogham; the cairn's slab (the stones in their order roll it back); a
+// niche of fey candles; woven branches; the dais; its floors (heath,
+// flagstones, the court's starlit stone, the toadstool ring that takes you
+// dancing, moss, birch-litter, a pool of stars); and what's set about in
+// it: the standing stones (each its tree's ogham; they wake when touched
+// in their order), a cairn, a stone basin, birches, hazel, toadstools and
+// the ring's caps, the throne, fey lanterns, the harp, benches, the feast
+// (don't eat it), the piper asleep, the bones of the taken, an offering, a
+// candle-tree. Last of all, so no block before them changes its number.
+def('hh_drystone', { tool: 'pick', hardness: Infinity, drop: null, label: 'Drystone' });
+def('hh_spiral', { hardness: Infinity, drop: null, label: 'A Kerbstone, Carved' });
+def('hh_hilldoor', { interact: 'hh_hilldoor', hardness: Infinity, drop: null, light: 3, label: 'A Door in the Hill' });
+def('hh_ogham', { hardness: Infinity, drop: null, label: 'A Stone, Cut with Ogham' });
+def('hh_slab', { interact: 'hh_slab', hardness: Infinity, drop: null, label: 'The Cairn\'s Slab' });
+def('hh_niche', { hardness: Infinity, drop: null, light: 6, label: 'Fey Candles' });
+def('hh_woven', { hardness: Infinity, drop: null, label: 'Woven Branches' });
+def('hh_dais', { hardness: Infinity, drop: null, label: 'The Dais' });
+def('hh_heath', { hardness: Infinity, drop: null, label: 'Heath' });
+def('hh_flags', { hardness: Infinity, drop: null, label: 'Flagstones' });
+def('hh_starlit', { hardness: Infinity, drop: null, light: 1, label: 'Starlit Stone' });
+def('hh_ring', { hardness: Infinity, drop: null, label: 'A Fairy Ring' });
+def('hh_moss', { hardness: Infinity, drop: null, label: 'Moss' });
+def('hh_litter', { hardness: Infinity, drop: null, label: 'Birch-Litter' });
+def('hh_pool', { hardness: Infinity, drop: null, light: 3, label: 'A Pool of Stars' });
+def('hh_stone', { ...sprite, tall: true, solid: true, rotatable: true, kinds: true, interact: 'hh_stone', hardness: Infinity, light: 5, lightWhenState: true, drop: null, label: 'A Standing Stone' });
+def('hh_cairn', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Cairn' });
+def('hh_basin', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, light: 2, drop: null, label: 'A Stone Basin' });
+def('hh_birch', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Silver Birch' });
+def('hh_hazel', { ...sprite, solid: true, rotatable: true, hardness: 0.6, drop: [{ item: 'berries', min: 1, max: 2 }], label: 'Hazel' });
+def('hh_toadstools', { ...dressing, rotatable: true, hardness: 0.1, drop: [{ item: 'mushroom', chance: 0.5 }], label: 'Toadstools' });
+def('hh_ringcap', { ...dressing, rotatable: true, interact: 'hh_ringcap', hardness: Infinity, drop: null, label: 'A Toadstool of the Ring' });
+def('hh_throne', { ...sprite, tall: true, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Throne of the Hill' });
+def('hh_lantern', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, light: 10, lightWhenState: true, drop: null, label: 'Fey Lantern' });
+def('hh_harp', { ...sprite, solid: true, rotatable: true, interact: 'hh_harp', hardness: Infinity, drop: null, label: 'A Golden Harp' });
+def('hh_bench', { ...sprite, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'Bench' });
+def('hh_feast', { ...sprite, solid: true, rotatable: true, kinds: true, interact: 'hh_feast', hardness: Infinity, light: 3, drop: null, label: 'The Feast' });
+def('hh_piper', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Piper, Asleep' });
+def('hh_bones', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Bones, Garlanded' });
+def('hh_offering', { ...dressing, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'An Offering' });
+def('hh_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'Candle-Tree' });

@@ -27,6 +27,7 @@ import { knock } from '../game/combat.js';
 import { FY } from '../world/dungeongen.js';
 import { B } from '../world/blocks.js';
 import { groveCloud, groveWoodTurns } from '../game/grovework.js';
+import { moundRemembers } from '../game/moundwork.js';
 
 const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 const runOf = (c) => c.game.runAt?.(c.x) || c.game.dungeon || null;
@@ -60,9 +61,11 @@ function hobStruck(game, c, src, amount) {
     c.wronged = true;
     c.fleeT = 9;
     c.fleeFrom = src;
-    c.say?.('You\'ll be sorry. The wood remembers.', 2.2, '#c8e890');
+    c.say?.(runOf(c)?.rec?.type === 'mound' ? 'You\'ll be sorry. The hill remembers.' : 'You\'ll be sorry. The wood remembers.', 2.2, '#c8e890');
     const run = runOf(c);
-    if (run) groveWoodTurns(run, src);
+    // (Round 108: in the Hollow Hill, the hill remembers: see moundwork.js.)
+    if (run && run.rec?.type === 'mound') moundRemembers(run, src);
+    else if (run) groveWoodTurns(run, src);
   }
   return amount;
 }
@@ -72,7 +75,7 @@ export const GROVE_SPECIES = {
   drowsebloom: { name: 'Drowsebloom', hp: 16, dmg: 0, step: 9, mode: 'hostile', aggro: 8, under: true, anchored: true, brain: 'drowsebloom', ward: bloomWard, isle: 'thessa', light: 2, drops: [['herb', 1, 2, 0.7], ['flower_yellow', 1, 2, 0.5]] },
   glimmer: { name: 'Glimmer', hp: 4, dmg: 0, step: 0.28, mode: 'hostile', aggro: 12, under: true, floats: true, brain: 'glimmer', ward: glimmerWard, isle: 'thessa', light: 6, noHalo: true, drops: [['glowberries', 1, 1, 0.5]] },
   delver: { name: 'Delver', hp: 16, dmg: 4, step: 0.5, mode: 'hostile', aggro: 10, under: true, brain: 'delver', style: 'snap', isle: 'thessa', drops: [['leather', 1, 1, 0.4], ['mushroom', 1, 2, 0.4]] },
-  hob: { name: 'Hob', hp: 10, dmg: 0, step: 0.45, mode: 'passive', under: true, ward: hobStruck, isle: 'thessa', drops: [['honeycomb', 1, 1, 0.5]] },
+  hob: { name: 'Hob', hp: 10, dmg: 0, step: 0.45, mode: 'passive', under: true, ward: hobStruck, calm: 'hob', isle: 'thessa', drops: [['honeycomb', 1, 1, 0.5]] },
 };
 
 // A step toward a spot, one tile at a time (true if it moved).
