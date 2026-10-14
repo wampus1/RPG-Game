@@ -98,10 +98,10 @@ export const CURSELING = {
   groups: { idle: [0, 3, 1.4], walk: [3, 4, 0.62], attack: [7, 2, 0.5], hurt: [9, 1, 0.2] },
 };
 
-// The Mourner: a long grey dress, a grey veil over a white face, kneeling
+// The Keener: a long grey dress, a grey veil over a white face, kneeling
 // with her hands together, flowers before her. Wailing, the veil thrown
 // back and her arms up.
-export const MOURNER = {
+export const KEENER = {
   size: 24,
   pal: { a: '#17171d', b: '#a8a8b8', c: '#828292', d: '#5e5e6c', e: '#3e3e4a', f: '#22222a', g: '#121217', h: '#dcc0b0', i: '#bc9c8c', j: '#4a3832', k: '#3a2c27', l: '#310823', m: '#f088c8', n: '#d050a0', o: '#101f09', p: '#4a8a2a', q: '#2e5a1c', r: '#f4ded0', s: '#94766a', t: '#6a5048', u: '#16191e', v: '#0e1014', w: '#ffffff' },
   rows: [
@@ -192,4 +192,4 @@ export const BANNER_WRAITH = {
   groups: { idle: [0, 2, 1.4], walk: [2, 4, 0.62], attack: [6, 2, 0.5], hurt: [8, 1, 0.2] },
 };
 
-export const CHAMPION_MOBS = { shade_archer: SHADE_ARCHER, curseling: CURSELING, mourner: MOURNER, banner_wraith: BANNER_WRAITH };
+export const CHAMPION_MOBS = { shade_archer: SHADE_ARCHER, curseling: CURSELING, keener: KEENER, banner_wraith: BANNER_WRAITH };

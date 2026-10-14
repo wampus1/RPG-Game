@@ -174,7 +174,7 @@ function takeOffering(run, x, z) {
 // belonged to wake.
 export function touched(run, x, y, z) {
   // (Round 111) A chest of the dead's opened in the Champion's Hall: the
-  // mourners near know.
+  // keeners near know.
   if (run.rec.type === 'champion') CH.desecrated(run, { x, z });
   for (const q of run.data.wakes || []) {
     if (q.x !== x || q.z !== z) continue;

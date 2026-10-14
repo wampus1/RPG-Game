@@ -6,7 +6,7 @@
 // one walkable, the galleries too; what's written there made from its own
 // story; its new creatures drawn and at work (the huntress's shade on the
 // high ground whose arrows pin you, the curseling that gets the fallen up
-// again cursed, the mourner who wails); the oath; the wards; the
+// again cursed, the keener who wails); the oath; the wards; the
 // memorials; and its master painted by hand, every one of his forms.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -95,7 +95,7 @@ test("the Hall is its own architect's now, a floor to each of what it was", () =
   assert.ok(T.arch, 'its architect');
   assert.equal(T.wall, B.ch_stone);
   for (const k of ['shade_archer', 'curseling']) assert.ok(T.mobs.some(([m]) => m === k), k);
-  assert.ok(T.kept.includes('mourner'));
+  assert.ok(T.kept.includes('keener'));
   for (let n = 0; n < 3; n++) {
     const f = buildFloor(rec(2), n);
     const h = f.rooms.find((r) => r.kit === 'hall');
@@ -143,7 +143,7 @@ test('a floor of the Hall is laid out as one: the oath and its stones and door, 
   for (const [k, v] of Object.entries(n0)) assert.ok(v > 3, `${k}: ${v}`);
   assert.ok(galleries > 30, `galleries: ${galleries}`);
   assert.ok(cursed > 30, `the curse on the barrow floors: ${cursed}`);
-  for (const k of ['oathbound_squire', 'trial_sentinel', 'banner_wraith', 'shade_archer', 'curseling', 'mourner']) assert.ok(sp[k] > 2, `${k}: ${sp[k]}`);
+  for (const k of ['oathbound_squire', 'trial_sentinel', 'banner_wraith', 'shade_archer', 'curseling', 'keener']) assert.ok(sp[k] > 2, `${k}: ${sp[k]}`);
 });
 
 test("what's written in the Hall is its own story, the same each time; the oath book has the order the stones open to", () => {
@@ -170,11 +170,11 @@ test("the Hall's tiles and things are drawn; its new creatures are in the game a
     assert.ok(f(0, false, 0) && f(3, true, 1), n);
   }
   for (const k of Object.keys(CHAMPION_SPECIES)) assert.ok(SPECIES[k], k);
-  for (const k of ['shade_archer', 'curseling', 'mourner', 'banner_wraith']) {
+  for (const k of ['shade_archer', 'curseling', 'keener', 'banner_wraith']) {
     const A = CHAMPION_MOBS[k];
     assert.ok(A && A.size === 24 && A.groups.walk && A.groups.attack, k);
   }
-  assert.equal(SPECIES.mourner.mode, 'passive');
+  assert.equal(SPECIES.keener.mode, 'passive');
 });
 
 function inHall() {
@@ -341,9 +341,9 @@ test('the huntress\'s shade keeps the high ground and her arrows pin you', () =>
   assert.equal(a.y, FY + 2, 'still up on the gallery');
 });
 
-test('a mourner wails at a fight near her, and what sleeps near her wakes; a memorial given to blesses you once a floor', () => {
+test('a keener wails at a fight near her, and what sleeps near her wakes; a memorial given to blesses you once a floor', () => {
   const { game, input, d, p, x0, z0 } = inHall();
-  const m = d.spawn('mourner', x0 + 7, FY, z0 + 1, { peaceful: true });
+  const m = d.spawn('keener', x0 + 7, FY, z0 + 1, { peaceful: true });
   m.dormant = 0;
   const sleeper = d.spawn('oathbound_squire', x0 + 12, FY, z0 + 3, {});
   sleeper.dormant = 99;

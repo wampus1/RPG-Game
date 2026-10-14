@@ -391,7 +391,7 @@ export function ancientTick(run, dt) {
       if (!p) continue;
       t.open = true;
       run.state.solved[key] = true;
-      // (Round 111: a grave broken open, and the mourners near know.)
+      // (Round 111: a grave broken open, and the keeners near know.)
       desecrated(run, t);
       const x = t.x;
       const z = t.z + t.dz;

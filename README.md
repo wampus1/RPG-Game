@@ -8688,7 +8688,7 @@ is one stage of what happened:
     Shades still sit at the table.
   - **The oath chapel.** His oath in bronze on the wall, four
     kneeling-stones in a row in no particular order, and the bronze
-    oath-door in one wall with his cache behind it. A mourner kneels at
+    oath-door in one wall with his cache behind it. A keener kneels at
     the stones.
   - **The barracks.** The squires' cots along the wall with plate on
     stands between, training dummies, a rack, the squire's diary.
@@ -8698,7 +8698,7 @@ is one stage of what happened:
     lumps of it standing up. Ward-stones stand round it, most of them
     cracked. Curselings, and a sentinel.
   - **The hall of the fallen.** Memorial stones in rows, each with a name
-    and how they fell, flowers, candles, plaques; a mourner kneeling.
+    and how they fell, flowers, candles, plaques; a keener kneeling.
 - **What's at work there** (see `src/game/championwork.js`).
   - **The oath.** Kneel at the stones in the order of his oath, as his
     plaque gives it. Each kindles gold, and with the last the oath-door
@@ -8716,7 +8716,7 @@ is one stage of what happened:
   - **The fallen.** A squire, sentinel or shade struck down lies for
     twenty seconds. If a curseling gets to it, it gets up again with the
     curse in it: tougher, harder-hitting, and edged in green light.
-  - **The mourners.** A fight near one, or a grave or chest of the dead
+  - **The keeners.** A fight near one, or a grave or chest of the dead
     opened near one, and she wails: everything asleep near her wakes.
   - What's been done (oath-doors opened, wards sealed, memorials given
     to) stays done when you come back to the floor.
@@ -8740,15 +8740,15 @@ is one stage of what happened:
   - **The Curseling.** A dog-sized lump of the curse, many-eyed, on six
     thin legs. It bites, but it would rather find the fallen and crawl
     into them.
-  - **The Mourner.** A grey-veiled woman from the town, kneeling and
-    weeping. She never fights; she wails.
+  - **The Keener.** A grey-veiled woman from the town come to keen for
+    the dead, kneeling and weeping. She never fights; she wails.
   - Together:
     - the squires hold you below while the shade pins you from the
       gallery;
     - every squire you cut down is a body for the curselings, so kill
       them first;
     - the wraith rallies the dead;
-    - a fight near a mourner wakes the room.
+    - a fight near a keener wakes the room.
 - **Its master, painted by hand.** The Hero is now painted at his full
   128 pixels, twice a man's height in battered plate trimmed in gold. He
   has:

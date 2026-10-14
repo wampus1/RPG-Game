@@ -12,7 +12,7 @@
 // game/championwork.js for the oath (the kneeling-stones, knelt at in the
 // order of his oath, open the oath-door), the wards (the cracked ones leak
 // the curse; kneel and hold one to seal it), the memorials (an offering
-// left, a blessing), and the mourners; game/ancient.js for the old works
+// left, a blessing), and the keeners; game/ancient.js for the old works
 // (the trials, the statues that swing their swords, the blades, the
 // tombs, the reliquaries, the arena), kept in their rooms.
 //
@@ -32,7 +32,7 @@
 //     floor from the cracked wall, and the ward-stones round it, some
 //     cracked; the curselings;
 //   the hall of the fallen: memorial stones in rows, the folk's flowers,
-//     candles; a mourner kneeling.
+//     candles; a keener kneeling.
 // About the floor: its papers (see deeps/championlore.js), and what it
 // was.
 import { B, BLOCKS, META_STATE } from '../blocks.js';
@@ -305,9 +305,9 @@ function oath(ctx, H, r) {
   }
   for (let k = 0; k < 2; k++) place(ctx, H, r, B.ch_candles, 0, true);
   walls(ctx, H, r, [['ch_banner', 2], ['ch_laurel', 2], ['ch_frieze', 1]], 0.55);
-  // A mourner, knelt at the stones.
+  // A keener, knelt at the stones.
   const m = near(ctx, H, r, at[1].x - d.x, at[1].z - d.z, 2);
-  if (m) put(ctx, 'mourner', m.x, m.z, r, { dormant: 0, peaceful: true, group: groupOf(ctx, r, 'mourner') });
+  if (m) put(ctx, 'keener', m.x, m.z, r, { dormant: 0, peaceful: true, group: groupOf(ctx, r, 'keener') });
 }
 // The barracks: cots, armour, dummies, a rack.
 function barracks(ctx, H, r) {
@@ -408,7 +408,7 @@ function memorial(ctx, H, r) {
   walls(ctx, H, r, [['ch_plaque', 3], ['ch_laurel', 2], ['ch_banner', 1]], 0.5);
   ruin(ctx, H, r);
   const m = near(ctx, H, r, r.cx, r.cz, 3);
-  if (m) put(ctx, 'mourner', m.x, m.z, r, { dormant: 0, peaceful: true, group: groupOf(ctx, r, 'mourner') });
+  if (m) put(ctx, 'keener', m.x, m.z, r, { dormant: 0, peaceful: true, group: groupOf(ctx, r, 'keener') });
   if (ctx.n >= 1) band(ctx, H, r, ['banner_wraith'], { x: r.cx, z: r.z1 - 2 }, 'fallen');
 }
 

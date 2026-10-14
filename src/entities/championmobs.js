@@ -1,7 +1,7 @@
 // (Round 111) What's in the Hall of the Last Champion beside his squires,
 // sentinels and banner-wraiths (laid out by world/deeps/champion.js, drawn
 // in render/art/champion_mobs.js; the oath, the wards, the memorials, the
-// fallen getting up again and the mourners' wail are in
+// fallen getting up again and the keeners' wail are in
 // game/championwork.js), each made to work with the others:
 //   the huntress's shade: the ghost of his huntress, or one like her, a
 //     bow and a quiver and a hood, keeping to the high ground (the
@@ -12,8 +12,8 @@
 //     (a squire, a sentinel, a shade struck down in the last little while)
 //     and crawl into them, and they get up again with the curse in them,
 //     harder than before. Kill the curselings first.
-//   the mourner: a grey-veiled woman come down from the town to the dead,
-//     kneeling, weeping. She never fights. But a fight near her, or a grave
+//   the keener: a grey-veiled woman come down from the town to keen for
+//     the dead, kneeling, weeping. She never fights. But a fight near her, or a grave
 //     broken open, and she wails, and everything asleep near her wakes.
 import { BRAINS } from './monsters.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
@@ -47,8 +47,8 @@ export const CHAMPION_SPECIES = {
     name: 'Curseling', hp: 6, dmg: 2, step: 0.22, aggro: 12, light: 2, brain: 'curseling', style: 'bite',
     drops: [['old_coin', 1, 1, 0.2]],
   }),
-  mourner: {
-    name: 'Mourner', hp: 10, dmg: 0, step: 0.5, mode: 'passive', aggro: 0, under: true, ancient: true, calm: 'mourner', isle: 'velmarch',
+  keener: {
+    name: 'Keener', hp: 10, dmg: 0, step: 0.5, mode: 'passive', aggro: 0, under: true, ancient: true, calm: 'keener', isle: 'velmarch',
     drops: [['flower_red', 1, 2, 0.8], ['coin', 1, 4, 0.5]],
   },
 };
@@ -123,7 +123,7 @@ export const CHAMPION_BRAINS = {
 
   // Knelt, weeping; never shy of you, nor wandering off. (Her wail: see
   // championwork.js.)
-  mourner(c, dt) {
+  keener(c, dt) {
     if (c.fleeT > 0) return false;
     c.sobT = (c.sobT ?? 2 + Math.random() * 3) - dt;
     if (c.sobT <= 0) {
@@ -135,4 +135,4 @@ export const CHAMPION_BRAINS = {
 };
 Object.assign(BRAINS, CHAMPION_BRAINS);
 // (Of the ancient places' own, as the old ones are: see ancientmobs.js.)
-for (const k of ['shade_archer', 'curseling', 'mourner']) ANCIENT_SPECIES[k] = CHAMPION_SPECIES[k];
+for (const k of ['shade_archer', 'curseling', 'keener']) ANCIENT_SPECIES[k] = CHAMPION_SPECIES[k];

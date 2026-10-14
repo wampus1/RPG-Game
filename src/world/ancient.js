@@ -48,8 +48,8 @@ export const ANCIENT_DTYPES = {
     name: 'Hall of the Last Champion', isle: 'velmarch', ancient: true, wall: B.ch_stone, floor: B.ch_flags, alt: B.ch_cracked, beam: B.planks_dark, regions: [2, 2], floors: [3, 3],
     kits: ['trial', 'armory', 'statues', 'blades', 'chapel', 'tomb', 'arena', 'burial', 'reliquary', 'trial', 'trap', 'treasure', 'guard', 'statues', 'tomb'],
     // (Round 111: and the shades of his Company, the curselings; the
-    // mourners set out where they kneel.)
-    mobs: [['oathbound_squire', 4], ['trial_sentinel', 2], ['banner_wraith', 2], ['shade_archer', 2], ['curseling', 2]], only: true, kept: ['mourner'],
+    // keeners set out where they kneel.)
+    mobs: [['oathbound_squire', 4], ['trial_sentinel', 2], ['banner_wraith', 2], ['shade_archer', 2], ['curseling', 2]], only: true, kept: ['keener'],
     bosses: ['the_hero'], torches: 0.35,
     shapes: { rect: 3, octagon: 2, cross: 2, round: 1 }, wiggle: 0, decor: [['statue', 2], ['war_banner', 2], ['ch_candles', 2], ['ch_brazier', 1], ['ch_armour', 1], ['ch_rack', 1], ['ch_flowers', 1]],
     dark: [0.09, 0.08, 0.07], motes: ['#ffe8a0', '#c8c8c8'], ambient: ['march', 'whisper', 'chains', 'drone'],

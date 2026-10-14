@@ -11,7 +11,7 @@
 // memorials (a coin left at one, and you're remembered: a blessing, once
 // a floor); the fallen (a squire or a sentinel or a shade struck down, a
 // curseling gets to it, and it gets up again with the curse in it); and
-// the mourners (a fight near one, or a tomb broken open, and she wails:
+// the keeners (a fight near one, or a tomb broken open, and she wails:
 // everything asleep near her wakes).
 //
 // What's been done (the oath-doors opened, the wards sealed, the
@@ -187,7 +187,7 @@ export function corpseNear(run, c, r = 8) {
   return best;
 }
 
-// ------------------------------------------------------------ the mourners
+// ------------------------------------------------------------ the keeners
 function wail(run, m) {
   const game = run.game;
   const T = chT(run);
@@ -203,12 +203,12 @@ function wail(run, m) {
     c.target = game.player;
     n++;
   }
-  tell(run, 'wail', `The mourner throws back her veil and wails, a sound like the wind in a chimney, and all through the hall what was sleeping wakes.${n ? '' : ' (There was nothing to wake, this time.)'} (She can't bear a fight near the dead, nor a grave broken.)`, '#d0d8e8');
+  tell(run, 'wail', `The keener throws back her veil and wails, a sound like the wind in a chimney, and all through the hall what was sleeping wakes.${n ? '' : ' (There was nothing to wake, this time.)'} (She can't bear a fight near the dead, nor a grave broken.)`, '#d0d8e8');
 }
-// A grave broken open, or a chest of the dead's: the mourners near know.
+// A grave broken open, or a chest of the dead's: the keeners near know.
 export function desecrated(run, at) {
   if (!isChampion(run)) return;
-  for (const m of run.creatures()) if (!m.dead && m.species === 'mourner' && dist(m, at) <= 8) wail(run, m);
+  for (const m of run.creatures()) if (!m.dead && m.species === 'keener' && dist(m, at) <= 8) wail(run, m);
 }
 
 // ------------------------------------------------------------ put back
@@ -367,9 +367,9 @@ export function tick(run, dt, party = null) {
   // The fallen: lying a while for a curseling to find.
   for (const q of T.corpses) q.t -= dt;
   T.corpses = T.corpses.filter((q) => q.t > 0 && !q.taken);
-  // The mourners: a fight near one and she wails.
+  // The keeners: a fight near one and she wails.
   for (const m of mobs) {
-    if (m.dead || m.species !== 'mourner') continue;
+    if (m.dead || m.species !== 'keener') continue;
     const wt = (T.wailT.get(m) || 0) - dt;
     T.wailT.set(m, wt);
     if (wt > 0) continue;
