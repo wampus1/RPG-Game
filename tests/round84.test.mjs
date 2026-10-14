@@ -120,7 +120,8 @@ test('storms: a thunderstorm\'s rain, a sandstorm under a clear sky, the wind ge
   assert.ok(g.weather.blow >= 0.95 && g.weather.wind > 1.5, 'the wind up');
   g.modWeather = { kind: 'sandstorm', until: abs() + 300 };
   g.weather.t = 0;
-  run(g, 60 * 3);
+  // (Round 114: the thunderstorm eases off for a few seconds first.)
+  run(g, 60 * 8);
   assert.equal(g.weather.kind, 'clear');
   assert.equal(g.weather.severe, 'sandstorm');
   // Hail.

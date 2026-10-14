@@ -3180,8 +3180,21 @@ function bossHall(ctx, r, boss) {
 
 // A small room beyond a crumbling wall, joined to nothing: there's good
 // stuff in it, and nobody's been in for a long time.
+// (Round 114) The tiles a place's architect has set something of its own
+// at (a slit, a niche, a lamp in the wall), from the floor's lists: never
+// broken through or built over by the old kinds' secrets and traps.
+function keptTiles(ctx) {
+  const kept = new Set();
+  for (const v of Object.values(ctx.out)) {
+    if (!Array.isArray(v)) continue;
+    for (const q of v) if (q && typeof q === 'object' && Number.isFinite(q.x) && Number.isFinite(q.z)) kept.add(`${q.x - ctx.b.x0},${q.z}`);
+  }
+  return kept;
+}
+
 function hiddenRoom(ctx) {
   const { rng, plan, b, T, out, rec, big } = ctx;
+  const kept = keptTiles(ctx);
   for (let t = 0; t < 30; t++) {
     const r = plan.rooms[rng.int(1, plan.rooms.length - 1)];
     if (r.sealed || r.kit === 'hidden') continue;
@@ -3209,6 +3222,7 @@ function hiddenRoom(ctx) {
       room = { x0: wx + 1, z0: wz - 1, x1: wx + w, z1: wz - 1 + d - 1 };
     }
     if (room.x0 < 2 || room.z0 < 2 || room.x1 >= plan.W - 2 || room.z1 >= plan.D - 2) continue;
+    if (kept.has(`${wx},${wz}`)) continue;
     let clear = true;
     for (let z = room.z0 - 1; z <= room.z1 + 1 && clear; z++) for (let x = room.x0 - 1; x <= room.x1 + 1; x++) if (plan.at(x, z) || plan.forbid[z * plan.W + x]) clear = false;
     if (!clear) continue;
@@ -3241,6 +3255,7 @@ function hiddenRoom(ctx) {
 // that fire along them when one's stepped on.
 function trapPassages(ctx) {
   const { rng, plan, b, out, big } = ctx;
+  const kept = keptTiles(ctx);
   const n = big ? 0 : rng.int(1, 3);
   for (let k = 0, tries = 0; k < n && tries < 80; tries++) {
     const x = rng.int(2, plan.W - 3);
@@ -3254,7 +3269,7 @@ function trapPassages(ctx) {
       slit = { x: x + ox, z: z + oz, dx: -ox, dz: -oz, rot };
       break;
     }
-    if (!slit) continue;
+    if (!slit || kept.has(`${slit.x},${slit.z}`)) continue;
     b.set(x, FY, z, B.pressure_plate);
     b.set(slit.x, FY, slit.z, B.arrow_slit, slit.rot);
     out.plates.push({ x: b.x0 + x, z, slits: [{ x: b.x0 + slit.x, z: slit.z, dx: slit.dx, dz: slit.dz }] });
@@ -3269,11 +3284,11 @@ function trapPassages(ctx) {
       b.set(x, FY, z, B.pressure_plate);
       // Slits in the far walls of the room, along both lines through it.
       const slits = [];
-      if (!plan.at(r.x0 - 1, z)) {
+      if (!plan.at(r.x0 - 1, z) && !kept.has(`${r.x0 - 1},${z}`)) {
         b.set(r.x0 - 1, FY, z, B.arrow_slit, 3);
         slits.push({ x: b.x0 + r.x0 - 1, z, dx: 1, dz: 0 });
       }
-      if (!plan.at(x, r.z0 - 1)) {
+      if (!plan.at(x, r.z0 - 1) && !kept.has(`${x},${r.z0 - 1}`)) {
         b.set(x, FY, r.z0 - 1, B.arrow_slit, 0);
         slits.push({ x: b.x0 + x, z: r.z0 - 1, dx: 0, dz: 1 });
       }
