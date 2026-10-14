@@ -34,6 +34,7 @@ import { chill } from './gems.js';
 import { work, drag } from '../entities/bosskit.js';
 import { addRift, addBouncer } from '../entities/evolved.js';
 import { knock } from './combat.js';
+import { desecrated } from './championwork.js';
 
 const ELEMENTS = [
   { kind: 'fire', burn: 2, color: [255, 120, 40], puff: ['#ff8030', '#ffd060', '#ffffff'], word: 'fire' },
@@ -390,6 +391,8 @@ export function ancientTick(run, dt) {
       if (!p) continue;
       t.open = true;
       run.state.solved[key] = true;
+      // (Round 111: a grave broken open, and the mourners near know.)
+      desecrated(run, t);
       const x = t.x;
       const z = t.z + t.dz;
       r.emit(t.x, FY + 1, t.z, { n: 14, color: ['#c8c8c8', '#8a8a80', '#ffe8a0'], up: 24, speed: 20, life: 0.8, shape: 'puff' });

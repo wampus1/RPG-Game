@@ -1542,3 +1542,48 @@ def('an_transmute', { ...sprite, solid: true, interact: 'an_transmute', hardness
 def('an_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'A Candelabrum' });
 def('an_coal', { ...sprite, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'coal', min: 2, max: 4 }, { item: 'sulfur', min: 1, max: 2 }], label: 'Coal and Sulphur' });
 def('an_jars', { ...sprite, solid: true, rotatable: true, hardness: 0.3, drop: [{ item: 'glass', min: 1, max: 2 }], label: 'Jars' });
+
+// (Round 111) The Hall of the Last Champion made over (see
+// world/deeps/champion.js): its pale sandstone in long courses; a frieze of
+// the old wars; his banner; a bronze plaque of the fallen; a shield and
+// spears; a bronze laurel; the oath-door; the wall the curse broke out of;
+// the dais; its floors (worn flags, cracked flags, the red runner, the
+// curse over the flags); and what's set about in it: statues of the heroes
+// before him, kneeling-stones of his virtues, the ward-stones the
+// companions set, memorials to the fallen and the folk's flowers, the
+// companions' feast (table, bench, hearth), arms and armour, training
+// dummies, the squires' cots, braziers, columns, the curse's growth, the
+// oath book, votive candles, the last stand's barricade, a fallen man.
+// Last of all, so no block before them changes its number.
+def('ch_stone', { tool: 'pick', hardness: Infinity, drop: null, label: 'Sandstone' });
+def('ch_frieze', { hardness: Infinity, drop: null, label: 'A Frieze of the Old Wars' });
+def('ch_banner', { hardness: Infinity, drop: null, label: 'The Champion\'s Banner' });
+def('ch_plaque', { interact: 'lore', hardness: Infinity, drop: null, label: 'A Plaque of the Fallen' });
+def('ch_arms', { hardness: Infinity, drop: null, label: 'A Shield and Spears' });
+def('ch_laurel', { hardness: Infinity, drop: null, label: 'A Laurel in Bronze' });
+def('ch_oathdoor', { interact: 'ch_oathdoor', hardness: Infinity, drop: null, light: 3, label: 'The Oath-Door' });
+def('ch_cursewall', { hardness: Infinity, drop: null, light: 4, label: 'The Curse, in the Stone' });
+def('ch_dais', { hardness: Infinity, drop: null, label: 'A Step' });
+def('ch_flags', { hardness: Infinity, drop: null, label: 'Flagstones' });
+def('ch_cracked', { hardness: Infinity, drop: null, label: 'Cracked Flagstones' });
+def('ch_runner', { hardness: Infinity, drop: null, label: 'A Red Runner' });
+def('ch_cursed', { hardness: Infinity, drop: null, light: 2, label: 'The Curse, Spreading' });
+def('ch_statue', { ...sprite, tall: true, solid: true, rotatable: true, hardness: Infinity, drop: null, label: 'A Hero of the Old Wars' });
+def('ch_kneel', { ...sprite, solid: true, rotatable: true, interact: 'ch_kneel', hardness: Infinity, light: 8, lightWhenState: true, drop: null, label: 'A Kneeling-Stone' });
+def('ch_ward', { ...sprite, solid: true, interact: 'ch_ward', hardness: Infinity, light: 6, lightWhenState: true, drop: null, label: 'A Ward-Stone' });
+def('ch_memorial', { ...sprite, solid: true, interact: 'ch_memorial', hardness: Infinity, drop: null, label: 'A Memorial' });
+def('ch_flowers', { ...sprite, solid: false, hardness: 0.1, drop: [{ item: 'flower_red', min: 1, max: 2 }], label: 'Flowers, Left' });
+def('ch_table', { ...sprite, solid: true, rotatable: true, hardness: 1, drop: [{ item: 'planks', min: 2, max: 3 }], label: 'The Long Table' });
+def('ch_bench', { ...sprite, solid: true, rotatable: true, hardness: 1, drop: [{ item: 'planks', min: 1, max: 2 }], label: 'A Bench' });
+def('ch_hearth', { ...sprite, solid: true, hardness: Infinity, light: 10, drop: null, label: 'The Hearth' });
+def('ch_armour', { ...sprite, solid: true, rotatable: true, hardness: 1.5, drop: [{ item: 'iron_ingot', min: 1, max: 2 }], label: 'A Suit of Plate' });
+def('ch_dummy', { ...sprite, solid: true, rotatable: true, hardness: 0.4, drop: [{ item: 'cloth', min: 1, max: 1 }], label: 'A Training Dummy' });
+def('ch_cot', { ...sprite, solid: true, rotatable: true, hardness: 0.8, drop: [{ item: 'cloth', min: 1, max: 2 }], label: 'A Squire\'s Cot' });
+def('ch_rack', { ...sprite, solid: true, rotatable: true, hardness: 1.2, drop: [{ item: 'iron_ingot', min: 1, max: 1 }], label: 'A Rack of Arms' });
+def('ch_brazier', { ...sprite, solid: true, hardness: Infinity, light: 11, drop: null, label: 'A Bronze Brazier' });
+def('ch_column', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'A Column' });
+def('ch_growth', { ...sprite, solid: true, rotatable: true, hardness: Infinity, light: 3, drop: null, label: 'The Curse, Growing' });
+def('ch_lectern', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'The Oath Book' });
+def('ch_candles', { ...sprite, solid: true, hardness: Infinity, light: 7, drop: null, label: 'Votive Candles' });
+def('ch_barricade', { ...sprite, solid: true, rotatable: true, hardness: 1.2, drop: [{ item: 'planks', min: 1, max: 3 }], label: 'A Barricade' });
+def('ch_fallen', { ...sprite, solid: true, rotatable: true, interact: 'lore', hardness: Infinity, drop: null, label: 'A Fallen Man-at-Arms' });

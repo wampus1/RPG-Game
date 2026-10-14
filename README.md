@@ -8626,6 +8626,153 @@ silver) and the rubedo (red porphyry and gold).
 - **Version 1.10.0.** Worlds from 1.9 load as before. Athanor floors you
   have already been on are laid out afresh the next time you go down.
 
+## Round 111: The Hall of the Last Champion, made over
+
+The seventeenth of the dungeon overhauls, and the second of the ancient
+places. The Hall is a hero's barrow in the hills of Velmarch, a memorial
+and a prison at once: the Champion's companions sealed him in while he
+could still beg them to. The feeling is solemn grandeur gone to grief, and
+reverence turning to dread the deeper you go. Pale sandstone in long
+courses, friezes of the old wars, bronze and old gold, his faded banners,
+laurels, candles still burning and the town's flowers at the door. Long
+processional halls with alcoves and a raised gallery along them. Each floor
+is one stage of what happened:
+
+- the Hall of Honours, the memorial still whole, a red runner down its halls;
+- the Hall of Trials, where his companions made their last stand: cracked
+  flags, barricades, the fallen;
+- the Sealed Barrow, the curse growing green-black out of the cracks.
+
+- **Drawn afresh.** Every tile and thing in the Hall is painted by hand.
+  - **The walls.** Pale sandstone in long courses, each block a little
+    different, worn at the corners, moss in the low joints. Also:
+    - a frieze of the old wars in relief (spearmen marching; the
+      Champion with his sword up and the sun behind him);
+    - his banner (the sun of his order on red, or his sword), faded and
+      frayed;
+    - a bronze plaque of the names of the fallen, green with age;
+    - a round shield with crossed spears, and a bronze laurel;
+    - the bronze oath-door;
+    - the wall the curse broke out of, an eye in it that opens and shuts;
+    - a step's face and a sunk floor's.
+  - **The floors.** Square sandstone flags worn smooth, the same cracked
+    and stained, the red runner with its gold border, and the curse
+    spreading over the flags. The wall tops are a dark stone, so the
+    rooms stand clear of it.
+  - **The things set about.**
+    - Statues of the heroes before him (a knight on his sword, a huntress
+      with her bow), the folk's flowers at their feet.
+    - Kneeling-stones of his four virtues (sword, open hand, sun,
+      laurel), which kindle gold when knelt at in order.
+    - Ward-stones, sealed and shining or cracked with the curse seeping
+      out.
+    - Memorial stones, with candle and coin once something's left.
+    - The Company's long table and benches, the hearth, suits of plate,
+      training dummies, the squires' cots, racks of arms.
+    - Bronze braziers, columns with a laurel hung on them, the curse's
+      growth, the oath book, votive candles, a barricade from the last
+      stand, a fallen man-at-arms.
+- **Rooms the Hall has.** Its floors are laid out by its own architect
+  (see `src/world/deeps/champion.js`), beside its old rooms. Every floor
+  keeps at least one of the old works (a trial, the statues, the blades,
+  the tombs, the arena, the reliquary), and the old rooms are dressed in
+  its own things. Deeper down every room shows the last stand
+  (barricades, the fallen) and then the curse.
+  - **The hall of honours.** On every floor: a long nave with the red
+    runner down it, columns in pairs and braziers at its end. A gallery
+    runs two deep along the back wall, a step up at each end, with
+    statues of the heroes along it. Banners, friezes and plaques line
+    the walls. Squires below, the huntress's shade up on the gallery.
+  - **The feast-hall.** The Company's long table and its benches, the
+    hearth at its end, shields on the walls, a toast cut in the table.
+    Shades still sit at the table.
+  - **The oath chapel.** His oath in bronze on the wall, four
+    kneeling-stones in a row in no particular order, and the bronze
+    oath-door in one wall with his cache behind it. A mourner kneels at
+    the stones.
+  - **The barracks.** The squires' cots along the wall with plate on
+    stands between, training dummies, a rack, the squire's diary.
+    Squires asleep, and a sentinel drilling them deeper down.
+  - **The wound.** Where the curse broke out of the stone. It grows over
+    the floor from the cracked wall (wider the deeper you are), with
+    lumps of it standing up. Ward-stones stand round it, most of them
+    cracked. Curselings, and a sentinel.
+  - **The hall of the fallen.** Memorial stones in rows, each with a name
+    and how they fell, flowers, candles, plaques; a mourner kneeling.
+- **What's at work there** (see `src/game/championwork.js`).
+  - **The oath.** Kneel at the stones in the order of his oath, as his
+    plaque gives it. Each kindles gold, and with the last the oath-door
+    swings open. Kneel out of order and the lit stones go dark, the curse
+    bursts up at you, and curselings come.
+  - **The wards.** Around a cracked ward the curse's growth burns whoever
+    stands on it, and gives up a curseling every so often while you're
+    near (three at most at a time). Kneel at a ward and hold still by it
+    for three breaths and it seals (two curselings come for you as you
+    start). Move and the words break off. Seal them all and the growth
+    burns away, and every curseling near it with it.
+  - **The memorials.** Each stone tells you whose it is. Leave a coin and
+    a candle's lit there; the first time on a floor, you're remembered
+    (+2 endurance for a while).
+  - **The fallen.** A squire, sentinel or shade struck down lies for
+    twenty seconds. If a curseling gets to it, it gets up again with the
+    curse in it: tougher, harder-hitting, and edged in green light.
+  - **The mourners.** A fight near one, or a grave or chest of the dead
+    opened near one, and she wails: everything asleep near her wakes.
+  - What's been done (oath-doors opened, wards sealed, memorials given
+    to) stays done when you come back to the floor.
+- **What's written there.** Every Hall has its Champion by name and what
+  he killed the fourth time (the Wyrm of the Ashen Fells, the Hollow
+  King, the Many-Eyed Thing under the hills, the Mother of the Deep), and
+  what it left in him. It also has his companions (the huntress, the
+  priest, the shield-bearer, the squire), the battles of his wars named
+  for the country round the town, and the order of his oath. Its papers
+  come from all of that (see `src/world/deeps/championlore.js`):
+  - his oath, the plaques of the fallen, the Nine Wars;
+  - the squire's diary, a companion's last letter, the priest's account
+    of the curse, the rite of the wards;
+  - a toast cut in the long table, notes clutched by the fallen,
+    memorial names, the last page of the Company's book, and his barrow.
+- **Its new creatures**, each painted by hand and made to work with the
+  others. The squires and sentinels stay; the banner-wraith is repainted.
+  - **The Huntress's Shade.** A hooded ghost of grey-blue light, her
+    cloak thinning to nothing below. She keeps to the high ground (the
+    gallery) and shoots down, and her arrows pin you a moment.
+  - **The Curseling.** A dog-sized lump of the curse, many-eyed, on six
+    thin legs. It bites, but it would rather find the fallen and crawl
+    into them.
+  - **The Mourner.** A grey-veiled woman from the town, kneeling and
+    weeping. She never fights; she wails.
+  - Together:
+    - the squires hold you below while the shade pins you from the
+      gallery;
+    - every squire you cut down is a body for the curselings, so kill
+      them first;
+    - the wraith rallies the dead;
+    - a fight near a mourner wakes the room.
+- **Its master, painted by hand.** The Hero is now painted at his full
+  128 pixels, twice a man's height in battered plate trimmed in gold. He
+  has:
+  - his crested great helm with horns of gold and his eyes like coals in
+    the slit;
+  - broad pauldrons in lames, the sun of his order on his breast;
+  - a red cloak in tatters;
+  - a greatsword point-down in his fist and a blue kite shield with the
+    sun on it;
+  - a stride of four steps.
+
+  Every form the curse gives him is painted too: his breast split into a
+  toothed mouth; his sword-arm a claw or a blade of bone; his shield-arm
+  a tentacle; his helm burst open on stalked eyes; his legs a writhing
+  mass of tentacles; and dragon's wings.
+- **Fixes along the way.**
+  - Creatures in the ancient places now keep the colours they're painted
+    in (they were being washed toward the frost look of Velmarch's other
+    old places).
+  - An arrow can now carry its own effect when it hits.
+  - A creature risen with a curse in it shows it.
+- **Version 1.11.0.** Worlds from 1.10 load as before. Hall floors you
+  have already been on are laid out afresh the next time you go down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

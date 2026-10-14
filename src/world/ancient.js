@@ -25,6 +25,7 @@ import { B, META_STATE } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { MAP_W, MAP_H, REGION_W, REGION_D } from '../config.js';
 import { ATHANOR_ARCH } from './deeps/athanor.js';
+import { CHAMPION_ARCH } from './deeps/champion.js';
 
 // The kinds of ancient place (as the far lands' own: see fardeep.js
 // FAR_DTYPES), each with its one master.
@@ -44,13 +45,18 @@ export const ANCIENT_DTYPES = {
     arch: ATHANOR_ARCH,
   },
   champion: {
-    name: 'Hall of the Last Champion', isle: 'velmarch', ancient: true, wall: B.mossy_bricks, floor: B.flagstone, alt: B.cracked_bricks, beam: B.planks_dark, regions: [2, 2], floors: [3, 3],
+    name: 'Hall of the Last Champion', isle: 'velmarch', ancient: true, wall: B.ch_stone, floor: B.ch_flags, alt: B.ch_cracked, beam: B.planks_dark, regions: [2, 2], floors: [3, 3],
     kits: ['trial', 'armory', 'statues', 'blades', 'chapel', 'tomb', 'arena', 'burial', 'reliquary', 'trial', 'trap', 'treasure', 'guard', 'statues', 'tomb'],
-    mobs: [['oathbound_squire', 4], ['trial_sentinel', 2], ['banner_wraith', 2]], only: true,
+    // (Round 111: and the shades of his Company, the curselings; the
+    // mourners set out where they kneel.)
+    mobs: [['oathbound_squire', 4], ['trial_sentinel', 2], ['banner_wraith', 2], ['shade_archer', 2], ['curseling', 2]], only: true, kept: ['mourner'],
     bosses: ['the_hero'], torches: 0.35,
-    shapes: { rect: 3, octagon: 2, cross: 2, round: 1 }, wiggle: 0, decor: [['statue', 3], ['war_banner', 3], ['weapon_rack', 2], ['candles', 2], ['skull_pile', 1], ['triumph_column', 1], ['hanging_chains', 1]],
+    shapes: { rect: 3, octagon: 2, cross: 2, round: 1 }, wiggle: 0, decor: [['statue', 2], ['war_banner', 2], ['ch_candles', 2], ['ch_brazier', 1], ['ch_armour', 1], ['ch_rack', 1], ['ch_flowers', 1]],
     dark: [0.09, 0.08, 0.07], motes: ['#ffe8a0', '#c8c8c8'], ambient: ['march', 'whisper', 'chains', 'drone'],
     loot: [['old_coin', 3, 8, 0.6], ['iron_ingot', 1, 3, 0.4], ['gold_ingot', 1, 1, 0.25], ['gem', 1, 1, 0.2]],
+    // (Round 111: its own rooms its own architect's, the old ones set about
+    // with its own, a floor to each of what it was: see deeps/champion.js.)
+    arch: CHAMPION_ARCH,
   },
   rift: {
     name: 'Sundered Reach', isle: 'ostria', ancient: true, wall: B.obsidian, floor: B.rock_void, alt: B.blight_floor, beam: null, regions: [2, 2], floors: [3, 3],

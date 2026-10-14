@@ -6058,6 +6058,9 @@ export class Game {
         t.poisonT = 5;
         t.poisonSrc = a.from;
       }
+      // (Round 111: whatever else its shooter's arrows do: a shade's pins
+      // you where you stand.)
+      if (hit && a.onHit && !t.dead) a.onHit(this, t);
       javelin(a);
       onArrowLand(this, a, hit);
       onArrowMods(this, a, hit);

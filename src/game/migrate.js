@@ -834,6 +834,14 @@ export const STEPS = [
       log.push('The Athanors are made over: white and gold marble, a stage of the Work to each floor (the nigredo, the albedo, the rubedo), with the laboratorium and its alcoves, the great athanor on its dais, the cloister and its fountain, the speculum and its sanctum, the vat-hall and the garden of metals; the sun-lamp\'s beam and its mirrors, the transmutation table, the athanor\'s egg and the Red Tincture, the vats, and the quicksilver and its fumes; the adepts, the leaden sentinels and the vat-tenders; and the Divine Alchemist redrawn. Athanor floors you have already been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 111) The Hall of the Last Champion made over (its floors' make
+  // raised: see dungeon.js KIND_GEN).
+  {
+    to: '1.11.0',
+    data(d, log) {
+      log.push('The Halls of the Last Champion are made over: sandstone and bronze and his faded banners, a floor to each of what it was (the Hall of Honours, the Hall of Trials, the Sealed Barrow), with the hall of honours and its gallery, the feast-hall, the oath chapel and its door, the barracks, the wound and its wards, and the hall of the fallen; the oath, the wards, the memorials and the mourners; the huntress\'s shades, the curselings, and the dead getting up again cursed; and the Hero redrawn. Hall floors you have already been on are laid out afresh the next time you go down.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

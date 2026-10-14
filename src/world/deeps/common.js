@@ -30,7 +30,8 @@ export function put(ctx, species, x, z, r, o = {}) {
   const { out, b } = ctx;
   if (out.spawns.some((s) => s.x === b.x0 + x && s.z === z)) return null;
   const sw = ctx.T.swap && ctx.T.swap[species];
-  const v = LOOK[ctx.rec.isle] || 0;
+  // (Round 111: not in the ancient places, whose own are as they're drawn.)
+  const v = ctx.T.ancient ? 0 : LOOK[ctx.rec.isle] || 0;
   const s = { id: out.spawns.length, species: sw ? ctx.rng.pick(sw) : species, x: b.x0 + x, z, room: r.id, ...(v ? { variant: v } : {}), ...o };
   out.spawns.push(s);
   return s;

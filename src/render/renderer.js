@@ -2668,6 +2668,14 @@ export class Renderer {
           ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#c070ff'), cx - 1, cy - 1);
           ctx.globalAlpha = a;
         }
+        // (Round 111) Risen again with the curse in it: a sick green edge,
+        // crawling.
+        if (e.cursed) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (0.45 + 0.25 * Math.sin(this.time * 5 + (e.id || 0)));
+          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#8ad040'), cx - 1, cy - 1);
+          ctx.globalAlpha = a;
+        }
         // Its shield up (a warden's cover, a golem's plates): a pale rim of
         // light. (One of the Overseer's sentinels, holding up its shield:
         // bright, and pulsing.)
@@ -2839,6 +2847,12 @@ export class Renderer {
         if (e.infected && !rolling && !inWater) {
           ctx.globalAlpha = a0 * (0.35 + 0.2 * Math.sin(this.time * 3 + (e.id || 0)));
           ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#c070ff'), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a0;
+        }
+        // (Round 111: risen again with the curse in it, a sick green edge.)
+        if (e.cursed && !rolling && !inWater) {
+          ctx.globalAlpha = a0 * (0.45 + 0.25 * Math.sin(this.time * 5 + (e.id || 0)));
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#8ad040'), sx - 1, top - SPR_PAD - 1);
           ctx.globalAlpha = a0;
         }
         // (A master's edge lit in its colour; white as a blow comes.)

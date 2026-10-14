@@ -27,6 +27,7 @@ import { WARREN_MOBS } from './art/warren_mobs.js';
 import { MOUND_MOBS } from './art/mound_mobs.js';
 import { BROCH_MOBS } from './art/broch_mobs.js';
 import { ATHANOR_MOBS } from './art/athanor_mobs.js';
+import { CHAMPION_MOBS } from './art/champion_mobs.js';
 import { lookOf } from './pixart.js';
 import { farIcon, FAR_CREATURES } from './farart.js';
 import { ANCIENT_CREATURES } from './ancientart.js';
@@ -274,6 +275,7 @@ for (const [k, def] of Object.entries(WARREN_MOBS)) CREATURE_LOOKS[k] = lookOf(d
 for (const [k, def] of Object.entries(MOUND_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(BROCH_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 for (const [k, def] of Object.entries(ATHANOR_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
+for (const [k, def] of Object.entries(CHAMPION_MOBS)) CREATURE_LOOKS[k] = lookOf(def);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 

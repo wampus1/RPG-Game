@@ -24,6 +24,7 @@ import { WARREN_SPECIES } from './warrenmobs.js';
 import { MOUND_SPECIES } from './moundmobs.js';
 import { BROCH_SPECIES } from './brochmobs.js';
 import { ATHANOR_SPECIES } from './athanormobs.js';
+import { CHAMPION_SPECIES } from './championmobs.js';
 import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
@@ -135,6 +136,8 @@ export const SPECIES = {
   ...ANCIENT_SPECIES,
   // (Round 110: the Athanor's own, and its old ones with somewhere to go.)
   ...ATHANOR_SPECIES,
+  // (Round 111: the Champion's Hall's own.)
+  ...CHAMPION_SPECIES,
   ...FAR_BOSS_SPECIES,
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,

@@ -299,6 +299,10 @@ export function drive(role, e, A, t, q = {}) {
       out.a += 0.3 * dying;
       break;
     }
+    case 'still':
+      // (Round 111) Set in its place on the body, moving with it only: a
+      // breastplate, or what's split it.
+      break;
     default:
       out.a = Math.sin(t * 1.2 + ph) * 0.05;
   }
