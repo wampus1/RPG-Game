@@ -44,6 +44,7 @@ import { paintingArt } from './paintings.js';
 import { GroundFx } from './groundfx.js';
 import { steedSprite, dirAngle, easeAngle, steedSlices, steedRows } from './steeds.js';
 import { chairTable } from '../game/chairs.js';
+import { pixelsIn } from './pixels.js';
 
 // (Round 114) Which floors fray into their neighbours (see
 // Renderer.blendEdges): earth, stone, sand, moss and the like; not what's
@@ -2274,9 +2275,10 @@ export class Renderer {
     const m = this.mouse;
     const S = D.S;
     if (m && m.x >= D.x && m.x < D.x + S.img.width && m.y >= D.y && m.y < D.y + S.img.height) {
-      const ctxm = S.img.getContext('2d');
-      const px = ctxm.getImageData(m.x - D.x, m.y - D.y, 1, 1).data;
-      if (px[3] > 120) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx + 8, feetY, S) };
+      // (Round 115: off the pixels it was made from, never read back off
+      // the canvas each frame the mouse is over it.)
+      const a = S.px ? (S.px[(m.y - D.y) * S.w + (m.x - D.x)] >>> 24) : pixelsIn(S.img, m.x - D.x, m.y - D.y, 1, 1)[3];
+      if (a > 120) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx + 8, feetY, S) };
     }
   }
 
@@ -3390,8 +3392,7 @@ export class Renderer {
     let c = this.dropIcons.get(key);
     if (c) return c;
     const src = itemIcon(key);
-    const sctx = src.getContext('2d');
-    const d = sctx.getImageData(0, 0, 16, 16).data;
+    const d = pixelsIn(src, 0, 0, 16, 16);
     c = document.createElement('canvas');
     c.width = 8;
     c.height = 8;
@@ -4055,7 +4056,7 @@ export class Renderer {
     let pts = this.opaque.get(key);
     if (!pts) {
       pts = [];
-      const d = img.getContext('2d').getImageData(0, 0, 16, 16).data;
+      const d = pixelsIn(img, 0, 0, 16, 16);
       for (let y = 0; y < 15; y++) for (let x = 0; x < 15; x++) if (d[(y * 16 + x) * 4 + 3] > 200 && d[((y + 1) * 16 + x + 1) * 4 + 3] > 200) pts.push([x, y]);
       this.opaque.set(key, pts);
     }

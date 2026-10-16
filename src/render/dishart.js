@@ -5,13 +5,14 @@
 // went in it on top (a tart open, its filling showing; a loaf, flecked);
 // a platter of little heaps of each on a plate (a salad in a bowl).
 // 16 by 16, like every item's.
+import { pixelsIn } from './pixels.js';
 
 const S = 16;
 
 // Each ingredient's picture as pixels, its main colour, and a few small
 // cut-outs of it (the most solid bits), for the dish's.
 function sample(icon) {
-  const d = icon.getContext('2d').getImageData(0, 0, S, S).data;
+  const d = pixelsIn(icon, 0, 0, S, S);
   let r = 0;
   let g = 0;
   let b = 0;

@@ -1474,7 +1474,10 @@ export function tickHour(sim, L, h) {
 }
 
 // Bring a settlement's books up to `abs` (absolute game minutes).
-export function simulateTo(sim, L, abs) {
+// (`wait`: a town you're in, its day of business still being worked
+// through a little each frame: its hours wait for it, rather than it all
+// being done there and then. See Sim.dailyCivic.)
+export function simulateTo(sim, L, abs, wait = false) {
   const e = L.econ;
   // A settlement's story starts on the first morning of the world.
   if (e.lastAbs === null) e.lastAbs = Math.floor(Math.min(abs - 60, DAY + 360) / 60) * 60;
@@ -1482,6 +1485,10 @@ export function simulateTo(sim, L, abs) {
   // (Its day of business, if it's still being worked through, first: see
   // Sim.civicTick.)
   if (sim && sim.civicJob && sim.civicJob.L === L) sim.civicTick();
+  if (sim && sim.hereJob && sim.hereJob.L === L) {
+    if (wait) return 0;
+    sim.civicTick(Infinity, 'hereJob');
+  }
   let n = 0;
   while (e.lastAbs + 60 <= abs) {
     tickHour(sim, L, e.lastAbs);
@@ -1489,7 +1496,7 @@ export function simulateTo(sim, L, abs) {
     n++;
     // (A far town's day of business, left for the frames to come: the
     // rest of its time waits for it.)
-    if (sim && sim.civicJob && sim.civicJob.L === L) break;
+    if (sim && ((sim.civicJob && sim.civicJob.L === L) || (sim.hereJob && sim.hereJob.L === L))) break;
   }
   return n;
 }

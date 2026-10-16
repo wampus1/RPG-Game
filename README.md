@@ -9098,6 +9098,56 @@ A round of fixes from play, and a barrow with more ups and downs.
 - **Version 1.14.0.** Worlds from 1.13 load as before. Floors of old places
   you have already been on are laid out afresh the next time you go down.
 
+## Round 115: Smoother, and lighter for whoever joins you
+
+A round of speed-ups, measured before and after, with nothing about play
+changed. The work averaged only a few milliseconds a frame anyway (a city
+of 90 people about 2.6 ms, a dungeon floor's 20 to 40 creatures under half
+a millisecond), so the work went into the frames that stalled.
+
+- **Towns.**
+  - **The morning's business.** A town you're in, or one just coming into
+    view, used to work through its whole day of business at once: births,
+    weddings, streets, laws, trade, the look for a pier. That took up to a
+    quarter of a second in one frame. It's now worked through a few
+    milliseconds a frame, as the far towns' always were. Its hours wait a
+    moment for it.
+  - **Towns laid out ahead.** A city near you used to be laid out all at
+    once as you walked toward it, a frozen frame of up to a fifth of a
+    second. It now goes first in the queue of towns laid out a few
+    milliseconds a frame.
+  - **The look for a pier** is made a few rows at a time, ahead of the
+    day's business that needs it. It's used only if the town hasn't
+    changed in the meantime, and it finds exactly the same spots.
+  - The worst frame in a day of a city, at its busiest hour, is down from
+    over 130 ms to about 40 ms.
+- **Dungeons.**
+  - **Climbing out.** The ground about an old place's way in is kept while
+    anyone's below. Coming up no longer lays it all out again, so leaving
+    takes a few milliseconds instead of a tenth of a second.
+  - **Creatures with nowhere to go** (a mourner after a candle it can't
+    reach) no longer search thousands of squares every frame. They try
+    again a moment later.
+- **Drawing.**
+  - Nothing is read back off the screen to draw a dropped item, a sign's
+    icon, a crumb of food, a jewel's glow, a dish, a master's shape or its
+    death motes. Each such read stalled the frame, over a second at a
+    time on a slow machine, the first time a town's signs came into view.
+    The pixels are kept from when each picture is made.
+  - Pointing at a wagon reads its own picture's pixels, not the screen's,
+    every frame the mouse is over it.
+- **Playing together.**
+  - **The floor's plan.** Each time you went down a floor in someone
+    else's world, your machine laid the whole floor out again just to
+    draw its map. The host now sends the plan, once a floor, packed small.
+  - **What's sent.** The host works out each thing's state once a frame
+    for however many of you are playing, not once for each of you. With
+    three guests in a city that halves the host's sending work.
+  - Guests otherwise only draw, light, point and play the weather's
+    sounds: everything else is already the host's.
+- **Version 1.15.0.** Worlds from 1.14 load as before; nothing in a save
+  changes.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

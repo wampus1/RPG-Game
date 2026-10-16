@@ -10,7 +10,7 @@
 import { parseLine, hears, heard } from './chat.js';
 import { openEnvelope, toPlayer, toRelay, MAX_PLAYERS } from './protocol.js';
 import { asSeat, seatMap } from '../game/party.js';
-import { enc, diffFields, packEntity } from './wire.js';
+import { enc, diffFields, fieldsOf, packEntity, packPlan } from './wire.js';
 import { uiFrame } from './uiwire.js';
 import { profileOf, cleanIcon, cleanDesc, cleanTitle } from './account.js';
 import { BLOCKS } from '../world/blocks.js';
@@ -603,6 +603,10 @@ export class HostNet {
     if (this.acc < 1 / RATE) return;
     const step = this.acc;
     this.acc = 0;
+    // (Round 115) Each thing's fields worked out once a frame, for however
+    // many of you it's sent to (nothing changes between one of you and the
+    // next): they were worked out again for each.
+    this.fields = new Map();
     for (const g of this.guests.values()) {
       if (g.state !== 'in') continue;
       // (Asked for word less often: every other time, the time between
@@ -614,6 +618,7 @@ export class HostNet {
       g.owed = 0;
       this.sendTo(g, s);
     }
+    this.fields = null;
   }
 
   sendTo(g, step) {
@@ -666,6 +671,12 @@ export class HostNet {
         g.sent.seenMap = sk;
         msg.ds = { id: dn.rec.id, f: dn.floor, m: hex };
       }
+      // (Round 115) The floor's plan, for their map: once a floor.
+      const pk = dn && dn.data && dn.data.plan ? `${dn.rec.id}:${dn.floor}:${dn.rx0}:${dn.rec.restores || 0}` : null;
+      if (pk && pk !== g.sent.plan) {
+        g.sent.plan = pk;
+        msg.dp = packPlan(dn.data, pk);
+      }
     });
     // Everything about them.
     const near = (e) => Math.abs(e.x - p.x) <= VIEW && Math.abs(e.z - p.z) <= VIEW;
@@ -676,7 +687,12 @@ export class HostNet {
       seen.add(e.id);
       let last = g.sent.ents.get(e.id);
       if (!last) g.sent.ents.set(e.id, (last = {}));
-      const ch = diffFields(e, last);
+      let now = this.fields && this.fields.get(e);
+      if (!now) {
+        now = fieldsOf(e);
+        this.fields?.set(e, now);
+      }
+      const ch = diffFields(e, last, now);
       if (ch) ents.push(packEntity(e, ch));
     };
     // (Not anyone still watching their opening: not in the world yet.)

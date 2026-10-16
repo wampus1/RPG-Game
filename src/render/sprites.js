@@ -37,6 +37,7 @@ import { shipIcon } from './shipart.js';
 import { isleBossArt } from './islebossart.js';
 import { drawHumanoid, CHAR_W, SHEET_H, FRAMES, SPR_PAD } from './people.js';
 import { MODS } from '../mod/state.js';
+import { keepPixels, pixelsIn } from './pixels.js';
 
 const OUT = '#1c1622';
 // (People are drawn in people.js.)
@@ -46,7 +47,9 @@ function toCanvas(px) {
   const c = document.createElement('canvas');
   c.width = px.w;
   c.height = px.h;
-  c.getContext('2d').putImageData(px.toImageData(), 0, 0);
+  const img = px.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   return c;
 }
 
@@ -1944,7 +1947,7 @@ function glowOf(icon, color, tag, thin = false) {
   if (g) return g;
   const w = icon.width;
   const h = icon.height;
-  const src = icon.getContext('2d').getImageData(0, 0, w, h).data;
+  const src = pixelsIn(icon, 0, 0, w, h);
   const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 40;
   g = document.createElement('canvas');
   g.width = w + 4;
@@ -2143,7 +2146,7 @@ export function itemIcon(key) {
   const dIcon = it && !it.enhanced ? dungeonIcon(key, it) : null;
   if (it && it.enhanced) {
     const base = itemIcon(it.base);
-    const d = base.getContext('2d').getImageData(0, 0, 16, 16).data;
+    const d = pixelsIn(base, 0, 0, 16, 16);
     const bp = new Px(16, 16);
     for (let i = 0; i < 256; i++) if (d[i * 4 + 3]) bp.set(i % 16, Math.floor(i / 16), [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], d[i * 4 + 3]);
     px = edgeOverlay(bp);
@@ -2187,7 +2190,7 @@ export function frameGlow(sheet, fx, fy, w, h, color) {
   const k = `${fx}:${fy}:${color}`;
   let g = m.get(k);
   if (g) return g;
-  const src = sheet.getContext('2d').getImageData(fx, fy, w, h).data;
+  const src = pixelsIn(sheet, fx, fy, w, h);
   const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 40;
   g = document.createElement('canvas');
   g.width = w + 2;

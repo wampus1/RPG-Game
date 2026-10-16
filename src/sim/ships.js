@@ -56,6 +56,15 @@ export class Ships {
   // planks wide and four long, straight out over the water, with open water
   // beyond its end for the ship to lie in.
   dockSite(L, size = 'small') {
+    const steps = this.dockSiteSteps(L, size);
+    let r;
+    do r = steps.next();
+    while (!r.done);
+    return r.value;
+  }
+
+  // (Round 115) The same, a few rows of the shore at a time (see prepSteps).
+  *dockSiteSteps(L, size = 'small') {
     const D = DOCKS[size] || DOCKS.small;
     const b = L.bounds;
     const P = L.plaza;
@@ -108,6 +117,7 @@ export class Ships {
     const head = D.head || 0;
     let best = null;
     for (let z = b.z0 - 14; z <= b.z1 + 14; z++) {
+      if ((z - b.z0) % 4 === 0) yield;
       for (let x = b.x0 - 14; x <= b.x1 + 14; x++) {
         if (!dry(x, z)) continue;
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -207,9 +217,54 @@ export class Ships {
     const P = this.ports[s.id];
     if (P && P.state !== 'docked') return;
     if (!P && L.econ.noDock !== undefined && day - L.econ.noDock < 7) return;
-    if (L.shoreWarm) return;
-    yield* L.edgeSteps(14 + 10);
-    L.shoreWarm = true;
+    if (!L.shoreWarm) {
+      yield* L.edgeSteps(14 + 10);
+      L.shoreWarm = true;
+    }
+    // (Round 115) And the looks for a pier the day's business will make
+    // (see daily), made here a few rows at a time: a fifth of a second of
+    // it, all at once, the first day a town on the water was seen to.
+    const looks = this.dockLooks(L, day);
+    if (!looks.length) return;
+    const found = { sid: s.id, day, sig: this.dockSig(L), sites: new Map() };
+    for (const size of looks) {
+      const site = yield* this.dockSiteSteps(L, size);
+      found.sites.set(size, site);
+      if (site && !P) break;
+    }
+    found.sig = this.dockSig(L);
+    this.found = found;
+  }
+
+  // Which sizes of pier the day's business will look for room for (as
+  // daily does, in order), if any.
+  dockLooks(L, day) {
+    const s = L.settlement;
+    const knows = this.sim.tech.has(s, 'trade_ships');
+    const P = this.ports[s.id];
+    if (!s.coast && !knows && (!P || P.state === 'planned')) return [];
+    const want = dockSizeFor(s);
+    if (!P) {
+      if (L.econ.noDock !== undefined && day - L.econ.noDock < 7) return [];
+      return ['large', 'medium', 'small'].slice(2 - DOCKS[want].rank);
+    }
+    if (P.state === 'docked' && DOCKS[want].rank > (DOCKS[P.size] || DOCKS.small).rank && !P.grow && L.econ.treasury >= DOCKS[want].cost + 40 && !this.sim.works.active(s.id).some((q) => q.kind === 'dock')
+      && (L.econ.noGrowDock === undefined || day - L.econ.noGrowDock >= 7)) return [want];
+    return [];
+  }
+
+  // (What the town's like, so a look made a moment ago still holds: no
+  // building or work begun since.)
+  dockSig(L) {
+    return `${L.maskV || 0}:${L.buildings.length}:${this.sim.works.projects.length}`;
+  }
+
+  // Where a pier of `size` could go: the look made ahead (see prepSteps)
+  // if it's today's and the town's as it was, else looked for now.
+  dockFor(L, day, size) {
+    const f = this.found;
+    if (f && f.sid === L.settlement.id && f.day === day && f.sites.has(size) && f.sig === this.dockSig(L)) return f.sites.get(size);
+    return this.dockSite(L, size);
   }
 
   daily(L, day, rng) {
@@ -228,7 +283,7 @@ export class Ships {
       // changes, not every day.)
       if (L.econ.noDock !== undefined && day - L.econ.noDock < 7) return null;
       let site = null;
-      for (const size of ['large', 'medium', 'small'].slice(2 - DOCKS[want].rank)) if ((site = this.dockSite(L, size))) break;
+      for (const size of ['large', 'medium', 'small'].slice(2 - DOCKS[want].rank)) if ((site = this.dockFor(L, day, size))) break;
       if (!site) {
         L.econ.noDock = day;
         return null;
@@ -289,7 +344,7 @@ export class Ships {
     // ...and the town grown since: the dock grows with it.
     if (P.state === 'docked' && DOCKS[want].rank > (DOCKS[P.size] || DOCKS.small).rank && !P.grow && L.econ.treasury >= DOCKS[want].cost + 40 && !this.sim.works.active(s.id).some((q) => q.kind === 'dock')
       && (L.econ.noGrowDock === undefined || day - L.econ.noGrowDock >= 7)) {
-      const site = this.dockSite(L, want);
+      const site = this.dockFor(L, day, want);
       if (!site) L.econ.noGrowDock = day;
       else {
         const xs = site.tiles.map((t) => t[0]);
@@ -300,6 +355,7 @@ export class Ships {
         ledger(L, day, `${s.name} has outgrown its ${P.size === 'small' ? 'jetty' : 'pier'}: ¤${DOCKS[want].cost} for ${DOCKS[want].label}.`);
       }
     }
+    this.found = null;
     if (P.grow) {
       const p = this.sim.works.projects.find((q) => q.id === P.grow.project);
       if (!p || p.done) {

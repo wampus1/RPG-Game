@@ -869,6 +869,13 @@ export const STEPS = [
       log.push('Fixes: the barrow\'s ship has a ladder out of its hold and wooden sides; barrow floors have raised galleries and sunken floors with steps; dungeon floors blend and mostly use their plain tiles; stairs everywhere climb the right way; pools sit in the floor; no more than 3 to 5 foes to a room by tier; the corpse-light throws cold fire; the old hound stays put and eats the bones you drop; the time crystal never shuts you in the way it rebuilds; cells are locked while anyone\'s in them (a lockpick opens them, and prisoners let out run for it); a doorway is not a house; the coachman drives his own coach and keeps his hours; weather changes gently; skipping days and weddings no longer freeze the game. Floors of old places you have been on are laid out afresh the next time you go down.');
     },
   },
+  // (Round 115) Quicker, not different: nothing in a save to change.
+  {
+    to: '1.15.0',
+    data(d, log) {
+      log.push('Smoother: a town\'s morning business, a town coming into view, a nearby city being laid out and the look for a pier are all worked through a little each frame instead of all at once; the ground by an old place\'s way in is kept while you\'re below, so climbing out is instant; icons, signs, dishes and masters are no longer read back off the screen to be drawn; creatures stop searching every frame for a way that isn\'t there; and with others playing, the host sends each floor\'s plan for the map (no more laying the floor out again on your own machine) and works out what to send once for all of you.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -14,6 +14,7 @@ import { TILE, LH } from '../config.js';
 import { frameGlow } from './sprites.js';
 import { beginTex, makeTex, drawTex, drawRim, texScale, bigTex, TEXEL } from './bosstex.js';
 import { poseOf, drawPoseFx, drawPoseBehind } from './bossanim.js';
+import { keepPixels } from './pixels.js';
 
 export const BOSS_SCALE = 1.5;
 const OUT = '#1c1622';
@@ -44,7 +45,9 @@ function toCanvas(px) {
   const c = document.createElement('canvas');
   c.width = px.w;
   c.height = px.h;
-  c.getContext('2d').putImageData(px.toImageData(), 0, 0);
+  const img = px.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   return c;
 }
 

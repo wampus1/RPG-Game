@@ -5,7 +5,7 @@
 // draws that, plays its sounds, and sends back what you press and click
 // and point at, for the host to do as you.
 import { heard } from './chat.js';
-import { applyEntity, resolveEntity, dec } from './wire.js';
+import { applyEntity, resolveEntity, dec, unpackPlan } from './wire.js';
 import { applyFrame } from './uiwire.js';
 import { Region } from '../world/region.js';
 import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../config.js';
@@ -16,7 +16,7 @@ import { introFrom } from '../game/intros.js';
 import { wallFall } from '../game/wallfall.js';
 import { timeTurn } from '../game/timecrystal.js';
 import { eruptionScene } from '../game/eruption.js';
-import { DungeonRun, planFloor } from '../game/dungeon.js';
+import { DungeonRun } from '../game/dungeon.js';
 import { noteSeen, mergeSeen } from '../ui/dungeonmap.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
@@ -247,6 +247,12 @@ export class GuestNet {
     // (Round 68) The great ships about you.
     if (m.sh) applyShips(game, m.sh);
     if (m.l) this.lists(m.l);
+    // (Round 115) A floor's plan, from the host (see globals).
+    if (m.dp) {
+      this.plans ||= new Map();
+      this.plans.set(m.dp.k, unpackPlan(m.dp));
+      if (this.plans.size > 4) this.plans.delete(this.plans.keys().next().value);
+    }
     if (m.w) this.globals(m.w);
     // (Round 91) What's been seen of this floor, by any of you.
     if (m.ds) this.seenFloor(m.ds);
@@ -410,19 +416,17 @@ export class GuestNet {
     run.floor = d.floor;
     run.fight = dec(d.fight, find);
     run.fallen = dec(d.fallen, find);
-    // (Round 91) The floor's plan, laid out here as the host has it, for
-    // the map (made once a floor).
+    // (Round 91) The floor's plan as the host has it, for the map.
+    // (Round 115: sent by the host, once a floor: it used to be laid out
+    // all over again here, the whole floor, a stall each time you went
+    // down a floor.)
     if (d.rx0 !== undefined && d.rx0 !== null) run.rx0 = d.rx0;
     if (d.restores !== undefined) rec.restores = d.restores;
-    if (run.planned !== `${d.floor}:${run.rx0}:${rec.restores || 0}`) {
-      run.planned = `${d.floor}:${run.rx0}:${rec.restores || 0}`;
-      let b = null;
-      try {
-        b = run.rx0 !== undefined ? planFloor(rec, d.floor, run.rx0) : null;
-      } catch {
-        b = null;
-      }
-      run.plan = b ? { plan: b.plan, x0: b.x0, z0: b.z0, rooms: b.rooms, bossGate: b.bossGate, up: b.up } : {};
+    const pk = `${d.id}:${d.floor}:${run.rx0}:${rec.restores || 0}`;
+    if (run.planned !== pk) {
+      const got = this.plans && this.plans.get(pk);
+      run.plan = got || {};
+      if (got) run.planned = pk;
     }
     run.data = { ...run.plan, bossRoom: d.bossRoom, up: d.up || run.plan.up, upAt: d.upAt, down: d.down };
     run.packs = d.packs || [];

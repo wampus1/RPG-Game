@@ -100,8 +100,8 @@ export function fieldsOf(e) {
 
 // What changed in its fields since `last` (all of them the first time);
 // `last` brought up to date. Null if nothing did.
-export function diffFields(e, last) {
-  const now = fieldsOf(e);
+// (`now`: its fields as already worked out this frame, for another of you.)
+export function diffFields(e, last, now = fieldsOf(e)) {
   let out = null;
   for (const k of Object.keys(now)) {
     if (last[k] === now[k]) continue;
@@ -163,4 +163,54 @@ export function resolveEntity(e, find) {
     const v = raw[k];
     if (v && typeof v === 'object' && k !== 'rec') e[k] = dec(v, find);
   }
+}
+
+// (Round 115) A floor's plan, for a player's map (sent once a floor: they
+// used to lay the whole floor out again themselves just to have it). Its
+// open squares and their rooms, run by run; where it lies; its stairs,
+// its way up, the gate before its master.
+const runs = (a) => {
+  const out = [];
+  for (let i = 0; i < a.length; ) {
+    let j = i + 1;
+    while (j < a.length && a[j] === a[i]) j++;
+    out.push(a[i], j - i);
+    i = j;
+  }
+  return out;
+};
+const unrun = (r, n, T) => {
+  const a = new T(n);
+  let i = 0;
+  for (let k = 0; k < r.length; k += 2) {
+    a.fill(r[k], i, i + r[k + 1]);
+    i += r[k + 1];
+  }
+  return a;
+};
+export function packPlan(data, key) {
+  const P = data.plan;
+  return {
+    k: key,
+    W: P.W,
+    D: P.D,
+    open: runs(P.open),
+    room: P.room ? runs(P.room) : null,
+    x0: data.x0,
+    z0: data.z0 || 0,
+    stairs: (data.rooms || []).filter((r) => r.stairs).map((r) => [r.stairs.x, r.stairs.z]),
+    bossGate: data.bossGate ? { x: data.bossGate.x, z: data.bossGate.z } : null,
+    up: data.up ? { x: data.up.x, z: data.up.z } : null,
+  };
+}
+export function unpackPlan(p) {
+  const n = p.W * p.D;
+  return {
+    plan: { W: p.W, D: p.D, open: unrun(p.open, n, Uint8Array), room: p.room ? unrun(p.room, n, Int16Array) : null },
+    x0: p.x0,
+    z0: p.z0,
+    rooms: (p.stairs || []).map(([x, z]) => ({ stairs: { x, z } })),
+    bossGate: p.bossGate,
+    up: p.up,
+  };
 }

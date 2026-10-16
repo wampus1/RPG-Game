@@ -11,6 +11,7 @@
 import { Px, hex, mix, shade } from './pixel.js';
 import { outlineSel } from './people.js';
 import { TILE, LH } from '../config.js';
+import { keepPixels } from './pixels.js';
 
 const TAU = Math.PI * 2;
 const STEPS = 64;
@@ -19,7 +20,9 @@ function toCanvas(p) {
   const c = document.createElement('canvas');
   c.width = p.w;
   c.height = p.h;
-  c.getContext('2d').putImageData(p.toImageData(), 0, 0);
+  const img = p.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   return c;
 }
 

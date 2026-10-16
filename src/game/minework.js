@@ -437,10 +437,20 @@ export function walkTo(c, goal, near = 1) {
   if (dist(c, goal) <= near) return false;
   if (c.moving) return true;
   if (!c.lurePath || c.lureI >= c.lurePath.length || c.lureGoal !== key(goal.x, goal.z)) {
+    // (Round 115: no way there, found a moment ago: not looked for again
+    // every frame (a search of thousands of squares each time), but in a
+    // little while, when something may have moved.)
+    const frame = c.game.frameNo;
+    if (frame !== undefined && c.lureNone === key(goal.x, goal.z) && frame < c.lureRetry) return false;
     c.lurePath = findPath(c.game.world, c.x, c.y, c.z, goal.x, FY, goal.z, { maxNodes: 2500, near, partial: true });
     c.lureI = 0;
     c.lureGoal = key(goal.x, goal.z);
-    if (!c.lurePath || !c.lurePath.length) return false;
+    if (!c.lurePath || !c.lurePath.length) {
+      c.lureNone = c.lureGoal;
+      c.lureRetry = (frame ?? 0) + 20;
+      return false;
+    }
+    c.lureNone = null;
   }
   const [nx, , nz] = c.lurePath[c.lureI];
   if (c.tryStep(nx, nz, c.S.step)) c.lureI++;

@@ -925,10 +925,13 @@ export class Game {
       if (!this.world.isLoaded(X, Z)) this.world.loadRegion(X, Z);
     } else if (Math.random() < 0.1) {
       // Idle: lay out nearby settlements ahead of time so arriving doesn't stall.
+      // (Round 115: first in the queue of towns laid out a few milliseconds
+      // a frame, not all at once there and then: a city took a fifth of a
+      // second, a frozen frame as you walked towards it. See Sim.laidOut.)
       for (const s of this.world.ow.settlements) {
         if (this.world.layouts.has(s.id)) continue;
         if (Math.abs(s.cx - p.x / REGION_W) > 3 || Math.abs(s.cz - p.z / REGION_D) > 3) continue;
-        this.world.getLayout(s);
+        this.sim.laidOut(s.id);
         break;
       }
     }
@@ -947,6 +950,14 @@ export class Game {
     for (const { layout } of this.active.values()) {
       const b = layout.bounds;
       if (rx >= Math.floor((b.x0 - 26) / REGION_W) && rx <= Math.floor((b.x1 + 26) / REGION_W) && rz >= Math.floor((b.z0 - 22) / REGION_D) && rz <= Math.floor((b.z1 + 22) / REGION_D)) return true;
+    }
+    // (Round 115) The ground about the way into an old place anyone's down
+    // in, kept for when they come up: it was let go, and laid out afresh
+    // all at once as they climbed out (a tenth of a second of it).
+    for (const run of this.runs ? this.runs.values() : this.dungeon ? [this.dungeon] : []) {
+      const r = run && run.rec;
+      if (!r || r.x === undefined) continue;
+      if (Math.abs(rx - Math.floor(r.x / REGION_W)) <= 1 && Math.abs(rz - Math.floor(r.z / REGION_D)) <= 1) return true;
     }
     return false;
   }
@@ -990,7 +1001,7 @@ export class Game {
     }
     if (missing) return;
     // The town's books were kept while we were away: catch up first.
-    this.sim.catchUp(layout);
+    this.sim.catchUp(layout, true);
     const dead = this.deadNpcs.get(s.id) || new Set();
     const npcs = [];
     for (const rec of layout.npcs) {

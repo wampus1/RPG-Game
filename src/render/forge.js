@@ -18,6 +18,7 @@ import { Sculpt } from './sculpt.js';
 import { Paint, hash2 } from './paint.js';
 import { Part } from './bossrig.js';
 import { grid, frameRows } from './pixart.js';
+import { keepPixels } from './pixels.js';
 
 export const FORGE = {};
 export function forge(defs) {
@@ -48,7 +49,9 @@ function toCanvas(px) {
   const c = document.createElement('canvas');
   c.width = px.w;
   c.height = px.h;
-  c.getContext('2d').putImageData(px.toImageData(), 0, 0);
+  const img = px.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   return c;
 }
 

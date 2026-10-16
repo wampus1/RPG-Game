@@ -520,11 +520,10 @@ test('nothing read back off a canvas to draw a half-eaten dish or a floor\'s edg
 });
 
 test('version 1.14.0, and the step to it', () => {
-  assert.equal(GAME_VERSION, '1.14.0');
+  assert.ok(compareVersions(GAME_VERSION, '1.14.0') >= 0);
   assert.ok(compareVersions('1.13.0', GAME_VERSION) < 0);
-  const steps = stepsFor('1.13.0');
+  const steps = stepsFor('1.13.0').filter((s) => s.to === '1.14.0');
   assert.equal(steps.length, 1);
-  assert.equal(steps[0].to, '1.14.0');
   const log = [];
   steps[0].data({}, log);
   assert.ok(/barrow/i.test(log[0]) && /coach/i.test(log[0]));

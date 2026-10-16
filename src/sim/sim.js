@@ -325,8 +325,21 @@ export class Sim {
     }
   }
 
-  catchUp(L) {
-    simulateTo(this, L, this.abs);
+  // (`here`: a town coming into view about you: its day of business, if
+  // it falls due as it's caught up, worked through over the next frames as
+  // a town you're in is (see dailyCivic), never all at once as it appears:
+  // a quarter of a second of it, walking up to a town.)
+  catchUp(L, here = false) {
+    if (!here) {
+      simulateTo(this, L, this.abs);
+      return;
+    }
+    this.civicHere = true;
+    try {
+      simulateTo(this, L, this.abs, true);
+    } finally {
+      this.civicHere = false;
+    }
   }
 
   update(dt) {
@@ -335,9 +348,14 @@ export class Sim {
     this.ticked = this.tickT <= 0;
     if (this.tickT <= 0) {
       this.tickT = 0.5;
-      for (const { layout } of this.game.active.values()) {
-        simulateTo(this, layout, this.abs);
-        this.syncTreasury(layout);
+      this.civicHere = true;
+      try {
+        for (const { layout } of this.game.active.values()) {
+          simulateTo(this, layout, this.abs, true);
+          this.syncTreasury(layout);
+        }
+      } finally {
+        this.civicHere = false;
       }
       this.backgroundTick();
       // (As the one whose house it is, with others playing: see asBuilder.)
@@ -371,6 +389,7 @@ export class Sim {
       this.nextLay();
     }
     if (this.civicJob) this.civicTick(LAY_MS);
+    if (this.hereJob) this.civicTick(LAY_MS, 'hereJob');
     this.war.update(dt);
     this.volcano.update(dt);
     this.saga.update(dt);
@@ -1212,6 +1231,15 @@ export class Sim {
   }
 
   dailyCivic(L, day, rng) {
+    // (Round 115) A town you're in: its day of business worked through a
+    // few milliseconds a frame too, in a slot of its own (beside the far
+    // towns' one), so the morning's business never holds a frame up; its
+    // hours wait for it, a moment (see econ.simulateTo).
+    if (this.civicHere) {
+      if (this.hereJob) this.civicTick(Infinity, 'hereJob');
+      this.hereJob = { L, day, now: Math.min(this.abs, day * DAY + 600), steps: this.civicSteps(L, day, rng) };
+      return;
+    }
     // (Another town's, still under way, is seen through first.)
     if (this.civicJob) this.civicTick();
     const job = { L, day, now: Math.min(this.abs, day * DAY + 600), steps: this.civicSteps(L, day, rng) };
@@ -1223,8 +1251,8 @@ export class Sim {
 
   // On with the day of business under way, `ms` of it at most (all of it,
   // by default). Whether it's done.
-  civicTick(ms = Infinity) {
-    const job = this.civicJob;
+  civicTick(ms = Infinity, slot = 'civicJob') {
+    const job = this[slot];
     if (!job) return true;
     this.simDay = job.day;
     this.simNow = job.now;
@@ -1234,13 +1262,13 @@ export class Sim {
       do r = job.steps.next();
       while (!r.done && performance.now() - t0 < ms);
       if (r.done) {
-        this.civicJob = null;
+        this[slot] = null;
         // Building work in a town caught up from afar moves on with its
         // days (and what gets finished is noted on the day it was).
         this.works.catchUp(job.L, Math.min(this.abs, (job.day + 1) * DAY));
       }
     } catch (e) {
-      this.civicJob = null;
+      this[slot] = null;
       throw e;
     } finally {
       this.simDay = null;
@@ -2383,6 +2411,7 @@ export class Sim {
   serialize() {
     // (A town's day half worked through is finished first.)
     this.civicTick();
+    this.civicTick(Infinity, 'hereJob');
     const settlements = [];
     for (const L of this.game.world.layouts.values()) {
       if (!L.econ) continue;

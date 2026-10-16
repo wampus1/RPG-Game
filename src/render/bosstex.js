@@ -13,6 +13,7 @@
 // pixel, however it was made.
 //   And as it's drawn: posed (see bossanim.js: crouched for a blow,
 // stretched into it, reared up roaring, coming apart at its end).
+import { keepPixels } from './pixels.js';
 
 export const TEX_NORMAL = 64;
 export const TEX_BIG = 128;
@@ -409,6 +410,7 @@ export function makeTex(key, s, big = false, o = {}) {
   img.width = tw;
   img.height = th;
   img.getContext('2d').putImageData(out, 0, 0);
+  keepPixels(img, out.data);
   return { img, tx0, ty0, w: tw, h: th, mask };
 }
 
@@ -531,5 +533,7 @@ export function snapScratch(tx0, ty0, w, h) {
   img.width = w;
   img.height = h;
   img.getContext('2d').drawImage(c.canvas, AX + tx0, AY + ty0, w, h, 0, 0, w, h);
+  // (Its pixels from the scratch canvas, which is read cheaply: see pixels.js.)
+  keepPixels(img, c.getImageData(AX + tx0, AY + ty0, w, h).data);
   return { img, tx0, ty0, w, h };
 }

@@ -31,6 +31,7 @@ import './forge_far_beasts.js';
 import './forge_evolved.js';
 // (Round 95: and those drawn by hand since, in their place: see forge_pix.js.)
 import './forge_pix.js';
+import { keepPixels, pixelsIn } from './pixels.js';
 
 export const FRAMES = 24;
 const cache = new Map();
@@ -41,7 +42,9 @@ function toCanvas(px) {
   const c = document.createElement('canvas');
   c.width = px.w;
   c.height = px.h;
-  c.getContext('2d').putImageData(px.toImageData(), 0, 0);
+  const img = px.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   return c;
 }
 
@@ -126,7 +129,7 @@ function bodyBox(species, img) {
   const cv = c0.getContext ? c0 : img;
   const w = cv.width;
   const h = cv.height;
-  const d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+  const d = pixelsIn(cv, 0, 0, w, h);
   let x0 = w;
   let y0 = h;
   let x1 = -1;

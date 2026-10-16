@@ -21,6 +21,7 @@
 // it, and comes apart, texel by texel, into motes that rise and are gone.
 import { bossTint } from './bossart.js';
 import { TEXEL, drawTex, drawRim as texRim, drawScratchRim, drawScratch } from './bosstex.js';
+import { pixelsIn } from './pixels.js';
 // (A forged master has no mask of its own: its rim's drawn from the scratch
 // canvas it's still on. See forge.js.)
 const drawRim = (ctx, tex, x, y, color, alpha, pose) => {
@@ -534,7 +535,7 @@ function dying(r, ctx, e, tex, x, y, pose, tint) {
   if (d >= 0.55 && !A.dust && tex.img) {
     const W = tex.w;
     const H = tex.h;
-    const data = tex.img.getContext('2d').getImageData(0, 0, W, H).data;
+    const data = pixelsIn(tex.img, 0, 0, W, H);
     // (Round 73: no more than six hundred or so motes, however big it is:
     // a great master's thousands of them made its end crawl.)
     const step = Math.max(1, Math.ceil(Math.sqrt((W * H) / 600)));

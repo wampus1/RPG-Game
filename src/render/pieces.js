@@ -17,6 +17,7 @@ import { GROUND } from '../config.js';
 import { hex, shade, mix } from './pixel.js';
 import { Paint, hash2 } from './paint.js';
 import { outlineSel } from './people.js';
+import { keepPixels } from './pixels.js';
 
 export const PIECE_W = 48;
 export const PIECE_FRAMES = 12;
@@ -717,7 +718,9 @@ export function pieceFrame(name, f, st) {
   c = document.createElement('canvas');
   c.width = p.w;
   c.height = p.h;
-  c.getContext('2d').putImageData(p.toImageData(), 0, 0);
+  const img = p.toImageData();
+  c.getContext('2d').putImageData(img, 0, 0);
+  keepPixels(c, img.data);
   cache.set(k, c);
   return c;
 }
