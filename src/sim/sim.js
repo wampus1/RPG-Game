@@ -348,14 +348,17 @@ export class Sim {
     this.ticked = this.tickT <= 0;
     if (this.tickT <= 0) {
       this.tickT = 0.5;
-      this.civicHere = true;
-      try {
-        for (const { layout } of this.game.active.values()) {
-          simulateTo(this, layout, this.abs, true);
-          this.syncTreasury(layout);
+      for (const { layout } of this.game.active.values()) {
+        // (In the ordinary run of the hours only: after a jump of time (a
+        // command, a long wait), all of it at once, as before.)
+        const flowing = layout.econ.lastAbs !== null && this.abs - layout.econ.lastAbs <= 120;
+        this.civicHere = flowing;
+        try {
+          simulateTo(this, layout, this.abs, flowing);
+        } finally {
+          this.civicHere = false;
         }
-      } finally {
-        this.civicHere = false;
+        this.syncTreasury(layout);
       }
       this.backgroundTick();
       // (As the one whose house it is, with others playing: see asBuilder.)

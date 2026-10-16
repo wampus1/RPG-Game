@@ -30,6 +30,8 @@ function inCity() {
   game.teleportPlayer(Math.round((s.cx + s.cw / 2) * 64), 40, Math.round((s.cz + s.cd / 2) * 36));
   game.minute = 9 * 60;
   for (let i = 0; i < 60; i++) game.update(1 / 30, input);
+  // (Till its people are about: the ground comes in a piece at a time.)
+  for (let i = 0; i < 1200 && !game.npcs.some((q) => !q.dead && q.layout && q.layout.settlement === s); i++) game.update(1 / 30, input);
   return { game, input, s, L: game.world.layouts.get(s.id) };
 }
 
@@ -194,6 +196,7 @@ test('the floor\'s plan, packed small by the host and the same at the guest\'s',
 test('each thing\'s state worked out once, for however many it\'s sent to', () => {
   const { game } = inCity();
   const n = game.npcs.find((q) => !q.dead);
+  assert.ok(n, 'someone about');
   const now = fieldsOf(n);
   const a = {};
   const b = {};
