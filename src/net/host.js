@@ -535,8 +535,11 @@ export class HostNet {
     };
     // Every block that changes, for whoever has that ground.
     const onBlock = game.onBlockChange.bind(game);
-    game.onBlockChange = (x, y, z, o, n) => {
-      onBlock(x, y, z, o, n);
+    // (Round 118: what was there before passed on too: without it, a door
+    // opened or shut in a world others were in never swung, on the host's
+    // own screen either.)
+    game.onBlockChange = (x, y, z, o, n, om) => {
+      onBlock(x, y, z, o, n, om);
       this.blockChanged(x, y, z);
     };
   }

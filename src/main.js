@@ -1692,8 +1692,9 @@ function step(now) {
     } catch (e) {
       if (!step.uiErr || now - step.uiErr > 1000) console.error(e);
       step.uiErr = now;
-      // (Round 117: never left turned or shifted for the frames after.)
-      cleanCtx(ctx);
+      // (Round 117: never left turned or shifted for the frames after.
+      // Round 118: the world drawn under it kept.)
+      cleanCtx(ctx, true);
     }
     const t3 = performance.now();
     const pf = (perf.frames = (perf.frames || 0) + 1);

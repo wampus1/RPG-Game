@@ -248,9 +248,11 @@ const NOTE_EARSHOT = 24;
 
 // (Round 117) A picture's drawing state put back as it starts: every save
 // let go of, no turn or shift, nothing see-through, drawn plainly.
-export function cleanCtx(ctx) {
+// (Round 118: `keep`, what's drawn kept: for the screen the HUD went
+// wrong on, the world already drawn on it.)
+export function cleanCtx(ctx, keep = false) {
   if (!ctx) return;
-  if (ctx.reset) {
+  if (ctx.reset && !keep) {
     // (Clears the picture too: it's drawn afresh next frame anyway.)
     ctx.reset();
   } else {

@@ -888,6 +888,12 @@ export const STEPS = [
       log.push('Old places show their tier on the map (bronze, silver, gold; tier III alight), and their ways in grow grander with it, built back up stone by stone when a time crystal turns them back. Relic shards are set at an anvil. Chests behind bars can no longer be reached through them. Item descriptions say plainly what things do. The fairy rings let you go, and nothing gone wrong in the drawing can leave the view turned or shifted.');
     },
   },
+  {
+    to: '1.18.0',
+    data(d, log) {
+      log.push('Playing together: a guest can skip their opening with Enter, doors swing open and shut on everyone\'s screen, and the HUD and windows are always drawn, whatever else goes wrong. Townsfolk who climb a stair to an upper floor stay up there.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

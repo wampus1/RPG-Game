@@ -9274,6 +9274,37 @@ visual are gone. And the coaches, sorted out.
   already turned back gets its grander way in the next time its ground
   is laid out.
 
+## Round 118: Playing together, and townsfolk upstairs
+
+- **A guest couldn't skip their opening.** Openings are skipped with
+  Enter, but in someone else's world Enter is kept on your own screen to
+  open the chat, so it never reached the host, who plays the opening.
+  While an opening or a scene is playing, a guest's Enter now goes to the
+  host and skips it. The rest of the time it still opens the chat.
+- **Doors didn't swing in a shared world.** The host passes every change
+  to the world on to its guests. Doing that, it dropped what the block's
+  state had been before, and a door's swing is worked out from that, so
+  no door swung, not even on the host's own screen. Guests also received
+  a door opening as a whole new block rather than a change of state. Both
+  fixed: doors swing open and shut on everyone's screen (chairs pulled
+  out slide too).
+- **No HUD or windows for a guest.** Everything drawn over the world (the
+  HUD, the minimap, the guild strip, the boss's bar, each window, the
+  notices, the tooltip) is now drawn on its own. If one part goes wrong,
+  the rest are still drawn; the error is logged once, not every frame.
+  The drawing state is also reset before the HUD is drawn, so nothing
+  left over from drawing the world can leave the HUD invisible. This
+  couldn't be reproduced on demand, so these are safeguards rather than
+  a single fix.
+- **Townsfolk sent back down from upstairs.** Anyone found standing on a
+  house above street level was assumed to be on its roof and put back
+  down on the street every two seconds, including people who had just
+  climbed the stair to an upper floor. Now only someone out under the
+  open sky (on a roof or a wall top) is brought down; anyone with a roof
+  over their head is left where they are.
+- **Version 1.18.0.** Worlds from 1.17 load as before; nothing in a save
+  changes.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

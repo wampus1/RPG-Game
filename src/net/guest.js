@@ -222,6 +222,13 @@ export class GuestNet {
     if (m.b) for (const [x, y, z, id, meta] of m.b) {
       const old = w.getBlock(x, y, z);
       if (!w.regionAt(x, z)) continue;
+      // (Round 118) The same block, only its state changed (a door opened
+      // or shut, a chair pulled out): changed as that, so it's seen to
+      // swing or slide here as it does on the host's screen.
+      if (old === id) {
+        if (w.getMeta(x, y, z) !== meta) w.setMeta(x, y, z, meta);
+        continue;
+      }
       w.setBlock(x, y, z, id, meta);
       if ((BLOCKS[old] && (BLOCKS[old].light || BLOCKS[old].opaque)) || (BLOCKS[id] && (BLOCKS[id].light || BLOCKS[id].opaque))) game.lightDirty = true;
     }
@@ -564,7 +571,10 @@ export class GuestNet {
           this.openPause?.();
           continue;
         }
-        if (remoteModal ? SCREEN_KEYS.has(k.code) : LOCAL_KEYS.has(k.code)) {
+        // (Round 118) In an opening or a scene, Enter skips it: the host's
+        // business (it plays it), not this screen's chat.
+        const skip = (k.code === 'Enter' || k.code === 'NumpadEnter') && !!(game.scene || game.cutscene);
+        if (!skip && (remoteModal ? SCREEN_KEYS.has(k.code) : LOCAL_KEYS.has(k.code))) {
           this.localKey(k);
           continue;
         }

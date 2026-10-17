@@ -142,7 +142,7 @@ test('a picture left turned and shifted by a drawing gone wrong is put straight'
   let reset = 0;
   cleanCtx({ reset: () => reset++ });
   assert.equal(reset, 1);
-  assert.ok(/cleanCtx\(this\.ctx\)/.test(src('render/renderer.js')) && /cleanCtx\(ctx\)/.test(src('main.js')));
+  assert.ok(/cleanCtx\(this\.ctx\)/.test(src('render/renderer.js')) && /cleanCtx\(ctx, true\)/.test(src('main.js')));
 });
 
 test('the fairy ring lets you go: set down off it, not taken again, the view held on its middle meanwhile', () => {

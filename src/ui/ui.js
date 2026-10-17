@@ -384,9 +384,34 @@ export class UI {
   }
 
   // ------------------------------------------------------------ render
+  // (Round 118) One part of what's drawn over the world, on its own: if it
+  // goes wrong, the rest is still drawn (it used to take the whole of the
+  // HUD, the windows and the notices with it, every frame it went wrong),
+  // and the picture's left as it was before it (see Renderer.cleanCtx).
+  part(ctx, name, fn) {
+    ctx.save();
+    try {
+      fn();
+    } catch (e) {
+      const now = performance.now();
+      const fails = (this.fails ||= new Map());
+      if (!(now - (fails.get(name) || -1e9) < 5000)) console.error(`drawing ${name}:`, e);
+      fails.set(name, now);
+    } finally {
+      ctx.restore();
+    }
+  }
+
   render(ctx, game, fps) {
     this.tooltip = null;
     this.notesTop = 0;
+    // (Round 118) Whatever the drawing of the world left the picture's
+    // pen as (turned, shifted, see-through, blended), put back: the HUD and
+    // the windows always drawn plain and whole over it.
+    ctx.setTransform?.(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    if ('filter' in ctx) ctx.filter = 'none';
     // What people are saying (left for here by the renderer: see
     // Renderer.drawBubbles): over a place's name and the notices, so a dark
     // box passing over never hides it; under the menus. (In a scene, where
@@ -398,15 +423,17 @@ export class UI {
       words = false;
     }
     if (this.showHud && game && game.player) {
-      this.drawHud(game, fps);
-      drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
+      this.part(ctx, 'hud', () => {
+        this.drawHud(game, fps);
+        drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
+      });
       if (this.hudP > 0.8) {
-        this.drawMinimapImage(ctx, game);
-        this.drawGuildStrip(ctx, game);
+        this.part(ctx, 'minimap', () => this.drawMinimapImage(ctx, game));
+        this.part(ctx, 'guild strip', () => this.drawGuildStrip(ctx, game));
       }
     }
     // A master's fight: its name and its life across the top of the screen.
-    if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.drawBossBar(ctx, game);
+    if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.part(ctx, 'boss bar', () => this.drawBossBar(ctx, game));
     // Reeling one in (see drawReel).
     if (this.showHud && game && game.fishing && game.fishing.phase === 'reel') this.drawReel(ctx, game);
     // An opening scene's letterbox, titles and captions (under any window);
@@ -420,18 +447,18 @@ export class UI {
     // (Notices go under a menu that's open, so as not to hide it; over the
     // title screen and the world.)
     const under = this.windows.some((w) => w.modal && w.state !== 'closing' && w.kind !== 'title' && w.kind !== 'banner');
-    if (under) drawNotes(this, ctx);
-    const drawWin = (w) => {
+    if (under) this.part(ctx, 'notes', () => drawNotes(this, ctx));
+    const drawWin = (w) => this.part(ctx, `window ${w.kind || '?'}`, () => {
       w.grid.clear();
       w.hits = [];
       w.draw(w.grid, game);
       const p = w.state === 'open' ? 1 : Math.max(0, Math.min(1, w.p));
       drawGrid(ctx, w.grid, w.x, w.y, easeOut(p), w.seed, this.time);
       if (w.drawPixels && p >= 1) w.drawPixels(ctx, game);
-    };
+    });
     if (words) {
       for (const w of this.windows) if (w.kind === 'banner' && !covered) drawWin(w);
-      if (!under) drawNotes(this, ctx);
+      if (!under) this.part(ctx, 'notes', () => drawNotes(this, ctx));
       r.drawBubbles(ctx);
     }
     for (const w of this.windows) {
@@ -441,7 +468,7 @@ export class UI {
     // (In someone else's world: what their windows have under your pointer,
     // and what you've picked up in them, as the host sent it.)
     if (!this.tooltip && this.remoteTip && this.windows.some((w) => w.remote)) this.tooltip = this.remoteTip;
-    if (this.tooltip) this.drawTooltip(ctx);
+    if (this.tooltip) this.part(ctx, 'tooltip', () => this.drawTooltip(ctx));
     const held = this.cursorStack || (this.windows.some((w) => w.remote) ? this.remoteStack : null);
     if (held) {
       const ic = itemIcon(held.item);
@@ -452,9 +479,9 @@ export class UI {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, this.fade)})`;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     }
-    if (game && game.sleep) this.drawSleep(ctx, game);
+    if (game && game.sleep) this.part(ctx, 'sleep', () => this.drawSleep(ctx, game));
     if (this.ko) this.drawKnockout(ctx);
-    if (!under && !words) drawNotes(this, ctx);
+    if (!under && !words) this.part(ctx, 'notes', () => drawNotes(this, ctx));
   }
 
   // A notice at the side of the screen (someone joined: see multiplayer.js).

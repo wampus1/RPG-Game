@@ -2088,6 +2088,14 @@ export class NPC extends Entity {
     const B0 = BLOCKS[w.getBlock(this.x, this.y - 1, this.z)];
     // Only if it's a house (its walls or roof) they're standing on.
     if (!(B0.render === 'cube' && (/roof|thatch/.test(B0.name) || buildingAt(this.layout, this.x, this.z)))) return false;
+    // (Round 118) Not on an upper storey's floor, with its roof over them:
+    // that's where they were going (up its stair), and they used to be
+    // put straight back down to the street. Only out under the sky, on a
+    // roof or a wall top.
+    for (let dy = 2; dy <= 7; dy++) {
+      const b = BLOCKS[w.getBlock(this.x, this.y + dy, this.z)];
+      if (b && b.solid && !b.liquid) return false;
+    }
     for (let r = 1; r <= 8; r++) {
       for (let dz = -r; dz <= r; dz++) {
         for (let dx = -r; dx <= r; dx++) {
