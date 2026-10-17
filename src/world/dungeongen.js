@@ -1519,7 +1519,8 @@ function byWall(plan, x, z) {
 // Next to where a passage comes in (or anything open that isn't this room).
 // (Round 120) Anything solid on the floor just inside a master's hall's
 // doorways, gone: the doorway's own tile and the two on either side of it,
-// three paces into the hall. (Not its walls, nor what's to be used.)
+// three paces into the hall. (Not its walls, nor what's to be used, nor
+// its lights: a place's lamps, braziers and lanterns are part of its work.)
 export function clearBossWay(ctx, r) {
   const { b, plan } = ctx;
   for (const d of doorways(plan, r)) {
@@ -1532,7 +1533,7 @@ export function clearBossWay(ctx, r) {
         for (const y of [FY, FY + 1, FY + 2]) {
           const id = b.get(x, y, z);
           const bl = BLOCKS[id];
-          if (id === B.air || !bl || !bl.solid || bl.interact || bl.ladder || id === B.stairs_up) continue;
+          if (id === B.air || !bl || !bl.solid || bl.interact || bl.light || bl.ladder || id === B.stairs_up) continue;
           // (A step of raised floor, nothing on it: walked up, not round.)
           if (y === FY && bl.render === 'cube' && b.get(x, FY + 1, z) === B.air) continue;
           b.set(x, y, z, B.air);
