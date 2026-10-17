@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { ITEMS, socketed, grownRelic, SHARD_MAX } from '../src/world/items.js';
 import { DungeonRun } from '../src/game/dungeon.js';
-import { fitShard, setRelic, relicAt, relicReach, inRelic, RELIC_R, serializeRelics, loadRelics } from '../src/game/relics.js';
+import { setShards, setRelic, relicAt, relicReach, inRelic, RELIC_R, serializeRelics, loadRelics } from '../src/game/relics.js';
 import { buildFloor, gearFor, FY } from '../src/world/dungeongen.js';
 import { RNG } from '../src/util/rng.js';
 import { MODS, STAR_MAX, starKey, parseStar, plainKey, starGear, rollStars, rollMods, starable, gearClass } from '../src/world/quality.js';
@@ -257,16 +257,16 @@ test('a relic shard set into a relic in your pack makes its circle reach further
   p.inv.fill(null);
   p.inv[0] = { item: 'relic_shard', count: SHARD_MAX + 2 };
   p.inv[3] = { item: 'relic_ward', count: 1 };
-  p.selected = 0;
-  assert.ok(fitShard(game, ITEMS.relic_shard));
+  // (Round 117: set at an anvil, a shard at a time or all at once.)
+  assert.ok(setShards(game, 3, 0, 1).ok);
   assert.equal(p.inv[3].item, 'relic_ward*1');
   assert.equal(p.inv[0].count, SHARD_MAX + 1);
-  for (let i = 0; i < SHARD_MAX + 1; i++) fitShard(game, ITEMS.relic_shard);
+  setShards(game, 3, 0);
   assert.equal(ITEMS[p.inv[3].item].shards, SHARD_MAX, 'no more than it can take');
   assert.equal(p.inv[0].count, 2, 'the rest kept');
   // None to set it in: kept.
   p.inv[3] = null;
-  assert.ok(fitShard(game, ITEMS.relic_shard));
+  assert.ok(!setShards(game, 3, 0).ok);
   assert.equal(p.inv[0].count, 2);
   // Set down, it reaches further; taken up, it keeps its shards.
   const x = Math.round(p.x) + 2;
