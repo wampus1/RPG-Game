@@ -11,7 +11,7 @@
 // its way is long; `rideInfo` is, for the line on the screen), and its
 // coach or ferry is a prop in game.props, so everyone sees it go by.
 import { GROUND, REGION_W, REGION_D, WORLD_Y } from '../config.js';
-import { coachStand, arrivalSpot, wayTime, harbourWay, sendCoach, COACHMAN } from '../sim/coaches.js';
+import { coachStand, coachBay, arrivalSpot, wayTime, harbourWay, sendCoach, COACHMAN } from '../sim/coaches.js';
 import { seaOff, seaRoute } from './shipfleets.js';
 import { countItem, removeItem, addItem } from './inventory.js';
 import { shippable, FERRY_CARRIES } from './stalls.js';
@@ -22,6 +22,13 @@ import { MinHeap } from '../util/heap.js';
 
 // How much quicker it all goes, hurried on (see Game.timeRate).
 export const RIDE_FAST = 12;
+// (Round 116) Got down from the coach this soon after climbing in (seconds),
+// your fare's given back, and it turns about for its stand.
+export const REFUND_SECS = 10;
+// How long a coach waits where it's set you down, and the longest it takes
+// on the way home (game minutes).
+const DWELL = 20;
+const HOME_MAX = 6 * 60;
 
 const centre = (s) => ({ x: Math.round((s.cx + s.cw / 2) * REGION_W), z: Math.round((s.cz + s.cd / 2) * REGION_D) });
 const abs = (game) => game.day * 1440 + game.minute;
@@ -51,7 +58,7 @@ function coachWay(game, from, to, ms) {
   }
   if (!w || w.rough) return null;
   const a = (LA && coachStand(LA)) || centre(from);
-  const b = endOf(game, to);
+  const b = endOf(game, to, from);
   const pts = w.pts;
   const n = pts.length;
   // Where the way leaves the one town, and comes into the other.
@@ -191,12 +198,15 @@ function tidy(pts) {
   return out.length >= 2 ? out : null;
 }
 
-// Where the coach pulls up at `s`.
-function endOf(game, s) {
+// Where the coach pulls up at `s` (Round 116: in from `from`, at the way in
+// on that side, or beside the coach standing there: see coachBay).
+function endOf(game, s, from = null) {
   const L = game.world.layouts.get(s.id);
+  const bay = L && coachBay(L, from);
+  if (bay) return { x: bay.x, z: bay.z };
   const st = L && coachStand(L);
   if (st) return { x: st.x, z: st.z };
-  const at = arrivalSpot(game, s, 'coach');
+  const at = arrivalSpot(game, s, 'coach', from);
   return { x: at.x, z: at.z };
 }
 
@@ -359,7 +369,7 @@ export function startRide(game, link) {
   if (p._ride || p.dead || countItem(p.inv, 'coin') < link.fare) return false;
   const from = link.from || game.world.ow.settlementAt(p.x, p.z) || game.currentSettlement;
   if (!from) return false;
-  const R = { kind: link.kind, from: from.id, to: link.s.id, name: link.s.name, fast: false, leg: 1, key: `ride:${p.id}` };
+  const R = { kind: link.kind, from: from.id, to: link.s.id, name: link.s.name, fast: false, leg: 1, key: `ride:${p.id}`, fare: link.fare, realT: 0 };
   const mins = Math.max(10, link.mins);
   R.mins = mins;
   let pts;
@@ -391,15 +401,17 @@ export function startRide(game, link) {
   // (Round 114) The coach at the stand is the one you've climbed into: it
   // leaves (none left standing behind it), its coachman driving, and it's
   // gone till it's been there and back.
+  // (Round 116: there, a while there, and home again, seen the whole way:
+  // see sendHome.)
   if (link.kind !== 'ferry') {
-    sendCoach(game, from.id, Math.min(mins * 2, 12 * 60));
+    sendCoach(game, from.id, mins + DWELL + Math.min(mins, HOME_MAX));
     game.props.delete(`coach:${from.id}`);
   }
   makeProp(game, p, R);
   game.audio?.play(link.kind === 'ferry' ? 'ship_bell' : 'horn');
   game.ui.msg(link.kind === 'ferry'
     ? `You pay ¤${link.fare} and go aboard the ferry for ${link.s.name}: ${wayTime(mins)} at sea.${game.isParty() ? '' : ' (T to hurry the hours on.)'}`
-    : `You pay ¤${link.fare} and climb into the coach for ${link.s.name}: ${wayTime(mins)} on the road.${game.isParty() ? '' : ' (T to hurry the hours on; F to get down.)'}`, '#e8e0a0');
+    : `You pay ¤${link.fare} and climb into the coach for ${link.s.name}: ${wayTime(mins)} on the road.${game.isParty() ? ' (Space to get down.)' : ' (T to hurry the hours on; Space to get down.)'}`, '#e8e0a0');
   tick(game, p, 0);
   return true;
 }
@@ -504,19 +516,7 @@ function holdSpot(game, p) {
 
 // The coach (with its driver up on the bench) or the ferry, carrying you.
 function makeProp(game, p, R) {
-  const s = game.world.ow.settlements[R.from];
-  const civ = s && s.civ;
-  const prop = {
-    kind: 'prop', type: R.kind === 'ferry' ? 'ship' : 'wagon', id: 90000 + (game.propN = (game.propN || 0) + 1), dead: false,
-    x: R.pts[0].x, y: GROUND, z: R.pts[0].z, face: 1, hood: true, sail: true, moving: true, ride: true,
-    horse: R.kind === 'ferry' ? null : { coat: (R.from + R.to) % 4, saddle: false },
-    banner: civ ? civ.color.hex : null, riders: [p.look], bench: null, rideOwner: p,
-    driver: R.kind === 'ferry' ? null : DRIVER,
-    renderPos() {
-      return { x: this.x, y: this.y, z: this.z };
-    },
-  };
-  prop.bench = prop.driver;
+  const prop = rideProp(game, R, p);
   game.props.set(R.key, prop);
   R.prop = prop;
   p.mount = null;
@@ -526,9 +526,111 @@ function makeProp(game, p, R) {
   return prop;
 }
 
+// The coach or the ferry, as seen: `p` riding in it (or nobody).
+function rideProp(game, R, p) {
+  const s = game.world.ow.settlements[R.from];
+  const civ = s && s.civ;
+  const prop = {
+    kind: 'prop', type: R.kind === 'ferry' ? 'ship' : 'wagon', id: 90000 + (game.propN = (game.propN || 0) + 1), dead: false,
+    x: R.pts[0].x, y: GROUND, z: R.pts[0].z, face: 1, hood: true, sail: true, moving: true, ride: true,
+    horse: R.kind === 'ferry' ? null : { coat: (R.from + R.to) % 4, saddle: false },
+    banner: civ ? civ.color.hex : null, riders: p ? [p.look] : [], bench: null, rideOwner: p || null,
+    driver: R.kind === 'ferry' ? null : DRIVER,
+    renderPos() {
+      return { x: this.x, y: this.y, z: this.z };
+    },
+  };
+  prop.bench = prop.driver;
+  return prop;
+}
+
 // (Whoever drives the coach: an old hand in a hat, the coachman from the
 // stand.)
 const DRIVER = COACHMAN;
+
+// ------------------------------------------------------------ going home
+// (Round 116) A coach on the road with nobody in it: having set you down
+// (or you having got down), on to wherever it's going and then home to
+// its own town's stand, seen the whole way; once it's back, it stands
+// there to be had again (see coaches.coachAway). Its way's points each
+// with the time it's there by: `game.coachRuns`.
+// A way's points, each with the time (game minutes) it's reached by, the
+// whole of it taking `mins` from `t0`.
+function timed(pts, t0, mins) {
+  const at = measure(pts);
+  const len = at[at.length - 1] || 1;
+  return pts.map((q, i) => ({ x: q.x, z: q.z, t: t0 + (at[i] / len) * Math.max(0.01, mins) }));
+}
+
+// Sent off home: the coach of ride `R`, at `prop` (kept, if given, so it
+// doesn't flicker), along `way` (timed points).
+function sendHome(game, R, way, prop = null) {
+  if (!way.length) return;
+  const run = { sid: R.from, to: R.to, key: `coachrun:${R.from}:${(game.runN = (game.runN || 0) + 1)}`, way, i: 1 };
+  run.prop = prop || rideProp(game, R, null);
+  Object.assign(run.prop, { riders: [], rideOwner: null, moving: false });
+  game.props.set(run.key, run.prop);
+  (game.coachRuns ||= []).push(run);
+  // (Away till it's home.)
+  (game.coachAway ||= new Map()).set(R.from, Math.max(abs(game), way[way.length - 1].t));
+  game.props.delete(`coach:${R.from}`);
+}
+
+// Each frame: every coach on its way home, along it.
+export function runsTick(game) {
+  const runs = game.coachRuns;
+  if (!runs || !runs.length) return;
+  const now = abs(game);
+  const w = game.world;
+  for (const run of runs) {
+    const way = run.way;
+    const last = way[way.length - 1];
+    if (now >= last.t) {
+      run.done = true;
+      game.props.delete(run.key);
+      if (game.coachAway && game.coachAway.get(run.sid) <= last.t + 0.01) game.coachAway.delete(run.sid);
+      // (Back at its stand at once, not a moment later.)
+      game.standT = 0;
+      continue;
+    }
+    let i = Math.max(1, Math.min(run.i || 1, way.length - 1));
+    if (way[i - 1].t > now) i = 1;
+    while (i < way.length - 1 && way[i].t <= now) i++;
+    run.i = i;
+    const a = way[i - 1];
+    const b = way[i];
+    const f = b.t > a.t ? Math.max(0, Math.min(1, (now - a.t) / (b.t - a.t))) : 1;
+    const prop = run.prop;
+    const x = a.x + (b.x - a.x) * f;
+    const z = a.z + (b.z - a.z) * f;
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    prop.moving = Math.abs(dx) + Math.abs(dz) > 0.01;
+    if (prop.moving) {
+      prop.face = Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 3 : 1) : dz > 0 ? 0 : 2;
+      prop.ang = Math.atan2(dx, dz);
+    }
+    prop.x = x;
+    prop.z = z;
+    const tx = Math.round(x);
+    const tz = Math.round(z);
+    if (w.regionAt && w.regionAt(tx, tz)) {
+      const sy = coachY(w, tx, tz, prop.y || GROUND);
+      if (sy > 0) prop.y = sy;
+    }
+    if (!game.props.has(run.key)) game.props.set(run.key, prop);
+  }
+  game.coachRuns = runs.filter((r) => !r.done);
+}
+
+// The way the coach of ride `R` has come so far, back to where it set off
+// (`d`: how far it's come).
+function cameBack(R, d) {
+  const here = pointAt(R, d);
+  const back = [{ x: here.x, z: here.z }];
+  for (let i = Math.min(R.leg || 1, R.pts.length - 1) - 1; i >= 0; i--) back.push({ x: R.pts[i].x, z: R.pts[i].z });
+  return back.length >= 2 ? back : [back[0], back[0]];
+}
 
 // ------------------------------------------------------------ on the way
 // Each frame, for the one riding: along the way as the time goes by.
@@ -536,6 +638,7 @@ export function tick(game, p, dt) {
   const R = p._ride;
   if (!R) return;
   if (p.dead) return endRide(game, p, 'dead');
+  R.realT = (R.realT || 0) + dt;
   // (The coach or ferry gone from the world, a load say: put back.)
   if (!R.prop || !game.props.has(R.key)) makeProp(game, p, R);
   // (Round 82) Still at the stand, the driver making sure of the way: a
@@ -653,8 +756,9 @@ export function rideLeft(p) {
   return i ? i.left : 0;
 }
 
-// F, riding: down off the coach, where it is (no fare back); not off the
-// ferry, out at sea.
+// Space (or F), riding: down off the coach, where it is; not off the
+// ferry, out at sea. (Round 116) Got down from it in the first moments
+// (REFUND_SECS), your fare back, and it turns about for its stand.
 export function getOff(game, p) {
   const R = p._ride;
   if (!R) return false;
@@ -662,7 +766,7 @@ export function getOff(game, p) {
     game.ui.msg('Not out here: there\'s nothing but sea till the ferry ties up.', '#c8c8c8', true);
     return true;
   }
-  endRide(game, p, 'off');
+  endRide(game, p, (R.realT || 0) <= REFUND_SECS ? 'back' : 'off');
   return true;
 }
 
@@ -672,7 +776,9 @@ export function endRide(game, p, how) {
   if (!R) return;
   p._ride = null;
   p.rideInfo = null;
+  const prop = game.props.get(R.key) || R.prop;
   game.props.delete(R.key);
+  if (R.kind !== 'ferry' && R.pts && !game.remote) coachOn(game, R, how, prop);
   if (p.inWagon === R.prop) {
     p.inWagon = null;
     p.wagonSeat = null;
@@ -689,7 +795,7 @@ export function endRide(game, p, how) {
     if (R.kind === 'ferry') {
       const P = game.sim.ships && game.sim.ships.ports[s.id];
       at = P && P.site && !R.ashore ? { x: P.site.end.x, z: P.site.end.z } : arrivalSpot(game, s, 'coach');
-    } else at = arrivalSpot(game, s, 'coach');
+    } else at = arrivalSpot(game, s, 'coach', game.world.ow.settlements[R.from]);
   }
   game.loadAround(at.x, at.z, true);
   const spot = game.findFreeSpot(at.x, at.z, R.kind === 'ferry' ? GROUND : p.y);
@@ -697,23 +803,56 @@ export function endRide(game, p, how) {
   else game.teleportPlayer(spot.x, spot.y, spot.z);
   game.world.ow.markExplored(spot.x, spot.z, 2);
   game.updateSettlements(true);
-  if (how === 'off') game.ui.msg('You climb down from the coach. It rattles on without you.', '#c8c8c8');
+  if (how === 'back') {
+    // (Your fare back: you'd hardly set off.)
+    if (R.fare) {
+      const left = addItem(p.inv, 'coin', R.fare);
+      if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
+    }
+    game.ui.msg(`You climb down before it's well under way, and the coachman gives you back your ¤${R.fare || 0}. He turns the coach about for the stand.`, '#e8e0a0');
+  } else if (how === 'off') game.ui.msg('You climb down from the coach. It rattles on without you.', '#c8c8c8');
   else game.ui.msg(R.kind === 'ferry' ? (R.ashore ? `After ${wayTime(R.mins)} at sea, the ferry drops anchor off ${R.name}, and a boat rows you ashore.` : `After ${wayTime(R.mins)} at sea, the ferry ties up at ${R.name}. You step off onto the pier.`) : `After ${wayTime(R.mins)} on the road, the coach sets you down at ${R.name}.`, '#ffe8a0');
   game.audio?.play(R.kind === 'ferry' ? 'ship_bell' : 'horn');
   unloadExtras(game, p, R);
+}
+
+// (Round 116) The coach, once you're out of it: from where it's set you
+// down (a while there first), or from wherever you got down (on to where
+// it was going, unless it had hardly set off), home to its stand.
+function coachOn(game, R, how, prop) {
+  const now = abs(game);
+  const d = R.pending ? 0 : Math.max(0, Math.min(R.len, (now - R.t0) * R.pace));
+  const home = Math.min(R.mins, HOME_MAX);
+  let way;
+  if (how === 'back') {
+    const back = cameBack(R, d);
+    way = timed(back, now, Math.max(1, d / (R.pace || 1)));
+  } else if (how === 'there' || d >= R.len - 0.5) {
+    const end = R.pts[R.pts.length - 1];
+    way = [{ x: end.x, z: end.z, t: now }, ...timed(R.pts.slice().reverse(), now + DWELL, home)];
+  } else {
+    // (On to where it was going, then home.)
+    const here = pointAt(R, d);
+    const ahead = [{ x: here.x, z: here.z }, ...R.pts.slice(Math.min(R.leg || 1, R.pts.length - 1))];
+    const on = timed(ahead, now, Math.max(1, (R.len - d) / (R.pace || 1)));
+    const t1 = on[on.length - 1].t;
+    way = [...on, ...timed(R.pts.slice().reverse(), t1 + DWELL, home)];
+  }
+  sendHome(game, R, way, prop);
 }
 
 // ------------------------------------------------------------ kept
 export function rideSave(p) {
   const R = p && p._ride;
   if (!R) return null;
-  return { kind: R.kind, from: R.from, to: R.to, name: R.name, mins: R.mins, pts: R.pts, t0: R.t0, pace: R.pace, ashore: !!R.ashore, fast: false, horses: R.horses || [], wagons: R.wagons || [], hold: R.hold || null, pending: !!R.pending };
+  return { kind: R.kind, from: R.from, to: R.to, name: R.name, mins: R.mins, pts: R.pts, t0: R.t0, pace: R.pace, ashore: !!R.ashore, fast: false, horses: R.horses || [], wagons: R.wagons || [], hold: R.hold || null, pending: !!R.pending, fare: R.fare || 0 };
 }
 
 export function rideLoad(game, p, d) {
   if (!d || !d.pts || d.pts.length < 2) return;
   const at = measure(d.pts);
-  const R = { ...d, at, len: at[at.length - 1] || 1, leg: 1, key: `ride:${p.id}` };
+  // (Picked up again later: well under way, no fare back.)
+  const R = { ...d, at, len: at[at.length - 1] || 1, leg: 1, key: `ride:${p.id}`, realT: REFUND_SECS + 1 };
   p._ride = R;
   makeProp(game, p, R);
 }

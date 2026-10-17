@@ -1273,15 +1273,18 @@ function simpleIcon(key) {
       p.rect(6, 7, 2, 2, '#c8a060');
       break;
     case 'crossbow':
-      // The stock, the bow across it, a bolt laid ready.
-      p.line(3, 13, 11, 5, '#8a5a30');
-      p.line(4, 13, 12, 5, '#5e3a1c');
-      p.line(6, 2, 14, 10, '#9a9aa8');
-      p.line(6, 2, 7, 1, '#c8c8d4');
-      p.line(14, 10, 15, 9, '#c8c8d4');
-      p.line(7, 3, 13, 9, '#e8e4d8');
-      p.set(12, 4, '#d8d8e4');
-      p.set(2, 14, '#3a2414');
+      // (Round 116: lying across, not corner to corner like a pick.) The
+      // stock, the prod standing across its end, the string drawn back in
+      // a V, a bolt laid ready, the trigger under.
+      p.rect(0, 6, 3, 5, '#7a4a24');
+      p.rect(2, 7, 10, 2, '#8a5a30');
+      p.rect(2, 9, 10, 1, '#5e3a1c');
+      p.line(5, 10, 4, 12, '#5a5e6a');
+      for (let k = -6; k <= 6; k++) p.set(12 + Math.round((1 - (k / 6) ** 2) * 1.6), 8 + k, Math.abs(k) === 6 ? '#c8c8d4' : '#9a9aa8');
+      p.line(12, 3, 7, 7, '#e8e4d8');
+      p.line(12, 13, 7, 8, '#e8e4d8');
+      p.line(7, 7, 14, 7, '#c8b890');
+      p.set(15, 7, '#e0e0e8');
       break;
     case 'bolt':
       p.line(3, 13, 12, 4, '#7a5028');

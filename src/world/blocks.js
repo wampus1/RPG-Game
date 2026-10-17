@@ -1110,7 +1110,7 @@ def('gt_sand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Shell S
 def('gt_wetsand', { tool: 'shovel', hardness: Infinity, drop: null, label: 'Tidal Flat' });
 def('gt_pebbles', { hardness: Infinity, drop: null, label: 'Shingle' });
 def('gt_mosaic', { hardness: Infinity, drop: null, light: 2, label: 'Shell Mosaic' });
-def('gt_urchins', { hardness: Infinity, drop: null, label: 'Urchin Bed' });
+def('gt_urchins', { hardness: Infinity, drop: null, light: 3, label: 'Urchin Bed' });
 def('gt_kelp', { ...dressing, tall: true, hardness: 0.1, drop: null, label: 'Kelp' });
 def('gt_coral', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 1, drop: [{ item: 'coral', chance: 0.7 }], label: 'Coral' });
 def('gt_anemone', { ...dressing, rotatable: true, hardness: Infinity, light: 7, drop: null, label: 'Glowing Anemones' });

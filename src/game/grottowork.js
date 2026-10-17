@@ -257,8 +257,8 @@ export function tick(run, dt, party) {
     const want = L > 0.15 ? 'shut' : c.pearl && !S.taken[k2(c.x, c.z)] ? 'pearl' : 'open';
     if (w.getBlock(c.x, FY, c.z) === B.gt_clam && clamOf(w, c.x, c.z) !== want) w.setMeta(c.x, FY, c.z, CLAM[want]);
   }
-  // The urchins: spined, whoever steps on them (they're hidden under the
-  // high water).
+  // The urchins: spined, whoever steps on them. (Round 116: they're seen at
+  // every tide, their spines up through the water: see groundfx.js.)
   for (const e of all()) {
     if (e.S && (e.S.floats || e.S.swims)) continue;
     if (Math.abs(e.y - FY) > 0 || w.getBlock(e.x, FY - 1, e.z) !== B.gt_urchins) continue;
@@ -268,10 +268,6 @@ export function tick(run, dt, party) {
     game.damage(e, 2, null);
     e.slowT = Math.max(e.slowT || 0, 1);
     r.floatText(e.x, e.y + 2.4, e.z, 'urchin spines!', '#c8a0e0');
-    if (e.kind === 'player' && !T.told.urchin) {
-      T.told.urchin = true;
-      game.ui.msg('Urchins! Their spines go through your boot. (Mind the black urchin beds in the sand: the tide hides them.)', '#c8a0e0');
-    }
   }
   // The blowholes: at high water they spout, and throw whoever's on them
   // up onto the ledge above.

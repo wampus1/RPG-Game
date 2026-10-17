@@ -393,6 +393,6 @@ function loose(run, bow) {
   const T = vtT(run);
   if (!T.told.bolt) {
     T.told.bolt = true;
-    game.ui.msg('A brick sinks under your foot, and a bolt comes out of the wall. (Watch for bricks laid square across the course.)', '#ffd0a0', true);
+    game.ui.msg('A brick sinks under your foot, and a bolt comes out of the wall.', '#ffd0a0', true);
   }
 }

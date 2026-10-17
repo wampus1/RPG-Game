@@ -188,7 +188,7 @@ function beat(run, T, who) {
     game.renderer.emit(e.x, FY + 0.2, e.z, { n: 3, color: ['#d07068', '#a03a3c'], up: 4, speed: 10, life: 0.3 });
     if (e.kind === 'player' && !T.told.rugae) {
       T.told.rugae = true;
-      game.ui.msg('The ridged floor heaves under you on the beat and carries you along it. (Every third beat. Mind where it\'s taking you.)', '#e0b0a0', true);
+      game.ui.msg('The ridged floor heaves under you on the beat and carries you along it.', '#e0b0a0', true);
     }
   }
 }

@@ -404,7 +404,7 @@ export class DungeonRun {
       if (!s.boss && !s.key && (hash4(this.rec.seed, n, s.id) % 100) / 100 < this.rec.weakened * 0.8) continue;
       if (this.rec.cleared && s.boss) continue;
       const y = game.world.findStandY(s.x, s.z, FY);
-      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected, dormant: s.dormant, group: s.group, rest: s.rest, buried: s.buried, peaceful: s.peaceful, role: s.role, effigy: s.effigy, variant: s.variant, vigil: s.vigil, route: s.route });
+      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected, dormant: s.dormant, group: s.group, rest: s.rest, buried: s.buried, peaceful: s.peaceful, role: s.role, effigy: s.effigy, variant: s.variant, vigil: s.vigil, route: s.route, hole: s.hole, out: s.out, anvil: s.anvil, lying: s.lying });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
       // (A great master stood where all of it fits: never half in a wall.)
       if (c && c.foot && !fits(game, c, c.x, c.y, c.z, true)) {

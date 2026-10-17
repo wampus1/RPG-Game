@@ -16,6 +16,7 @@
 // cells searched and what the trowies put back in them) is kept in the
 // floor's state, and put back when the floor's made again (see restore).
 import { FY } from '../world/dungeongen.js';
+import { addZone } from '../entities/monsters.js';
 import { B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { addItem, countItem, removeItem } from './inventory.js';
@@ -304,7 +305,7 @@ export function gust(run, s) {
   const T = bcT(run);
   if (hit && !T.told.gust) {
     T.told.gust = true;
-    game.ui.msg('The gale comes in at the slit with a scream and knocks you off your feet. (Listen for the whistle before it comes. Get out of its line, or into a cell.)', '#e0f0f8', true);
+    game.ui.msg('The gale comes in at the slit with a scream and knocks you off your feet.', '#e0f0f8', true);
   }
 }
 
@@ -359,6 +360,8 @@ export function tick(run, dt, party = null) {
       game.audio?.play('wind_low', s);
       game.renderer.floatText(s.x, FY + 2.2, s.z, 'whistling...', '#e0f0f8');
       game.renderer.emit(s.x, FY + 1.2, s.z, { n: 8, color: SPRAY, up: 4, speed: 10, life: 0.6 });
+      // (Round 116) Its line shown on the floor till it comes.
+      addZone(game, { by: s, kind: 'mark', tiles: s.tiles, y: FY, life: GUST_WARN, color: [200, 232, 248] });
     }
     if (g.t <= 0) {
       gust(run, s);

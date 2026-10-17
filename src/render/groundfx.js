@@ -194,6 +194,10 @@ export class GroundFx {
   // water (drawn 3px lower).
   drawTop(ctx, world, wx, y, wz, id, liquid, sx, sy, t) {
     const key = K(wx, wz);
+    // (Round 116) An urchin bed: its urchins drawn on it, and at high water
+    // their spines through the surface, so it's seen at every tide.
+    if (id === B.gt_urchins && !liquid) this.drawUrchins(ctx, wx, wz, sx, sy, t, false);
+    else if (liquid && id === B.water && world.getBlock(wx, y - 1, wz) === B.gt_urchins) this.drawUrchins(ctx, wx, wz, sx, sy + 3, t, true);
     if (liquid) {
       if (BLOCKS[id] && id === B.water && !BLOCKS[world.getBlock(wx, y + 1, wz)]?.liquid) {
         const m = this.shore(world, wx, y, wz);
@@ -217,6 +221,52 @@ export class GroundFx {
       if (l) for (const q of l) if (q.y === y) this.drawRing(ctx, sx + 8 + pud.ox + Math.round(q.ox / 3), sy + 8 + pud.oz + Math.round(q.oz / 4), { ...q, big: false });
     }
     if (sp) for (const q of sp) if (q.y === y) this.drawSplash(ctx, sx + 8 + q.ox, sy + 8 + q.oz, q.t / 0.22);
+  }
+
+  // (Round 116) The urchins on a bed's square: two or three black, spined
+  // balls, their spines astir. Under water (`wet`), a dark shape below the
+  // surface and the spines standing up out of it, the water ringing them.
+  drawUrchins(ctx, wx, wz, sx, sy, t, wet) {
+    const h = hash4(wx, wz, 0x0c41);
+    const n = 2 + (h & 1);
+    for (let i = 0; i < n; i++) {
+      const q = h >>> (4 + i * 6);
+      const cx = sx + 4 + (q % 8);
+      const cy = sy + 4 + ((q >>> 3) % 8);
+      const r = i === 0 ? 3 : 2;
+      const stir = Math.floor(t * 3 + i + wx) & 1;
+      if (wet) {
+        ctx.fillStyle = 'rgba(28,14,44,0.55)';
+        ctx.fillRect(cx - r - 1, cy - r, r * 2 + 3, r * 2 + 1);
+        ctx.fillRect(cx - r, cy - r - 1, r * 2 + 1, r * 2 + 3);
+        // The spines, up through the surface.
+        ctx.fillStyle = '#e0a8ff';
+        for (const [dx, dy] of [[-r - 1, -1], [0, -r - 1], [r + 1, -1], [-1, -r], [1, -r]]) ctx.fillRect(cx + dx, cy + dy - stir, 1, 2);
+        ctx.fillStyle = '#fff0ff';
+        ctx.fillRect(cx, cy - r - 1 - stir, 1, 1);
+        ctx.fillRect(cx - r - 1, cy - 1 - stir, 1, 1);
+        ctx.fillRect(cx + r + 1, cy - 1 - stir, 1, 1);
+        // (The water ringing them.)
+        ctx.fillStyle = 'rgba(235,248,255,0.55)';
+        ctx.fillRect(cx - r - 2, cy + 1, r * 2 + 5, 1);
+        continue;
+      }
+      // The spines, every way.
+      const L = r + 2 + stir;
+      ctx.fillStyle = '#c088f0';
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        const k = dx && dy ? L - 1 : L;
+        for (let j = r; j <= k; j++) ctx.fillRect(cx + dx * j, cy + dy * j, 1, 1);
+      }
+      ctx.fillStyle = '#f4dcff';
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, -1]]) ctx.fillRect(cx + dx * L, cy + dy * L, 1, 1);
+      // Its body: black, a glint on top.
+      ctx.fillStyle = '#1e1028';
+      ctx.fillRect(cx - r, cy - r + 1, r * 2 + 1, r * 2 - 1);
+      ctx.fillRect(cx - r + 1, cy - r, r * 2 - 1, r * 2 + 1);
+      ctx.fillStyle = '#7a58a0';
+      ctx.fillRect(cx - 1, cy - r, 1, 1);
+    }
   }
 
   // A puddle lying on a square's top: dark water with the sky's sheen on

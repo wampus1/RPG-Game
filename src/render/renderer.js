@@ -1700,7 +1700,8 @@ export class Renderer {
       if (id === 0) continue;
       const b = BLOCKS[id];
       const meta = reg.meta[lb[ci] + y];
-      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE))) || barIds().has(id)) {
+      // (Round 116: an urchin bed, its urchins drawn over it each frame.)
+      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE))) || barIds().has(id) || id === B.gt_urchins) {
         dyn.push(u);
         continue;
       }
@@ -2761,6 +2762,14 @@ export class Renderer {
         // Its shield up (a warden's cover, a golem's plates): a pale rim of
         // light. (One of the Overseer's sentinels, holding up its shield:
         // bright, and pulsing.)
+        // (Round 116) Winding up to strike (a lantern jelly gathering its
+        // sting, a moray drawing back): a bright edge, quickening.
+        if (e.tellT > 0) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin(this.time * 30));
+          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, e.species === 'lantern_jelly' ? '#e0ffff' : '#ffe0a0'), cx - 1, cy - 1);
+          ctx.globalAlpha = a;
+        }
         if (e.armourT > 0 || e.shieldUp || e.sentinel) {
           const a = ctx.globalAlpha;
           ctx.globalAlpha = a * (e.sentinel ? 0.7 + 0.3 * Math.sin(this.time * 6) : 0.45 + 0.25 * Math.sin(this.time * 10));

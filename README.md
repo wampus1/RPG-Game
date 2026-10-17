@@ -9148,6 +9148,67 @@ a millisecond), so the work went into the frames that stalled.
 - **Version 1.15.0.** Worlds from 1.14 load as before; nothing in a save
   changes.
 
+## Round 116: Seen, and fair
+
+Things in the old places you couldn't see, or couldn't tell how to
+handle, made plain to the eye. Explanations that were standing in for a
+visual are gone. And the coaches, sorted out.
+
+- **Nothing in the dark you can't see.**
+  - **Lantern jellies and shrimpkin** were drawn almost fully transparent:
+    a jelly was just a light, a shrimpkin nothing at all. Their see-through
+    colours were written as fractions (0.45) and read as out of 255. Now
+    they're read as fractions, which also fixes the glimmer, the lemur and
+    the faint parts of a dozen other creatures and masters.
+  - Every creature on a floor of every kind of old place was checked: each
+    one shows up where it stands.
+- **Attacks you can see coming.**
+  - **The lantern jelly** gathers its light before it stings: brighter and
+    brighter, crackling, the squares around it lit up, for most of a
+    second. Step away and it stings nothing. (It no longer bites like
+    anything else as well.)
+  - **The moray** had lost its hole. When a floor's creatures were set out,
+    a moray's hole and the way it faces weren't passed on, so it sat
+    facing nowhere in particular and never struck. (The ash-smiths lost
+    their anvils and the grotto's drowned divers their lying in the sand
+    the same way. Both fixed.) It now reaches the fan of ground before its
+    hole, three deep and three wide. That ground reddens and it hisses for
+    a moment before it lunges and drags you toward its hole.
+- **Hazards you can see.**
+  - **Urchin beds** in the Tide Grottos are drawn as clusters of black,
+    spined urchins, glowing faintly purple. At high water their spines
+    stand up out of the surface with the water ringing them, so you can
+    always see where not to step.
+  - **The broch's gale**: while a slit whistles, the line the gust will
+    blow down is shown on the floor.
+  - **The vault's bolt plates** are bronze-rimmed slabs with a ring cut in
+    them, plain to see among the bricks, not bricks laid a hair
+    differently.
+  - The words that explained these (and the warren's hollow floor and the
+    gut's heaving ridges, both already plain to see) are gone.
+- **The crossbow** lies across its square, its prod standing across the
+  end, the string drawn back in a V and a bolt laid in it. It no longer
+  sits corner to corner like a pick.
+- **Coaches.**
+  - **Not every realm runs them.** An empire always does; of the rest,
+    about half, differently in every world. Towns of the others (and towns
+    of no realm) have no coach, and no coach goes to them.
+  - **Where a coach pulls up.** It used to drive straight into the coach
+    standing at the far town and vanish. Now it comes in at the way into
+    town on the side it came from, each side with its own spot. If that's
+    where the town's own coach stands, it pulls up beside it, a pace
+    between them. You're set down beside it.
+  - **It goes home.** It waits a little where it set you down, then drives
+    back to its own town, seen the whole way. Back at its stand, it's
+    there to be had again.
+  - **Getting down.** Space gets you down from the coach, as does F
+    (whatever's in your hand: F with food in it used to eat it instead).
+    Within the first 10 seconds you get your fare back and the coach turns
+    about for its stand. After that, no fare back, and it goes on without
+    you to where it was going, and then home.
+- **Version 1.16.0.** Worlds from 1.15 load as before; nothing in a save
+  changes.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

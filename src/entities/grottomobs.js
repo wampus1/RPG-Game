@@ -17,7 +17,8 @@
 //   the shrimpkin: little cleaner shrimp, peaceful. They mend whatever's
 //     most hurt near them: the drowned you're fighting, or you. Struck, they
 //     scatter.
-import { BRAINS } from './monsters.js';
+import { BRAINS, addZone } from './monsters.js';
+import { BLOCKS } from '../world/blocks.js';
 import { knock, strikeAnim, STYLES } from '../game/combat.js';
 import { FY } from '../world/dungeongen.js';
 import { wetAt, tideHigh, runOf } from '../game/grottowork.js';
@@ -92,13 +93,28 @@ export const GROTTO_BRAINS = {
     const game = c.game;
     const out = c.holeOut || { x: 0, z: 1 };
     if (c.outT > 0) c.outT -= dt;
+    if (c.tellT > 0) c.tellT -= dt;
     if (c.wardNote > 0) c.wardNote -= dt;
     c.face(c.x + out.x, c.z + out.z);
-    const line = [1, 2, 3].map((k) => ({ x: c.x + out.x * k, z: c.z + out.z * k }));
+    // (Round 116) What it can reach: not only straight out of its hole but
+    // the fan before it, three deep and three wide (it only ever struck at
+    // whoever stood dead in line, so mostly it just hid); open ground only.
+    const side = { x: out.z, z: out.x };
+    const line = [];
+    for (let k = 1; k <= 3; k++) {
+      for (let w = -1; w <= 1; w++) {
+        const x = c.x + out.x * k + side.x * w;
+        const z = c.z + out.z * k + side.z * w;
+        const b = BLOCKS[game.world.getBlock(x, c.y, z)];
+        if (b && b.solid) continue;
+        line.push({ x, z });
+      }
+    }
     const inLine = (e) => line.some((q) => q.x === e.x && q.z === e.z) && Math.abs(e.y - c.y) <= 1;
-    // Drawing back to lunge.
+    // Drawing back to lunge (the ground it'll strike reddening under you).
     if (c.lungeT > 0) {
       c.lungeT -= dt;
+      if (Math.random() < dt * 20) game.renderer.emit(c.x + out.x * 0.5, c.y + 0.6, c.z + out.z * 0.5, { n: 1, color: ['#e8e0a0', '#a0a878'], up: 6, speed: 8, life: 0.3 });
       if (c.lungeT > 0) return true;
       strikeAnim(c, STYLES.bite || null);
       c.outT = 1.8;
@@ -116,9 +132,11 @@ export const GROTTO_BRAINS = {
     if (!(c.cool > 0)) {
       const prey = game.everyone().find((p) => p && !p.dead && inLine(p));
       if (prey) {
-        c.lungeT = 0.45;
+        c.lungeT = 0.6;
         c.cool = 2.2;
-        game.renderer.floatText(c.x, c.y + 2, c.z, 'it gapes...', '#c8d0a0');
+        c.tellT = 0.6;
+        addZone(game, { by: c, kind: 'mark', tiles: line, y: c.y, life: 0.6, color: [230, 96, 60] });
+        game.audio?.play('hiss', c);
         return true;
       }
     } else c.cool -= dt;
@@ -127,22 +145,44 @@ export const GROTTO_BRAINS = {
 
   // Drifting in the water; stranded on the sand when the tide's out, and
   // stinging whoever steps by.
+  // (Round 116) Its sting is seen coming: whoever's beside it, it gathers
+  // its light (brighter and brighter, crackling, the paces round it lit
+  // up) for most of a second, then lets go at everyone still beside it.
+  // Step away, and it stings nothing.
   lanternJelly(c, dt) {
     const game = c.game;
     const wet = wetAt(game, c.x, c.y, c.z);
     c.lying = !wet;
+    // (Never the ordinary bite: only its sting, seen coming.)
+    c.attackCd = Math.max(c.attackCd || 0, 1);
+    const beside = (q) => q && !q.dead && dist(q, c) <= 1 && Math.abs(q.y - c.y) <= 1;
+    if (c.tellT > 0) {
+      c.tellT -= dt;
+      if (Math.random() < dt * 30) game.renderer.emit(c.x + (Math.random() - 0.5) * 1.6, c.y + 0.4 + Math.random(), c.z + (Math.random() - 0.5) * 1.6, { n: 1, color: ['#a0ffff', '#ffffff', '#5ad8f0'], up: 10, speed: 14, life: 0.3, glow: true });
+      if (c.tellT > 0) return true;
+      c.stingCd = wet ? 1.4 : 1.6;
+      game.audio?.play('zap', c);
+      game.renderer.emit(c.x, c.y + 0.6, c.z, { n: 18, color: ['#a0ffff', '#ffffff', '#5ad8f0'], up: 20, speed: 50, life: 0.4, glow: true });
+      for (const p of [...game.everyone(), ...(game.npcs || [])]) {
+        if (!beside(p)) continue;
+        if (p.kind === 'player' && p.rollT > 0) continue;
+        game.damage(p, wet ? c.S.dmg : 1, c);
+        p.stunT = Math.max(p.stunT || 0, wet ? 0.7 : 0.6);
+        game.renderer.floatText(p.x, p.y + 2.4, p.z, 'stung!', '#a0ffff');
+      }
+      return true;
+    }
+    if (c.stingCd > 0) c.stingCd -= dt;
+    else if (game.everyone().some(beside)) {
+      c.tellT = 0.75;
+      const tiles = [];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) tiles.push({ x: c.x + dx, z: c.z + dz });
+      addZone(game, { by: c, kind: 'mark', tiles, y: c.y, life: 0.75, color: [110, 230, 255] });
+      game.audio?.play('hum', c);
+      return true;
+    }
     if (!wet) {
       c.target = null;
-      if (c.stingCd > 0) c.stingCd -= dt;
-      else {
-        const p = game.everyone().find((q) => q && !q.dead && dist(q, c) <= 1 && Math.abs(q.y - c.y) <= 1);
-        if (p) {
-          c.stingCd = 1.6;
-          game.damage(p, 1, c);
-          p.stunT = Math.max(p.stunT || 0, 0.6);
-          game.renderer.floatText(p.x, p.y + 2.4, p.z, 'stung!', '#a0ffff');
-        }
-      }
       return true;
     }
     c.hasteT = Math.max(c.hasteT || 0, 0.3);

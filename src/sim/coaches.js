@@ -9,6 +9,7 @@
 // clicked, says where it goes (see ui/travel.js).
 import { REGION_W, REGION_D, MAP_W } from '../config.js';
 import { seaRoute, seaOff } from '../game/shipfleets.js';
+import { hash4, hashString } from '../util/rng.js';
 
 // How far a coach goes in a game minute, and a ferry (tiles).
 const COACH_PACE = 2.5;
@@ -31,15 +32,27 @@ function known(game, s) {
   return !!(game.revealMap || (ow.explored && ow.explored[Math.floor(c.z / REGION_D) * MAP_W + Math.floor(c.x / REGION_W)]));
 }
 
-// The coach's ways from `from`: [{ s, kind, dist, mins, fare, known }].
+// (Round 116) Does a town run a coach? Not every realm does: an empire
+// always, and some of the rest (each its own way, for good), from every
+// town of theirs; the others, and the towns of no realm, none.
+export function hasCoaches(s) {
+  const civ = s && s.civ;
+  if (!civ) return false;
+  if (civ.empire) return true;
+  return hash4(hashString(civ.name || ''), civ.id ?? 0, 0x0c0ac4) % 100 < 55;
+}
+
+// The coach's ways from `from`: [{ s, kind, dist, mins, fare, known }]
+// (Round 116: from a town that runs one, to the towns that do).
 export function coachLinks(game, from) {
   const ow = game.world.ow;
   const dip = game.sim.diplomacy;
+  if (!hasCoaches(from)) return [];
   const land = landOf(ow, from);
   const c0 = centre(from);
   const out = [];
   for (const s of ow.settlements) {
-    if (s === from || !open(s) || landOf(ow, s) !== land) continue;
+    if (s === from || !open(s) || !hasCoaches(s) || landOf(ow, s) !== land) continue;
     const road = (dip.roads || []).some((r) => r.done && ((r.a === from.id && r.b === s.id) || (r.a === s.id && r.b === from.id)));
     const c1 = centre(s);
     const dist = Math.hypot(c1.x - c0.x, c1.z - c0.z);
@@ -200,29 +213,96 @@ export function ferryLinks(game, from) {
 // Where a coach stands in town (its key and spot), or null: outside, by the
 // way in (beside the sign there, if it's up).
 export function coachStand(L) {
-  const sg = (L.signs || []).find((q) => q.kind === 'entrance' && q.x !== undefined);
-  const e = sg || (L.entrances && L.entrances[0]);
+  const e = homeGate(L);
   if (!e) return null;
-  // (Round 82) On the street by the sign (or open ground), never in a
-  // house or a yard beside it: the nearest spot that's clear.
-  let at = { x: e.x + 2, z: e.z + 1 };
-  if (L.mask && L.maskAt) {
-    const clear = (x, z) => [1, 5, 0].includes(L.maskAt(x, z)) && (!L.inside || L.inside(x, z));
-    if (!clear(at.x, at.z)) {
-      let best = null;
-      for (let dz = -4; dz <= 4; dz++) {
-        for (let dx = -4; dx <= 4; dx++) {
-          const x = e.x + dx;
-          const z = e.z + dz;
-          if (!clear(x, z)) continue;
-          const d = Math.abs(x - at.x) + Math.abs(z - at.z) + (L.maskAt(x, z) === 0 ? 0.5 : 0);
-          if (!best || d < best.d) best = { x, z, d };
-        }
-      }
-      if (best) at = { x: best.x, z: best.z };
+  const at = clearBy(L, e, { x: e.x + 2, z: e.z + 1 });
+  return { key: `coach:${L.settlement.id}`, type: 'wagon', x: at.x, z: at.z, face: 1, hood: true, horse: { coat: L.settlement.id % 4, saddle: false }, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'coach', sid: L.settlement.id } };
+}
+
+// The way in a town's own coach stands by (the sign there, if it's up).
+function homeGate(L) {
+  const sg = (L.signs || []).find((q) => q.kind === 'entrance' && q.x !== undefined);
+  return sg || (L.entrances && L.entrances[0]) || null;
+}
+
+// (Round 82) On the street by `e` (or open ground), never in a house or a
+// yard beside it: `want` if it's clear, else the nearest spot that is
+// (and, Round 116, not one of the `taken`, nor beside them).
+function clearBy(L, e, want, taken = []) {
+  if (!L.mask || !L.maskAt) return want;
+  const free = (x, z) => [1, 5, 0].includes(L.maskAt(x, z)) && (!L.inside || L.inside(x, z)) && !taken.some((q) => Math.abs(q.x - x) <= 1 && Math.abs(q.z - z) <= 1);
+  if (free(want.x, want.z)) return want;
+  let best = null;
+  for (let dz = -4; dz <= 4; dz++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      const x = e.x + dx;
+      const z = e.z + dz;
+      if (!free(x, z)) continue;
+      const d = Math.abs(x - want.x) + Math.abs(z - want.z) + (L.maskAt(x, z) === 0 ? 0.5 : 0);
+      if (!best || d < best.d) best = { x, z, d };
     }
   }
-  return { key: `coach:${L.settlement.id}`, type: 'wagon', x: at.x, z: at.z, face: 1, hood: true, horse: { coat: L.settlement.id % 4, saddle: false }, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'coach', sid: L.settlement.id } };
+  return best ? { x: best.x, z: best.z } : want;
+}
+
+// (Round 116) The ways into a town at its four sides (north, east, south,
+// west of it), each with the side it's on: [{ x, z, side: [dx, dz] }].
+export function townGates(L) {
+  const bd = L.bounds;
+  const pts = (L.entrances && L.entrances.length ? L.entrances : []).map((q) => {
+    const sg = (L.signs || []).find((g) => g.kind === 'entrance' && g.at && g.at.x === q.x && g.at.z === q.z);
+    return sg ? { x: sg.x, z: sg.z, at: q } : { x: q.x, z: q.z, at: q };
+  });
+  if (!bd) return pts.map((q) => ({ ...q, side: [0, 1] }));
+  const cx = (bd.x0 + bd.x1) / 2;
+  const cz = (bd.z0 + bd.z1) / 2;
+  const out = [];
+  for (const q of pts) {
+    const dx = q.at.x - cx;
+    const dz = q.at.z - cz;
+    // (Only the ways in at the town's edge: the streets' ends.)
+    const edge = Math.min(q.at.x - bd.x0, bd.x1 - q.at.x, q.at.z - bd.z0, bd.z1 - q.at.z);
+    if (edge > 4) continue;
+    const side = Math.abs(dx) >= Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
+    if (out.some((o) => o.side[0] === side[0] && o.side[1] === side[1])) continue;
+    out.push({ x: q.x, z: q.z, at: q.at, side });
+  }
+  return out;
+}
+
+// (Round 116) Where a coach in from town `from` pulls up at `L`: at the way
+// in on the side it comes from (each side its own spot), or, if that's
+// where the town's own coach stands, beside it (never into it):
+// { x, z, side }.
+export function coachBay(L, from) {
+  const home = coachStand(L);
+  const gates = townGates(L);
+  const c = L.bounds ? { x: (L.bounds.x0 + L.bounds.x1) / 2, z: (L.bounds.z0 + L.bounds.z1) / 2 } : null;
+  let gate = null;
+  if (from && c && gates.length) {
+    const f = centre(from);
+    const fx = f.x - c.x;
+    const fz = f.z - c.z;
+    const n = Math.hypot(fx, fz) || 1;
+    gate = gates.slice().sort((a, b) => (b.side[0] * fx + b.side[1] * fz) / n - (a.side[0] * fx + a.side[1] * fz) / n)[0];
+  }
+  const hg = homeGate(L);
+  const atHome = !gate || (hg && Math.abs(gate.x - hg.x) + Math.abs(gate.z - hg.z) <= 2);
+  if (atHome && home) {
+    // Side by side with the coach standing there, a pace between them.
+    const e = hg || home;
+    for (const dz of [2, -2, 3, -3]) {
+      const at = clearBy(L, e, { x: home.x, z: home.z + dz }, [home]);
+      if (at.x === home.x && at.z === home.z + dz) return { x: at.x, z: at.z, side: gate ? gate.side : [0, 1] };
+    }
+    const at = clearBy(L, e, { x: home.x, z: home.z + 2 }, [home]);
+    return { x: at.x, z: at.z, side: gate ? gate.side : [0, 1] };
+  }
+  if (!gate) return null;
+  // (Pulled up just inside the way in, off to one side of it.)
+  const want = { x: gate.x - gate.side[0] * 2 + gate.side[1] * 2, z: gate.z - gate.side[1] * 2 + gate.side[0] * 2 };
+  const at = clearBy(L, gate, want, home ? [home] : []);
+  return { x: at.x, z: at.z, side: gate.side };
 }
 
 // (Round 114) The coachman: up on the bench of his coach at the stand from
@@ -264,13 +344,16 @@ export function ferryStand(game, L) {
   return { key: `ferry:${L.settlement.id}`, type: 'ship', x, z, face: st.dir.x > 0 ? 3 : st.dir.x < 0 ? 1 : st.dir.z > 0 ? 0 : 2, banner: L.settlement.civ ? L.settlement.civ.color.hex : null, stop: { kind: 'ferry', sid: L.settlement.id } };
 }
 
-// Where you're set down at `s` (by coach, or off the ferry).
-export function arrivalSpot(game, s, kind) {
+// Where you're set down at `s` (by coach, or off the ferry): (Round 116)
+// off a coach in from `from`, beside where it pulls up.
+export function arrivalSpot(game, s, kind, from = null) {
   const L = game.world.layouts.get(s.id) || game.world.getLayout(s);
   if (kind === 'ferry') {
     const P = game.sim.ships && game.sim.ships.ports[s.id];
     if (P && P.site) return { x: P.site.root.x, z: P.site.root.z };
   }
+  const bay = L && from ? coachBay(L, from) : null;
+  if (bay) return { x: bay.x - 1, z: bay.z + 1 };
   const st = L && coachStand(L);
   if (st) return { x: st.x - 1, z: st.z + 1 };
   if (L && L.plaza) return { x: L.plaza.cx, z: L.plaza.cz + 3 };

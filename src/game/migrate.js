@@ -876,6 +876,12 @@ export const STEPS = [
       log.push('Smoother: a town\'s morning business, a town coming into view, a nearby city being laid out and the look for a pier are all worked through a little each frame instead of all at once; the ground by an old place\'s way in is kept while you\'re below, so climbing out is instant; icons, signs, dishes and masters are no longer read back off the screen to be drawn; creatures stop searching every frame for a way that isn\'t there; and with others playing, the host sends each floor\'s plan for the map (no more laying the floor out again on your own machine) and works out what to send once for all of you.');
     },
   },
+  {
+    to: '1.16.0',
+    data(d, log) {
+      log.push('Seen, and fair: the lantern jellies and shrimpkin are drawn as they should be; a jelly\'s sting and a moray\'s lunge are shown before they land, and morays strike again from their holes; urchin beds show at every tide, their spines up through the water; a gale\'s line and the vault\'s bolt plates show before they hurt you; the crossbow has its own look. Coaches: only some realms run them; a coach pulls up beside the one standing in the far town, at the way in on the side it came from, then drives home where you can see it; Space gets you down, your fare back if it had hardly set off.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

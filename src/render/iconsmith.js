@@ -395,20 +395,27 @@ const WEAPONS = {
   },
   bow: (S) => bowShape(S, 6.4, '#8a5a2e'),
   longbow: (S) => bowShape(S, 7.6, '#6a4422', true),
+  // (Round 116) Lying across the square, not corner to corner like the
+  // tools (it was too like a pick): the stock along, the prod standing
+  // across its end, the string drawn back to the nut in a V, a bolt laid in
+  // it, the trigger under.
   crossbow: (S) => {
-    const stock = S.add('wood', '#7a5030', 0.3, { axis: [1, -1] });
-    const [a, b] = [at(0.8, 0.4), at(13.4, 0)];
-    S.capsule(stock, a[0], a[1], b[0], b[1], 1.1);
-    const prod = S.add('steel', '#a8b4c8', 0.8);
+    const stock = S.add('wood', '#7a5030', 0.3, { axis: [1, 0] });
+    S.capsule(stock, 2, 8, 12.4, 8, 1.1);
+    S.poly(stock, [[0.6, 6.4], [3.8, 6.9], [3.8, 9.1], [0.6, 9.8]], 1.2);
+    const trig = S.add('iron', '#6a6e7a', 0.2);
+    S.capsule(trig, 5.2, 9.2, 4.4, 11.8, 0.5);
+    const prod = S.add('steel', '#8e9ab0', 0.8);
     const pts = [];
-    for (let k = -5; k <= 5; k++) pts.push(at(11.6 - (k * k) * 0.09, k * 0.9));
-    for (let i = 0; i < pts.length - 1; i++) S.capsule(prod, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 0.7);
+    for (let k = -6; k <= 6; k++) pts.push([12 + (1 - (k / 6) ** 2) * 1.6, 8 + k * 1.05]);
+    for (let i = 0; i < pts.length - 1; i++) S.capsule(prod, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 0.85);
     const st = S.add('string', '#e8e0c8', 0.5);
-    const [s0, s1] = [at(9.4, -4.4), at(9.4, 4.4)];
-    S.capsule(st, s0[0], s0[1], s1[0], s1[1], 0.4);
+    S.capsule(st, 12, 2, 7, 8, 0.4);
+    S.capsule(st, 12, 14, 7, 8, 0.4);
     const bolt = S.add('iron', '#c8b890', 1);
-    const [c0, c1] = [at(6.4, 0), at(14.6, 0)];
-    S.capsule(bolt, c0[0], c0[1], c1[0], c1[1], 0.45);
+    S.capsule(bolt, 6.6, 8, 14.6, 8, 0.45);
+    const head = S.add('steel', '#d0d8e8', 1.1);
+    S.poly(head, [[14.2, 6.8], [15.9, 8], [14.2, 9.2]], 0.7, 'ridge');
   },
   sling: (S) => {
     const c = S.add('string', '#c8a878', 0.4);

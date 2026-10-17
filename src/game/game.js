@@ -104,7 +104,7 @@ import { isBlueprint, ghostProblem, placeGhost, removeGhost, plansSave, plansLoa
 import { boxPress, boxDrag, boxWheel, openPlanWindow } from '../ui/plans.js';
 import { ShipDesignWindow } from '../ui/shipdesign.js';
 import { checkRegion, healthNote } from './savehealth.js';
-import { startRide, tick as rideTick, hurry as rideHurry, getOff as rideOff, endRide as rideEnd, rideSave, rideLoad } from './rides.js';
+import { startRide, tick as rideTick, hurry as rideHurry, getOff as rideOff, endRide as rideEnd, rideSave, rideLoad, runsTick as coachRunsTick } from './rides.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
@@ -2398,6 +2398,8 @@ export class Game {
     if (!blocked) this.handleKeys(sheep ? sheepFilter(this, this.player, uiRes.pressed) : uiRes.pressed, uiRes.wheel);
     // (Round 78) On the coach or the ferry: carried along. On a rope: up it.
     if (this.player._ride) rideTick(this, this.player, dt);
+    // (Round 116) The coaches with nobody in them, on their way home.
+    if (this.coachRuns && this.coachRuns.length && !this.remote) coachRunsTick(this);
     if (this.player._grapple) grappleTick(this, this.player, dt);
     // What you wear and hold, and the potions you've drunk.
     this.bonusT = (this.bonusT || 0) - dt;
@@ -3055,12 +3057,16 @@ export class Game {
           this.ui.msg('Layer: AUTO', '#a0c8ff');
           break;
         case 'Space':
-          if (this.fishing) hook(this);
+          // (Round 116) Riding the coach: down off it (see rides.getOff).
+          if (p._ride) rideOff(this, p);
+          else if (this.fishing) hook(this);
           else roll(this, p, this.heldMove());
           break;
         case 'KeyF':
           if (this.cutscene) this.interactFront();
           else if (p.raft) this.leaveRaft();
+          // (Round 116: off the coach, whatever's in your hand.)
+          else if (p._ride) rideOff(this, p);
           else if (shipKey(this, 'KeyF')) break;
           else if (p.heldDef()?.kind === 'food') this.eat();
           else if (p.heldDef()?.kind === 'potion') this.drink();
@@ -4536,7 +4542,7 @@ export class Game {
       });
     }
     // (Round 78: not a coach or ferry under way with someone in it.)
-    for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k) && !k.startsWith('ride:')) this.props.delete(k);
+    for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k) && !k.startsWith('ride:') && !k.startsWith('coachrun:')) this.props.delete(k);
     // You, sat in the back of one.
     for (const q of this.props.values()) this.riding.seatShown(q);
     // (Round 90: anyone's, not only yours; one of a player's wagons is

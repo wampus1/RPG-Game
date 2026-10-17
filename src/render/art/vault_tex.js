@@ -23,10 +23,23 @@ const FACES = {
 const FLOORS = new Set(['tv_brick', 'tv_plate', 'tv_loess', 'tv_stone', 'tv_lacquerfloor', 'tv_jade', 'tv_bridge']);
 const PALACE = new Set(['tv_stone', 'tv_lacquerfloor', 'tv_jade', 'tv_bridge']);
 const turned = (rows, v) => (v % 2 ? flipX(rows) : rows);
-// (A plate in the floor: the bricks as they are, but one course laid
-// square across the middle, a hair proud of the rest: see it, and step
-// round it.)
-const PLATE = A.BRICK[0].map((r, y) => (y === 7 || y === 8 ? r.slice(0, 3) + (y === 7 ? 'hhhhhhhhhh' : 'gggggggggg') + r.slice(13) : r));
+// (A plate in the floor. Round 116: a bronze-rimmed slab set in the bricks,
+// a mark cut in it, plain to see from across the room: step round it.)
+const PLATE = A.BRICK[0].map((r, y) => {
+  if (y < 2 || y > 13) return r;
+  return [...r].map((c, x) => {
+    if (x < 2 || x > 13) return c;
+    if (y === 2 || x === 2) return 'C';
+    if (y === 13 || x === 13) return 'b';
+    if (y === 3 || x === 3) return 'c';
+    if (y === 12 || x === 12) return 'B';
+    // The mark: a ring cut in the slab.
+    const d = Math.abs(x - 7.5) + Math.abs(y - 7.5);
+    if (d >= 2 && d < 3) return 'k';
+    if (d >= 3 && d < 3.5) return 'H';
+    return y < 6 && x < 6 ? 'Q' : 'S';
+  }).join('');
+});
 
 // The tops (16 by 16), or null if it isn't one of ours.
 export function vaultTop(name, v) {

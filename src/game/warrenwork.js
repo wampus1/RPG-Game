@@ -212,7 +212,7 @@ export function give(run, q, quiet) {
   const T = wrT(run);
   if (!T.told.give) {
     T.told.give = true;
-    game.ui.msg('The cracked earth gives way under you, and you go down with it into the hollow beneath. (Mind the cracked places: the floor here is hollow.)', '#e0c090', true);
+    game.ui.msg('The cracked earth gives way under you, and you go down with it into the hollow beneath.', '#e0c090', true);
   }
   // (Everything under the floor heard that.)
   noise(run, q, 7, game.everyone().find((p) => p && !p.dead && dist(p, q) <= 2) || null);

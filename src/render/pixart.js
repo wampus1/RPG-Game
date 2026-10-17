@@ -35,6 +35,11 @@ export function grid(def, rows = def.rows) {
 }
 
 // A palette of hex strings (or [hex, alpha]) by character, as rgb.
+// (Round 116: an alpha of 1 or under is a fraction (0.45, most of the way
+// see-through); over 1, out of 255. Some of the art was painted the one
+// way and some the other, and a lantern jelly, a shrimpkin, a glimmer and
+// a lemur painted in fractions came out all but invisible.)
+export const alphaOf = (a) => (a === undefined || a === null ? 255 : a <= 1 ? Math.round(a * 255) : a);
 const PALS = new WeakMap();
 function palOf(pal) {
   let out = PALS.get(pal);
@@ -42,7 +47,7 @@ function palOf(pal) {
   out = {};
   for (const [k, v] of Object.entries(pal)) {
     const [c, a] = Array.isArray(v) ? v : [v, 255];
-    out[k] = { rgb: hex(c), a };
+    out[k] = { rgb: hex(c), a: alphaOf(a) };
   }
   PALS.set(pal, out);
   return out;
@@ -164,7 +169,8 @@ export const VARIANTS = {
 function recolour(pal, V) {
   const out = {};
   for (const [ch, v] of Object.entries(pal)) {
-    const [c, a] = Array.isArray(v) ? v : [v, 255];
+    const [c, a0] = Array.isArray(v) ? v : [v, 255];
+    const a = alphaOf(a0);
     const rgb = hex(c);
     const mx = Math.max(...rgb);
     const mn = Math.min(...rgb);
