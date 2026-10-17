@@ -882,6 +882,12 @@ export const STEPS = [
       log.push('Seen, and fair: the lantern jellies and shrimpkin are drawn as they should be; a jelly\'s sting and a moray\'s lunge are shown before they land, and morays strike again from their holes; urchin beds show at every tide, their spines up through the water; a gale\'s line and the vault\'s bolt plates show before they hurt you; the crossbow has its own look. Coaches: only some realms run them; a coach pulls up beside the one standing in the far town, at the way in on the side it came from, then drives home where you can see it; Space gets you down, your fare back if it had hardly set off.');
     },
   },
+  {
+    to: '1.17.0',
+    data(d, log) {
+      log.push('Old places show their tier on the map (bronze, silver, gold; tier III alight), and their ways in grow grander with it, built back up stone by stone when a time crystal turns them back. Relic shards are set at an anvil. Chests behind bars can no longer be reached through them. Item descriptions say plainly what things do. The fairy rings let you go, and nothing gone wrong in the drawing can leave the view turned or shifted.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

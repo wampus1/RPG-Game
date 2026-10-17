@@ -475,7 +475,7 @@ export class Dungeons {
       if (!d) continue;
       Object.assign(d, q);
       const s = this.site(d);
-      if (s) s.state = { cleared: d.type !== 'kavorent' && d.cleared, open: d.spire ? d.spire.open : null, beaten: d.type === 'kavorent' && d.cleared };
+      if (s) s.state = { cleared: d.type !== 'kavorent' && d.cleared, open: d.spire ? d.spire.open : null, beaten: d.type === 'kavorent' && d.cleared, tier: d.tier || 1 };
     }
   }
 }

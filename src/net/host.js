@@ -504,6 +504,16 @@ export class HostNet {
       const real = audio;
       const proxy = Object.create(real);
       proxy.netWrapped = true;
+      // (Round 117) Where the sounds are heard from, kept on the real one:
+      // set on the copy, the real one went on hearing from wherever the
+      // player was when the world was opened to others (a stale body after
+      // a respawn or a load), and every sound "too far off" went unheard.
+      Object.defineProperty(proxy, 'listener', {
+        get: () => real.listener,
+        set: (v) => {
+          real.listener = v;
+        },
+      });
       proxy.play = (name, where, g, o) => {
         const w = where && typeof where === 'object' && where.x !== undefined ? at(where.x, where.z) : null;
         // (Round 66: how loud and how high, for a mod's sound.)

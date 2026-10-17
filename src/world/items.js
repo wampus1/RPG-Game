@@ -286,12 +286,12 @@ item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 
 // what it can't digest, worth more than its weight in gold to the
 // perfumers.
 // (Round 109) Fish-oil, from the Drowned Broch's casks: the beacon's fuel.
-item('wreckers_key', { name: 'The Wreckers\' Key', kind: 'misc', stack: 1, value: 2, about: 'A big iron key on a greasy cord. It opens the padlock on the wreckers\' strongroom.' });
-item('fish_oil', { name: 'Jar of Fish-Oil', kind: 'misc', stack: 8, value: 4, fuel: true, about: 'A stoneware jar of stinking fish-oil, stoppered with a rag. It burns bright and long: the old keepers fed the beacon on it.' });
-item('ambergris', { name: 'Ambergris', kind: 'misc', stack: 16, value: 60, about: 'A lump of grey wax out of a whale\'s gut, sweet-smelling and worth more than its weight in gold to the perfumers.' });
+item('wreckers_key', { name: 'The Wreckers\' Key', kind: 'misc', stack: 1, value: 2, about: 'Opens the padlock on the wreckers\' strongroom in a broch.' });
+item('fish_oil', { name: 'Jar of Fish-Oil', kind: 'misc', stack: 8, value: 4, fuel: true, about: 'Fuel for a broch\'s beacon: use a cold beacon with a jar in your pack to light it (uses one jar).' });
+item('ambergris', { name: 'Ambergris', kind: 'misc', stack: 16, value: 60, about: 'A valuable trade good: worth about ¤60 to a merchant.' });
 // (Round 106) Out of the Salt Cathedral: a tear of the Mother's, a drop of
 // brine set hard and clear as glass, pink at its heart.
-item('mothers_tear', { name: 'Mother\'s Tear', kind: 'misc', stack: 16, value: 75, about: 'A drop of brine from the Salt Cathedral, set as hard and clear as glass, pink at its heart. The pilgrims of Saltmere pay well for them.' });
+item('mothers_tear', { name: 'Mother\'s Tear', kind: 'misc', stack: 16, value: 75, about: 'A valuable trade good from the Salt Cathedral: worth about ¤75 to a merchant.' });
 // (Round 95) A chieftain's gold, out of the barrows: a twisted torc for the
 // neck, a ring for the arm (given by a ring-giver to their sworn).
 item('gold_torc', { name: 'Gold Torc', kind: 'misc', stack: 8, value: 95 });
@@ -300,7 +300,7 @@ item('arm_ring', { name: 'Arm-Ring', kind: 'misc', stack: 8, value: 45 });
 // bones in a little reliquary of their own, worth a great deal to any
 // temple (and to the dead, who wake when they're taken).
 item('gilt_chalice', { name: 'Gilt Chalice', kind: 'misc', stack: 4, value: 85 });
-item('saint_relic', { name: 'Saint\'s Relic', kind: 'misc', stack: 1, value: 220, about: 'A saint\'s bones in a little gilt casket. Any temple would pay well for them, and the crypt they came from is no longer quiet.' });
+item('saint_relic', { name: 'Saint\'s Relic', kind: 'misc', stack: 1, value: 220, about: 'Worth about ¤220 to a merchant or temple. Taking it from its shrine puts out every candle on that crypt floor.' });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
@@ -381,7 +381,7 @@ food('glowberries', 1, 3, 'Glowberries');
 food('lantern_pod', 1, 1, 'Lantern Pod');
 item('bamboo_cane', { name: 'Bamboo Cane', kind: 'misc', stack: 64, value: 1 });
 item('salt', { name: 'Salt', kind: 'misc', stack: 64, value: 3 });
-item('frost_crystal', { name: 'Frost Crystal', kind: 'misc', stack: 32, value: 9, about: 'A shard of ice that never melts. The Rimeborn burn them in their frost hearths.' });
+item('frost_crystal', { name: 'Frost Crystal', kind: 'misc', stack: 32, value: 9, about: 'A trade good: worth about ¤9 to a merchant.' });
 item('antler', { name: 'Antler', kind: 'misc', stack: 16, value: 6 });
 item('tiger_pelt', { name: 'Tiger Pelt', kind: 'misc', stack: 8, value: 30 });
 item('pink_feather', { name: 'Pink Feather', kind: 'misc', stack: 32, value: 4 });
@@ -393,9 +393,9 @@ food('glowcap', 1, 3, 'Glowcap');
 // (Round 100) From the Wildwood Hollow: comb out of a hornets' nest, and a
 // seed that wants the sun.
 food('honeycomb', 2, 5, 'Honeycomb');
-item('sun_seed', { name: 'Sun-Seed', kind: 'misc', stack: 4, value: 12, about: 'A golden seed pod, warm in the hand. It wants the sun.' });
+item('sun_seed', { name: 'Sun-Seed', kind: 'misc', stack: 4, value: 12, about: 'Plant it in the sunlit bed of earth in a grove (use the bed with a seed in your pack) to make it grow.' });
 // (Round 101) The Kiln-Deep's: the key cast in the master's mould.
-item('kiln_key', { name: 'Kiln-Key', kind: 'misc', stack: 4, value: 30, about: 'A key of black iron, still warm, its bow a flame. Cast in the master\'s mould; it opens a kiln-door.' });
+item('kiln_key', { name: 'Kiln-Key', kind: 'misc', stack: 4, value: 30, about: 'Opens one locked kiln-door in a forge. Used up when it opens a door.' });
 food('crab_meat', 1, 3, 'Crab Meat');
 food('cooked_crab', 5, 6, 'Cooked Crab');
 // Hot dishes from the pot (and a warm cup) do their good slowly: a little
@@ -460,8 +460,8 @@ item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
 // (Round 68) The great ships (see world/shipmodels.js): bought at a
 // harbour's shipwright (a sloop can be built at a workbench), launched on
 // open water; shot for their guns; a sailor signed on.
-item('cannonball', { name: 'Cannonball', kind: 'misc', stack: 32, value: 3, about: 'Iron shot for a ship\'s gun, a shot a fire. An anvil makes four from an iron ingot, a lump of sulphur and a coal; a harbour\'s shipwright sells them.' });
-item('sailors_articles', { name: 'Sailor\'s Articles', kind: 'misc', stack: 8, value: 45, about: 'A sailor\'s mark on the ship\'s articles: right-click aboard a ship of your own and they join her crew (more hands sail her better, man her guns, pump her and mend her). Talk to a hand of yours for orders.' });
+item('cannonball', { name: 'Cannonball', kind: 'misc', stack: 32, value: 3, about: 'Ammunition for a ship\'s guns: each shot uses one. An anvil makes four from an iron ingot, a lump of sulphur and a coal; harbour shipwrights sell them.' });
+item('sailors_articles', { name: 'Sailor\'s Articles', kind: 'misc', stack: 8, value: 45, about: 'Right-click aboard a ship of your own to sign a sailor onto her crew. More crew sail her faster, man her guns, pump out water and make repairs. Talk to a crew member to give orders.' });
 // (Round 69) Every ship comes in a bottle, and goes back into one: she
 // comes out of it with no crew (sign them on), and at a fixed price, 750
 // to 5,000 coins by her kind.
@@ -480,7 +480,7 @@ item('lead', { name: 'Lead', kind: 'misc', stack: 8, value: 6 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 // (Round 78) Thrown up at a ledge, and climbed (see game/grapple.js).
 // (Round 86) See game/spyglass.js.
-item('spyglass', { name: 'Spyglass', kind: 'misc', stack: 1, value: 60, about: 'A brass telescope. Right-click to put it to your eye: move the mouse round to turn the view (you\'re its pivot), and scroll to look further out or bring it back in. Right-click again to lower it.' });
+item('spyglass', { name: 'Spyglass', kind: 'misc', stack: 1, value: 60, about: 'Right-click to look through it: move the mouse to turn the view, and scroll to zoom in or out. Right-click again to lower it.' });
 item('grapple_hook', { name: 'Grappling Hook', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 30, grapple: true, about: 'Right-click a ledge above you (up to 12 high, 9 out) to throw it; you climb the rope to the top. Right-click again to let go.' });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15, hands: 2 });
 item('arrow', { value: 1 });
@@ -660,27 +660,27 @@ for (const k of SHARD_GEMS) item(`shard_${k}`, { name: `${GEMS[k].name} Shard`, 
 // if an odd stamp), plans for things nobody's built in a hundred years, a
 // sigil for a sealed door, and relics: things of power that work on all
 // round them wherever they're set down (see game/relics.js).
-item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 0.5, exchange: 2, about: 'Stamped with kings nobody remembers. Any merchant will change them: two of them for a gold coin.' });
-item('old_blueprint', { name: 'Old Blueprint', kind: 'misc', stack: 8, value: 30, about: 'Plans for works long forgotten. A mayor would pay well for them, and the town\'s builders and thinkers would learn from them.' });
-item('sigil', { name: 'Bronze Sigil', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'The key to a sealed door, down below.' });
-item('cell_keys', { name: 'Jailer\'s Keys', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'A ring of iron keys off a holdout jailer\'s belt: they open the cells below.' });
-item('kav_key', { name: 'Glyph Key', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'A shard of light in a frame of alloy: it opens a Kavorent vault.' });
+item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 0.5, exchange: 2, about: 'Old money: any merchant exchanges two of them for one gold coin.' });
+item('old_blueprint', { name: 'Old Blueprint', kind: 'misc', stack: 8, value: 30, about: 'Give it to a mayor (talk to them) for coin and renown; it also speeds up the town\'s research.' });
+item('sigil', { name: 'Bronze Sigil', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'Opens a sealed door further down in the dungeon it came from.' });
+item('cell_keys', { name: 'Jailer\'s Keys', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'Opens the cell doors in a holdout.' });
+item('kav_key', { name: 'Glyph Key', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'Opens one Kavorent vault door.' });
 // A relic's power, and the colour of its circle.
 export const RELICS = {
-  hearth: { name: 'Hearthstone', color: '#ffb050', about: 'Wounds close a little, slowly, for everyone near it.' },
-  vigil: { name: 'Vigil Lamp', color: '#fff0a0', about: 'No night thing comes within its circle, and the dead are weakened near it.' },
-  breath: { name: 'Windcharm', color: '#70f0c8', about: 'Breath comes back twice as fast to everyone near it.' },
-  ward: { name: 'Warding Idol', color: '#70a8ff', about: 'Blows land a fifth lighter on everyone near it.' },
-  fury: { name: 'War Totem', color: '#ff5050', about: 'Blows struck near it land a fifth harder.' },
-  harvest: { name: 'Seed of Plenty', color: '#90e050', about: 'Crops near it grow twice as fast.' },
+  hearth: { name: 'Hearthstone', color: '#ffb050', about: 'Heals everyone in its circle by 1 every 4 seconds.' },
+  vigil: { name: 'Vigil Lamp', color: '#fff0a0', about: 'Burns undead and night creatures in its circle, and they take 40% more damage there.' },
+  breath: { name: 'Windcharm', color: '#70f0c8', about: 'Stamina recovers twice as fast for everyone in its circle.' },
+  ward: { name: 'Warding Idol', color: '#70a8ff', about: 'Everyone in its circle takes 20% less damage.' },
+  fury: { name: 'War Totem', color: '#ff5050', about: 'Hits struck inside its circle deal 20% more damage.' },
+  harvest: { name: 'Seed of Plenty', color: '#90e050', about: 'Crops in its circle grow twice as fast.' },
 };
-for (const [k, r] of Object.entries(RELICS)) item(`relic_${k}`, { name: r.name, kind: 'relic', stack: 1, value: 90, relic: k, plant: B.relic, color: r.color, about: `${r.about} (Set it down to use it; pick it up again any time.)` });
+for (const [k, r] of Object.entries(RELICS)) item(`relic_${k}`, { name: r.name, kind: 'relic', stack: 1, value: 90, relic: k, plant: B.relic, color: r.color, about: `${r.about} Place it on the ground to use it (circle radius 4 paces); pick it up again any time.` });
 // Relic shards: what a master of an old place leaves of the power it kept
 // about it (one to three). One set into a relic in your pack makes its
 // circle reach half a pace further, for good, up to eight of them.
 export const SHARD_MAX = 8;
 export const SHARD_REACH = 0.5;
-item('relic_shard', { name: 'Relic Shard', kind: 'relic_shard', stack: 16, value: 30, color: '#e0b8ff', about: `A splinter of the power a master of the deep kept about it. Used from your belt, it sinks into a relic in your pack: that relic's circle reaches half a pace further, for good (up to ${SHARD_MAX} shards to a relic).` });
+item('relic_shard', { name: 'Relic Shard', kind: 'relic_shard', stack: 16, value: 30, color: '#e0b8ff', about: `Set it into a relic at an anvil (use the anvil, then Relic shards). Each shard widens the relic's circle by half a pace, permanently, up to ${SHARD_MAX} shards per relic.` });
 // A relic with `n` shards set in it ("relic_hearth*3").
 export function grownRelic(kind, n = 0) {
   const k = `relic_${kind}`;
@@ -699,7 +699,7 @@ function deriveGrown(key) {
 // cores that powered their halls (a mayor will pay a fortune for one: the
 // town's thinkers can learn from it what nobody else alive knows), and
 // shards of crystal in a gem's colours (five fuse into a whole stone).
-item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 14, about: 'Dark, light, unbelievably hard. A smith can work it into iron.' });
+item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 14, about: 'A crafting material: a furnace smelts two (and a coal) into an iron ingot; an anvil makes two iron ingots from one.' });
 // (Round 61) Time crystals: what a master leaves when it falls, of its
 // tier. Used at the way into a beaten place, they turn it back to what it
 // was before anyone went down, a tier harder (and richer) than the crystal:
@@ -707,41 +707,41 @@ item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 
 for (const t of [1, 2, 3]) {
   item(`time_crystal_${t}`, {
     name: `Time Crystal (Tier ${['', 'I', 'II', 'III'][t]})`, kind: 'time_crystal', tier: t, stack: 4, value: [0, 300, 700, 1500][t], color: ['', '#9ad8ff', '#c8a0ff', '#ffd070'][t],
-    about: `It ticks, very softly, out of time with everything. Hold it at the way into an old place whose master is beaten and use it (right-click): the place turns back to what it was, at tier ${['', 'II', 'III', 'III'][t]}: harder, its master stronger, its chests richer.`,
+    about: `Use it (right-click) at the entrance of a dungeon whose boss you have beaten: the dungeon resets at tier ${['', 'II', 'III', 'III'][t]}, with stronger enemies, a stronger boss and richer chests.`,
   });
 }
-item('kav_core', { name: 'Kavorent Core', kind: 'misc', stack: 8, value: 450, about: 'A heavy sphere with a slow light turning inside it. Give it to a mayor: with it, a realm can begin to learn the Kavorent\'s arts.' });
+item('kav_core', { name: 'Kavorent Core', kind: 'misc', stack: 8, value: 450, about: 'Give it to a mayor (talk to them) for a large sum of coin; their realm can then research Kavorent technology.' });
 // (Their shards are made with the stones, above.)
 // The rarest finds: their arms and armour, things they made to carry, and
 // fittings that make what you have better than it was.
-item('kav_blade', { name: 'Phase Blade', kind: 'weapon', stack: 1, damage: 10, reach: 1.7, cooldown: 0.36, value: 380, heft: 0.8, pierce: 0.6, kav: true, about: 'Its edge is never quite where it seems: it slips past shields and through armour.' });
-item('kav_lance', { name: 'Arc Lance', kind: 'weapon', stack: 1, damage: 9, reach: 2.6, cooldown: 0.7, value: 420, hands: 2, style: 'halberd', kav: true, lance: true, about: 'Each thrust throws a lance of light that strikes everything in a line, four paces out.' });
-item('kav_caster', { name: 'Pulse Caster', kind: 'weapon', stack: 1, damage: 6, reach: 1.2, range: 10, ranged: true, cooldown: 0.6, value: 460, hands: 2, ammo: 'none', kav: true, about: 'Needs no arrows: it draws on your breath, and looses bolts of light.' });
+item('kav_blade', { name: 'Phase Blade', kind: 'weapon', stack: 1, damage: 10, reach: 1.7, cooldown: 0.36, value: 380, heft: 0.8, pierce: 0.6, kav: true, about: 'Pierces 60% of a shield\'s block and of armour.' });
+item('kav_lance', { name: 'Arc Lance', kind: 'weapon', stack: 1, damage: 9, reach: 2.6, cooldown: 0.7, value: 420, hands: 2, style: 'halberd', kav: true, lance: true, about: 'Each thrust also fires a beam that hits everything in a straight line up to 4 paces ahead.' });
+item('kav_caster', { name: 'Pulse Caster', kind: 'weapon', stack: 1, damage: 6, reach: 1.2, range: 10, ranged: true, cooldown: 0.6, value: 460, hands: 2, ammo: 'none', kav: true, about: 'Ranged. Needs no ammunition: each shot costs stamina.' });
 const kwear = (key, name, slot, armor, value, extra = {}) => item(key, { name, kind: 'armor', stack: 1, slot, armor, value, look: 'kav', kav: true, ...extra });
-kwear('kav_visor', 'Kavorent Visor', 'head', 0.12, 260, { stats: { cha: 1 }, about: 'You see in the dark a little, wearing it.' });
-kwear('kav_carapace', 'Kavorent Carapace', 'body', 0.28, 520, { stats: { end: 2 }, about: 'Light as cloth, hard as nothing forged.' });
+kwear('kav_visor', 'Kavorent Visor', 'head', 0.12, 260, { stats: { cha: 1 } });
+kwear('kav_carapace', 'Kavorent Carapace', 'body', 0.28, 520, { stats: { end: 2 } });
 kwear('kav_greaves', 'Kavorent Greaves', 'legs', 0.14, 300, { stats: { agi: 1 } });
-kwear('kav_treads', 'Kavorent Treads', 'feet', 0.07, 220, { stats: { agi: 1 }, about: 'Your steps are quicker and make no sound.' });
-kwear('kav_aegis', 'Aegis Projector', 'shield', 0, 480, { block: 0.95, about: 'Raised, it throws up a wall of light: arrows go no further.' });
+kwear('kav_treads', 'Kavorent Treads', 'feet', 0.07, 220, { stats: { agi: 1 } });
+kwear('kav_aegis', 'Aegis Projector', 'shield', 0, 480, { block: 0.95, about: 'While raised, it blocks 95% of the force of a hit and stops arrows from every side.' });
 // Gadgets: used from your belt (F, or the right mouse button).
 const gadget = (key, name, value, about, extra = {}) => item(key, { name, kind: 'gadget', stack: 1, value, about, kav: true, ...extra });
-gadget('kav_blink', 'Blink Shard', 320, 'Use it and you\'re six paces away, toward where you point, in an instant. It takes a few seconds to gather itself again.', { charge: 4 });
-gadget('kav_everlight', 'Everlight', 180, 'A cold, steady light that never goes out. Hold it, or carry it in your off hand.', { light: 13 });
-gadget('kav_mender', 'Mending Cell', 300, 'Use it to mend 12 health over a few seconds. Three uses; it fills again each dawn.', { uses: 3 });
-gadget('kav_bulwark', 'Field Projector', 340, 'Use it to throw up a wall of light in front of you for eight seconds: nothing gets through.', { charge: 20 });
-gadget('kav_lodestar', 'Lodestar', 160, 'Use it and it points the way: below ground, to the way down; above, to the nearest place of old stone you haven\'t yet beaten.', { charge: 2 });
-gadget('overseer_eye', 'The Overseer\'s Eye', 900, 'The great eye of the Kavorent\'s last warden, still burning. Use it and its beam pours out toward where you point for four seconds, burning all it touches and setting the floor alight; then it must gather itself again (half a minute).', { charge: 30, light: 4 });
+gadget('kav_blink', 'Blink Shard', 320, 'Use it to teleport 6 paces toward the pointer. Recharges in 4 seconds.', { charge: 4 });
+gadget('kav_everlight', 'Everlight', 180, 'A light that never goes out. Hold it, or carry it in your off hand.', { light: 13 });
+gadget('kav_mender', 'Mending Cell', 300, 'Use it to heal 12 health over a few seconds. 3 uses; refills at each dawn.', { uses: 3 });
+gadget('kav_bulwark', 'Field Projector', 340, 'Use it to raise a wall of light in front of you for 8 seconds that stops all attacks and arrows. Recharges in 20 seconds.', { charge: 20 });
+gadget('kav_lodestar', 'Lodestar', 160, 'Use it to show the way: in a dungeon, to the stairs down; above ground, to the nearest dungeon you haven\'t beaten.', { charge: 2 });
+gadget('overseer_eye', 'The Overseer\'s Eye', 900, 'Use it to fire a beam toward the pointer for 4 seconds: it burns everything it touches and sets the floor on fire. Recharges in 30 seconds.', { charge: 30, light: 4 });
 // (Round 72) What the evolved masters leave (see game/evolvedgear.js):
 // used from your belt like the Kavorent's gadgets, each a thing of its
 // master's power.
 const relicGadget = (key, name, value, color, about, extra = {}) => item(key, { name, kind: 'gadget', stack: 1, value, color, about, evolved: true, ...extra });
-relicGadget('alchemist_hand', 'Hand of the Great Work', 1800, '#ffd060', 'The Divine Alchemist\'s hand, twelve-fingered, still turning. Use it and a ring of its element breaks out of the ground three paces round you, burning, freezing, eating or striking whoever stands in it: fire, then frost, then acid, then lightning, each use the next. It gathers itself again in nine seconds.', { charge: 9 });
-relicGadget('rift_needle', 'The Crawler\'s Needle', 1800, '#c8a0ff', 'A spine of the Rift Crawler\'s, cold as nothing. Use it once and it marks where you stand; use it again, elsewhere, and it tears a rift between the mark and you, for twenty seconds: step into either end and you come out of the other (so does anything else). Six seconds to gather itself after.', { charge: 6 });
-relicGadget('hero_gauntlet', 'The Champion\'s Gauntlet', 1800, '#ffe070', 'The Hero\'s own gauntlet, the curse gone out of it. Use it and for twelve seconds you have his strength: your blows land half again as hard and rend whoever else is before you, and what lands on you lands lighter by a third. Forty seconds to gather itself again.', { charge: 40 });
-relicGadget('worm_tooth', 'The Alinelidan\'s Tooth', 1800, '#c8f080', 'A tooth of the World-Worm, as long as your forearm. Use it and you go down into the ground as it did, and come up under where you point, up to eight paces off and through anything between: whoever is there is thrown back and bitten, and the hole you leave is full of its acid. Fourteen seconds to gather itself again.', { charge: 14 });
+relicGadget('alchemist_hand', 'Hand of the Great Work', 1800, '#ffd060', 'Use it to raise a ring of elemental ground 3 paces around you that hurts whoever stands in it. Each use is the next element in turn: fire (burns), frost (freezes), acid, lightning. Recharges in 9 seconds.', { charge: 9 });
+relicGadget('rift_needle', 'The Crawler\'s Needle', 1800, '#c8a0ff', 'Use it once to mark where you stand; use it again somewhere else to open a rift between the mark and you for 20 seconds. Anything that steps into one end comes out of the other. Recharges in 6 seconds.', { charge: 6 });
+relicGadget('hero_gauntlet', 'The Champion\'s Gauntlet', 1800, '#ffe070', 'Use it for 12 seconds of strength: your hits deal 50% more damage and also hit everyone else in front of you, and you take a third less damage. Recharges in 40 seconds.', { charge: 40 });
+relicGadget('worm_tooth', 'The Alinelidan\'s Tooth', 1800, '#c8f080', 'Use it to burrow to the pointer, up to 8 paces away and through anything in between. Whoever is there is knocked back and bitten, and the hole you leave fills with acid. Recharges in 14 seconds.', { charge: 14 });
 // Fittings: set into a weapon, or a piece of armour, for good.
-item('kav_edge', { name: 'Alloy Edge', kind: 'enhancer', stack: 4, value: 220, kav: true, fits: 'weapon', about: 'Fit it to a weapon (use it with the weapon in your belt): +3 to every blow, for good.' });
-item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 240, kav: true, fits: 'armor', about: 'Fit it to a piece of armour you wear (use it): it turns a twentieth more of each blow, and adds a point of endurance.' });
+item('kav_edge', { name: 'Alloy Edge', kind: 'enhancer', stack: 4, value: 220, kav: true, fits: 'weapon', about: 'Use it with a weapon in your belt to fit it: that weapon deals +3 damage on every hit, permanently.' });
+item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 240, kav: true, fits: 'armor', about: 'Use it to fit it to a piece of armour you are wearing: that piece blocks 5% more of each hit and gives +1 Endurance, permanently.' });
 
 // --- hobby & trade goods -------------------------------------------------------
 // Instruments (round 51): held, the right button (or F) plays them (see
@@ -755,33 +755,33 @@ item('hunting_horn', { name: 'Hunting Horn', kind: 'misc', stack: 1, value: 20, 
 item('dice', { kind: 'misc', stack: 8, value: 3 });
 // For a household's locked chest (see ui/lockpick.js). Holdout thieves
 // carry them; four are beaten out of an iron ingot at an anvil.
-item('lockpick', { name: 'Lockpick', kind: 'misc', stack: 16, value: 4, about: 'A thin steel pick and a tension wrench. Use one on a locked chest: flick the pins up and turn as each one meets the shear line. A slip strains it; too many and it snaps.' });
+item('lockpick', { name: 'Lockpick', kind: 'misc', stack: 16, value: 4, about: 'Use it on a locked chest to pick the lock: lift each pin and turn when it reaches the shear line. Slips strain the pick; too many and it breaks.' });
 // A holdout bombarder's (see monsters.js): lit and thrown where you point
 // (right button), it goes up a moment after it lands.
-item('dynamite', { name: 'Dynamite', kind: 'misc', stack: 8, value: 8, about: 'A stick of blasting powder with a fuse. Right-click to light it and throw it where you point: it goes up a moment after it lands, and hurts whoever is near.' });
+item('dynamite', { name: 'Dynamite', kind: 'misc', stack: 8, value: 8, about: 'Right-click to light it and throw it at the pointer. It explodes shortly after landing and damages everyone nearby.' });
 item('sketchbook', { kind: 'misc', stack: 1, value: 8 });
 item('prayer_beads', { name: 'Prayer Beads', kind: 'misc', stack: 1, value: 6 });
-item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4, about: 'Hold it and press F (or the right button) for a smoke.' });
+item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4, about: 'Hold it and press F (or right-click) to smoke it.' });
 item('flute', { kind: 'misc', stack: 1, value: 12, instrument: true, about: `A wooden flute: the top row, Q to P. ${PLAY}` });
 item('ledger', { kind: 'misc', stack: 1, value: 5 });
-item('scroll', { kind: 'misc', stack: 16, value: 6, about: 'A blank scroll. Use it (F or the right button) to copy a recipe you know onto it, to sell to a cook or give away.' });
+item('scroll', { kind: 'misc', stack: 16, value: 6, about: 'Use it (F or right-click) to copy a recipe you know onto it, to sell to a cook or give away.' });
 item('ladle', { kind: 'misc', stack: 1, value: 3 });
 // Tokens of the player's standing: not wanted by any trader.
 item('guard_badge', { name: 'Guard Badge', kind: 'misc', stack: 1, value: 0, noSell: true });
 item('letter', { name: 'Sealed Letter', kind: 'misc', stack: 16, value: 0, noSell: true });
 item('dispatch', { name: 'Mayor\'s Dispatch', kind: 'misc', stack: 16, value: 0, noSell: true });
 // (Round 54) Proof of a term passed at a city's Academy (see sim/college.js).
-item('diploma', { name: 'Academy Diploma', kind: 'misc', stack: 4, value: 0, noSell: true, about: 'Rolled parchment, the Academy\'s seal at the foot of it: proof you sat a term and passed. Frame it, or show it off.' });
+item('diploma', { name: 'Academy Diploma', kind: 'misc', stack: 4, value: 0, noSell: true, about: 'Proof you finished a term at an Academy. A keepsake: it has no other use.' });
 // (Round 52: see sim/saga.) The key to an outlaws' cage; goods taken on the
 // road, to carry to a fence; a token of an outlaw band's that you ride with
 // them; proof of a deed done.
-item('cage_key', { name: 'Cage Key', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'Iron, heavy, warm from an outlaw\'s pocket. It opens the cage at their camp.' });
-item('stolen_goods', { name: 'Bundle of Stolen Goods', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'Silver plate, a lady\'s rings, a merchant\'s ledger: wrapped in sacking and tied. Take it to the fence.' });
-item('outlaw_token', { name: 'Outlaw\'s Token', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'A coin cut in half and strung on a cord. Outlaws who know it let you by.' });
-item('trophy', { name: 'Trophy', kind: 'misc', stack: 8, value: 30, about: 'Proof of a hunt: a tooth, a claw, a lock of grey fur. Folk will pay to see it, or to have it.' });
-item('heirloom', { name: 'Heirloom', kind: 'misc', stack: 1, value: 25, noSell: true, about: 'Old silver, worn smooth. Somebody misses this.' });
-item('holy_relic', { name: 'Holy Relic', kind: 'misc', stack: 1, value: 60, noSell: true, about: 'A saint\'s bone in a silver box. It belongs in a temple.' });
-item('cure', { name: 'Fever Cure', kind: 'potion', stack: 8, value: 18, effect: { heal: 4 }, about: 'Bitter, green, and it works. Give it to someone with the fever (or drink it yourself).' });
+item('cage_key', { name: 'Cage Key', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'Opens the cage at the outlaw camp it came from.' });
+item('stolen_goods', { name: 'Bundle of Stolen Goods', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'Stolen property. Take it to a fence (see your quests).' });
+item('outlaw_token', { name: 'Outlaw\'s Token', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'Given when you join an outlaw band, as a sign of membership. It has no other use.' });
+item('trophy', { name: 'Trophy', kind: 'misc', stack: 8, value: 30, about: 'Proof of a hunt. Worth about ¤30 to a merchant.' });
+item('heirloom', { name: 'Heirloom', kind: 'misc', stack: 1, value: 25, noSell: true, about: 'Someone\'s lost family heirloom: give it back to them (see your quests).' });
+item('holy_relic', { name: 'Holy Relic', kind: 'misc', stack: 1, value: 60, noSell: true, about: 'A stolen holy relic: return it to the temple it belongs to (see your quests).' });
+item('cure', { name: 'Fever Cure', kind: 'potion', stack: 8, value: 18, effect: { heal: 4 }, about: 'Cures the fever and heals 4. Drink it, or give it to someone who has the fever.' });
 
 export function getItem(key) {
   return ITEMS[key];

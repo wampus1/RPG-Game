@@ -4,7 +4,7 @@
 // before it, and the Kavorent's spires, five paces square and taller than
 // anything men have built. (What's below: see dungeongen.js.)
 import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y, SURFACE } from '../config.js';
-import { B, BLOCKS } from './blocks.js';
+import { B, BLOCKS, META_STATE } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
 import { FAR_SITES, FAR_OWN_SHARE, FAR_OWN_TYPE } from './fardeep.js';
@@ -442,8 +442,92 @@ Object.assign(FAR_GATE, ANCIENT_GATE);
 
 // --------------------------------------------------------------- above ground
 // The blocks of a site's entrance, as [dx, y, dz, id, meta] from its spot
-// (y absolute). `state`: { cleared, open (a spire's open side) }.
+// (y absolute). `state`: { cleared, open (a spire's open side), tier }.
+// (Round 117) Turned back to a higher tier with a time crystal, its way in
+// grander: see grandeur.
 export function siteBlocks(s, state = {}) {
+  const out = gateBlocks(s, state);
+  const tier = state.tier || 1;
+  if (tier < 2 || state.cleared || s.mod || s.type === 'kavorent') return out;
+  return grandeur(s, out, tier);
+}
+
+// (Round 117) A way in made grander for its tier, out in front of it (the
+// side its door faces) and round it, never across the door or the way to
+// it. II: a paved approach, two pillars flanking it with fires lit on
+// them, and a post with a fire at each corner. III: the approach longer
+// and wider, edged; an arch over the start of it; four tall columns at the
+// corners, fires on them; fires lining the way.
+function grandeur(s, out, tier) {
+  const h = s.h;
+  const M = { ...BASE_MAT, ...(FAR_MAT[s.island] || {}) };
+  let x0 = 0;
+  let x1 = 0;
+  let z0 = 0;
+  let z1 = 0;
+  for (const [dx, y, dz, id] of out) {
+    if (id === B.air || y > h + 6) continue;
+    x0 = Math.min(x0, dx);
+    x1 = Math.max(x1, dx);
+    z0 = Math.min(z0, dz);
+    z1 = Math.max(z1, dz);
+  }
+  const add = [];
+  const put = (dx, y, dz, id, meta = 0) => add.push([dx, y, dz, id, meta]);
+  const lit = META_STATE;
+  // (Room over whatever's built, and ground under it.)
+  const open = (dx, dz, up = 4) => {
+    for (let y = h + 1; y <= h + up; y++) put(dx, y, dz, B.air);
+  };
+  const pave = (dx, dz, id) => {
+    put(dx, h - 1, dz, M.stone);
+    put(dx, h, dz, id);
+    open(dx, dz, 3);
+  };
+  const pillar = (dx, dz, top, id, cap) => {
+    put(dx, h, dz, M.stone);
+    for (let y = h + 1; y <= h + top; y++) put(dx, y, dz, id);
+    if (cap) put(dx, h + top + 1, dz, cap, cap === B.brazier ? lit : 0);
+  };
+  const far = tier >= 3 ? 7 : 4;
+  const half = tier >= 3 ? 2 : 1;
+  const zA = z1 + 1;
+  // The approach.
+  for (let dz = zA; dz < zA + far; dz++) {
+    for (let dx = -half; dx <= half; dx++) pave(dx, dz, tier >= 3 && Math.abs(dx) === half ? B.stone_bricks : B.flagstone);
+  }
+  // Pillars flanking it, fires on them.
+  const px = half + 2;
+  for (const sx of [-1, 1]) {
+    pillar(sx * px, zA + 1, tier >= 3 ? 3 : 2, B.stone_bricks, B.brazier);
+    if (tier >= 3) {
+      pillar(sx * px, zA + 4, 2, B.stone_bricks, B.brazier);
+      for (let dz = zA; dz < zA + far; dz += 2) put(sx * (half + 1), h + 1, dz, B.brazier, lit);
+    }
+  }
+  // The corners.
+  const cx0 = x0 - 2;
+  const cx1 = x1 + 2;
+  const cz0 = z0 - 2;
+  for (const [dx, dz] of [[cx0, cz0], [cx1, cz0], [cx0, zA + 1], [cx1, zA + 1]]) {
+    if (Math.abs(dx) <= px + 1 && dz >= zA) continue;
+    open(dx, dz, tier >= 3 ? 6 : 4);
+    if (tier >= 3) pillar(dx, dz, 4, B.marble_column, B.brazier);
+    else pillar(dx, dz, 2, M.stone, B.brazier);
+  }
+  // III: an arch over the start of the way, two wide.
+  if (tier >= 3) {
+    const za = zA + far - 1;
+    for (const sx of [-1, 1]) {
+      for (let y = h + 1; y <= h + 4; y++) put(sx * (half + 1), y, za, B.stone_bricks);
+    }
+    for (let dx = -(half + 1); dx <= half + 1; dx++) put(dx, h + 5, za, B.stone_bricks);
+    put(0, h + 6, za, B.brazier, lit);
+  }
+  return [...out, ...add];
+}
+
+function gateBlocks(s, state = {}) {
   // (Round 62) A mod's place: built as its Builder says (see mod/build.js).
   if (s.mod) return MODS.siteBlocks ? MODS.siteBlocks(s, state) : [];
   const out = [];

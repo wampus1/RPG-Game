@@ -9,7 +9,7 @@ import { B } from '../src/world/blocks.js';
 import { ACTIONS, bind, keyOf, remapKey, resetKeybinds, loadKeybinds } from '../src/game/keybinds.js';
 import { SETTING_ROWS, SETTING_TABS, DEFAULTS } from '../src/game/settings.js';
 import { soundGroup } from '../src/game/audio.js';
-import { coachLinks } from '../src/sim/coaches.js';
+import { coachLinks, hasCoaches } from '../src/sim/coaches.js';
 import { GroundFx } from '../src/render/groundfx.js';
 import { topicsFor, TOPIC_CATS, remembers } from '../src/game/dialogue.js';
 import { STEPS } from '../src/game/migrate.js';
@@ -92,7 +92,12 @@ test('upstairs: beds slept in, a trade over a shop, rooms over the tavern; and t
   assert.ok(lodging > 0, 'rooms over a tavern');
   const input = stubInput();
   for (let i = 0; i < 5; i++) game.update(0.1, input);
-  const here = W.ow.settlementAt(game.player.x, game.player.z);
+  // (Round 116: not every realm runs a coach: a town of one that does.)
+  const here = W.ow.settlementAt(game.player.x, game.player.z) && hasCoaches(W.ow.settlementAt(game.player.x, game.player.z)) ? W.ow.settlementAt(game.player.x, game.player.z) : W.ow.settlements.find((q) => !q.deserted && hasCoaches(q) && coachLinks(game, q).length);
+  if (W.ow.settlementAt(game.player.x, game.player.z) !== here) {
+    game.teleportPlayer(Math.round((here.cx + here.cw / 2) * 64), 40, Math.round((here.cz + here.cd / 2) * 36));
+    for (let i = 0; i < 20; i++) game.update(0.1, input);
+  }
   const links = coachLinks(game, here);
   assert.ok(links.length, 'somewhere to go by coach');
   game.player.give('coin', 200);

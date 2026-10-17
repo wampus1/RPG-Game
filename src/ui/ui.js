@@ -744,9 +744,9 @@ export class UI {
       lines.push({ text: 'Placeable block' + (b.rotatable ? ' · [R] rotate' : ''), color: C.dim });
     }
     if (d.relic) {
-      lines.push({ text: `Reaches ${relicReach(d.shards)} paces${d.shards ? ` · ${d.shards} of ${SHARD_MAX} shards set in it` : ''}`, color: '#e0b8ff' });
+      lines.push({ text: `Circle radius ${relicReach(d.shards)} paces · ${d.shards || 0} of ${SHARD_MAX} shards`, color: '#e0b8ff' });
       lines.push({ text: 'Set it down to use it', color: C.green });
-    } else if (d.kind === 'relic_shard') lines.push({ text: 'Use it [RMB]: into a relic in your pack', color: C.green });
+    } else if (d.kind === 'relic_shard') lines.push({ text: 'Set into a relic at an anvil', color: C.green });
     else if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
     // (Round 78) Against what you've on, or in hand.
     const gm = this.game;

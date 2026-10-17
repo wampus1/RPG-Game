@@ -246,6 +246,24 @@ export function bubbleLines(text) {
 // (Round 88) How far off an instrument's still heard, in paces.
 const NOTE_EARSHOT = 24;
 
+// (Round 117) A picture's drawing state put back as it starts: every save
+// let go of, no turn or shift, nothing see-through, drawn plainly.
+export function cleanCtx(ctx) {
+  if (!ctx) return;
+  if (ctx.reset) {
+    // (Clears the picture too: it's drawn afresh next frame anyway.)
+    ctx.reset();
+  } else {
+    for (let i = 0; i < 64; i++) ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    if ('filter' in ctx) ctx.filter = 'none';
+    ctx.shadowBlur = 0;
+  }
+  ctx.imageSmoothingEnabled = false;
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -615,7 +633,17 @@ export class Renderer {
     }
     const z = this.vw / VIEW_W;
     this.zoomK = this.vw === VIEW_W && this.vh === VIEW_H ? 1 : z;
-    this.renderFrame(game, dt);
+    // (Round 117) Something gone wrong mid-drawing (a thing turned or moved
+    // to be drawn, and never put back) mustn't leave the picture turned and
+    // moved for every frame after, more each time: drawn from a clean
+    // slate, both pictures, whatever happened.
+    try {
+      this.renderFrame(game, dt);
+    } catch (e) {
+      cleanCtx(this.ctx);
+      if (main !== this.ctx) cleanCtx(main);
+      throw e;
+    }
     this.layer = null;
     if (this.zoomK !== 1) {
       this.layer = this.zcanvas;
@@ -657,7 +685,7 @@ export class Renderer {
     // (An opening scene moves the camera its own way: see cutscene.js.)
     // (Round 69: at a ship's wheel, her middle: see shipgame.js helmView.)
     // (Round 86: through a spyglass, where it's looking: see spyglass.js.)
-    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : game.helmFocus || game.spyFocus || player.renderPos();
+    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : game.helmFocus || game.spyFocus || (game.ringFocus && game.ringFocus.run === game.dungeon ? game.ringFocus : null) || player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
     const tx = pu * TILE + 8 - this.vw / 2;

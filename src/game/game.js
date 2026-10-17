@@ -176,6 +176,34 @@ function townPlaced(w, L, x, y, z) {
   return false;
 }
 
+// (Round 117) Can `p` reach (x, z) with nothing solid at head height in the
+// way (iron bars, a shut cell door, a wall; a counter or a fence is
+// below it)? Looked along three lines a little apart, so the corner of a
+// wall you're reaching past doesn't count.
+export function reachClear(world, p, x, z) {
+  const dx = x - p.x;
+  const dz = z - p.z;
+  const n = Math.max(Math.abs(dx), Math.abs(dz));
+  if (n <= 1) return true;
+  const len = Math.hypot(dx, dz);
+  const ox = -dz / len;
+  const oz = dx / len;
+  const y = p.y + 1;
+  const blocked = (off) => {
+    const steps = n * 4;
+    for (let i = 1; i < steps; i++) {
+      const f = i / steps;
+      const tx = Math.floor(p.x + 0.5 + dx * f + ox * off);
+      const tz = Math.floor(p.z + 0.5 + dz * f + oz * off);
+      if ((tx === p.x && tz === p.z) || (tx === x && tz === z)) continue;
+      const b = BLOCKS[world.getBlock(tx, y, tz)];
+      if (b && b.solid && !b.liquid) return true;
+    }
+    return false;
+  };
+  return !blocked(0) || !blocked(0.3) || !blocked(-0.3);
+}
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
@@ -2329,12 +2357,22 @@ export class Game {
     const sc = this.scene;
     if (!sc) return 1;
     sc.t += dt;
-    sc.update?.(this, dt, pressed);
+    // (Round 117) A scene that goes wrong is cut short, never left holding
+    // you still for good.
+    try {
+      sc.update?.(this, dt, pressed);
+    } catch (e) {
+      console.error(e);
+      sc.t = sc.dur;
+    }
     if (sc.t >= sc.dur) {
       // (An opening over: into the world at last, then its first words.)
       if (sc.intro && !this.remote) this.placeIn();
-      sc.end?.(this);
-      if (this.scene === sc) this.scene = null;
+      try {
+        sc.end?.(this);
+      } finally {
+        if (this.scene === sc) this.scene = null;
+      }
       return 1;
     }
     return sc.timeScale ? sc.timeScale(sc.t) : 1;
@@ -3157,7 +3195,9 @@ export class Game {
         }
       }
     }
-    const reach = (x, y, z) => Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= REACH && Math.abs(y - p.y) <= 4;
+    // (Round 117: and nothing solid at head height between you and it: not
+    // through iron bars, a shut cell door or a wall, though over a counter.)
+    const reach = (x, y, z) => Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= REACH && Math.abs(y - p.y) <= 4 && reachClear(this.world, p, x, z);
     const c = { mx, my };
     if (ent) {
       c.entity = ent.e;

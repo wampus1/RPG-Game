@@ -62,10 +62,15 @@ export class Audio {
             this.groups[k] = g;
           }
         } catch {
-          this.enabled = false;
+          // (Round 117: tried again on the next click or key, a few times,
+          // not given up on for the whole of the session.)
+          this.ctx = null;
+          this.failed = (this.failed || 0) + 1;
+          if (this.failed >= 5) this.enabled = false;
         }
-      } else if (this.ctx.state === 'suspended') this.ctx.resume();
+      } else if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') this.ctx.resume?.();
     };
+    this.unlock = unlock;
     // Browsers only allow sound after the first click, tap or key press.
     for (const ev of ['mousedown', 'pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, unlock);
     // (Round 81) The desktop app lets it play from the start.
@@ -285,6 +290,15 @@ export class Audio {
   play(name, src = null, game = null, o = null) {
     // (Round 93: how many asked for, heard or not: see tempo.attackCue.)
     this.plays = (this.plays || 0) + 1;
+    // (Round 117) Put to sleep by the browser or the machine (a headset
+    // swapped, the lid shut and opened): woken again.
+    if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed') {
+      const now = performance.now();
+      if (!(now - (this.wokeAt || 0) < 1000)) {
+        this.wokeAt = now;
+        this.ctx.resume?.().catch?.(() => {});
+      }
+    }
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     // (Names asked for that were never given a voice of their own.)
     if (SOUND_ALIAS[name]) name = SOUND_ALIAS[name];

@@ -10,6 +10,7 @@ import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
 import { openingLine, topicsFor, respond, TOPIC_CATS } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
+import { RelicAnvilWindow } from './relicanvil.js';
 import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
@@ -442,6 +443,14 @@ export class CraftWindow extends Window {
       g.text(this.w - extra.length - 2, ey, extra, hov ? C.white : C.hi, '#2a2230');
       this.hit(this.w - extra.length - 2, ey, extra.length, 1, () => this.extra());
     }
+    // (Round 117) At an anvil, relic shards set into a relic.
+    if (this.station === 'anvil' || this.station === 'smith') {
+      const rl = ' Relic shards (H) ';
+      const ry = this.h - 4;
+      const hov = this.hovering(this.w - rl.length - 2, ry, rl.length, 1);
+      g.text(this.w - rl.length - 2, ry, rl, hov ? C.white : '#e0b8ff', '#2a2230');
+      this.hit(this.w - rl.length - 2, ry, rl.length, 1, () => this.ui.open(new RelicAnvilWindow(this.ui)));
+    }
   }
   extra() {
     const game = this.ui.game;
@@ -458,6 +467,10 @@ export class CraftWindow extends Window {
     else if (this.station === 'anvil' || this.station === 'smith') this.ui.open(new ReforgeWindow(this.ui));
   }
   onKey(k) {
+    if ((this.station === 'anvil' || this.station === 'smith') && k.code === 'KeyH') {
+      this.ui.open(new RelicAnvilWindow(this.ui));
+      return true;
+    }
     if ((this.station === 'scribe' && k.code === 'KeyP') || (this.station === 'jeweller' && k.code === 'KeyS') || ((this.station === 'anvil' || this.station === 'smith') && k.code === 'KeyR')) {
       this.extra();
       return true;

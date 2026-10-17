@@ -2,7 +2,7 @@
 import { VIEW_W, VIEW_H, REGION_W, REGION_D } from './config.js';
 import { migrateSave } from './game/migrate.js';
 import { CRT } from './render/crt.js';
-import { Renderer } from './render/renderer.js';
+import { Renderer, cleanCtx } from './render/renderer.js';
 import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
@@ -1692,6 +1692,8 @@ function step(now) {
     } catch (e) {
       if (!step.uiErr || now - step.uiErr > 1000) console.error(e);
       step.uiErr = now;
+      // (Round 117: never left turned or shifted for the frames after.)
+      cleanCtx(ctx);
     }
     const t3 = performance.now();
     const pf = (perf.frames = (perf.frames || 0) + 1);

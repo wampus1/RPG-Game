@@ -9,7 +9,7 @@
 // most): everything in it harder, its chests richer, its master stronger.
 import { VIEW_W, VIEW_H } from '../config.js';
 import { restamp, siteBlocks } from '../world/sites.js';
-import { BLOCKS } from '../world/blocks.js';
+import { BLOCKS, B } from '../world/blocks.js';
 import { ledger } from '../sim/econ.js';
 import { TIER_MAX, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { pidOf } from '../sim/saga/refs.js';
@@ -124,7 +124,7 @@ export function restoreDungeon(game, rec, tier) {
   }
   const site = D.site(rec);
   if (site) {
-    site.state = { cleared: false, open: rec.spire ? rec.spire.open : null, beaten: false };
+    site.state = { cleared: false, open: rec.spire ? rec.spire.open : null, beaten: false, tier: rec.tier };
     restamp(game.world, site);
     stepOut(game, site);
   }
@@ -280,6 +280,10 @@ export function timeTurn(game, rec, tier, color, { witness = false, by = null, s
         // The fallen stones lifting, turning, going back where they were.
         if (Math.random() < dt * 14) r.emit(at.x + (Math.random() - 0.5) * 3, at.y, at.z + (Math.random() - 0.5) * 3, { n: 1, color: ['#8a8270', '#5a5650', '#c8b898', tint], up: 40, speed: 6, life: 0.9, gravity: -30, size: 2 });
         g.shake = Math.max(g.shake || 0, 0.08 + 0.3 * clamp01((this.t - 1) / (this.SNAP - 1)));
+        // (Round 117) And the way in builds itself back up before your
+        // eyes, from the ground up and the middle out, each stone flying
+        // in out of the light to where it was.
+        if (!this.witness && !this.shown) this.rebuild(g);
       }
       // The snap: the place as it was.
       if (this.t >= this.SNAP && !this.done) {
@@ -293,6 +297,53 @@ export function timeTurn(game, rec, tier, color, { witness = false, by = null, s
         g.audio?.play('boom', at);
         g.audio?.play('chime', at);
         g.audio?.play('reveal_great');
+      }
+    },
+    // (Round 117) The stones put back a few at a time over the rewinding
+    // (all of them, and anyone in their way stepped out, at the snap: see
+    // restoreDungeon). Never where someone's standing.
+    rebuild(g) {
+      const w = g.world;
+      if (!this.plan) {
+        this.plan = [];
+        this.placed = 0;
+        const site = g.sim.dungeons.site(rec);
+        if (!site) return;
+        const want = new Map();
+        for (const [dx, y, dz, id, meta] of siteBlocks(site, { cleared: false, open: rec.spire ? rec.spire.open : null, beaten: false, tier })) {
+          const x = site.x + dx;
+          const z = site.z + dz;
+          if (y < 0 || !w.regionAt(x, z)) continue;
+          want.set(`${x},${y},${z}`, [x, y, z, id, meta]);
+        }
+        for (const q of want.values()) if (w.getBlock(q[0], q[1], q[2]) !== q[3]) this.plan.push(q);
+        // (What's in the way gone first; then the rest, low before high,
+        // near the middle before far.)
+        const d = (q) => Math.hypot(q[0] - site.x, q[2] - site.z);
+        this.plan.sort((a, b) => (a[3] === B.air ? 0 : 1) - (b[3] === B.air ? 0 : 1) || a[1] - b[1] || d(a) - d(b));
+      }
+      const k = clamp01((this.t - 1.2) / (this.SNAP - 1.6));
+      const goal = Math.floor(k * this.plan.length);
+      const people = g.everyone ? g.everyone() : [p];
+      const r = g.renderer;
+      let shown = 0;
+      for (; this.placed < goal; this.placed++) {
+        const [x, y, z, id, meta] = this.plan[this.placed];
+        if (id !== B.air && people.some((q) => q && !q.dead && Math.floor(q.x) === x && Math.floor(q.z) === z && y >= Math.round(q.y) && y <= Math.round(q.y) + 1)) continue;
+        w.setBlock(x, y, z, id, meta);
+        if (id !== B.air && shown < 6) {
+          shown++;
+          // (Flying in out of the light.)
+          r.emit(x + 0.5, y + 3 + Math.random() * 3, z + 0.5, { n: 2, color: [tint, '#ffffff', color], up: -40, speed: 6, life: 0.35, glow: true, gravity: 120, shape: 'star' });
+          r.emit(x + 0.5, y + 0.6, z + 0.5, { n: 3, color: ['#c8b898', tint], up: 14, speed: 18, life: 0.4 });
+        }
+      }
+      if (shown) {
+        this.thunk = (this.thunk ?? 0) - 1;
+        if (this.thunk <= 0) {
+          this.thunk = 4;
+          g.audio?.play('place', at);
+        }
       }
     },
     // Over it all: the world goes the colour of old glass, rewinding bands

@@ -1705,12 +1705,90 @@ function simpleIcon(key) {
       p.set(13, 1, '#c0e040');
       for (const [x, y] of [[5, 12], [6, 10], [7, 8]]) p.set(x, y, '#c88a4a');
       break;
+    // (Round 117) Things that had no picture of their own.
+    case 'gilt_chalice':
+      // A gold cup on a stem and a round foot, a red stone set in its bowl.
+      p.rect(4, 2, 8, 1, '#fff0a0');
+      p.rect(4, 3, 8, 3, '#e8b830');
+      p.rect(5, 6, 6, 1, '#c89a20');
+      p.rect(6, 7, 4, 1, '#a87a18');
+      p.rect(7, 8, 2, 3, '#c89a20');
+      p.rect(5, 11, 6, 1, '#e8b830');
+      p.rect(4, 12, 8, 1, '#a87a18');
+      p.set(5, 3, '#fff8d0');
+      p.set(5, 4, '#fff0a0');
+      p.set(8, 4, '#c8202a');
+      p.set(9, 4, '#e84a50');
+      p.set(7, 9, '#fff0a0');
+      break;
+    case 'saint_relic':
+      // A little gilt casket with a peaked lid, a cross on it, a bone
+      // showing through its window.
+      p.rect(3, 7, 10, 6, '#c89a20');
+      p.rect(3, 12, 10, 1, '#8a6a10');
+      p.line(3, 6, 8, 3, '#e8b830');
+      p.line(8, 3, 12, 6, '#e8b830');
+      p.rect(4, 5, 8, 2, '#e8b830');
+      p.rect(5, 4, 6, 1, '#e8b830');
+      p.rect(5, 8, 6, 3, '#2a1e14');
+      p.line(6, 10, 10, 8, '#e8e4d4');
+      p.set(6, 9, '#f4f0e0');
+      p.set(10, 9, '#f4f0e0');
+      p.vline(8, 1, 3, '#fff0a0');
+      p.hline(7, 9, 2, '#fff0a0');
+      break;
+    case 'cell_keys':
+      // A ring of three iron keys.
+      p.ellipse(6, 5, 3, 3, '#6a6e7a');
+      p.ellipse(6, 5, 1, 1, '#000000', 0);
+      for (const [x0, y0, x1, y1] of [[7, 7, 12, 13], [8, 6, 14, 9], [5, 8, 6, 14]]) {
+        p.line(x0, y0, x1, y1, '#9a9eac');
+        p.set(x1, y1, '#c8ccd8');
+      }
+      p.rect(11, 12, 2, 1, '#9a9eac');
+      p.rect(13, 9, 1, 2, '#9a9eac');
+      p.rect(6, 13, 2, 1, '#9a9eac');
+      break;
+    case 'mill_sail':
+      // A windmill's sail: a lattice frame, cloth stretched on it.
+      p.line(2, 14, 13, 3, '#7a5030');
+      p.rect(7, 3, 6, 8, '#e8e0cc');
+      p.hline(7, 12, 5, '#a89e8a');
+      p.hline(7, 12, 8, '#a89e8a');
+      p.vline(10, 3, 10, '#a89e8a');
+      break;
+    case 'quicksilver':
+      // Beads of quicksilver, run together.
+      p.ellipse(7, 9, 4, 3, '#a8b0bc');
+      p.ellipse(11, 11, 2, 1.6, '#a8b0bc');
+      p.set(5, 8, '#ffffff');
+      p.set(6, 7, '#e8ecf4');
+      p.set(11, 10, '#ffffff');
+      p.hline(4, 10, 12, '#6a7280');
+      break;
+    case 'acid_pool':
+      // A puddle of green acid, bubbling.
+      p.ellipse(8, 10, 6, 3, '#6ab830');
+      p.ellipse(8, 10, 4, 2, '#a0e040');
+      p.set(6, 7, '#d0ff80');
+      p.set(10, 6, '#d0ff80');
+      p.set(9, 9, '#f0ffc0');
+      break;
+    case 'placed_item':
+      // (Something set down on a table: a parcel tied with string.)
+      p.rect(4, 6, 8, 7, '#a8784a');
+      p.vline(8, 6, 12, '#e8e4d8');
+      p.hline(4, 11, 9, '#e8e4d8');
+      p.set(7, 5, '#e8e4d8');
+      p.set(9, 5, '#e8e4d8');
+      break;
     default:
       p.rect(4, 4, 8, 8, '#ff00ff');
   }
   return p.outline(OUT);
 }
 export const MISSING_ICON = '#ff00ff';
+const OWN_PICTURE = new Set(['mill_sail', 'quicksilver', 'acid_pool', 'placed_item']);
 
 function blockIcon(id) {
   const b = BLOCKS[id];
@@ -2159,7 +2237,8 @@ export function itemIcon(key) {
   else if (!it) px = relight(simpleIcon(key));
   else if (it.kind === 'potion') px = relight(potionIcon(it));
   else if (it.kind === 'gem') px = relight(gemIcon(it));
-  else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);
+  // (Round 117: a block with no face of its own to show, its own picture.)
+  else if (it.block !== undefined && it.kind === 'block' && !OWN_PICTURE.has(key)) px = blockIcon(it.block);
   else {
     const m = key.match(/^(wood|stone|iron|gold|steel)_(pickaxe|axe|shovel|sword)$/);
     if (m) px = toolIcon(m[2], m[1]);

@@ -235,6 +235,9 @@ export function addMark(game, x, z, label = null) {
   return m;
 }
 
+// (Round 117) Each tier's badge on the map: bronze, silver, gold.
+export const TIER_BADGE = ['', '#c8844a', '#d8e0ec', '#ffd040'];
+
 export class MapWindow extends Window {
   constructor(ui) {
     super(ui, COLS - 2, ROWS - 2, { kind: 'map' });
@@ -1274,6 +1277,72 @@ export class MapWindow extends Window {
     for (const c of game.sim.bandits ? game.sim.bandits.knownCamps() : []) {
       put(c.x, c.z, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10', `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}`, null, true);
     }
+    // (Round 117) An old place's tier: a coloured badge beside it, its pips
+    // the tier (bronze I, silver II, gold III), and a tier III place
+    // alight on the map: a slow golden pulse round it and sparks circling.
+    const now = performance.now() / 1000;
+    const tierBadge = (d) => {
+      const tier = Math.max(1, Math.min(3, d.tier || 1));
+      const cx = Math.floor(d.x / REGION_W);
+      const cz = Math.floor(d.z / REGION_D);
+      if (!(d.known || d.seen || game.revealMap) && !known(cx, cz)) return;
+      const col = TIER_BADGE[tier];
+      if (glyphs) {
+        const right = (d.x % REGION_W) >= REGION_W / 2;
+        const gx = o.x + cx * w + (right ? w / 2 : 0);
+        const gy = o.y + cz * h;
+        const bw = w / 2;
+        const bx = right ? gx - bw : gx + bw;
+        if (tier >= 3) {
+          // (Its glow: a gold ring breathing out round it, and three sparks.)
+          const k = (now * 0.8) % 1;
+          ctx.save();
+          ctx.globalAlpha = 0.55 * (1 - k);
+          ctx.strokeStyle = '#ffd040';
+          ctx.lineWidth = 1;
+          const g = 1 + k * Math.max(w, h) * 0.5;
+          ctx.strokeRect(Math.round(gx - g) + 0.5, Math.round(gy - g) + 0.5, Math.round(bw + g * 2), Math.round(h + g * 2));
+          ctx.globalAlpha = 0.18 + 0.12 * Math.sin(now * 3);
+          ctx.fillStyle = '#ffd040';
+          ctx.fillRect(Math.round(gx - 1), Math.round(gy - 1), Math.round(bw + 2), Math.round(h + 2));
+          ctx.globalAlpha = 1;
+          const rr = Math.max(w, h) * 0.75;
+          for (let i = 0; i < 3; i++) {
+            const a = now * 2.2 + (i * Math.PI * 2) / 3;
+            ctx.fillStyle = i % 2 ? '#fff4c0' : '#ffd040';
+            ctx.fillRect(Math.round(gx + bw / 2 + Math.cos(a) * rr), Math.round(gy + h / 2 + Math.sin(a) * rr * 0.8), 2, 2);
+          }
+          ctx.restore();
+        }
+        // The badge: a small shield of the tier's metal, its pips dark.
+        const bs = Math.max(4, Math.round(Math.min(bw, h) * 0.8));
+        const sx = Math.round(bx + (bw - bs) / 2);
+        const sy = Math.round(gy + (h - bs) / 2);
+        ctx.fillStyle = '#140e08';
+        ctx.fillRect(sx - 1, sy - 1, bs + 2, bs + 2);
+        ctx.fillStyle = col;
+        ctx.fillRect(sx, sy, bs, bs - 1);
+        ctx.fillRect(sx + 1, sy + bs - 1, bs - 2, 1);
+        const pip = Math.max(1, Math.floor(bs / 5));
+        const gap = Math.max(1, Math.floor((bs - pip * tier) / (tier + 1)));
+        ctx.fillStyle = '#2a1a0c';
+        for (let i = 0; i < tier; i++) ctx.fillRect(sx + gap + i * (pip + gap), sy + Math.floor((bs - pip) / 2), pip, pip);
+      } else if (this.z >= 3) {
+        const q = this.at(d.x, d.z);
+        if (tier >= 3) {
+          const k = (now * 0.8) % 1;
+          ctx.save();
+          ctx.globalAlpha = 0.6 * (1 - k);
+          ctx.strokeStyle = '#ffd040';
+          ctx.strokeRect(Math.round(q.x - 3 - k * 4) + 0.5, Math.round(q.y - 3 - k * 4) + 0.5, Math.round(6 + k * 8), Math.round(6 + k * 8));
+          ctx.restore();
+        }
+        ctx.fillStyle = '#140e08';
+        ctx.fillRect(Math.round(q.x) + 2, Math.round(q.y) - 4, 3, 3);
+        ctx.fillStyle = col;
+        ctx.fillRect(Math.round(q.x) + 2, Math.round(q.y) - 4, 2, 2);
+      }
+    };
     // Old places, found or heard of. (Grey once beaten.)
     for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
       if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
@@ -1283,8 +1352,9 @@ export class MapWindow extends Window {
       const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : anc ? (blink ? '#ffd0c0' : '#ff6a50') : '#f0d8a0';
       const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
       // (Turned back with a time crystal: its tier. Round 61.)
-      const tierTxt = (d.tier || 1) > 1 ? ` · tier ${['', 'I', 'II', 'III'][d.tier]}` : '';
+      const tierTxt = ` · tier ${['', 'I', 'II', 'III'][Math.max(1, Math.min(3, d.tier || 1))]}`;
       put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : anc ? '#3a0a10' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}${anc ? ', an ancient place' : ''}) · ${what}${tierTxt}`, kav ? '#7ae0ff' : anc ? '#ff9080' : '#f0d8a0', true);
+      tierBadge(d);
     }
     // What people have told you of: a lake, a river, the coast.
     for (const q of game.world.ow.pins || []) {

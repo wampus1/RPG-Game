@@ -361,7 +361,8 @@ test('a lantern jelly stings; stranded on the sand it lies still and stings whoe
   const j = d.spawn('lantern_jelly', x0 + 6, FY, z0 + 2, {});
   p.teleport(x0 + 5, FY, z0 + 2);
   const hp = p.hp;
-  run(game, input, 0.3);
+  // (Round 116: it gathers its light first, the best part of a second.)
+  run(game, input, 1.2);
   assert.ok(j.lying, 'stranded, out of the water');
   assert.equal(j.x, x0 + 6, 'it doesn\'t go anywhere');
   assert.ok(p.hp < hp && p.stunT >= 0, 'stung');

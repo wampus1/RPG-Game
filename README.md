@@ -9209,6 +9209,71 @@ visual are gone. And the coaches, sorted out.
 - **Version 1.16.0.** Worlds from 1.15 load as before; nothing in a save
   changes.
 
+## Round 117: Tiers you can see, and fixes from play
+
+- **Fixes.**
+  - **The wobbling screen.** Two things could make the view swing about,
+    slide off and leave you unable to act:
+    - **Taken dancing by a fairy ring** (the Hollow Hills): the view
+      chased you round the ring, step after step. It now holds still on
+      the ring's middle while you dance. When the dance ends you're set
+      down on the nearest open ground that isn't ring (it used to try
+      only the four squares beside you and could leave you on the ring,
+      to be taken again and again). The ring won't take you again until
+      you've stepped clear of it.
+    - **A drawing error.** If anything went wrong mid-drawing, the
+      picture's turn or shift was left in place, more each frame. Now
+      the picture is put straight after any such error, so it can't
+      build up from frame to frame.
+    - A cutscene that hits an error now ends instead of holding you still
+      for good.
+  - **Sound.** In a world opened to others, the host's sounds could be
+    judged from wherever your character was when the world was opened,
+    so after a respawn or a load nearly everything was "too far off" to
+    hear. Sounds are now heard from where you are. Sound put to sleep by
+    the browser or the machine (headphones swapped, the lid shut) wakes
+    again by itself, and a failed start of the sound system is retried
+    on your next click or key instead of leaving you silent all session.
+  - **Chests behind iron bars.** You can no longer open, loot or break
+    anything through iron bars, a shut cell door or a wall. Reaching over
+    a counter still works.
+  - **Missing pictures.** The Gilt Chalice, the Saint's Relic and the
+    Jailer's Keys have pictures of their own (they showed the magenta
+    "missing" square). So do the windmill sail, quicksilver, acid and a
+    set-down parcel. Every other item and block was checked.
+- **Tiers.**
+  - **On the map.** Every old place has a badge beside its icon: bronze
+    with one pip for tier I, silver with two for tier II, gold with three
+    for tier III. A tier III place is alight: a gold ring breathes out
+    round it and three sparks circle it. Its tooltip names the tier.
+  - **Grander ways in.** An old place turned back to a higher tier has a
+    grander way in, built out in front of it and never across its door:
+    - Tier II: a paved approach, two pillars flanking it with fires lit
+      on them, and a post with a fire at each corner.
+    - Tier III: a longer, wider, edged approach with fires lining it, an
+      arch over its start, two more pillars, and tall marble columns with
+      fires at the corners.
+  - **Turning a place back with a time crystal** now rebuilds it before
+    your eyes: as the clock runs backwards, its stones fly in out of the
+    light and set themselves, from the ground up and the middle out.
+    Nothing is set where anyone is standing, and anyone left inside when
+    it's done is stepped out in front of it.
+- **Relic shards at an anvil.** Shards are no longer used from your belt.
+  At an anvil, press Relic shards (H): put a relic from your pack in the
+  relic slot and shards in the shard slot, see the radius before and
+  after, and press Set. Nothing leaves your pack till you do.
+- **Item descriptions, said plainly.** Every item's description now says
+  what it does, with numbers, instead of hinting at it. For example: the
+  Phase Blade "pierces 60% of a shield's block and of armour"; relics
+  give their circle's radius and exactly what they do in it; the
+  masters' trophies give their duration and recharge time; quest items
+  say who to give them to; trade goods say what a merchant pays. The
+  Kavorent Visor, Carapace and Treads promised things they don't do
+  (seeing in the dark, silent steps); those claims are gone.
+- **Version 1.17.0.** Worlds from 1.16 load as before. A place you have
+  already turned back gets its grander way in the next time its ground
+  is laid out.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -86,40 +86,43 @@ export function setRelic(game, x, y, z, kind, shards = 0) {
   game.ui.msg(`You set down the ${R.name}. Runes kindle in a circle round it${shards ? `, ${relicReach(shards)} paces across` : ''}: ${R.about.charAt(0).toLowerCase()}${R.about.slice(1)}`, R.color);
 }
 
-// A relic shard used from the belt: it sinks into a relic in your pack (the
-// nearest to the shard's slot that can take one more), and that relic's
-// circle reaches half a pace further for good. Whether it was used.
-export function fitShard(game, def, p = game.player) {
+// (Round 117) A relic shard used from the belt: not set in that way any
+// more. It tells you where it is: on an anvil (see setShards).
+export function fitShard(game, def) {
   if (!def || def.kind !== 'relic_shard') return false;
-  const slot = p.inv[p.selected];
-  const order = [...p.inv.keys()].sort((a, b) => Math.abs(a - p.selected) - Math.abs(b - p.selected));
-  let at = -1;
-  let full = false;
-  for (const i of order) {
-    const it = p.inv[i] && ITEMS[p.inv[i].item];
-    if (!it || it.kind !== 'relic') continue;
-    if ((it.shards || 0) >= SHARD_MAX) {
-      full = true;
-      continue;
-    }
-    at = i;
-    break;
-  }
-  if (at < 0) {
-    game.ui.msg(full ? `Your relics have all the shards they'll take (${SHARD_MAX}).` : 'You carry no relic to set it in. (Take one up first: the shard goes into a relic in your pack.)', '#e0b8ff', true);
-    game.audio?.play('error');
-    return true;
-  }
-  const was = ITEMS[p.inv[at].item];
-  const n = (was.shards || 0) + 1;
-  p.inv[at] = { item: grownRelic(was.relic, n), count: 1 };
-  slot.count--;
-  if (slot.count <= 0) p.inv[p.selected] = null;
-  const R = RELICS[was.relic];
-  game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 20, color: ['#e0b8ff', R.color, '#ffffff'], up: 30, speed: 26, life: 0.8, glow: true, gravity: -16 });
-  game.audio?.play('rune');
-  game.ui.msg(`The shard sinks into the ${R.name} and is gone: its circle will reach ${relicReach(n)} paces now (${n} of ${SHARD_MAX} shards).`, '#e0b8ff');
+  game.ui.msg('Relic shards are set into a relic at an anvil: use an anvil, choose "Relic shards", put the relic and the shards in their slots, and press Set.', '#e0b8ff', true);
+  game.audio?.play('error');
   return true;
+}
+
+// (Round 117) At an anvil: up to `n` relic shards (from pack slot `si`) set
+// into the relic in pack slot `ri`. Each makes its circle reach half a pace
+// further, for good, up to SHARD_MAX. { ok, why, set, key }.
+export function shardRoom(key) {
+  const it = ITEMS[key];
+  return it && it.kind === 'relic' ? SHARD_MAX - (it.shards || 0) : 0;
+}
+export function setShards(game, ri, si, n = Infinity, p = game.player) {
+  const rs = p.inv[ri];
+  const ss = p.inv[si];
+  const it = rs && ITEMS[rs.item];
+  if (!it || it.kind !== 'relic') return { ok: false, why: 'Put a relic in the relic slot.' };
+  if (!ss || ITEMS[ss.item]?.kind !== 'relic_shard') return { ok: false, why: 'Put relic shards in the shard slot.' };
+  const room = shardRoom(rs.item);
+  if (room <= 0) return { ok: false, why: `That relic already holds the most shards it can (${SHARD_MAX}).` };
+  const k = Math.max(0, Math.min(n, room, ss.count));
+  if (!k) return { ok: false, why: 'No shards to set.' };
+  const total = (it.shards || 0) + k;
+  const key = grownRelic(it.relic, total);
+  p.inv[ri] = { item: key, count: 1 };
+  ss.count -= k;
+  if (ss.count <= 0) p.inv[si] = null;
+  const R = RELICS[it.relic];
+  game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 16 + 4 * k, color: ['#e0b8ff', R.color, '#ffffff'], up: 30, speed: 26, life: 0.8, glow: true, gravity: -16 });
+  game.audio?.play('clang');
+  game.audio?.play('rune');
+  game.ui.msg(`${k} shard${k > 1 ? 's' : ''} set into the ${R.name}. Its circle now has a radius of ${relicReach(total)} paces (${total} of ${SHARD_MAX} shards).`, '#e0b8ff');
+  return { ok: true, set: k, key };
 }
 
 // The relic at a block (or one that's been lost track of: its block with

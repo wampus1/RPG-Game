@@ -12,7 +12,8 @@ import { M } from '../src/world/settlement.js';
 import { bubbleLines, rugJoin } from '../src/render/renderer.js';
 import { HIRE_MIN_OPINION } from '../src/sim/careers.js';
 import { repLevel } from '../src/sim/sim.js';
-import { coachLinks } from '../src/sim/coaches.js';
+import { coachLinks, hasCoaches } from '../src/sim/coaches.js';
+import { REGION_W, REGION_D } from '../src/config.js';
 import { CoachMapWindow } from '../src/ui/travel.js';
 import { steedPixels, dirAngle, easeAngle } from '../src/render/steeds.js';
 import { turnMount, mountStep } from '../src/game/riding.js';
@@ -45,7 +46,13 @@ test('a guard who only mildly dislikes you still guards you', () => {
 
 test('the coach keeps to the streets and roads (never through a house or the water), picked on a map', () => {
   const W = G.world;
-  const here = W.ow.settlementAt(G.player.x, G.player.z);
+  // (Round 116: not every realm runs a coach: a town of one that does.)
+  let here = W.ow.settlementAt(G.player.x, G.player.z);
+  if (!hasCoaches(here)) {
+    here = W.ow.settlements.find((q) => !q.deserted && hasCoaches(q) && coachLinks(G, q).length);
+    G.teleportPlayer(Math.round((here.cx + here.cw / 2) * REGION_W), 40, Math.round((here.cz + here.cd / 2) * REGION_D));
+    for (let i = 0; i < 20; i++) G.update(0.1, input);
+  }
   const links = coachLinks(G, here);
   assert.ok(links.length, 'somewhere to go');
   G.player.give('coin', 200);

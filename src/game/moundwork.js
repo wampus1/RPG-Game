@@ -322,6 +322,29 @@ export function moundRemembers(run, src) {
   }
 }
 
+// (Round 117) The nearest open ground to `p` on no ring (searching out a
+// few paces), or null.
+function offRing(w, p, onRing) {
+  const seen = new Set([k2(p.x, p.z)]);
+  let edge = [{ x: p.x, z: p.z }];
+  for (let r = 0; r < 6 && edge.length; r++) {
+    const next = [];
+    for (const q of edge) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = q.x + dx;
+        const z = q.z + dz;
+        if (seen.has(k2(x, z))) continue;
+        seen.add(k2(x, z));
+        if (w.stepTarget(q.x, FY, q.z, x, z, false) !== FY) continue;
+        if (!onRing(x, z)) return { x, z };
+        next.push({ x, z });
+      }
+    }
+    edge = next;
+  }
+  return null;
+}
+
 // ------------------------------------------------------------ each frame
 export function tick(run, dt, party = null) {
   if (!isMound(run)) return;
@@ -335,13 +358,22 @@ export function tick(run, dt, party = null) {
   const who = (party || [game.player]).filter((p) => p && !p.dead);
   // The ring: stepped in, you're taken dancing.
   const rings = run.data.rings || [];
+  const onRing = (x, z) => rings.some((g, i) => !S.broken[i] && g.tiles.some((t) => t.x === x && t.z === z));
   for (const p of who) {
-    if (T.free.get(p) > 0) T.free.set(p, T.free.get(p) - dt);
+    // (Round 117) Let go by a ring, it won't take you again till you've
+    // stepped clear of every ring, and a moment after.
+    const fr = T.free.get(p);
+    if (fr === Infinity) {
+      if (!onRing(p.x, p.z)) T.free.set(p, 1.5);
+    } else if (fr > 0) T.free.set(p, fr - dt);
     const d = T.dance.get(p);
     if (d) {
       d.t -= dt;
       d.stepT -= dt;
       p.rootT = Math.max(p.rootT || 0, 0.3);
+      // (The view held on the ring's middle while you're taken round it,
+      // not swung after every step.)
+      if (p === game.player) game.ringFocus = d.mid;
       if (d.stepT <= 0 && d.t > 0) {
         d.stepT = DANCE_STEP;
         d.i = (d.i + 1) % d.g.tiles.length;
@@ -350,22 +382,17 @@ export function tick(run, dt, party = null) {
         if (Math.random() < 0.5) game.renderer.emit(t.x, FY + 0.6, t.z, { n: 3, color: FEY, up: 10, speed: 8, life: 0.6, glow: true });
       }
       if (d.t <= 0) {
-        // Out, dizzy, a step off the ring.
+        // Out, dizzy, set down off the ring (Round 117: the nearest open
+        // ground that's no ring's, however thick the ring: it used to try
+        // only the squares next to you, and leave you on the ring to be
+        // taken again and again).
         T.dance.delete(p);
-        T.free.set(p, 2.5);
+        T.free.set(p, Infinity);
+        if (p === game.player) game.ringFocus = null;
         p.rootT = 0;
-        p.slowT = Math.max(p.slowT || 0, 2.5);
-        const room = run.data.rooms.find((r) => r.id === d.g.room);
-        const cx = room ? room.cx + run.data.x0 : p.x;
-        const cz = room ? room.cz : p.z;
-        for (const [ox, oz] of [[Math.sign(p.x - cx), Math.sign(p.z - cz)], [Math.sign(p.x - cx), 0], [0, Math.sign(p.z - cz)], [-Math.sign(p.x - cx), -Math.sign(p.z - cz)]]) {
-          const nx = p.x + ox;
-          const nz = p.z + oz;
-          if ((ox || oz) && w.stepTarget(p.x, FY, p.z, nx, nz, false) === FY && !d.g.tiles.some((t) => t.x === nx && t.z === nz)) {
-            p.teleport(nx, FY, nz);
-            break;
-          }
-        }
+        p.slowT = Math.max(p.slowT || 0, 1.2);
+        const out = offRing(w, p, onRing);
+        if (out) p.teleport(out.x, FY, out.z);
         game.renderer.floatText(p.x, p.y + 2.4, p.z, 'dizzy', '#d8c0ff');
       }
       continue;
@@ -374,7 +401,8 @@ export function tick(run, dt, party = null) {
     const gi = rings.findIndex((g, i) => !S.broken[i] && g.tiles.some((t) => t.x === p.x && t.z === p.z));
     if (gi < 0) continue;
     const g = rings[gi];
-    T.dance.set(p, { g, i: g.tiles.findIndex((t) => t.x === p.x && t.z === p.z), t: DANCE, stepT: DANCE_STEP });
+    const mid = { x: g.tiles.reduce((a, t) => a + t.x, 0) / g.tiles.length, y: FY, z: g.tiles.reduce((a, t) => a + t.z, 0) / g.tiles.length, run };
+    T.dance.set(p, { g, i: g.tiles.findIndex((t) => t.x === p.x && t.z === p.z), t: DANCE, stepT: DANCE_STEP, mid });
     game.audio?.play('chime', p);
     game.renderer.floatText(p.x, p.y + 2.4, p.z, 'taken dancing!', '#d8c0ff');
     if (!T.told.ring) {
@@ -382,6 +410,7 @@ export function tick(run, dt, party = null) {
       game.ui.msg('You step into the ring, and the music has you: your feet take you round and round, and you can\'t stop them. (Step in no ring. Or break it: kick over its toadstools.)', '#d8c0ff', true);
     }
   }
+  if (game.ringFocus && !T.dance.has(game.player)) game.ringFocus = null;
   // The wisps drink the lanterns dark.
   for (const c of run.creatures()) {
     if (c.dead || c.dormant || c.species !== 'wisp') continue;
