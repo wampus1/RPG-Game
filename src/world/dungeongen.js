@@ -1272,6 +1272,10 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
       if (id !== B.air && id !== B.stairs_up && id !== B.torch && !BLOCKS[id].ladder) b.set(x, y, z, B.air);
     }
   }
+  // (Round 120) A master's hall: nothing solid set in the way just inside
+  // its doorway (three paces in, three across), so you can walk straight
+  // in. What's there to be used (a chest, a lever) is kept.
+  for (const r of R) if (r.kit === 'boss') clearBossWay(ctx, r);
   // (And with all that set about, the lava still leaves a way through each
   // hall it's in: where something now stands in the way round, a little
   // more of the floor's left as it was.)
@@ -1513,6 +1517,31 @@ function byWall(plan, x, z) {
 }
 
 // Next to where a passage comes in (or anything open that isn't this room).
+// (Round 120) Anything solid on the floor just inside a master's hall's
+// doorways, gone: the doorway's own tile and the two on either side of it,
+// three paces into the hall. (Not its walls, nor what's to be used.)
+export function clearBossWay(ctx, r) {
+  const { b, plan } = ctx;
+  for (const d of doorways(plan, r)) {
+    const side = { x: d.oz ? 1 : 0, z: d.ox ? 1 : 0 };
+    for (let k = 0; k < 3; k++) {
+      for (let w = -1; w <= 1; w++) {
+        const x = d.x - d.ox * k + side.x * w;
+        const z = d.z - d.oz * k + side.z * w;
+        if (!plan.at(x, z) || plan.room[z * plan.W + x] !== r.id) continue;
+        for (const y of [FY, FY + 1, FY + 2]) {
+          const id = b.get(x, y, z);
+          const bl = BLOCKS[id];
+          if (id === B.air || !bl || !bl.solid || bl.interact || bl.ladder || id === B.stairs_up) continue;
+          // (A step of raised floor, nothing on it: walked up, not round.)
+          if (y === FY && bl.render === 'cube' && b.get(x, FY + 1, z) === B.air) continue;
+          b.set(x, y, z, B.air);
+        }
+      }
+    }
+  }
+}
+
 function doorBlocked(plan, r, x, z) {
   for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     const nx = x + ox;

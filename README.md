@@ -9327,6 +9327,22 @@ visual are gone. And the coaches, sorted out.
 - **Version 1.19.0.** Worlds from 1.18 load as before; nothing in a save
   changes.
 
+## Round 120: Tier numerals, and a clear way into the boss's hall
+
+- **Tier on the map.** The tier badge beside an old place's icon is now a
+  small numeral, I, II or III, on the corner of the icon itself, in the
+  tier's colour: bronze for I, silver for II, gold for III. A tier III
+  place still glows on the map.
+- **A clear way in.** A boss's hall could have something solid (a statue,
+  a column, a pillar) standing just inside its doorway, in the way as you
+  came in. The doorway's tile and the ones either side of it, three paces
+  into the hall, are now kept clear of anything solid. A chest or lever
+  there stays, and so does a raised step of floor you can walk up. (Old
+  dungeon floors already laid out keep what they had until they're laid
+  out again.)
+- **Version 1.20.0.** Worlds from 1.19 load as before; nothing in a save
+  changes.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

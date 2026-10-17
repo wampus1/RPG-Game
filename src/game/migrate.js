@@ -900,6 +900,12 @@ export const STEPS = [
       log.push('Nobody a floor above or below sees you pick a lock (or anything else you do). A guest\'s HUD is hidden during their opening and cutscenes. Anyone on a floor that\'s cut away above you, or a floor below yours, is no longer drawn floating in your room.');
     },
   },
+  {
+    to: '1.20.0',
+    data(d, log) {
+      log.push('An old place\'s tier shows on the map as a numeral (I, II or III) in its colour on the corner of its icon. Nothing solid stands just inside the doorway of a boss\'s hall any more (floors already laid out keep theirs till they\'re laid out again).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

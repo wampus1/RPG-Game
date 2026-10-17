@@ -1292,7 +1292,6 @@ export class MapWindow extends Window {
         const gx = o.x + cx * w + (right ? w / 2 : 0);
         const gy = o.y + cz * h;
         const bw = w / 2;
-        const bx = right ? gx - bw : gx + bw;
         if (tier >= 3) {
           // (Its glow: a gold ring breathing out round it, and three sparks.)
           const k = (now * 0.8) % 1;
@@ -1314,19 +1313,21 @@ export class MapWindow extends Window {
           }
           ctx.restore();
         }
-        // The badge: a small shield of the tier's metal, its pips dark.
-        const bs = Math.max(4, Math.round(Math.min(bw, h) * 0.8));
-        const sx = Math.round(bx + (bw - bs) / 2);
-        const sy = Math.round(gy + (h - bs) / 2);
+        // (Round 120) The badge: its tier as a numeral, I, II or III, in
+        // the tier's colour, small on the top corner of its icon (the
+        // outer one, away from the next square), on a dark ground.
+        const u = Math.max(1, Math.round(Math.min(bw, h) / 10));
+        const nw = (tier * 2 + 1) * u;
+        const nh = 5 * u;
+        const nx = Math.round(right ? gx + bw - nw - u : gx + u);
+        const ny = Math.round(gy + u);
         ctx.fillStyle = '#140e08';
-        ctx.fillRect(sx - 1, sy - 1, bs + 2, bs + 2);
+        ctx.fillRect(nx - u, ny - u, nw + 2 * u, nh + 2 * u);
         ctx.fillStyle = col;
-        ctx.fillRect(sx, sy, bs, bs - 1);
-        ctx.fillRect(sx + 1, sy + bs - 1, bs - 2, 1);
-        const pip = Math.max(1, Math.floor(bs / 5));
-        const gap = Math.max(1, Math.floor((bs - pip * tier) / (tier + 1)));
-        ctx.fillStyle = '#2a1a0c';
-        for (let i = 0; i < tier; i++) ctx.fillRect(sx + gap + i * (pip + gap), sy + Math.floor((bs - pip) / 2), pip, pip);
+        // (Its strokes, joined top and bottom by serifs.)
+        for (let i = 0; i < tier; i++) ctx.fillRect(nx + (1 + i * 2) * u, ny, u, nh);
+        ctx.fillRect(nx, ny, nw, u);
+        ctx.fillRect(nx, ny + nh - u, nw, u);
       } else if (this.z >= 3) {
         const q = this.at(d.x, d.z);
         if (tier >= 3) {
