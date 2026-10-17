@@ -894,6 +894,12 @@ export const STEPS = [
       log.push('Playing together: a guest can skip their opening with Enter, doors swing open and shut on everyone\'s screen, and the HUD and windows are always drawn, whatever else goes wrong. Townsfolk who climb a stair to an upper floor stay up there.');
     },
   },
+  {
+    to: '1.19.0',
+    data(d, log) {
+      log.push('Nobody a floor above or below sees you pick a lock (or anything else you do). A guest\'s HUD is hidden during their opening and cutscenes. Anyone on a floor that\'s cut away above you, or a floor below yours, is no longer drawn floating in your room.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

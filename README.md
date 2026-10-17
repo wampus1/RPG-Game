@@ -9305,6 +9305,28 @@ visual are gone. And the coaches, sorted out.
 - **Version 1.18.0.** Worlds from 1.17 load as before; nothing in a save
   changes.
 
+## Round 119: Who sees what
+
+- **Lockpicking seen through the floor.** Whether anyone saw what you did
+  (a lock picked, a theft, a crop taken, a door broken down) took no
+  account of height, so someone a storey above or below you, within a few
+  paces, saw it through the floor between you. Now nobody more than a
+  couple of steps above or below sees it, and anyone else only by a clear
+  line at your height.
+- **A guest's HUD during cutscenes.** On a guest's screen the HUD (hearts,
+  belt, minimap, guild strip, the fishing reel) stayed up through their
+  opening and through cutscenes. It's hidden while either plays, as it
+  always was on the host's own screen.
+- **Players on another floor drawn in your room.** Indoors, the storeys
+  over you are cut away so you can see your own floor. Anyone standing up
+  on one of them (another player, or the townsfolk upstairs) was still
+  drawn at their own height, floating over your room where the floor
+  they stand on had been cut away. Anyone a storey under the floor you're
+  on was drawn over it too. Neither is drawn now. You see them again when
+  you're on their floor.
+- **Version 1.19.0.** Worlds from 1.18 load as before; nothing in a save
+  changes.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

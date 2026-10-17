@@ -589,9 +589,17 @@ export class Sim {
   // NPCs who can see what happens at (x, z): close enough, looking that
   // way (anyone right beside you notices), with no wall or closed door in
   // between. Windows and open doors let them see through.
-  witnesses(sid, x, z, radius = 7, exclude = null) {
+  // (Round 118) `y`: the height it's done at. Nobody a storey above or below
+  // sees it (through the floor between), and anyone else only along that
+  // height. Not given: the height of whoever's doing it, if it's you, there
+  // or a step off (most often it is); else anywhere (as it always was).
+  witnesses(sid, x, z, radius = 7, exclude = null, y = undefined) {
     const a = this.game.active.get(sid);
     if (!a) return [];
+    if (y === undefined) {
+      const p = this.game.player;
+      y = p && !p.dead && Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) <= 2 ? p.y : null;
+    }
     // A light step: people have to be closer to notice.
     if (heroHas(this.game.hero, 'sneak')) radius = Math.max(2, Math.round(radius * 0.7));
     // (A face everyone knows.)
@@ -604,7 +612,8 @@ export class Sim {
       if (n.dead || n.sleeping || n === exclude || n.rec.away) return false;
       const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
       if (d > radius) return false;
-      if (!this.canSee(n, x, z)) return false;
+      if (y !== null && y !== undefined && Math.abs(n.y - y) > 2) return false;
+      if (!this.canSee(n, x, z, y)) return false;
       return this.notices(n, d, radius, x, z);
     });
   }

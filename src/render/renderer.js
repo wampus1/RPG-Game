@@ -1232,9 +1232,28 @@ export class Renderer {
     // (Down in the ground: anyone up on the surface over the workings isn't
     // drawn walking about on the plan of them.)
     const deep = this.underground && this.hidden;
+    // (Round 119) Indoors, the storeys over you cut away: anyone up on one
+    // (another player, the folk upstairs) isn't drawn standing on the air
+    // where its floor was; nor anyone a storey under you, below the floor
+    // you're on. They used to be, at their own height, over your room.
+    const level = this.hidden ? this.hiddenLevel : null;
+    const below = (e) => {
+      if (level === null || e.y > level - 4 || !this.hidden.has(Math.round(e.x) * 65536 + Math.round(e.z))) return false;
+      const x = Math.round(e.x);
+      const z = Math.round(e.z);
+      for (let y = Math.round(e.y) + 2; y < level - 1; y++) {
+        const b = BLOCKS[world.getBlock(x, y, z)];
+        if (b && b.render === 'cube' && b.opaque) return true;
+      }
+      return false;
+    };
     for (const e of ghost.length ? [...game.visibleEntities, ...ghost] : game.visibleEntities) {
       if (cut && cut.hides(e)) continue;
       if (deep && e !== game.player && e.y >= this.hiddenLevel && this.hidden.has(e.x * 65536 + e.z)) continue;
+      if (level !== null && e !== game.player && e !== game.player.mount && e.kind !== 'prop' && !e.deck) {
+        if (Math.round(e.y) >= level && this.hidden.has(Math.round(e.x) * 65536 + Math.round(e.z))) continue;
+        if (below(e)) continue;
+      }
       // (Asleep inside a tent: out of sight; the tent snores for them.)
       if (e.sleeping && e.bedTile && e.bedTile.tent) continue;
       // (Fallen: drawn by the rite that raises you, over the dark.)

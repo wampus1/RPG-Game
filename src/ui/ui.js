@@ -422,7 +422,10 @@ export class UI {
       r.drawBubbles(ctx);
       words = false;
     }
-    if (this.showHud && game && game.player) {
+    // (Round 119) In an opening or a cutscene, none of it: on a guest's
+    // screen too (whose HUD stays up the whole time: see main.js).
+    const cine = !!(game && (game.cutscene || (game.scene && game.scene.intro)));
+    if (this.showHud && !cine && game && game.player) {
       this.part(ctx, 'hud', () => {
         this.drawHud(game, fps);
         drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
@@ -435,7 +438,7 @@ export class UI {
     // A master's fight: its name and its life across the top of the screen.
     if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.part(ctx, 'boss bar', () => this.drawBossBar(ctx, game));
     // Reeling one in (see drawReel).
-    if (this.showHud && game && game.fishing && game.fishing.phase === 'reel') this.drawReel(ctx, game);
+    if (this.showHud && !cine && game && game.fishing && game.fishing.phase === 'reel') this.drawReel(ctx, game);
     // An opening scene's letterbox, titles and captions (under any window);
     // a short scene's bars and words (see scenes.js).
     if (game && game.cutscene) game.cutscene.draw(ctx);

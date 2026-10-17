@@ -5447,7 +5447,7 @@ export class Game {
   // Can anyone see you at a household's lock?
   lockWatched(owner) {
     const p = this.player;
-    return this.sim.witnesses(owner.sid, p.x, p.z, 6).length > 0;
+    return this.sim.witnesses(owner.sid, p.x, p.z, 6, null, p.y).length > 0;
   }
 
   // Picking a household's lock (see ui/lockpick.js): with a lockpick, and
