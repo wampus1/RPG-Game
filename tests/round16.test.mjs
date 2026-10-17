@@ -42,7 +42,10 @@ function inCity(seed = 12345, minute = 10 * 60) {
   game.updateSettlements(true);
   game.minute = minute;
   tick(game, input, 20, 0.1);
-  p.teleport(L.plaza.cx, game.world.findStandY(L.plaza.cx, L.plaza.cz, GROUND), L.plaza.cz);
+  // (Round 119: on the ground, never down in it where there's nowhere to
+  // stand: the plaza's middle can be a statue's plinth.)
+  const at = game.findFreeSpot(L.plaza.cx, L.plaza.cz, GROUND);
+  p.teleport(at.x, at.y, at.z);
   return { game, input, L, p, sid: city.id, a: game.active.get(city.id) };
 }
 
