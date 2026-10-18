@@ -615,6 +615,11 @@ export class DialogueWindow extends Window {
     game.audio?.play('select');
     if (r.open === 'trade') return this.ui.openTrade(n);
     if (r.open === 'gift') return this.ui.open(new GiftWindow(this.ui, n));
+    // (Round 121) The council, a campaign, an offer of office.
+    if (r.open === 'office') {
+      this.close();
+      return this.ui.openOffice?.(game);
+    }
     if (r.open === 'tech') {
       this.ui.open(new TechWindow(this.ui, game, n.settlement));
       return;

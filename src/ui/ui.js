@@ -21,6 +21,8 @@ import { addItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
 import { QuestWindow } from './quests.js';
+import { CouncilWindow } from './council.js';
+import { HustingsWindow, CountWindow, BannerWindow, VoteWindow } from './hustings.js';
 import { pidOf } from '../sim/saga/refs.js';
 import { ZONE, KINDS } from '../game/fishing.js';
 import { mastery } from '../game/mastery.js';
@@ -144,6 +146,36 @@ export class UI {
     for (const w of this.windows) this.close(w);
   }
 
+  // (Round 121) A moment of holding office, marked by a window of its own
+  // (see sim/office.js: Office.show).
+  showOffice(kind, data) {
+    if (kind === 'count') return this.open(new CountWindow(this, data));
+    if (kind === 'vote') return this.open(new VoteWindow(this, data));
+    if (kind === 'voted') {
+      const w = this.find('council');
+      if (w && w.sid === data.sid) w.say('The council has voted.', '#a0e8ff');
+      return w;
+    }
+    if (['oath', 'charter', 'fallen', 'free', 'founding', 'offer'].includes(kind)) return this.open(new BannerWindow(this, kind, data));
+    return null;
+  }
+
+  // N: the council of the town you govern (or sit on); your campaign, if
+  // you're standing; an offer of office to answer.
+  openOffice(game) {
+    const o = game.sim && game.sim.office;
+    if (!o) return;
+    const pid = o.pid();
+    const offer = o.offerFor(pid);
+    if (offer) return this.open(new BannerWindow(this, 'offer', offer));
+    const T = o.councilOf(pid);
+    const q = Object.values(game.sim.causes.list).find((c) => c && !c.done && c.kind === 'office' && c.cands.some((x) => x.pid === pid));
+    if (T && !(q && !o.isHolder(q.sid, pid))) return this.open(new CouncilWindow(this, T.sid));
+    if (q) return this.open(new HustingsWindow(this, q.sid));
+    this.msg('You hold no office. A citizen of a few days can stand for mayor at the town hall.', C.dim);
+    return null;
+  }
+
   toggle(kind, make) {
     const w = this.find(kind);
     if (w) this.close(w);
@@ -236,6 +268,14 @@ export class UI {
         case 'KeyJ':
           if (!game.player.dead) this.toggle('journal', () => new W.JournalWindow(this));
           continue;
+        // (Round 121) The council of the town you govern.
+        case 'KeyN': {
+          if (game.player.dead) continue;
+          const w = this.find('council') || this.find('hustings') || this.find('officebanner');
+          if (w) this.close(w);
+          else this.openOffice(game);
+          continue;
+        }
         // The quest log: what you've taken on, and the world's stories.
         case 'KeyO':
           if (!game.player.dead) this.toggle('quests', () => new QuestWindow(this));
@@ -906,6 +946,11 @@ export class UI {
       }
       for (const l of sim.careers.hudLines()) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, l.text.slice(0, 24), l.color);
+      }
+      // (Round 121) The town you govern: its matters, a crisis.
+      if (sim.office) for (const l of sim.office.hudLines()) {
+        g.fill(0, y, 25, 1, ' ', C.fg, l.blink && Math.floor(this.time * 3) % 2 ? 'rgba(120,20,20,0.85)' : 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
       }
       // No sleep for a day or more: it shows, until you sleep it off.

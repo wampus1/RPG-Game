@@ -76,7 +76,9 @@ export class Founding {
     return rng.pick(opts.slice(0, 6));
   }
 
-  found(L, day, rng) {
+  // (`lead`, round 121: a player leading them, { leader, name }: they're
+  // the village's head once it's begun; see office.founded.)
+  found(L, day, rng, lead = null) {
     const ow = this.game.world.ow;
     const s0 = L.settlement;
     const at = this.site(L, rng);
@@ -118,6 +120,10 @@ export class Founding {
     // (They come in together, at the end of the road.)
     for (const q of back) q.at = arrive;
     const p = { id: this.next++, sid: s.id, from: s0.id, idxs: moved.map((r) => r.idx), depart: now, arrive, stage: 'travel', day };
+    if (lead) {
+      p.leader = lead.leader;
+      p.leaderName = lead.name;
+    }
     // A wagon, if the old town has one to spare.
     const wagon = this.sim.stables ? this.sim.stables.take(L, 'wagon') : null;
     if (wagon) p.mount = wagon;
@@ -125,7 +131,7 @@ export class Founding {
     this.lastFounded = day;
     const dir = this.dirFrom(s0, s);
     const names = moved.filter((r) => r.age === 'adult').map((r) => r.name.first);
-    ledger(L, day, `${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names[names.length - 1]} and their families are leaving ${s0.name} to found a new village, ${s.name}, out to the ${dir}. The town has sent them off with tools and seed.`);
+    ledger(L, day, `${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names[names.length - 1]} and their families are leaving ${s0.name} to found a new village, ${s.name}, out to the ${dir}${lead ? `, led by ${lead.name}` : ''}. The town has sent them off with tools and seed.`);
     if (this.game.active.has(s0.id)) this.game.ui.msg(`Settlers are setting out from ${s0.name} to found ${s.name}.`, '#e8d8a0');
     return p;
   }
@@ -179,8 +185,10 @@ export class Founding {
       if (adults.length && !adults.some((r) => r.job === 'builder')) retrain(NL, adults[0], 'builder', rng);
       if (adults.length > 1 && !adults.some((r) => r.job === 'farmer')) retrain(NL, adults[1], 'farmer', rng);
       // And the eldest is the elder.
-      if (adults.length > 2 && !NL.npcs.some((r) => r.job === 'mayor' && alive(r))) retrain(NL, adults[adults.length - 1], 'mayor', rng);
+      if (adults.length > 2 && !NL.npcs.some((r) => r.job === 'mayor' && alive(r)) && !p.leader) retrain(NL, adults[adults.length - 1], 'mayor', rng);
       this.pitch(p, NL);
+      // (A player leading them: theirs to govern from the first night.)
+      if (p.leader && this.sim.office) this.sim.office.founded(NL, p, day);
       ledger(NL, day, `The settlers from ${this.sim.layoutOf(p.from)?.settlement.name || 'afar'} have reached the spot they chose, and pitched their tents. ${s.name} is begun.`);
       const home = this.sim.layoutOf(p.from);
       if (home && home.econ) ledger(home, day, `Word from the settlers: they've reached the place they'll call ${s.name}, and the first tents are up.`);

@@ -9343,6 +9343,117 @@ visual are gone. And the coaches, sorted out.
 - **Version 1.20.0.** Worlds from 1.19 load as before; nothing in a save
   changes.
 
+## Round 121: Governing a town
+
+You can now hold a town's office, and run it.
+
+- **Standing for mayor.** Once you've been a citizen of a town for three
+  days, file to stand at its town hall (talk to the mayor: ¤20 in a village,
+  ¤40 in a town, ¤80 in a city, for the treasury). The town votes four to
+  six days later. The campaign window (**N**) shows the race as it stands,
+  and how each faction leans: yours, unsure, or not. Make up to three
+  pledges to factions (lower taxes, bread for the hungry, better pay for
+  the watch, building, feast days, a law they want); each wins that
+  faction over now, and becomes a promise you must keep within ten days of
+  taking office. Speak in the square once a day to win over the undecided
+  of one faction. Put money into the campaign, and talk to townsfolk one at
+  a time ("What do you make of the vote?"). On the night of the count the
+  ballots drop into two heaps, and you're elected or not.
+- **Taking office.** The old mayor steps down. A steward, one of the
+  townsfolk, keeps the hall and the town's daily business, and does all the
+  mayor used to for everyone else (citizenship, letters, licences). You get
+  the town's Chain of Office, and pay from its treasury each day (its
+  charter sets how much).
+- **The council window (N).** The council sits every morning at ten. Seven
+  pages:
+  - **Sitting:** the day's matters, drawn from what is really going on in
+    the town: thin coffers or money to spare, a law the town is pressing
+    for (with the reason: fights, night-time trouble, poaching), the
+    hungry, a spate of thefts or a long calm, a building it lacks (tavern,
+    smithy, bakery; more with ambitious works), a feast day, a realm decree
+    the town falls short of. At most four at a time. Each choice says what
+    it will do: to the treasury and taxes, and to each faction (▲ better,
+    ▼ worse). Decide one in the hall and the council votes there and then.
+    The chamber shows your councillors as themselves behind the long
+    table; each raises their vote in turn, and the wax seal comes down:
+    CARRIED or DEFEATED. Away from the hall, your word goes by letter and
+    the council votes at the next sitting. What's carried is done at ten
+    the next morning.
+  - **Treasury:** what's in it, sitting by sitting; what comes in and goes
+    out. Set the tax with ◄ ►, and the four budget lines (watch pay, relief,
+    public works, feast days). Each change is a proposal for the council.
+  - **Laws:** every law, how many of the town back it, and how each faction
+    sees it. Propose passing or repealing one.
+  - **People:** the seven factions (merchants, farmers and fishers,
+    crafters, guards, clergy, elders, poor folk): how well each thinks of
+    you, the reasons in numbers, what each wants most, your promises to
+    them, and the town's approval over three weeks.
+  - **Officers:** name a steward, a captain of the watch (one stronger
+    against raiders), a treasurer (a shrewd one gathers up to a fifth more
+    tax; a sly one skims), a magistrate (sets the fines without the
+    council). See the council's seats and how loyal each member is. Set
+    standing orders: what the steward does with whatever you leave
+    undecided (taxes, the hungry, laws, building, feasts, fines, crises,
+    the realm's decrees).
+  - **Charter** and **Realm**: below.
+- **Being overruled.** The council can vote you down, and won't vote again
+  on the same choice. If the town turns against you (approval under 32 for
+  three sittings), someone of the most aggrieved faction starts a recall
+  petition. With enough names, the town votes on whether you stay. You can
+  meet the petitioners' demands, or pay their leader to drop it (it may get
+  out). Defy a realm decree and the realm answers week by week: a letter,
+  then a fine, then an ultimatum (submit, pay it off, or defy it). When
+  your term ends, the most aggrieved faction puts someone up against you
+  (or a fellow player who filed to stand). A town that thinks very well of
+  you returns you unopposed.
+- **New laws only a governor can draft:** an alms law, market day, a town
+  militia (raiders driven off even with no guard; ¤1 a week each for kit),
+  a temple tithe (the priest feeds the hungry from it), and guild dues. Each
+  does exactly what it says.
+- **Charters.** Six ways to govern, each with its own vote, term, recall
+  and pay, and its own friends and enemies among the factions: mayor and
+  council; a town moot (everyone votes; villages start with one); a guild
+  charter (the richest merchants and crafters vote, weighted by their
+  purses; no petitions; taxes capped at 14%); temple rule (needs a temple
+  and priest; the priest can veto; no elections, but the temple can remove
+  you); a protectorate (you decree everything; no elections; an unhappy
+  town grows restless and may rise); a commune (each faction one voice;
+  relief can never be cut; no pay). A reform needs two votes in every
+  three, under the charter the town has now.
+- **Other ways into office.**
+  - Appointed: the realm may offer you a town of its realm that has lost
+    its head, if you're a citizen in that realm in good standing. You
+    serve at the realm's pleasure, with no elections.
+  - Acclaimed: a town in trouble (famine, a riot, no head) may call on you,
+    if you're its friend and you're there.
+  - A coup: sound out the guards. With half the watch behind you, seize
+    the hall and rule by decree. Without them, it's treason.
+  - Founding: lead settlers out of a crowded town (¤100). When they reach
+    their spot, the village is yours, and you write its charter.
+  Answer an offer from the window it opens, or with N.
+- **Crises** don't wait for the sitting: raiders at the gates, a fever,
+  famine, a crowd at the hall, a scandal, the realm's ultimatum, a rising.
+  Each has hours to decide, shown as a burning fuse and on your HUD. It is
+  your call alone, with no vote. Leave it, and your steward acts by your
+  standing orders.
+- **The realm.** See its decrees and whether the town meets them. Petition
+  its ruler for aid, a lower least tax, lighter tribute, or a road. In a
+  realm ruled by a council, a well-liked head of a town is offered a seat
+  on it. The realm's decrees are then put to its council's vote, yours
+  among them. Propose breaking away (two in every three): the town becomes
+  a free state and you its head, setting its decrees yourself. Your
+  ambitions are tracked with their progress: a second term, being beloved,
+  a full treasury, growing the town, the realm's council, independence.
+- **Playing together.** Seat fellow players who are citizens of your town
+  on its council. When it votes, each is asked (the vote waits a little
+  for them). They can stand against you when your term is up, and bring
+  their petitions before your council.
+- **Command console:** `office [town]` takes office at once; `office sit`
+  holds the sitting now; `office crisis <kind>` brings one on; `office
+  leave` steps down.
+- **Version 1.21.0.** Worlds from 1.20 load as before. No town has a
+  player's office yet.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -9357,6 +9468,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `teleport [on\|off]` | while on, click anywhere you've seen on the world map (M) to go there |
 | `reveal [off]` | shows the whole world map |
 | `towns`, `where` | every place, nearest first; where you are |
+| `office [town] \| sit \| crisis <kind> \| leave` | take office in a town at once; hold the council's sitting now; bring on a crisis (raid, famine, fever, unrest, scandal); step down |
 | `wedding [now] [town]` | two single grown-ups get engaged; the wedding is in two days, or within a few hours with `now` |
 | `feast [now] [town]`, `fete [now] [town]` | a feast day, or a celebration of the town |
 | `street [town]` | the builders lay out a new street with lots |

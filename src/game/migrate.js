@@ -906,6 +906,15 @@ export const STEPS = [
       log.push('An old place\'s tier shows on the map as a numeral (I, II or III) in its colour on the corner of its icon. Nothing solid stands just inside the doorway of a boss\'s hall any more (floors already laid out keep theirs till they\'re laid out again).');
     },
   },
+  {
+    to: '1.21.0',
+    data(d, log) {
+      // (Towns have no office of a player's yet: each starts under the
+      // charter it would have, when someone takes it.)
+      if (d && d.sim && !d.sim.office) d.sim.office = { towns: {}, offers: [] };
+      log.push('You can govern a town: stand for mayor where you\'re a citizen (or be appointed, acclaimed, seize the hall, or found a village), and run it from the council window (N): its matters, taxes, laws, spending, factions, officers, charter and realm.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

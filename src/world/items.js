@@ -300,6 +300,9 @@ item('arm_ring', { name: 'Arm-Ring', kind: 'misc', stack: 8, value: 45 });
 // bones in a little reliquary of their own, worth a great deal to any
 // temple (and to the dead, who wake when they're taken).
 item('gilt_chalice', { name: 'Gilt Chalice', kind: 'misc', stack: 4, value: 85 });
+// (Round 121) Worn by a town's head while they hold the office (see
+// sim/office.js): given when you take office, taken back when you leave it.
+item('chain_of_office', { name: 'Chain of Office', kind: 'misc', stack: 1, value: 0, about: 'The badge of a town\'s head, given when you take office and returned when you leave it. Press N to open your council.' });
 item('saint_relic', { name: 'Saint\'s Relic', kind: 'misc', stack: 1, value: 220, about: 'Worth about ¤220 to a merchant or temple. Taking it from its shrine puts out every candle on that crypt floor.' });
 
 // --- food ---------------------------------------------------------------------

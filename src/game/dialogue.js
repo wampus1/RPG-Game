@@ -303,9 +303,9 @@ export const TOPIC_CATS = [
 ];
 const CAT_OF = {};
 for (const [cat, ids] of Object.entries({
-  now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host',
+  now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer',
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay',
-  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund',
+  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   manners: 'gift rude',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
@@ -451,7 +451,22 @@ function topicsRaw(npc, game) {
     add('profession', car.job && car.job.kind === 'profession' && car.job.sid === s.id ? 'About my post...' : 'I\'d like an official profession.');
     const pet = sim.petition;
     add('petition', pet && pet.sid === s.id ? `About my petition (${pet.signers.length} signature${pet.signers.length === 1 ? '' : 's'})...` : 'I\'d like to petition about a law.');
+    // (Round 121) The town's office (see sim/office.js).
+    const off = sim.office;
+    const hold = off.holder(s.id);
+    const offer = off.offerFor();
+    if (offer && offer.sid === s.id) add('offer', 'About the office...');
+    if (hold && hold.pid === off.pid()) add('office', inHall ? 'Convene the council.' : 'About the council...');
+    else {
+      const cq = sim.causes.of(s.id);
+      if (cq && cq.kind === 'office' && cq.cands.some((c) => c.pid === off.pid())) add('campaign', 'How goes my campaign?');
+      else add('stand', hold ? `I'd like to stand against ${hold.name} at the election.` : `I'd like to stand for ${s.type === 'village' ? 'elder' : 'mayor'}.`);
+      if (off.plotStrength(npc.layout).share >= 0.5) add('seize', '(Your guards at your back) Step aside. The hall is mine.');
+    }
+    if (!hold && sim.isCitizen(s.id) && npc.layout.npcs.length >= 10 && s.type !== 'village') add('lead', 'I would lead settlers out, to found a village.');
   }
+  // (Round 121) A word with the watch about who runs the town.
+  if (rec.job === 'guard' && !npc.hired && !npc.visit && rec.age === 'adult' && rep >= 30 && !sim.office.isHolder(s.id) && (sim.isCitizen(s.id) || rep >= 50)) add('sound', '(Quietly) This town needs a firmer hand...');
   // A researcher or a scholar: what they're working on, and the tree of
   // learning it's part of.
   if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) add('research', rec.job === 'researcher' ? 'What are you working on? (the tree of learning)' : 'What are the scholars studying? (the tree of learning)');
@@ -1174,6 +1189,14 @@ function petitionTalk(npc, game, arg) {
     const law = LAWS[pet.law];
     const need = needed(L);
     if (pet.signers.length < need) return { lines: [`To ${pet.enact ? 'pass' : 'repeal'} the ${law.name.toLowerCase()}? You have ${pet.signers.length} signature${pet.signers.length === 1 ? '' : 's'}; I'd want at least ${need} before the council considers it.`], choices: [{ id: 'petition', arg: 'drop', label: 'Forget the petition.' }], back: 'I\'ll gather more.' };
+    // (Round 121) A town a player governs: it goes before their council.
+    const hold = sim.office.holder(s.id);
+    if (hold) {
+      if (hold.pid === sim.office.pid()) return { lines: ['You govern the town yourself: put it before the council (N, the Laws page).'] };
+      sim.petition = null;
+      sim.office.petitionItem(L, pet, game.playerName);
+      return { lines: [`${pet.signers.length} names. I'll put it before the council: ${hold.name} will decide on it.`] };
+    }
     const d = decide(L, pet, sim.opinion(npc));
     sim.petition = null;
     if (!d.ok) {
@@ -1204,6 +1227,77 @@ function petitionTalk(npc, game, arg) {
     choices: LAW_IDS.filter((id) => lawFits(L.settlement, id)).map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })),
     back: 'Never mind.',
   };
+}
+
+// (Round 121) Holding office (see sim/office.js): convening the council,
+// standing for election, an offer of office, leading settlers out, and,
+// with the watch behind you, seizing the hall.
+function officeTalk(npc, game, id, arg) {
+  const sim = game.sim;
+  const off = sim.office;
+  const L = npc.layout;
+  const s = npc.settlement;
+  const rec = npc.rec;
+  const inHall = game.buildingAtPlayer()?.type === 'townhall';
+  const title = s.type === 'village' ? 'elder' : 'mayor';
+  switch (id) {
+    case 'office':
+      return { lines: [inHall ? 'The council is waiting for you.' : 'The papers are all in the hall. But I can tell you what\'s before the council.'], open: 'office' };
+    case 'offer':
+      return { lines: ['It\'s yours if you\'ll have it.'], open: 'office' };
+    case 'campaign': {
+      const q = sim.causes.of(s.id);
+      const t = q ? off.projection(L, q) : [0, 0];
+      const side = q ? q.cands.findIndex((c) => c.pid === off.pid()) : -1;
+      const ahead = side >= 0 && t[side] > t[1 - side];
+      return { lines: [ahead ? 'From what I hear, you\'re ahead. Don\'t count on it till the count.' : 'It\'s close, or worse. Get out and talk to people.'], open: 'office' };
+    }
+    case 'stand': {
+      const t = off.canStand(L);
+      if (!t.ok) return { lines: [t.why] };
+      if (arg !== 'yes') {
+        const lines = t.filing
+          ? [`You'd stand against ${t.against} when the term is up, on day ${t.when}?`, `The fee to file is ¤${t.fee}, for the treasury.`]
+          : [`Stand against ${t.against}? The town votes a few days after you file, and the whole town votes.`, `The fee to file is ¤${t.fee}, for the treasury. Then it's up to you: talk to people, make your pledges, speak in the square (N).`];
+        return { lines, choices: [{ id: 'stand', arg: 'yes', label: `File to stand (¤${t.fee})` }], back: 'Not just yet.' };
+      }
+      if (!inHall) return { lines: [`Come to the ${s.type === 'village' ? 'Village Hall' : 'Town Hall'} to file. It has to go in the ledger.`] };
+      const r = off.stand(L);
+      if (!r.ok) return { lines: [r.why] };
+      game.audio?.play('page');
+      if (r.filing) return { lines: [`It's in the ledger. When the term is up, on day ${r.when}, you stand against them.`] };
+      return { lines: [`It's in the ledger: you stand for ${title}. The town votes on day ${r.q.end + 1}.`, 'Good luck. You\'ll need it.'], open: 'office' };
+    }
+    case 'sound': {
+      const r = off.sound(L, npc);
+      const P = off.plotStrength(L);
+      return { lines: [r.text, ...(r.yes ? [`(${P.n} of the ${P.of} guards stand with you${P.share >= 0.5 ? ': enough to take the hall' : ''}.)`] : [])] };
+    }
+    case 'seize': {
+      if (arg !== 'yes') return { lines: ['(Your guards are waiting outside.)', 'What do you want?'], choices: [{ id: 'seize', arg: 'yes', label: 'Seize the town hall' }], back: 'Nothing. Not today.' };
+      const r = off.seize(L);
+      if (!r.ok) return { lines: [r.why] };
+      if (!r.seized) {
+        game.audio?.play('alarm');
+        return { lines: ['Guards! Seize them: it\'s treason!'], close: true };
+      }
+      game.audio?.play('fanfare');
+      return { lines: ['...So it\'s come to this. Very well. The hall is yours.', `(You rule ${s.name} now, by decree.)`], close: true };
+    }
+    case 'lead': {
+      const t = off.canLead(L);
+      if (!t.ok) return { lines: [t.why] };
+      if (arg !== 'yes') return { lines: [`Lead settlers out? A few families might go, if someone they trusted led them. It would take ¤${t.cost} for tools, seed and timber.`, 'Once they\'re there, the village is yours to govern.'], choices: [{ id: 'lead', arg: 'yes', label: `Lead them (¤${t.cost})` }], back: 'Let me think on it.' };
+      const r = off.lead(L);
+      if (!r.ok) return { lines: [r.why] };
+      game.audio?.play('chime');
+      const NL = sim.layoutOf(r.party.sid);
+      return { lines: [`They're packing up. ${NL ? NL.settlement.name : 'The new village'} it'll be called. They'll set out on the road, and when they reach the spot, it's yours.`] };
+    }
+    default:
+      void rec;
+      return { lines: ['Hm.'] };
+  }
 }
 
 // How your workshop and house are coming along: waiting for a lot (and the
@@ -2014,6 +2108,14 @@ function respondRaw(npc, game, id, arg) {
     }
     case 'realm': return realmTalk(npc, game);
     case 'petition': return petitionTalk(npc, game, arg);
+    case 'office':
+    case 'offer':
+    case 'stand':
+    case 'campaign':
+    case 'seize':
+    case 'lead':
+    case 'sound':
+      return officeTalk(npc, game, id, arg);
     case 'sign': {
       const p2 = sim.petition;
       if (!p2 || p2.sid !== s.id) return { lines: ['A petition? Never heard of it.'] };

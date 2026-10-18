@@ -3,6 +3,9 @@
 //   - a law the town is divided over (see laws.js): to pass it, or throw
 //     it out;
 //   - who should be mayor: the mayor, or someone standing against them.
+//   - (Round 121) who should hold the town's office, when a player stands
+//     for it, or a player governs it and the term is up (see office.js):
+//     its candidates may be players or townsfolk.
 // Each side has someone speaking for it (their champion), and everyone
 // grown up leans one way or the other, by their own lights (what they
 // think of the law; whether the challenger's the kind of person they'd
@@ -59,6 +62,9 @@ export class Causes {
   // A question put to the town: a divided law, or the mayor challenged.
   begin(L, day, rng) {
     const s = L.settlement;
+    // (Round 121: a town a player governs brings its questions before the
+    // council instead: see office.js.)
+    if (this.sim.office?.governs(L)) return null;
     const people = voters(L);
     if (people.length < 5) return null;
     const opts = [];
@@ -72,7 +78,9 @@ export class Causes {
       if (split >= 0.28) opts.push({ kind: 'law', law: id, enact: !on, w: split });
     }
     const mayor = mayorOf(L);
-    if (mayor && s.type !== 'village' && people.length >= 8) opts.push({ kind: 'mayor', w: 0.3 });
+    // (A town a player governs votes on its head when the term is up: see
+    // office.js.)
+    if (mayor && s.type !== 'village' && people.length >= 8 && !this.sim.office?.governs(L)) opts.push({ kind: 'mayor', w: 0.3 });
     if (!opts.length) return null;
     let t = rng.float(0, opts.reduce((a, o) => a + o.w, 0));
     const o = opts.find((q) => (t -= q.w) < 0) || opts[0];
@@ -103,9 +111,28 @@ export class Causes {
     return q;
   }
 
+  // (Round 121) An election for the town's office: `cands` ({ idx } a
+  // townsperson, { pid, name } a player; the sitting one first). The town
+  // votes on day `end` + 1.
+  office(L, day, cands, rng, end = null) {
+    const s = L.settlement;
+    const name = (c) => (c.pid ? c.name : full(L.npcs[c.idx]));
+    const q = { id: this.seq++, sid: s.id, kind: 'office', start: day, end: end ?? day + rng.int(4, 6), funds: [0, 0], swayed: {}, asked: {}, side: null, done: false, cands, pledges: {}, spoke: {} };
+    q.champ = cands.map((c) => (c.pid ? null : c.idx));
+    const T = this.sim.office ? this.sim.office.of(s.id) : null;
+    const title = T && T.holder ? this.sim.office.title(L, T).toLowerCase() : s.type === 'village' ? 'elder' : 'mayor';
+    q.title = `Who should be ${title} of ${s.name}: ${name(cands[0])}, or ${name(cands[1])}?`;
+    q.sides = [`${name(cands[0]).split(' ')[0]} (${cands[0].sitting ? 'sitting' : 'standing'})`, `${name(cands[1]).split(' ')[0]} (standing)`];
+    ledger(L, day, `${name(cands[1])} is standing against ${name(cands[0])} to be ${title}. The town votes on day ${q.end + 1}.`);
+    this.list[s.id] = q;
+    this.tellPlayer(L, `${s.name} is divided: ${q.title} (Ask anyone in town what they make of it.)`);
+    return q;
+  }
+
   // Which way someone leans, and how hard (-1 for the first side ... +1 for
   // the second), before anyone's swayed them.
   lean(L, q, r) {
+    if (q.kind === 'office') return this.sim.office.lean(L, q, r);
     if (q.kind === 'law') return -stance(r, q.law) * (q.enact ? 1 : -1);
     const [a, b] = q.champ.map((i) => L.npcs.find((x) => x.idx === i));
     if (!a || !b) return 0;
@@ -133,6 +160,10 @@ export class Causes {
     // The undecided swayed by money spent, and you yourself, out canvassing.
     for (let i = 0; i < 2; i++) t[i] += Math.floor(q.funds[i] / FUND_PER_VOTE);
     if (q.side !== null) t[q.side] += 2;
+    // (A player standing votes for themselves.)
+    if (q.kind === 'office') q.cands.forEach((c, i) => {
+      if (c.pid) t[i]++;
+    });
     return t;
   }
 
@@ -140,6 +171,8 @@ export class Causes {
   // near you), and a few minds changing of themselves.
   campaign(L, q, day) {
     const rng = new RNG(hash4(q.id, day, 0xca3));
+    // (What the town thinks of a player standing, while they're about.)
+    if (q.kind === 'office') for (const c of q.cands) if (c.pid) this.sim.office.noteOpinions(c.pid, L);
     const people = voters(L);
     for (let k = 0; k < 2 && people.length; k++) {
       const r = people[rng.int(0, people.length - 1)];
@@ -159,7 +192,10 @@ export class Causes {
     q.result = t;
     this.last[s.id] = day;
     let what;
-    if (q.kind === 'law') {
+    if (q.kind === 'office') {
+      for (const c of q.cands) if (c.pid) this.sim.office.noteOpinions(c.pid, L);
+      what = this.sim.office.elected(L, q, win, t, day);
+    } else if (q.kind === 'law') {
       const law = LAWS[q.law];
       // (Side 0 is whoever called for the change.)
       const change = win === 0;

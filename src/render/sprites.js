@@ -1706,6 +1706,26 @@ function simpleIcon(key) {
       for (const [x, y] of [[5, 12], [6, 10], [7, 8]]) p.set(x, y, '#c88a4a');
       break;
     // (Round 117) Things that had no picture of their own.
+    case 'chain_of_office':
+      // A gold chain hung in a loop, links picked out, a medallion at the
+      // bottom with the town's seal (a red stone) at its heart.
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (0.05 + (i / 8) * 0.9);
+        const x = Math.round(8 + Math.cos(a) * 5.5);
+        const y = Math.round(2 + Math.sin(a) * 0.4 + (1 - Math.abs(Math.cos(a))) * 7);
+        p.set(x, y, i % 2 ? '#e8b830' : '#fff0a0');
+        p.set(16 - x, y, i % 2 ? '#c89a20' : '#e8b830');
+      }
+      p.rect(5, 10, 6, 5, '#c89a20');
+      p.rect(6, 9, 4, 7, '#c89a20');
+      p.rect(6, 10, 4, 5, '#e8b830');
+      p.set(7, 11, '#c8202a');
+      p.set(8, 11, '#e84a50');
+      p.set(7, 12, '#a01820');
+      p.set(8, 12, '#c8202a');
+      p.set(6, 10, '#fff8d0');
+      p.set(9, 14, '#a87a18');
+      break;
     case 'gilt_chalice':
       // A gold cup on a stem and a round foot, a red stone set in its bowl.
       p.rect(4, 2, 8, 1, '#fff0a0');

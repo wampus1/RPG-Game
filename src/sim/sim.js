@@ -2,6 +2,7 @@
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
 import { Causes } from './causes.js';
+import { Office } from './office.js';
 import { asSeat } from '../game/party.js';
 import { townMigrations } from '../game/migrate.js';
 import { isStar, starWary } from '../game/starfall.js';
@@ -170,6 +171,8 @@ export class Sim {
     this.politics = new Politics(game, this);
     // (Round 78) Questions put to a town's vote (see causes.js).
     this.causes = new Causes(game, this);
+    // (Round 121) A town's office, when a player holds it (see office.js).
+    this.office = new Office(game, this);
     this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
     this.outings = new Outings(game, this);
@@ -386,6 +389,7 @@ export class Sim {
       this.founding.update();
       this.religion.update();
       this.market.update();
+      this.office.update();
     }
     if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) {
       this.laying = null;
@@ -916,6 +920,10 @@ export class Sim {
     // Laws: outsiders pay the tariff; an open market takes a little off.
     if (lawOn(npc.layout, 'tariff') && !this.isCitizen(s.id)) m *= 1.1;
     if (lawOn(npc.layout, 'openMarket')) m *= 0.95;
+    // (Round 121) Market day: a tenth off; guild dues: a tenth on, for the
+    // guilds' own wares.
+    if (lawOn(npc.layout, 'marketDay') && this.office.marketDay(npc.layout)) m *= 0.9;
+    if (lawOn(npc.layout, 'guildDues') && ['blacksmith', 'tailor', 'carpenter', 'jeweller', 'glassblower', 'merchant'].includes(rec.job)) m *= 1.1;
     // (Guild monopolies: the guilds set the prices.)
     if (this.tech.has(s, 'monopolies')) m *= 1.1;
     // A citizen of another realm: its tariff, and how the realms get on.
@@ -1078,7 +1086,7 @@ export class Sim {
     }
     L.econ.recent.deaths++;
     ledger(L, day, `${name}, ${jobTitle(rec, s).toLowerCase()}, died (${cause}).${slot ? ' The funeral is tomorrow at 16:00, by the graveyard.' : ''}`);
-    if (rec.job === 'mayor') ledger(L, day, 'The council will govern until a new leader is chosen.');
+    if (rec.job === 'mayor') ledger(L, day, rec.steward ? 'A new steward will be named to keep the hall.' : 'The council will govern until a new leader is chosen.');
     if (this.citizen && this.citizen.sid === s.id && this.citizen.host === rec.home) {
       // Hosting continues with the rest of the family, if any remain.
       if (!L.npcs.some((r) => r.home === rec.home && alive(r))) this.citizen.host = null;
@@ -1374,7 +1382,7 @@ export class Sim {
   playerTax(L, earned) {
     const rate = L.econ.tax;
     // (Kharos's fire tithe on top.)
-    const poll = Math.max(1, Math.round(10 * rate)) + titheOf(L);
+    const poll = Math.max(1, Math.round(10 * rate)) + titheOf(L) + (lawOn(L, 'templeTithe') ? 1 : 0);
     const share = Math.floor(earned * rate);
     return { tax: poll + share, poll, share };
   }
@@ -1754,6 +1762,8 @@ export class Sim {
   checkConduct(L, day) {
     const z = this.citizen;
     if (!z || z.sid !== L.settlement.id) return;
+    // (Not the town's own head: the town has other ways to be rid of you.)
+    if (this.office.isHolder(L.settlement.id)) return;
     const m = mayorOf(L);
     if (!m) return;
     const op = this.opinion({ rec: m, settlement: L.settlement });
@@ -1846,6 +1856,7 @@ export class Sim {
     if (!c) return;
     const L = this.layoutOf(c.sid);
     this.citizen = null;
+    this.office.onRevoke(c.sid);
     if (!quiet) this.game.ui.msg(`Your citizenship of ${L.settlement.name} was revoked (${reason}). ${L.settlement.name} has one citizen fewer.`, '#ff7060');
     this.careers.onRevoke(c.sid);
     ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}). ${L.settlement.name} lost a citizen.`);
@@ -2463,6 +2474,7 @@ export class Sim {
       renown: [...this.renown],
       petition: this.petition || null,
       causes: this.causes.serialize(),
+      office: this.office.serialize(),
       // How towns have grown: their size now, and ground they've spread onto.
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
@@ -2569,6 +2581,7 @@ export class Sim {
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;
     this.causes.load(data.causes);
+    this.office.load(data.office);
     for (const [id, type, base, suburbs, reach] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];
       if (!s) continue;

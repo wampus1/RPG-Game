@@ -26,6 +26,14 @@ function syncEnt(r, was = r.age) {
 export function electMayor(sim, L, day) {
   const e = L.econ;
   const s = L.settlement;
+  // (Round 121) A town a player governs needs only a new steward.
+  if (sim.office && sim.office.governs(L)) {
+    sim.office.ensureSteward(L, day);
+    e.mayorless = null;
+    return null;
+  }
+  // (Nor one while the realm's offer of the post to a player stands.)
+  if (sim.office && sim.office.offers.some((o) => o.sid === s.id && o.how === 'appointment' && o.until > sim.abs) && e.mayorless !== null && e.mayorless !== undefined) return null;
   if (s.deserted || L.npcs.some((r) => r.job === 'mayor' && alive(r) && !r.migrated)) {
     e.mayorless = null;
     return null;
@@ -159,7 +167,13 @@ export function raids(sim, L, day, rng) {
     ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} came to the edge of town in the night; ${hero.name.first} ${hero.name.last}, an adventurer staying in town, drove ${beast.startsWith('a ') ? 'it' : 'them'} off.`);
     return { driven: true, by: hero };
   }
-  if (guards.length && (guards.length >= 2 || rng.chance(0.6))) {
+  // (Round 121) A town with a militia turns out to see them off, guards or
+  // no; a captain of the watch makes it one stronger.
+  if ((e.laws || {}).militia && people.filter((r) => r.age === 'adult').length >= 4 && rng.chance(0.85)) {
+    ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} came to the edge of town in the night; the town's militia turned out and drove ${beast.startsWith('a ') ? 'it' : 'them'} off.`);
+    return { driven: true, militia: true };
+  }
+  if (guards.length && (guards.length + (e.captain !== null && e.captain !== undefined ? 1 : 0) >= 2 || rng.chance(0.6))) {
     const g = rng.pick(guards);
     if (rng.chance(0.3)) g.hp = Math.max(4, (g.hp ?? 24) - rng.int(4, 10));
     ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} came to the edge of town in the night; ${g.name.first} ${g.name.last} and the watch drove ${beast.startsWith('a ') ? 'it' : 'them'} off.`);

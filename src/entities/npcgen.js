@@ -67,7 +67,10 @@ export const HOBBIES = {
 const MERCHANT_TITLES = [null, 'Peddler', 'Trader', 'Master Merchant'];
 
 export function jobTitle(rec, s) {
+  // (Round 121) Keeping the hall for a town's governor (see office.js).
+  if (rec.job === 'mayor' && rec.steward) return 'Steward';
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
+  if (rec.job === 'guard' && rec.captain) return 'Captain of the Watch';
   if (rec.job === 'guard' && rec.life && rec.life.rank) return `${rec.life.rank} of the Watch`;
   if (rec.nomadBand !== undefined) return 'Nomad';
   if (rec.bandit !== undefined) return rec.banditChief ? 'Bandit Chief' : rec.hiredSword ? 'Sellsword' : 'Bandit';

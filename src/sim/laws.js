@@ -93,11 +93,44 @@ export const LAWS = {
     stance: (r) => (has(r, 'fisher', 'merchant') ? -0.5 : 0) + (has(r, 'mayor', 'guard') ? 0.3 : 0) + 0.1,
     pressure: (e, L) => (e.treasury < L.npcs.filter(alive).length * 12 ? 0.3 : 0) - 0.1,
   },
+  // (Round 121) Laws only a town's own governor can draft (see office.js):
+  // the towns never pass them of themselves, and only a player who holds
+  // office can put them before the town. What each does is done in
+  // office.js (lawsDaily), sim.js (prices) and life.js (raids).
+  alms: {
+    name: 'Alms law', short: 'alms', draft: true, desc: 'The treasury gives ¤1 a day to each of the town\'s poorest.',
+    stance: (r) => (has(r, 'beggar') ? 0.9 : 0) + ((r.coins || 0) < 6 ? 0.4 : 0) + (has(r, 'priest') ? 0.5 : 0) + (has(r, 'merchant', 'noble') ? -0.5 : 0) + ((P(r).kindness ?? 0.5) - 0.5) * 0.8,
+    pressure: () => -0.2,
+  },
+  marketDay: {
+    name: 'Market day', short: 'market day', draft: true, desc: 'Every seventh day is market day: traders sell a tenth cheaper, and each pays ¤1 to the treasury for their stall.',
+    stance: (r) => (has(r, 'merchant') ? 0.6 : 0) + (has(r, 'farmer', 'fisher', 'trapper') ? 0.4 : 0) + (has(r, 'baker', 'tailor', 'carpenter', 'blacksmith') ? 0.2 : 0) + (has(r, 'priest') ? -0.3 : 0) + (r.age === 'elder' ? -0.1 : 0) + 0.05,
+    pressure: () => -0.2,
+  },
+  militia: {
+    name: 'Town militia', short: 'militia', draft: true, desc: 'Every grown townsperson drills with the watch: raiders are driven off even with no guard on duty, and each pays ¤1 a week for their kit.',
+    stance: (r) => (has(r, 'guard') ? 0.5 : 0) + ((P(r).bravery ?? 0.5) - 0.5) * 1.2 + (has(r, 'merchant', 'noble') ? -0.3 : 0) + (r.age === 'elder' ? -0.2 : 0) + (has(r, 'trapper', 'lumberjack') ? 0.2 : 0),
+    pressure: () => -0.2,
+  },
+  templeTithe: {
+    name: 'Temple tithe', short: 'tithe', draft: true, unless: ['ember'], desc: 'Every grown townsperson with ¤4 or more gives ¤1 a day to the temple (citizens too), and the priest feeds the hungry from it.',
+    stance: (r) => (has(r, 'priest') ? 0.9 : 0) + ((r.traits || []).includes('devout') ? 0.6 : 0) + (has(r, 'merchant', 'noble') ? -0.5 : 0) + ((r.coins || 0) < 6 ? -0.3 : 0) + ((P(r).kindness ?? 0.5) - 0.5) * 0.4,
+    pressure: () => -0.2,
+  },
+  guildDues: {
+    name: 'Guild dues', short: 'guild dues', draft: true, desc: 'Every merchant and crafter pays ¤1 a day to the treasury, and their guilds keep prices up: their wares sell for a tenth more.',
+    stance: (r) => (has(r, 'blacksmith', 'tailor', 'carpenter', 'jeweller', 'glassblower') ? 0.5 : 0) + (has(r, 'merchant') ? 0.2 : 0) + ((r.coins || 0) < 6 ? -0.6 : 0) + (has(r, 'farmer', 'fisher') ? -0.3 : 0) - 0.05,
+    pressure: () => -0.2,
+  },
 };
 
-// Can this town's people pass the law at all?
-export function lawFits(s, id) {
-  const st = LAWS[id].styles;
+// Can this town's people pass the law at all? (`drafting`: a governor of
+// the town's own, who can put the drafted laws before it too.)
+export function lawFits(s, id, drafting = false) {
+  const law = LAWS[id];
+  if (law.draft && !drafting) return false;
+  if (law.unless && law.unless.includes(s && s.style)) return false;
+  const st = law.styles;
   return !st || st.includes(s && s.style);
 }
 export const LAW_IDS = Object.keys(LAWS);
@@ -187,7 +220,8 @@ export function reviewLaws(L, day, who) {
   let best = null;
   for (const id of LAW_IDS) {
     const law = LAWS[id];
-    if (!lawFits(L.settlement, id)) continue;
+    // (A law drafted by a governor since gone may be thrown out again.)
+    if (!lawFits(L.settlement, id) && !(law.draft && e.laws[id])) continue;
     const want = support(L, id) * 0.6 + law.pressure(e, L);
     const on = !!e.laws[id];
     const score = on ? -want : want;

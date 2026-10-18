@@ -1169,6 +1169,8 @@ function collectTaxes(L, day) {
   if (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'bookkeeping')) total = Math.round(total * 1.2);
   // (Round 68: a far people's own ways with tax: see sim/fartech.js.)
   if (L.sim && L.sim.tech) total = Math.round(total * (1 + L.sim.tech.fxOf(L.settlement, 'tax')));
+  // (Round 121: a shrewd treasurer, named by a town's governor.)
+  if (e.taxBoost && e.taxBoost !== 1) total = Math.round(total * e.taxBoost);
   e.treasury += total;
   e.taxY = total;
   e.taxDay = day;
@@ -1195,11 +1197,13 @@ function payWages(L, day) {
   let owed = 0;
   // The town pays its guards, mayor, priest and builders.
   const staff = L.npcs.filter((r) => alive(r) && !r.away && (r.job === 'guard' || r.job === 'mayor' || r.job === 'priest' || r.job === 'builder'));
-  for (const r of staff) owed += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
+  // (Round 121: the watch's pay as a governor sets it.)
+  const gw = e.guardWage ?? 5;
+  for (const r of staff) owed += r.job === 'guard' ? gw : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
   if (e.treasury >= owed) {
     e.treasury -= owed;
     for (const r of staff) {
-      const wage = r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
+      const wage = r.job === 'guard' ? gw : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
       r.coins += wage;
       r.earned += wage;
     }
@@ -1263,7 +1267,14 @@ export function guardSupplies(L) {
 }
 
 // The mayor looks over the books: taxes, relief for the hungry, laws.
+// (Round 121: a town a player governs holds its council's sitting instead:
+// see office.js.)
 function mayorReview(sim, L, day, rng) {
+  if (sim && sim.office && sim.office.daily(L, day, rng)) {
+    if (sim.events.rites) sim.events.rites(L, day);
+    sim.dailyCivic(L, day, rng);
+    return;
+  }
   const e = L.econ;
   const s = L.settlement;
   const m = mayorOf(L);

@@ -238,7 +238,9 @@ export function checkSupply(sim, L, day) {
     if (r) return { hired: r, job: 'builder' };
   }
   // Buildings the town lacks: a tavern anywhere big enough, a smithy in
-  // towns and cities, a bakery in cities.
+  // towns and cities, a bakery in cities. (Round 121: in a town a player
+  // governs, it's for the council to decide: see agenda.js.)
+  if (sim.office && sim.office.governs(L)) return null;
   const want = [];
   if (people.length >= 12) want.push('tavern');
   if (s.type !== 'village' && (!sim.tech || sim.tech.allows(s, 'building', 'smithy'))) want.push('smithy');

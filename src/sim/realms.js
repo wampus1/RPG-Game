@@ -418,30 +418,44 @@ export class Realms {
 
   // ------------------------------------------------------------ decrees
   // Once a week the ruler looks over the realm and may change one decree.
+  // (Round 121: where a player sits on the realm's council, the change is
+  // put to the council first, and made only if it carries: see
+  // office.realmProposal. A realm a player heads has its decrees from
+  // them, not from here.)
   decree(civ, day, rng) {
     const R = this.realm(civ);
     const ruler = this.ruler(civ);
-    if (!ruler) return null;
+    if (!ruler || R.head) return null;
     const d = R.decrees;
     const towns = this.memberLayouts(civ);
     if (!towns.length) return null;
     const who = authority(civ);
     const cap = (t) => t[0].toUpperCase() + t.slice(1);
     const p = ruler.personality || {};
+    const realmName = civ.name.replace(/^The /, '');
     const violence = towns.reduce((n, L) => n + (L.econ.recent.violence || 0) + (L.econ.recent.raids || 0), 0);
     const poor = towns.filter((L) => L.econ.treasury < residents(L).length * 6).length;
     const i = TAX_FLOORS.indexOf(d.taxFloor);
+    const put = (change) => {
+      if (this.sim.office && this.sim.office.realmProposal(civ, change, day)) return change.key;
+      change.apply();
+      return change.key;
+    };
     // Arms: trouble across the realm brings a ban; long calm (and a bold
     // ruler) lifts it (never in a martial realm).
     if (!d.armsBan && violence >= 3 + (p.bravery ?? 0.5) * 3) {
-      d.armsBan = true;
-      this.proclaim(civ, day, `By decree of ${who}: drawn weapons are forbidden in every town of the ${civ.name.replace(/^The /, '')}.`);
-      return 'armsBan';
+      return put({ key: 'armsBan', title: 'A weapons ban in every town', text: `drawn weapons forbidden in every town of the ${realmName}.`, lean: (r) => (0.5 - (r.personality?.bravery ?? 0.5)),
+        apply: () => {
+          d.armsBan = true;
+          this.proclaim(civ, day, `By decree of ${who}: drawn weapons are forbidden in every town of the ${realmName}.`);
+        } });
     }
     if (d.armsBan && violence === 0 && !(civ.values || []).includes('martial') && rng.chance(0.3 + (p.bravery ?? 0.5) * 0.4)) {
-      d.armsBan = false;
-      this.proclaim(civ, day, `${cap(who)} has lifted the realm's weapons ban.`);
-      return 'armsBan';
+      return put({ key: 'armsBan', title: 'Lifting the weapons ban', text: 'the realm\'s weapons ban lifted.', lean: (r) => ((r.personality?.bravery ?? 0.5) - 0.5),
+        apply: () => {
+          d.armsBan = false;
+          this.proclaim(civ, day, `${cap(who)} has lifted the realm's weapons ban.`);
+        } });
     }
     // Tariffs follow how the realms get on (none at all, where trade is free).
     const free = this.sim.tech && this.sim.tech.has(civ, 'free_trade');
@@ -449,20 +463,27 @@ export class Realms {
       if (o === civ) continue;
       const st = this.standing(civ, o);
       const on = d.tariffOn.includes(o.id);
+      const them = o.name.replace(/^The /, '');
       if (on && free) {
-        d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
-        this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${o.name.replace(/^The /, '')}: the realm trades freely now.`);
-        return 'tariff';
+        return put({ key: 'tariff', title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted: the realm trades freely now.`,
+          apply: () => {
+            d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
+            this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${them}: the realm trades freely now.`);
+          } });
       }
       if (!on && st === 'hostile' && !free) {
-        d.tariffOn.push(o.id);
-        this.proclaim(civ, day, `By decree of ${who}: merchants of the ${o.name.replace(/^The /, '')} pay a tariff on all they sell here.`);
-        return 'tariff';
+        return put({ key: 'tariff', title: `A tariff on the ${them}`, text: `merchants of the ${them} to pay a tariff on all they sell here.`, lean: () => 0.2,
+          apply: () => {
+            d.tariffOn.push(o.id);
+            this.proclaim(civ, day, `By decree of ${who}: merchants of the ${them} pay a tariff on all they sell here.`);
+          } });
       }
       if (on && st === 'friendly') {
-        d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
-        this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${o.name.replace(/^The /, '')}.`);
-        return 'tariff';
+        return put({ key: 'tariff', title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted.`, lean: () => 0.1,
+          apply: () => {
+            d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
+            this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${them}.`);
+          } });
       }
     }
     // A floor under every town's taxes when the realm is short; lower
@@ -470,14 +491,20 @@ export class Realms {
     const capL = this.sim.layoutOf(R.capital);
     const flush = capL && capL.econ.treasury > residents(capL).length * 40;
     if (i < TAX_FLOORS.length - 1 && (poor * 2 > towns.length || (capL && capL.econ.treasury < residents(capL).length * 10)) && (p.kindness ?? 0.5) < 0.8) {
-      d.taxFloor = TAX_FLOORS[i + 1];
-      this.proclaim(civ, day, `By decree of ${who}: no town of the ${civ.name.replace(/^The /, '')} may tax less than ${Math.round(d.taxFloor * 100)}%.`);
-      return 'taxFloor';
+      const v = TAX_FLOORS[i + 1];
+      return put({ key: 'taxFloor', title: `A least tax of ${Math.round(v * 100)}%`, text: `no town of the ${realmName} to tax less than ${Math.round(v * 100)}%.`, lean: (r) => (0.5 - (r.personality?.kindness ?? 0.5)),
+        apply: () => {
+          d.taxFloor = v;
+          this.proclaim(civ, day, `By decree of ${who}: no town of the ${realmName} may tax less than ${Math.round(d.taxFloor * 100)}%.`);
+        } });
     }
     if (i > 0 && flush && rng.chance(0.3 + (p.kindness ?? 0.5) * 0.5)) {
-      d.taxFloor = TAX_FLOORS[i - 1];
-      this.proclaim(civ, day, d.taxFloor ? `${cap(who)} lowered the realm's least tax to ${Math.round(d.taxFloor * 100)}%.` : `${cap(who)} no longer sets a least tax for the towns.`);
-      return 'taxFloor';
+      const v = TAX_FLOORS[i - 1];
+      return put({ key: 'taxFloor', title: v ? `Lowering the least tax to ${Math.round(v * 100)}%` : 'No least tax', text: v ? `the realm's least tax lowered to ${Math.round(v * 100)}%.` : 'no least tax set for the towns.', lean: (r) => ((r.personality?.kindness ?? 0.5) - 0.4),
+        apply: () => {
+          d.taxFloor = v;
+          this.proclaim(civ, day, d.taxFloor ? `${cap(who)} lowered the realm's least tax to ${Math.round(d.taxFloor * 100)}%.` : `${cap(who)} no longer sets a least tax for the towns.`);
+        } });
     }
     return null;
   }
@@ -504,7 +531,9 @@ export class Realms {
     if (R.capital === s.id || !L.econ.taxY) return 0;
     const capL = this.sim.layoutOf(R.capital);
     if (!capL || !capL.econ) return 0;
-    const n = Math.min(L.econ.treasury, Math.floor(L.econ.taxY * R.share));
+    // (Round 121: halved for a while, at a governor's petition.)
+    const cut = this.sim.office && this.sim.office.of(s.id) && this.sim.office.of(s.id).tributeCut > day ? 0.5 : 1;
+    const n = Math.min(L.econ.treasury, Math.floor(L.econ.taxY * R.share * cut));
     if (n <= 0) return 0;
     L.econ.treasury -= n;
     capL.econ.treasury += n;

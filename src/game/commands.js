@@ -35,6 +35,7 @@ export const COMMANDS = {
   erupt: { args: '[days]', about: 'The mountain on Kharos erupts now (or tells you how many days till it next does, with "days").' },
   mod: { args: 'help | list | give | spawn | place | story | event | effect | dungeon ...', about: '(Round 62) For trying a mod out: what the world\'s mods add ("mod list"), and putting any of it here: an item, a creature, a structure, a story, an event, an effect, a dungeon to go down into ("mod help" for each).' },
   ship: { args: '<sloop|brigantine|galleon|frigate> [aboard] | foe <type> | list', about: '(Round 68) Launch a ship of your own on the nearest open water (and put you aboard her, with "aboard"), with a crew and shot; "foe" sends a warship against you; "list" names the ships about.' },
+  office: { args: '[town] | sit | crisis <raid|famine|fever|unrest|scandal> | leave', about: '(Round 121) Take office in a town at once (the one you\'re in, or named), as if elected; "sit" holds the council\'s morning sitting now; "crisis" brings one on; "leave" steps you down.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -48,6 +49,46 @@ function civArg(game, q) {
 }
 
 const hod = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+
+// (Round 121) Taking office at once, and the council's business on demand.
+function officeCmd(game, words) {
+  const sim = game.sim;
+  const o = sim.office;
+  const first = (words[0] || '').toLowerCase();
+  const mine = o.heldBy(o.pid());
+  const ML = mine ? sim.layoutOf(mine.sid) : null;
+  if (first === 'leave') {
+    if (!mine) return ['You hold no office.'];
+    o.stepDown(ML);
+    return [`You step down as head of ${ML.settlement.name}.`];
+  }
+  if (first === 'sit') {
+    if (!mine) return ['You hold no office.'];
+    o.session(ML, mine, game.day, new RNG(hash4(game.day, ML.settlement.id, 0x5175)));
+    return [`The council of ${ML.settlement.name} sits: ${mine.agenda.filter((q) => !q.done).length} matter(s) before it (N).`];
+  }
+  if (first === 'crisis') {
+    if (!mine) return ['You hold no office.'];
+    const kind = (words[1] || 'raid').toLowerCase();
+    const e = ML.econ;
+    mine.crisisDay = -99;
+    mine.crises = {};
+    let spec = null;
+    if (kind === 'famine') e.famineDays = 5;
+    if (kind === 'unrest') e.riotDay = game.day;
+    if (kind === 'scandal') spec = o.scandalSpec(ML, mine, 'Word is out that a councillor took coin to vote your way.');
+    else spec = o.crisisNow(ML, mine, game.day, kind);
+    if (!spec) return [`No ${kind} crisis can come on in ${ML.settlement.name} now.`];
+    o.crisis(ML, mine, spec, game.day, sim.abs);
+    return [`Crisis in ${ML.settlement.name}: ${spec.title}. (N: the council)`];
+  }
+  const s = townArg(game, words);
+  const L = s && sim.layoutOf(s.id);
+  if (!L || !L.econ) return ['No such town (or you\'re not in one).'];
+  if (o.isHolder(s.id)) return [`You already govern ${s.name}.`];
+  o.install(L, o.pid(), game.playerName, 'election', game.day);
+  return [`You are ${o.title(L)} of ${s.name}. Press N for the council.`];
+}
 
 // A town by name (or the start of it), or the one you're in.
 function townArg(game, words) {
@@ -230,6 +271,7 @@ export function runCommand(game, text) {
     case 'rite':
     case 'fete':
       return eventCmd(game, cmd, words);
+    case 'office': return officeCmd(game, words);
     case 'street': {
       const s = townArg(game, words);
       const L = s && sim.layoutOf(s.id);
