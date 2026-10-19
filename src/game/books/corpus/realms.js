@@ -102,7 +102,7 @@ export const POOLS = {
     '(The|Their) (songs|old songs) (say|tell) that the {people} came {camehow}, (and|) (the|their) (chroniclers|scholars) (put|set) it (in|at) the year {came}.',
   ],
   'came.first': [
-    'They (were|came as) (a hardy|a stubborn|a hungry) (people|folk), (and|for) (they|the land) (needed|had) to (be|) (hard|harder still) (in|those) first (years|winters).',
+    'They were a (hardy|stubborn) (people|folk), as they had to be in those first (years|winters).',
     'The first (years|winters) were (hard|bitter), and (many|not a few) of the (newcomers|settlers) (are|lie) buried in the first (barrows|cairns) (they raised|of that time).',
     '(At first|In the first years) they (lived|kept) (close together|to the coast and the rivers), for they did not yet know the (land|country) or (its beasts|what lived in it).',
   ],
@@ -120,7 +120,7 @@ export const POOLS = {
   'proclaimed.why': [
     '(Raiders|Enemies) (on|from) (every side|all sides) (made|had made) (it|a realm) (needful|necessary): (no|not one) town (could|was able to) (hold out|stand) (alone|by itself).',
     'The towns of the {people} (had|) (quarrelled|feuded) (among themselves|with one another) (for|through) (a generation|years), and (were|grew) (tired|weary) of it.',
-    '(The|It) (realm|crown) (was|came) (born|made) (of|out of) (need|fear) (more than|rather than) (pride|ambition), (as|so) the (chroniclers|old books) (tell|have) it.',
+    'The (realm|crown) was (born|made) (of|out of) (need|fear) (more than|rather than) (pride|ambition), (as|so) the (chroniclers|old books) (tell|have) it.',
   ],
   'proclaimed.first': [
     '{firstking} (was|had been) (a|) (chief|war-leader) of {capital} (before|until then), and is (remembered|honoured) (still|to this day) as the (founder|first) of the (realm|line).',
@@ -179,7 +179,7 @@ export const POOLS = {
 
   // ------------------------------------------------------------ what a realm holds dear
   'value.open': [
-    '(Every|Each) (people|realm) (holds|has) (something|some things) (dearer|more dear) than (the rest|others), and the {people} of {realm} (are|have always been) (no|not) (different|otherwise).',
+    '(Every|Each) (people|realm) (holds|has) (something|some things) (dearer|more dear) than (the rest|others), and the {people} of {realm} are no different.',
     'Ask (anyone|any of the {people}) what (they prize|their realm prizes) (most|above all), and (they will tell you|the answer will be) {values}.',
   ],
   'value.close': [
@@ -241,7 +241,15 @@ export const POOLS = {
   ],
   'towns.capital': [
     'The (greatest|first) of them is {capital}, (the|its) (capital|seat), where {ruler} (sits|keeps court).',
-    '{capital} (is|has always been) (the|) (greatest|chief) (of them|among them), (and|) (the|its) (hall|throne) (is|stands) (there|in it).',
+    '{capital} (is|has always been) the (greatest|chief) of them, and the (hall|throne) (is|stands) there.',
+  ],
+  'towns.one': [
+    '{one} is a {onekind} (in|among) {oneground}[, (by|on) {onewater}].',
+    '{one}, (by|on) {onewater}, is (known|famous) for {onefamous}.',
+    '{one} (lies|stands) {oneway} of {capital}, (in|among) {oneground}.',
+    '{one} is (known|famous) (all over|across) the realm for {onefamous}.',
+    '{one}, a {onekind} {oneway} of {capital}, (is|has always been) (proud|vain) of its {onedish}.',
+    'In {one} (they|the folk) (say|swear) (their|the) {onedish} is the best in the realm, (and|but) (so|the same) (do|is said in) (the other towns|every other town).',
   ],
   'towns.count': [
     '(Of|Among) the (rest|others), {towns} (are|count among) (the best known|the greatest), (but|and) (every|each) (village|one) (has|keeps) (its own|a) (story|history) (worth|for) (telling|another book).',
@@ -253,7 +261,7 @@ export const POOLS = {
     '{war} (began|broke out) in {warstart} between {realm} and {enemy}, (over|for the sake of) {why}.',
   ],
   'rwar.course': [
-    '(It|The war) (was|went) (fought|on) (at|over) {battles}, (and|) (it|the fighting) (lasted|went on) (until|till) {warend}.',
+    'Its battles were {battles}, and (it|the fighting) (lasted|went on) (until|till) {warend}.',
     '(Its|The) (greatest|bloodiest) (battle|fight) (was|came at) {battle}, in {battleyear}, (which|and) {battlewinner} (won|carried).',
   ],
   'rwar.end': [

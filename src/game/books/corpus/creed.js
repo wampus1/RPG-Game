@@ -119,7 +119,7 @@ export const POOLS = {
     'It is a (big|heavy) beast, and (takes|needs) a strong arm to bring down.',
   ],
   'beast.advice.tame': [
-    'A (farmer|household) with (one|a few) (counts itself|is) (lucky|well off), and (a|any) (town|village) (without|that lacks) (them|any) (is|would be) (poor|a poor place) (indeed|).',
+    'A (farmer|household) with a few (counts itself|is) (lucky|well off), and a (town|village) without (them|any) (is|would be) a poor place indeed.',
   ],
   'beast.advice.passive': [
     'There is no (need|reason) to (fear|be afraid of) it; and (the|a) (hunter|cook) will be glad of it.',
@@ -189,7 +189,7 @@ export const POOLS = {
   'rule.rule': [
     'The faithful {taboo}.',
     'It is (the|a) rule of {faith} that the faithful {taboo}.',
-    '(Among|In) {faith}, the faithful {taboo}, and (they keep|keep) (it|the rule) (strictly|to the letter).',
+    'In {faith}, the faithful {taboo}, and (they keep|keep) (it|the rule) (strictly|to the letter).',
   ],
   'rule.why': [
     '(It is|This is) (an old|one of the oldest) (rules|customs) of the faith, (older|as old as) the (temples|first temples) of {realm}[, (and|) (no one|nobody) (living|) (knows|remembers) (why|how it began)].',

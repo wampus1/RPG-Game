@@ -159,10 +159,12 @@ export function writeBook(lore, entry) {
 // ------------------------------------------------------------ helpers
 // A clause made to follow "in 1102, ...": its first word lower-cased, if
 // it's not a name.
+// (Only the words that start a sentence and nothing else: never a name.)
+const STARTERS = new Set(['A', 'An', 'The', 'There', 'There\'s', 'Whoever', 'Raiders', 'Wolves', 'Spice', 'New', 'Most', 'Pilgrims', 'Folk', 'By', 'Its', 'Some', 'One', 'Every', 'Each']);
 function lowFirst(text, names) {
   const t = String(text).replace(/\.$/, '');
-  const w = t.split(/[\s,']/)[0];
-  if (names.has(w)) return t;
+  const w = t.split(/[\s,]/)[0];
+  if (names.has(w) || !STARTERS.has(w)) return t;
   return t.charAt(0).toLowerCase() + t.slice(1);
 }
 
@@ -208,7 +210,7 @@ export function plural(w) {
 }
 
 // What a hunter takes, as it's said: "feathers", but "raw meat".
-const dropWord = (d) => (/meat|leather|string|gel|dust|sulfur|salt|wool|silk|mushroom/.test(d) ? d : plural(d));
+const dropWord = (d) => (/meat|leather|string|gel|dust|sulfur|sulphur|salt|wool|silk|mushroom|ash|resin|moss|coal|gold coin|ink/.test(d) ? d : plural(d));
 
 const sentence = (s) => tidy(/[.!?]$/.test(s) ? s : `${s}.`);
 
@@ -262,7 +264,7 @@ function chapter(out, n, title) {
 }
 
 // ============================================================ the annals of a town
-const KIND_WORDS = { fire: 'Fire', flood: 'Flood', plague: 'Sickness', siege: 'Siege', famine: 'Hunger', omen: 'Omens', temple: 'The Temple', oath: 'Oaths', war: 'War', good: 'Good Years', bad: 'Hard Years', dungeon: 'Old Places', news: 'Recent Years', statue: 'Statues', drought: 'Drought', winter: 'Winter', fog: 'The Fog', wreck: 'The Wreck', lore: 'Remembered Things', founded: 'The Founding' };
+const KIND_WORDS = { battle: 'Battle', ceded: 'A New Allegiance', proclaimed: 'The Crown', fire: 'Fire', flood: 'Flood', plague: 'Sickness', siege: 'Siege', famine: 'Hunger', omen: 'Omens', temple: 'The Temple', oath: 'Oaths', war: 'War', good: 'Good Years', bad: 'Hard Years', dungeon: 'Old Places', news: 'Recent Years', statue: 'Statues', drought: 'Drought', winter: 'Winter', fog: 'The Fog', wreck: 'The Wreck', lore: 'Remembered Things', founded: 'The Founding' };
 
 GENRES.annals = {
   weight: 1.4,
@@ -291,8 +293,14 @@ GENRES.annals = {
     out.push(W.para('land', facts, { min: 2, max: 3 }));
     const first = h.entries.find((q) => q.kind === 'founded');
     out.push(W.para('founding', facts, { min: 3, max: 4, fixed: { arrive: sentence(first ? first.text : `${T.name} was founded by ${h.founder} in ${h.founded}`) } }));
-    // The years, a chapter to each few.
-    const list = h.entries.filter((q) => q.kind !== 'founded' && q.y <= meta.year);
+    // The years, a chapter to each few: the town's own history, and what
+    // the long past brought to it (see lore.js).
+    const list = [...h.entries.filter((q) => q.kind !== 'founded'), ...pastHere(lore, T, h)].filter((q) => q.y <= meta.year).sort((p, q) => p.y - q.y);
+    // (A town given up in an old war swore its first oath to the realm that
+    // gave it up.)
+    for (const w of lore.wars.filter((q) => q.ceded === T.s)) {
+      for (const q of list) if (q.kind === 'realm' && /swore itself/.test(q.text) && q.y < w.end) q.text = q.text.replace(/to the .*\.$/, `to ${w.loser.name}.`);
+    }
     const per = list.length > 6 ? 3 : 2;
     for (let i = 0; i < list.length; i += per) {
       const part = list.slice(i, i + per);
@@ -312,7 +320,7 @@ GENRES.annals = {
     }
     // Today.
     chapter(out, n++, `${T.name} in the Year ${meta.year}`);
-    const state = T.s.condition === 'prosperous' ? rng.pick(['prosperous and growing', 'busier than it has ever been', 'thriving']) : T.s.condition === 'poor' ? rng.pick(['poorer than it was', 'going through hard times', 'struggling']) : rng.pick(['much as it has always been', 'a fair place to live', 'quiet and well kept']);
+    const state = T.s.condition === 'prosperous' ? rng.pick(['prosperous and growing', 'busier than it has ever been', 'thriving']) : T.s.condition === 'poor' ? rng.pick(['poorer than it was', 'hard pressed', 'struggling']) : rng.pick(['much as it has always been', 'a fair place to live', 'quiet and well kept']);
     const pools = T.realm ? {} : { realm: 'present.free' };
     out.push(W.para('present', { ...facts, state }, { min: 3, max: 4, pools }));
     out.push('~');
@@ -322,6 +330,8 @@ GENRES.annals = {
   event(W, lore, T, q, facts, names, rng) {
     const kind = kindOf(q);
     let text = q.kind === 'news' || q.kind === 'statue' ? null : lowFirst(q.text, names);
+    // (What the long past brought: the battle's own words, and its war.)
+    const war = q.war ? { war: q.war.name, battle: q.b ? q.b.name : null, winner: q.b ? q.b.winner.name : null, loser: q.b ? q.b.loser.name : null, victor: q.war.victor ? q.war.victor.name : null, loser2: q.war.loser ? q.war.loser.name : null } : {};
     let when = null;
     let more = {};
     // (An old place: its whole story, as the town tells it.)
@@ -335,6 +345,7 @@ GENRES.annals = {
     // (A thing that befell it, not a thing that was done: "A hungry winter:
     // the snow lay till spring...")
     if (text && /^(a|an|the) [^,.;:]{0,40}:/i.test(text)) when ||= rng.pick([`In ${q.y} came ${text}`, `The year ${q.y} brought ${text}`]);
+    if (text && (q.war || q.land || q.kind === 'proclaimed')) when ||= `In ${q.y}, ${text}`;
     when ||= text ? rng.pick([`In the year ${q.y}, ${text}`, `In ${q.y}, ${text}`, `It was in ${q.y} that ${text}`]) : rng.pick([`In ${q.y}, the rolls of ${T.name} record: "${q.text.replace(/\.$/, '')}."`, `The rolls of ${T.name} for ${q.y} say only this: "${q.text.replace(/\.$/, '')}."`]);
     // What else happened then, elsewhere.
     // (What else happened then: on the same land first.)
@@ -347,9 +358,34 @@ GENRES.annals = {
       if (W.has(`event.${mv}.${kind}`)) pools[mv] = `event.${mv}.${kind}`;
       else pools[mv] = `event.${mv}.${/fire|flood|plague|siege|famine|drought|winter|fog|wreck/.test(kind) ? 'bad' : 'lore'}`;
     }
-    return W.para('event', { ...facts, ...link, ...more, year: String(q.y) }, { min: 2, max: 5, fixed: { when: sentence(when) }, pools });
+    return W.para('event', { ...facts, ...link, ...more, ...war, year: String(q.y) }, { min: 2, max: 5, fixed: { when: sentence(when) }, pools });
   },
 };
+
+// What the long past brought to a town: its realm proclaimed in it; the
+// battles fought at it, and the peace that gave it away; the winters and
+// fevers that fell on its whole land. (Only after it was founded.)
+const LAND_KINDS = { winter: 'winter', fever: 'plague', comet: 'omen', quake: 'bad', blight: 'famine', locust: 'famine' };
+function pastHere(lore, T, h) {
+  const out = [];
+  const after = (y) => y > h.founded + 1;
+  const R = T.realm;
+  if (R && R.capital === T.s && after(R.founded)) out.push({ y: R.founded, kind: 'proclaimed', text: `${cap(R.name)} was proclaimed in ${T.name}, and ${R.kings[0] ? R.kings[0].full : 'its first ruler'} took the throne in the hall.` });
+  for (const w of lore.wars) {
+    if (w.live) continue;
+    for (const b of w.battles) {
+      if (b.at !== T.s || !after(b.y)) continue;
+      const siege = /^the Siege of /.test(b.name);
+      out.push({ y: b.y, kind: siege ? 'siege' : 'battle', war: w, b, text: siege ? `${cap(b.name)} was laid in ${w.name}, and ${b.winner === (lore.realmOf(T.s) || R) ? `${T.name} held out against ${b.loser.name}` : `the town was taken by ${b.winner.name}`}.` : `${cap(b.name)} was fought outside ${T.name}, in ${w.name}, and the day went to ${b.winner.name}.` });
+    }
+    if (w.ceded === T.s && after(w.end)) out.push({ y: w.end, kind: 'ceded', war: w, text: `By ${w.peace}, which ended ${w.name}, ${T.name} passed from ${w.loser.name} to ${w.victor.name}.` });
+  }
+  for (const e of lore.events) {
+    if (!LAND_KINDS[e.kind] || e.land !== T.island || !after(e.y)) continue;
+    out.push({ y: e.y, kind: LAND_KINDS[e.kind], text: `${cap(e.text.replace(/^the /, 'the '))}.`, land: true });
+  }
+  return out;
+}
 
 // What kind of thing happened (for what's said of it): what the history
 // calls it, and for the rest, whether it went well or ill.
@@ -478,6 +514,14 @@ GENRES.realm = {
     out.push(W.para('rfaith', facts, { min: 3, max: 4 }));
     chapter(out, n++, 'The Towns of the Realm');
     out.push(W.para('towns', facts, { min: 2, max: 3 }));
+    // (A word on each of the greater towns.)
+    const some = R.towns.filter((q) => q !== R.capital).sort((p, q) => (q.type === 'city') - (p.type === 'city') || (q.type === 'town') - (p.type === 'town')).slice(0, 4);
+    const each = some.map((q) => {
+      const T = lore.town(q);
+      const way = lore.wayTo(R.capital, q);
+      return W.say('towns.one', { ...facts, one: q.name, onekind: T.kind, oneground: T.ground, onewater: T.water, onefamous: T.hist ? T.hist.famous : null, oneway: `${way.days} ${way.dir}`, onedish: T.dishes[0] ? T.dishes[0].toLowerCase() : null }, { want: ['one'] });
+    }).filter(Boolean);
+    if (each.length) out.push(each.join(' '));
     if (wars.length) {
       chapter(out, n++, `${R.short} at War`);
       for (const w of wars.slice(-3)) {

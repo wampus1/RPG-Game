@@ -91,6 +91,9 @@ export class Lore {
     this.seed = game.seed >>> 0;
     this.day = game.day;
     this.now = yearOf(game.day);
+    // (The long past is reckoned from the year the world began, and stays
+    // put however long it's played.)
+    this.base = yearOf(0);
     this.realms = [];
     this.byCiv = new Map();
     this.townCache = new Map();
@@ -120,8 +123,13 @@ export class Lore {
       if (st && st.head) R.ruler = `${R.title} ${st.headName || 'the ruler'}`;
       else if (st && st.ruler !== null && st.ruler !== undefined && realms.rulerName) R.ruler = realms.rulerName(civ);
       // When it was proclaimed, and the people came; and who has reigned.
-      R.founded = this.now - rng.int(95, 250) - (capital.type === 'city' ? 20 : 0);
-      R.came = R.founded - rng.int(40, 160);
+      // (Proclaimed after its capital was built, before any of its towns
+      // swore to it; its people came before any of their towns was
+      // founded: see history.js, whose cities are 280 to 520 years old.)
+      const hi = this.base - 212;
+      const lo = Math.min(hi, Math.max(this.base - 276, this.foundedOf(capital) + 4));
+      R.founded = rng.int(lo, hi);
+      R.came = this.base - 520 - rng.int(15, 140);
       R.cameHow = rng.pick(STYLE_CAME[style] || STYLE_CAME.vale);
       R.kings = this.dynasty(R, rng);
       this.realms.push(R);
@@ -138,18 +146,33 @@ export class Lore {
     const style = R.style;
     const eps = [...(STYLE_EPITHETS[style] || []), 'the Elder', 'the Bold', 'the Wise', 'the Just', 'the Young', 'the Pious', 'the Builder', 'the Unready', 'the Peacemaker', 'the Grey', 'the Lame', 'Longreign'];
     let first = true;
-    while (y < this.now - 4) {
+    while (y < this.base - 4) {
       const len = rng.int(7, 34);
-      const nm = first && FOUNDERS[style] ? rng.pick(FOUNDERS[style]) : personName(rng, style).first;
+      let nm = first && FOUNDERS[style] ? rng.pick(FOUNDERS[style]) : personName(rng, style).first;
+      // (No two of a line with one name: the chronicles would muddle them.)
+      for (let t = 0; t < 6 && out.some((q) => q.name === nm); t++) nm = personName(rng, style).first;
       // (No two of a line called the same.)
       const ep = rng.pick(eps.filter((e) => !out.some((q) => q.epithet === e)));
-      const k = { name: nm, epithet: ep || rng.pick(eps), from: y, to: Math.min(this.now - 1, y + len), how: rng.pick(['died in their bed', 'died in their bed', 'fell from a horse', 'died of a fever', 'gave up the throne in old age', 'died in battle', 'was poisoned, some say', 'drowned crossing a river']) };
+      const k = { name: nm, epithet: ep || rng.pick(eps), from: y, to: Math.min(this.base - 1, y + len), how: rng.pick(['died in their bed', 'died in their bed', 'fell from a horse', 'died of a fever', 'gave up the throne in old age', 'died in battle', 'was poisoned, some say', 'drowned crossing a river']) };
       k.full = `${R.title === 'Monarch' ? '' : `${R.title} `}${k.name} ${k.epithet}`;
       out.push(k);
       y = k.to + 1;
       first = false;
     }
     return out;
+  }
+
+  // When a town was founded: its history's year if it has one; otherwise
+  // the year its history will give it (the same first draw history.js
+  // makes), as near as can be told now.
+  foundedOf(s) {
+    const L = this.game.world.layouts ? this.game.world.layouts.get(s.id) : null;
+    const h = L && L.econ && L.econ.history;
+    if (h) return h.founded;
+    if (s.founding) return yearOf(s.founding.day);
+    const rng = new RNG(hash4(s.seed >>> 0, 0x415f));
+    const age = s.type === 'city' ? rng.int(280, 520) : s.type === 'town' ? rng.int(110, 300) : rng.int(35, 150);
+    return this.base - age;
   }
 
   realmOf(s) {
@@ -192,7 +215,7 @@ export class Lore {
       const rs = this.realms.filter((R) => R.island === land);
       const oldest = Math.min(...rs.map((R) => R.came));
       for (const ev of rng.shuffle(GREAT_EVENTS.slice()).slice(0, rng.int(2, 3))) {
-        const y = rng.int(oldest + 10, this.now - 6);
+        const y = rng.int(oldest + 10, this.base - 6);
         this.events.push({ y, kind: ev.k, name: ev.name, text: ev.text(LANDS[land] || 'the island'), realms: rs.map((R) => R.id), land });
       }
     }
@@ -214,7 +237,7 @@ export class Lore {
   // An old war (A started it, against B): its battles, who won, the peace.
   oldWar([A, B], rng) {
     const lo = Math.max(A.founded, B.founded) + 5;
-    const hi = this.now - 12;
+    const hi = this.base - 12;
     if (hi <= lo) return null;
     const start = rng.int(lo, hi);
     // (Not two wars at once between the same two.)
@@ -222,10 +245,12 @@ export class Lore {
     const C = CAUSES.filter((c) => c.when(A, B));
     const cause = rng.pick(C.length ? C : CAUSES.slice(-3));
     const len = rng.int(1, 9);
-    const end = Math.min(this.now - 2, start + len);
+    const end = Math.min(this.base - 2, start + len);
     // Where it was fought: the towns nearest the other's capital.
     const nearTo = (towns, to) => towns.slice().sort((p, q) => Math.hypot(p.cx - to.cx, p.cz - to.cz) - Math.hypot(q.cx - to.cx, q.cz - to.cz));
-    const front = [...nearTo(B.towns, A.capital).slice(0, 3), ...nearTo(A.towns, B.capital).slice(0, 2)];
+    // (Only towns standing then.)
+    const front = [...nearTo(B.towns, A.capital).slice(0, 3), ...nearTo(A.towns, B.capital).slice(0, 2)].filter((s) => this.foundedOf(s) < start - 5);
+    if (!front.length) return null;
     let score = 0;
     const battles = [];
     const nb = rng.int(2, 4);
@@ -247,7 +272,7 @@ export class Lore {
     let terms = 'white';
     let ceded = null;
     if (victor) {
-      const cand = nearTo(victor.towns.filter((s) => s !== victor.capital), loser.capital);
+      const cand = nearTo(victor.towns.filter((s) => s !== victor.capital && this.foundedOf(s) < start), loser.capital);
       if (cand.length && rng.chance(0.55)) {
         terms = 'ceded';
         ceded = cand[0];
@@ -391,7 +416,7 @@ export class Lore {
   // ------------------------------------------------------------ beasts
   beasts(land) {
     return Object.entries(SPECIES)
-      .filter(([k, sp]) => (land === 'thessa' ? HOME_BEASTS.includes(k) : sp.isle === land && !sp.boss))
+      .filter(([k, sp]) => (land === 'thessa' ? HOME_BEASTS.includes(k) : sp.isle === land && !sp.boss && !sp.under && !sp.minion))
       .map(([k, sp]) => ({ key: k, ...sp, drops: (sp.drops || []).map(([it]) => (ITEMS[it] ? ITEMS[it].name.toLowerCase() : it.replace(/_/g, ' '))) }));
   }
 

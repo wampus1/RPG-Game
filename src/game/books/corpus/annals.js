@@ -101,7 +101,7 @@ export const POOLS = {
     '{town} stands (in|among) {ground}, (on|toward) the (edge|heart) of {land}.',
     'The (land|country) (about|around) {town} is {ground}, with {water} (running|winding) (close by|past its gates|below it).',
     'Those who (come|travel) to {town} (come|pass) (through|across) {ground}[, (and|with) {water} (beside|alongside) them (the last mile|for the last mile)].',
-    '(Look|Seen) from (the hills|a distance|the road), {town} is (a cluster|a huddle|a smudge) of (roofs|smoke) (in|among) {ground}.',
+    '(Seen|Looked at) from (the hills|a distance|the road), {town} is (a cluster of roofs|a huddle of roofs|a smudge of smoke) (in|among) {ground}.',
   ],
   'land.before': [
     'Before (there was a town|the founding|anyone settled there), the (place|land) was (nothing but|only) {ground}, (crossed|walked) by (deer|herds|hunters) and (little else|no one who stayed).',
@@ -168,7 +168,7 @@ export const POOLS = {
   'event.detail.bad': [
     '(Folk|Families) went (hungry|short) that (year|winter), and more than one (family|household) (left|gave up and left) {town} for good.',
     'The (worst|hardest) of it (fell|came) on the poor, as (it always does|the worst always does), and the {clergies} of {god} (fed|kept) (whom|those) they could.',
-    '(It|The year) (was|is) (remembered|spoken of) (still|to this day) as (a black year|the black year|the bad year) in {town}.',
+    '(It|The year) is (remembered|spoken of) (still|to this day) as (a black year|the black year|the bad year) in {town}.',
     '(No one|Nobody) (could|can) (remember|say) (a worse|a harder) (time|year), (and|though) (some|the old folk) (said|swore) (that|) (worse|harder) (was|were) (to come|coming).',
   ],
   'event.after.bad': [
@@ -193,6 +193,29 @@ export const POOLS = {
   ],
   'event.after.war': [
     '(Their|The) names (are|were) (cut|carved) (on|into) a stone (on|by) the square, and (each year|every year) (flowers|garlands) are (laid|left) (at its foot|there) (on|for) {feast}.',
+  ],
+  // (A battle by the town, in one of the old wars.)
+  'event.detail.battle': [
+    'The (fighting|battle) (came|spread) (right|) up to the (fields|gates) of {town}, and (the townsfolk|folk) (watched|saw) it from the (walls|rooftops) (with their hearts in their mouths|in silence).',
+    'The (wounded|dying) were (carried|brought) into {town} (by|on) the (cartload|wagonload), and (every|each) (house|hall) (became|was made) a (hospital|sickroom) (that|for a) (night|week).',
+    '(Arrows|Spearheads) (from|of) that (day|battle) (are|have been) (still|) (turned up|found) by the (ploughs|ploughmen) (in|of) the fields (outside|about) {town}.',
+  ],
+  'event.after.battle': [
+    'The dead (of both sides|of either side) were buried (together|side by side) in (a|one) long grave (outside|by) the {town} road, (and|where) (a|the) (cairn|stone) (marks|stands over) (it|them) (still|to this day).',
+    '(For|In) (years|a generation) (after|afterwards), (no one|nobody) in {town} (would|could) (walk|go) (that|the) (field|road) (after dark|at night).',
+  ],
+  // (Given away in a peace, to another realm.)
+  'event.detail.ceded': [
+    '(Nobody|No one) in {town} (was|had been) asked, (and|but) the (banner|standard) of {victor} (went up|was raised) over the (gate|hall) (before|by) the (month|season) was out.',
+    '(Some|Many) (folk|families) (left|went) (for|over the border to) {loser2} (rather than|sooner than) (swear|live under) (the|a) new (oath|crown), (and|but) (most|the rest) (stayed|stayed on), as (most folk|people) (do|always do).',
+  ],
+  'event.after.ceded': [
+    '(The|Its) (old folk|oldest folk) (still|) (speak|talk) of (the|that) (year|peace) (bitterly|with a shrug), (and|but) their grandchildren (know|have known) no other (crown|realm).',
+  ],
+  // (The realm proclaimed in it.)
+  'event.detail.proclaimed': [
+    '(The|Its) (chiefs|heads of the great families) (came|rode) (in|into {town}) from (every|all) (corner|part) of {land} to (see|swear to) the (new|first) ruler, and {town} (feasted|was feasting) (for|through) a (week|fortnight).',
+    '(From|After) (that day|then), {town} (has been|was) the seat of the (realm|crown), and (its|the) (hall|great hall) (grew|was rebuilt) (to match|in stone).',
   ],
   // (An old place gone bad.)
   'event.detail.dungeon': [
@@ -269,7 +292,7 @@ export const POOLS = {
     'The (spring|next spring) (came|was) (late|kind), and the fields were (sown|planted) (again|from seed begged from (neighbours|the next valley)).',
   ],
   'event.detail.omen': [
-    '(Some|Many) (said|took) it (for|as) (a sign|an omen) (of|that) (war|plague|great change) (was coming|to come), (and|while) others (said|thought) it (was|meant) nothing at all.',
+    '(Some|Many) took it for (a sign|an omen) of (war|plague|great change) to come, (and|while) others (said|thought) it (was|meant) nothing at all.',
     'The {clergy} of {god} (watched|kept watch on) it (every night|night after night), but could not (say|tell) whether it (meant|was) good or ill.',
     '(Children|Folk) (stayed|were kept) (indoors|in) after dark, and (the|every) (temple|shrine) was (full|crowded) (every|each) night (it shone|it hung there).',
   ],
@@ -298,7 +321,7 @@ export const POOLS = {
   ],
   'event.detail.winter': [
     'The (snow|drifts) (lay|came) (to|over) the (eaves|doors), and (folk|the people) (went|passed) (from house to house|between houses) by (tunnels|paths) (dug|cut) (through|in) (it|the snow).',
-    'The (watch|night watch) (kept|fed) the fires (high|burning) (all night|through the dark), (and|while) (the wolves|the pack) (called|howled) (from|in) the (trees|forest) (close by|outside the walls).',
+    'The (watch|night watch) kept the fires (high|burning) (all night|through the dark), (and|while) (the wolves|the pack) (called|howled) (from|in) the (trees|forest) (close by|outside the walls).',
   ],
   'event.detail.fog': [
     'The fog (lay|sat) so (thick|heavy) (that|) (folk|the townsfolk) (could not|could hardly) see their own hands (before|in front of) their faces.',
@@ -319,7 +342,7 @@ export const POOLS = {
     '(The table|The food) of {town} is the (food|table) of the {people}: {dish} (above all|first of all), and {dish2}, (washed down|taken) with {drink}.',
     'No (feast|table) in {town} is (thought|counted) (complete|whole) without {dish}, and a guest (who refuses|that refuses) it (is|will be) (thought|counted) (rude|ill-mannered).',
     '(Every|Each) (house|kitchen) in {town} (has|keeps) its own (way with|way of making) {dish}, and (each|every one) (swears|holds) (theirs|its own) (is|to be) the (only|true) (one|way).',
-    '{drink} is (drunk|taken) (at every meal|with everything) in {town}, (by|and by) (young and old|old and young) (alike|) (and|but) (strangers|visitors) (should|had better) (go carefully|take care) with it.',
+    '{drink} is (drunk|taken) (at every meal|with everything) in {town}, by (young and old|old and young) alike; but (strangers|visitors) (should|had better) (go carefully|take care) with it.',
   ],
   'ways.faith': [
     'The faithful of {town} keep {faith}, and honour {god}, whose (sign|token) is {symbol}.',
@@ -356,7 +379,7 @@ export const POOLS = {
   'present.realm': [
     '{town} (is sworn|swears) to {realm}, (and|whose) {ruler} (rules|reigns) from {capital}.',
     '(Today|Now) {town} (is|stands) (among|one of) the (towns|places) of {realm}, (under|ruled by) {ruler}.',
-    'The (banner|standard) of {realm} (flies|hangs) (over|above) the (hall|gate) of {town}, (and|) its (taxes|tithes) (go|are sent) to {capital}.',
+    'The (banner|standard) of {realm} (flies|hangs) (over|above) the (hall|gate) of {town}, and its (taxes|tithes) (go|are sent) to {capital}.',
   ],
   'present.free': [
     '{town} (owes|swears) (allegiance|fealty) to no (realm|crown), and (its people|the townsfolk) are (proud|glad) of it.',
@@ -364,7 +387,7 @@ export const POOLS = {
   ],
   'present.now': [
     '(Today|In our own day) {town} is {state}, (and|but) (its people|the townsfolk) (remember|have not forgotten) (where they came from|the hard years).',
-    'The {towntype} (that|which) {founder} (founded|began) (is|has become) {state}, and (I|the old folk) (think|believe) {founder} would (know|recognise) (little|hardly anything) of it now.',
+    'The {towntype} (that|which) {founder} (founded|began) is (today|now) {state}, and (I|the old folk) (think|believe) {founder} would (know|recognise) (little|hardly anything) of it.',
     '(Some|A good many) (things|ways) in {town} have changed over the years, (but|and) (the|its) (market|square) (is|stands) (where|just where) it (always was|has always been).',
   ],
   'present.hope': [

@@ -9847,6 +9847,17 @@ with a page or more to each chapter, and you read it as an open book.
   as current wars, old places that have been cleared, and recent news.
 - **Shelves hold local books.** A shelf in a town most often holds books
   about that town, its realm or its land.
+- **Town histories include the shared past.** A town's history also covers
+  what the shared past brought to it: its realm being proclaimed there,
+  battles fought outside it, a peace that gave it to another realm, and
+  the winters and fevers that struck its whole land. A town that changed
+  hands is recorded as first swearing to the realm it belonged to at the
+  time.
+- **The past fits the towns.** Each people arrives before any of its towns
+  is founded. Each realm is proclaimed after its capital was built and
+  before any of its towns swore to it. Battles are fought only at towns
+  that existed then. The past is dated from the world's first year, so it
+  doesn't shift as years go by in the game.
 
 ### The Markov chains
 

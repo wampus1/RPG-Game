@@ -79,7 +79,7 @@ export const POOLS = {
     'The (old|miners\') (rails|tracks) (still|) (run|lead) down into the dark, and the miners\' (picks|carts) (lie|stand) where they were left.',
   ],
   'oldplace.what.crypt': [
-    'The chapel (above|over it) has (fallen in|long since fallen), and the stair down (goes|runs) under (black|still) water (before the bottom|halfway down).',
+    'The chapel (above|over it) has (fallen in|long since fallen), and the stair down (goes|runs) under (black|still) water (before the bottom|partway).',
     'The vaults are (half drowned|full of black water), and the (tombs|niches) (stand|lie) (open|empty) along the walls.',
   ],
   'oldplace.what.holdout': [
@@ -89,7 +89,7 @@ export const POOLS = {
     'The (hollow|way in) (opens|lies) (under|among) the roots of (a|the) (great|oldest) (tree|trees) (in|of) the wood, where the air smells (green|of moss and rot).',
   ],
   'oldplace.what.forge': [
-    'The (deep|forge) (is|was) (hot|warm) (even now|still), (and|) (the|its) (halls|galleries) (glow|are lit) (red|dull red) (from|with) (fires|embers) (no one|nobody) (living|) (has fed|feeds).',
+    'The (deep|forge) (is|was) (hot|warm) (even now|still), and (the|its) (halls|galleries) (glow|are lit) (red|dull red) (from|with) (fires|embers) (no one|nobody) (living|) (has fed|feeds).',
   ],
   'oldplace.what.grotto': [
     'The sea caves fill with the tide, and can only be (entered|gone into) at the lowest tides.',
@@ -125,7 +125,7 @@ export const POOLS = {
     '{clearedby} (went down|went in) and (killed|put down) (what|the thing that) (kept|ruled) it, and the way in (has|) (fallen|stayed) shut (since|ever since).',
   ],
   'oldplace.warn': [
-    '(Do not|Never) go (in|down) (alone|by night), and (do not|never) (take|carry off) (anything|what you find) (that|which) (was|is) (left|laid) for the dead.',
+    '(Do not|Never) go (in|down) (alone|by night), and never (take|carry off) anything that was (left|laid) for the dead.',
     'Those who go in for (gold|treasure) come out with (nothing but their lives|less than they took in), if they come out at all.',
     'This is no place for the (curious|careless), and I say so as plainly as I can.',
   ],

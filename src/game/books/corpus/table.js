@@ -110,7 +110,7 @@ export const POOLS = {
   ],
   'dish.how': [
     '{they} {be} {how}.',
-    '(To make {it}|Properly made), {they} {be} {how}.',
+    'Properly made, {they} {be} {how}.',
     'The {people} (say|hold) that {they} must be {how}, and that (any|every) other way (spoils|ruins) {it}.',
   ],
   'dish.when': [
