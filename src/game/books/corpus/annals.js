@@ -9,6 +9,8 @@
 export const FLOWS = {
   preface: [
     ['purpose', 'sources', 'humble'],
+    ['purpose', 'sources', 'pious', 'humble'],
+    ['pious', 'purpose', 'sources'],
     ['purpose', 'debt', 'sources'],
     ['sources', 'purpose', 'dedicate'],
     ['purpose', 'sources', 'debt', 'humble'],
@@ -53,6 +55,8 @@ export const FLOWS = {
     ['now', 'realm', 'end'],
     ['realm', 'now', 'hope', 'end'],
     ['now', 'hope', 'end'],
+    ['realm', 'people', 'now', 'end'],
+    ['people', 'now', 'hope', 'end'],
   ],
 };
 
@@ -88,6 +92,11 @@ export const POOLS = {
     'I (do not claim|make no claim) that (this book|it) is (complete|the whole of it): there (are|will always be) more (stories|tales) than any one (book|writer) can (hold|gather).',
     'If (I have|this book has) (left out|forgotten) (anything|anyone) that (matters|ought to be in it), the (fault|blame) is mine (alone|and nobody else\'s).',
     'I (am|was) no (scholar|great writer), and (this|it) (is|was) (a plain book|plainly written); but (it is|everything in it is) (true|as true as I could make it).',
+  ],
+  'preface.pious': [
+    'I began this book with a prayer to {god}, and I (end|finish) it the same way.',
+    '{god} (gave|has given) me the (years|patience) to (finish|write) it, and I (give thanks|am thankful) for it.',
+    'I (wrote|have written) (it|this book) (in|by) the (light|lamp) of the temple of {god}, (between|after) the (evening|night) (prayers|rites).',
   ],
   'preface.dedicate': [
     'I (give|dedicate) (this book|these pages) to the (people|folk) of {histtown}, who (made|have made) its history and (seldom|rarely) (wrote|write) it down.',
@@ -388,7 +397,12 @@ export const POOLS = {
   'present.now': [
     '(Today|In our own day) {town} is {state}, (and|but) (its people|the townsfolk) (remember|have not forgotten) (where they came from|the hard years).',
     'The {towntype} (that|which) {founder} (founded|began) is (today|now) {state}, and (I|the old folk) (think|believe) {founder} would (know|recognise) (little|hardly anything) of it.',
-    '(Some|A good many) (things|ways) in {town} have changed over the years, (but|and) (the|its) (market|square) (is|stands) (where|just where) it (always was|has always been).',
+    '(Some|A good many) (things|ways) in {town} have changed over the years, but (the|its) (market|square) (is|stands) (where|just where) it (always was|has always been).',
+  ],
+  'present.people': [
+    '(Some|About) {souls} (souls|folk) live in {town} (today|now), and {mayor} (keeps|holds) its (hall|council).',
+    '{town} (counts|has) (some|about) {souls} (souls|people) (today|now), (under|and its council is led by) {mayor}.',
+    '(Today|Now) {mayor} (keeps|holds) the hall of {town}, and (some|about) {souls} (souls|folk) (call|have made) it home.',
   ],
   'present.hope': [
     'May {town} (stand|prosper) (as long again|another {age} years), and (its people|its children) with it.',

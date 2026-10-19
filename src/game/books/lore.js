@@ -153,7 +153,11 @@ export class Lore {
       for (let t = 0; t < 6 && out.some((q) => q.name === nm); t++) nm = personName(rng, style).first;
       // (No two of a line called the same.)
       const ep = rng.pick(eps.filter((e) => !out.some((q) => q.epithet === e)));
-      const k = { name: nm, epithet: ep || rng.pick(eps), from: y, to: Math.min(this.base - 1, y + len), how: rng.pick(['died in their bed', 'died in their bed', 'fell from a horse', 'died of a fever', 'gave up the throne in old age', 'died in battle', 'was poisoned, some say', 'drowned crossing a river']) };
+      const k = { name: nm, epithet: ep || rng.pick(eps), from: y, to: Math.min(this.base - 1, y + len), how: null };
+      // (Not two of a line dying the same way running, but in their beds.)
+      const hows = ['died in their bed', 'died in their bed', 'fell from a horse', 'died of a fever', 'gave up the throne in old age', 'died in battle', 'was poisoned, some say', 'drowned crossing a river', 'died in their sleep', 'died of a winter cough'];
+      const last = out.slice(-2).map((q) => q.how);
+      k.how = rng.pick(hows.filter((h) => h === 'died in their bed' || !last.includes(h)));
       k.full = `${R.title === 'Monarch' ? '' : `${R.title} `}${k.name} ${k.epithet}`;
       out.push(k);
       y = k.to + 1;

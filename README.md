@@ -9853,6 +9853,9 @@ with a page or more to each chapter, and you read it as an open book.
   the winters and fevers that struck its whole land. A town that changed
   hands is recorded as first swearing to the realm it belonged to at the
   time.
+- **Present-day details.** A book written this year says how many people
+  live in the town now and who keeps its hall. A book written by a priest
+  of the town's faith mentions its god in the preface.
 - **The past fits the towns.** Each people arrives before any of its towns
   is founded. Each realm is proclaimed after its capital was built and
   before any of its towns swore to it. Battles are fought only at towns

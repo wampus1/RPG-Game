@@ -26,6 +26,7 @@ import { loreOf, peopleOf, cap, bare, LANDS } from './lore.js';
 import { Writer, tidy } from './write.js';
 import { DISHES, DRINKS } from './corpus/table.js';
 import { MEATY, FISHY } from '../../sim/culture.js';
+import { alive, mayorOf } from '../../sim/econ.js';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI'];
 export const START_YEAR = yearOf(0);
@@ -285,7 +286,9 @@ GENRES.annals = {
     // Preface.
     const cite = rng.pick(citable(lore, meta, (e) => (e.subj.town === T.id && ['annals', 'deeps', 'road'].includes(e.genre)) || (T.realm && e.subj.realm === T.realm.id && ['realm', 'war'].includes(e.genre))));
     chapter(out, 0, 'To the Reader');
-    out.push(W.para('preface', { ...facts, ...citeFacts(cite) }, { min: 3, max: 4 }));
+    // (A writer of the clergy says a word for their god.)
+    const clergy = T.faith && meta.author.sign.includes(T.faith.clergy);
+    out.push(W.para('preface', { ...facts, ...citeFacts(cite) }, { min: 3, max: 5, pools: clergy ? {} : { pious: 'none' } }));
     out.push(`> ${meta.author.sign}, in the year ${meta.year}`);
     // The land, and the founding.
     let n = 1;
@@ -322,7 +325,15 @@ GENRES.annals = {
     chapter(out, n++, `${T.name} in the Year ${meta.year}`);
     const state = T.s.condition === 'prosperous' ? rng.pick(['prosperous and growing', 'busier than it has ever been', 'thriving']) : T.s.condition === 'poor' ? rng.pick(['poorer than it was', 'hard pressed', 'struggling']) : rng.pick(['much as it has always been', 'a fair place to live', 'quiet and well kept']);
     const pools = T.realm ? {} : { realm: 'present.free' };
-    out.push(W.para('present', { ...facts, state }, { min: 3, max: 4, pools }));
+    // (Written this year: who lives there now, and who keeps its hall.)
+    const nowF = {};
+    if (meta.year >= lore.now && T.L) {
+      const live = T.L.npcs.filter((r) => alive(r) && !r.migrated).length;
+      if (live > 8) nowF.souls = String(Math.round(live / 10) * 10);
+      const m = mayorOf(T.L);
+      if (m && m.name) nowF.mayor = `${m.name.first} ${m.name.last}`;
+    }
+    out.push(W.para('present', { ...facts, state, ...nowF }, { min: 3, max: 5, pools }));
     out.push('~');
     return out;
   },
