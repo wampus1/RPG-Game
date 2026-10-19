@@ -28,6 +28,7 @@ import { Bmp, sky as skyBands, stars as paintStars, mountains, hills, palm, bush
 import { humanoidSheet, SHEET_H } from '../render/sprites.js';
 import { present, caption, bigText, darkWords } from './intros.js';
 import { paintLeader, drawSquare, drawDoorway } from '../render/art_leader.js';
+import { paintBrigand, drawChase, drawCove, drawJetty } from '../render/art_brigand.js';
 
 const PW = VIEW_W / 2;
 const PH = VIEW_H / 2;
@@ -281,7 +282,9 @@ export function brigandInfo(game) {
   };
 }
 
-const BRIG = { SHOT1: 6.2, SPLASH1: 6.9, SHOT2: 8.0, STRIKE: 9.2, ACT2: 11.5, ANCHOR: 16.4, ASHORE: 18, BLACK: 22.5 };
+// The shots: the chase by moonlight (to ACT2); the cove at sunrise (to
+// CUT3); the jetty, close (to BLACK).
+const BRIG = { SHOT1: 6.2, SPLASH1: 6.9, SHOT2: 8.0, STRIKE: 9.2, ACT2: 11.5, ANCHOR: 15.0, BOAT: 15.8, CUT3: 18.6, BLACK: 25 };
 
 export function brigandScene(game, info) {
   const mate = info.hands[0];
@@ -295,11 +298,13 @@ export function brigandScene(game, info) {
   const lines = [
     [1.2, null, 'An hour before dawn, off a lonely coast.'],
     [3.4, mate, 'Merchantman, dead ahead! Fat and low in the water. She hasn\'t seen us.'],
-    [5.4, `Captain ${info.first}`, 'Run out the gun. Put one across her bow.'],
-    [BRIG.STRIKE, null, 'She strikes her colours without a fight.'],
+    [5.2, `Captain ${info.first}`, 'Run out the gun. Put one across her bow.'],
+    [BRIG.SHOT2 + 0.2, mate, 'And one more, to be sure of her!'],
+    [BRIG.STRIKE + 0.4, null, 'She strikes her colours without a fight.'],
     [BRIG.ACT2 + 0.6, null, `Sunrise over ${info.cove}, the haven of the Black Gull Brethren.`],
-    [14.5, info.chief, `There's ${info.first}! And a hold full of somebody else's silver!`],
-    [BRIG.ASHORE + 0.5, 'The brethren', 'Ha-harrr!'],
+    [BRIG.BOAT + 0.4, info.chief, `There's ${info.first}! And a hold full of somebody else's silver!`],
+    [BRIG.CUT3 + 0.6, 'The brethren', 'Ha-harrr! The captain\'s home!'],
+    [BRIG.CUT3 + 3.6, info.chief, `Welcome back, Captain. The haven's missed you.`],
   ];
   let art = null;
   return scene('brigand_intro', info, {
@@ -322,320 +327,51 @@ export function brigandScene(game, info) {
         this.an = true;
         g.audio?.play('chain');
       }
+      if (this.t > BRIG.CUT3 + 1.5 && !this.bang) {
+        this.bang = true;
+        g.audio?.play('boom');
+      }
     },
     draw(ctx) {
-      if (!art) art = paintSeas(info);
-      drawBrigand(ctx, this, art, lines);
+      if (!art) art = paintBrigand(info);
+      drawBrig(ctx, this, art, lines);
     },
   });
 }
 
-function paintSeas(info) {
-  const seed = info.seed;
-  // Night: the sky, the moon and its stars, far islands, the sea.
-  const N = new Bmp(PW, PH);
-  const HZ = 70;
-  skyBands(N, [[0, [8, 10, 30]], [40, [22, 28, 66]], [HZ, [58, 56, 104]]], 0, PW);
-  paintStars(N, HZ - 8, seed, { band: true, n: 120 });
-  const MX = 200;
-  const MY = 24;
-  for (let y = MY - 14; y <= MY + 14; y++) for (let x = MX - 14; x <= MX + 14; x++) {
-    const d = Math.hypot(x - MX, y - MY);
-    if (d <= 11) {
-      const n = fbm(x * 0.3, y * 0.3, seed + 2);
-      const lit = clamp01(1 - (x - MX + y - MY + 8) / 30);
-      N.set(x, y, mixC([180, 186, 200], [244, 240, 224], lit * 0.7 + (n > 0.58 ? -0.25 : 0)));
-    } else if (d < 14) N.set(x, y, [200, 200, 230], 0.25 * (1 - (d - 11) / 3));
-  }
-  hills(N, (x) => HZ - 4 - Math.max(0, Math.sin(x * 0.05) * 6 + Math.sin(x * 0.13 + 1) * 3) * (x < 120 ? 1 : 0.3), HZ, [[14, 16, 34], [20, 22, 44], [26, 28, 54], [36, 38, 70]], { seed: seed + 3, texture: 0.2 });
-  for (let y = HZ; y < PH; y++) {
-    const k = (y - HZ) / (PH - HZ);
-    for (let x = 0; x < PW; x++) {
-      const n = fbm(x * 0.04, y * 0.25, seed + 5) - 0.5;
-      N.set(x, y, mixC([30, 38, 82], [10, 18, 44], k + n * 0.25));
-    }
-  }
-  // Dawn: the sky alight, the sun on the sea, the cove's beach and its
-  // palms, the green behind.
-  const D = new Bmp(PW, PH);
-  const DZ = 62;
-  skyBands(D, [[0, [52, 40, 96]], [24, [196, 104, 120]], [48, [255, 170, 110]], [DZ, [255, 214, 150]]], 0, PW);
-  for (let y = DZ - 14; y <= DZ; y++) for (let x = 40; x <= 80; x++) {
-    const d = Math.hypot(x - 60, (y - DZ) * 1.0);
-    if (d < 11) D.set(x, y, mixC([255, 250, 220], [255, 200, 120], d / 11));
-  }
-  for (let y = DZ; y < PH; y++) {
-    const k = (y - DZ) / (PH - DZ);
-    for (let x = 0; x < PW; x++) {
-      const n = fbm(x * 0.05, y * 0.3, seed + 7) - 0.5;
-      let c = mixC([120, 110, 150], [30, 70, 110], k + n * 0.2);
-      if (Math.abs(x - 60 - (y - DZ) * 0.2) < 3 + k * 12 && hash2(x, y, seed) < 0.5 - k * 0.3) c = mixC(c, [255, 220, 160], 0.6);
-      D.set(x, y, c);
-    }
-  }
-  // The headland and the beach curving round the bay.
-  // (Rising gently out of the sea toward the right, wooded.)
-  hills(D, (x) => DZ + 30 - ease(clamp01((x - 128) / 70)) * (44 + Math.sin(x * 0.05) * 5), DZ + 30, [[30, 56, 40], [46, 84, 52], [70, 112, 60], [110, 150, 80]], { seed: seed + 9 });
-  const sandTop = (x) => (x < 120 ? 104 + (120 - x) * 0.9 : 104 - ease(clamp01((x - 120) / 90)) * 22 + Math.sin(x * 0.07) * 1.5);
-  for (let x = 0; x < PW; x++) {
-    const top = Math.round(Math.min(PH, sandTop(x)));
-    for (let y = top; y < PH; y++) {
-      const n = hash2(x, y, seed + 11) * 0.1 + fbm(x * 0.1, y * 0.1, seed) * 0.1;
-      D.set(x, y, y - top < 2 ? [250, 240, 210] : mixC([236, 206, 150], [200, 160, 110], (y - top) / 40 + n));
-    }
-  }
-  const leaf = [[20, 60, 30], [36, 92, 40], [60, 130, 50], [96, 170, 70], [150, 210, 100]];
-  const bark = [[70, 46, 30], [110, 80, 50], [140, 104, 66]];
-  bush(D, 200, DZ + 8, 40, 10, leaf, seed + 1);
-  bush(D, 240, DZ + 6, 30, 9, leaf, seed + 2);
-  for (const [x, hgt] of [[150, 30], [168, 38], [246, 36], [232, 28]]) palm(D, x, sandTop(x) + 3, hgt, leaf, bark, seed + x);
-  return { night: N.canvas(), dawn: D.canvas(), sandTop };
-}
-
-// A ship side-on, its waterline at (x, wy), facing right: `o.len` long,
-// hull and sails, `o.black` a pirate's.
-function ship(g, x, wy, o, t) {
-  const L = o.len;
-  const H = Math.round(L * 0.22);
-  const bob = Math.sin(t * 1.6 + x * 0.05) * 0.8;
-  wy = Math.round(wy + bob);
-  // The hull.
-  g.fillStyle = o.hull;
-  g.beginPath();
-  g.moveTo(x - L / 2, wy - H);
-  g.lineTo(x + L / 2 + 4, wy - H - 2);
-  g.lineTo(x + L / 2 - 4, wy);
-  g.lineTo(x - L / 2 + 4, wy);
-  g.closePath();
-  g.fill();
-  g.fillStyle = o.trim;
-  g.fillRect(Math.round(x - L / 2), wy - H, L + 2, 1);
-  // Gunports, lanterns.
-  for (let k = 0; k < o.ports; k++) {
-    g.fillStyle = '#0a0808';
-    g.fillRect(Math.round(x - L / 3 + k * (L / (o.ports + 1)) * 1.3), wy - H + 3, 2, 2);
-  }
-  if (o.lantern) {
-    glow(g, x - L / 2 + 2, wy - H - 3, 6, '#ffc060', 0.6);
-    g.fillStyle = '#ffe080';
-    g.fillRect(Math.round(x - L / 2 + 2), wy - H - 4, 1, 2);
-  }
-  // Masts and sails (struck: furled).
-  for (let m = 0; m < o.masts; m++) {
-    const mx = Math.round(x - L / 4 + m * (L / (o.masts + 0.5)));
-    const mh = Math.round(L * (m === 1 || o.masts === 1 ? 0.75 : 0.62));
-    g.fillStyle = '#3a2a1e';
-    g.fillRect(mx, wy - H - mh, 1, mh);
-    const furl = o.furl || 0;
-    if (furl < 1) {
-      const sw = Math.round(L * 0.16 * (1 - furl * 0.8));
-      const sh = Math.round(mh * 0.7 * (1 - furl));
-      const belly = Math.sin(t * 2 + m) * 0.8 + 2;
-      g.fillStyle = o.sail;
-      g.beginPath();
-      g.moveTo(mx - sw, wy - H - mh + 2);
-      g.lineTo(mx + sw, wy - H - mh + 2);
-      g.lineTo(mx + sw + belly, wy - H - mh + 2 + sh);
-      g.lineTo(mx - sw + belly, wy - H - mh + 2 + sh);
-      g.closePath();
-      g.fill();
-      g.fillStyle = o.sailShade;
-      g.fillRect(mx + sw - 1, wy - H - mh + 2, 2, sh);
-      if (o.skull && m === 0) {
-        g.fillStyle = '#e8e4d8';
-        g.fillRect(mx - 1, wy - H - mh + 4 + Math.floor(sh / 3), 3, 2);
-        g.fillRect(mx, wy - H - mh + 6 + Math.floor(sh / 3), 1, 1);
-      }
-    } else {
-      g.fillStyle = o.sail;
-      g.fillRect(mx - 4, wy - H - mh + 3, 9, 2);
-    }
-    // The colours at the top.
-    if (m === o.masts - 1 && o.flag) {
-      const wave = Math.sin(t * 6) > 0 ? 1 : 0;
-      g.fillStyle = o.flag;
-      g.fillRect(mx + 1, wy - H - mh - 1, 5, 3);
-      g.fillRect(mx + 6, wy - H - mh + wave - 1, 1, 2);
-      if (o.skull) {
-        g.fillStyle = '#e8e4d8';
-        g.fillRect(mx + 3, wy - H - mh, 1, 1);
-      }
-    }
-  }
-  // Foam at her bow, if she's under way.
-  if (o.speed) {
-    for (let i = 0; i < 6; i++) px(g, x + L / 2 - 2 + i * 0.5 + Math.sin(t * 9 + i), wy - 1 + (i % 2), '#e8f0ff', 0.6);
-    for (let i = 0; i < 10; i++) px(g, x - L / 2 - i * 2, wy + (i % 2), '#c8d8ff', 0.4 * (1 - i / 10));
-  }
-}
-
-function waves(g, t, top, col, seed) {
-  for (let y = top + 2; y < PH; y += 2 + Math.floor((y - top) / 18)) {
-    const k = (y - top) / (PH - top);
-    for (let i = 0; i < 18; i++) {
-      const x = ((hash4(seed, y, i) % PW) + t * (4 + k * 10) * (i % 2 ? 1 : -1) + PW * 4) % PW;
-      const w = 2 + Math.round(k * 5);
-      g.globalAlpha = 0.25 + k * 0.35;
-      g.fillStyle = col;
-      g.fillRect(Math.round(x), y, w, 1);
-    }
-  }
-  g.globalAlpha = 1;
-}
-
-function drawBrigand(ctx, sc, art, lines) {
+function drawBrig(ctx, sc, art, lines) {
   const info = sc.info;
   const t = sc.t;
-  const c = bufOf('brig');
+  const c = bufOf('brigand');
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  const act2 = t >= BRIG.ACT2;
-  if (!act2) {
-    g.drawImage(art.night, 0, 0);
-    // The moon's path on the water, glittering.
-    for (let i = 0; i < 40; i++) {
-      const y = 72 + ((i * 7) % 70);
-      const x = 200 + Math.sin(i * 1.7 + t * 2) * (2 + (y - 70) * 0.15);
-      px(g, x, y, '#e8ecff', 0.35 + 0.35 * Math.sin(t * 5 + i));
-    }
-    waves(g, t, 70, '#5a6aa8', 3);
-    // The merchantman, slow; your sloop running her down.
-    const struck = t > BRIG.STRIKE;
-    const mx = 156 + t * (struck ? 0.4 : 1.2);
-    ship(g, mx, 92, { len: 50, hull: '#4a3020', trim: '#8a6a3a', sail: '#a8acc0', sailShade: '#6e7490', masts: 3, ports: 4, lantern: true, flag: struck ? '#f0f0f0' : '#2f6f8f', furl: clamp01((t - BRIG.STRIKE) / 1.5), speed: !struck }, t);
-    const sx = lerp(-40, mx - 52, ease(clamp01(t / 7.5)));
-    ship(g, sx, 108, { len: 40, hull: '#1a161c', trim: '#3a2a2a', sail: '#22202a', sailShade: '#121016', masts: 1, ports: 2, flag: info.flag, skull: true, speed: true }, t);
-    // The shots: a flash at her bow, smoke, and the splash.
-    for (const [at, hit] of [[BRIG.SHOT1, 0], [BRIG.SHOT2, 1]]) {
-      const s = t - at;
-      if (s < 0 || s > 3) continue;
-      const bx = sx + 20;
-      const by = 100;
-      if (s < 0.25) glow(g, bx + 3, by, 12, '#ffb040', 0.9 * (1 - s / 0.25));
-      for (let i = 0; i < 7; i++) {
-        const r = 2 + s * 6 + i;
-        g.globalAlpha = Math.max(0, 0.5 - s * 0.18);
-        g.fillStyle = i % 2 ? '#c8c4c0' : '#8a8684';
-        g.beginPath();
-        g.arc(bx + 4 + s * 6 + i * 1.5, by - s * 3 - i * 0.6, r * 0.5, 0, Math.PI * 2);
-        g.fill();
-      }
-      g.globalAlpha = 1;
-      // The splash: across her bow, the first; the second, through her sail.
-      const sp = s - 0.7;
-      if (sp > 0 && sp < 1.4 && !hit) {
-        const hgt = Math.sin(clamp01(sp / 1.4) * Math.PI) * 14;
-        g.fillStyle = '#e8f0ff';
-        g.fillRect(Math.round(mx + 32), Math.round(92 - hgt), 2, Math.round(hgt));
-        g.fillRect(Math.round(mx + 31), Math.round(92 - hgt * 0.6), 4, 2);
-      }
-      if (sp > 0 && hit) {
-        for (let i = 0; i < 6; i++) px(g, mx + Math.sin(i) * 4, 70 + sp * 10 + i * 2, '#e8e0cc', Math.max(0, 1 - sp));
-      }
-    }
+  g.clearRect(0, 0, PW, PH);
+  let zoom = 1;
+  let fx = PW / 2;
+  let fy = PH / 2;
+  const since = (at) => (t >= at ? t - at : -1);
+  if (t < BRIG.ACT2) {
+    drawChase(g, art, { t, gain: ease(clamp01(t / 10.5)), shot1: since(BRIG.SHOT1), shot2: since(BRIG.SHOT2), struck: since(BRIG.STRIKE), look: info.look });
+    zoom = 1 + 0.06 * ease(clamp01((t - 5) / 5));
+    fx = lerp(PW / 2, 150, ease(clamp01((t - 5) / 5)));
+    fy = 92;
+  } else if (t < BRIG.CUT3) {
+    const k = t - BRIG.ACT2;
+    drawCove(g, art, { t: k, come: clamp01(k / (BRIG.ANCHOR - BRIG.ACT2)), furled: t > BRIG.ANCHOR - 0.3, anchor: since(BRIG.ANCHOR), boat: t > BRIG.BOAT ? (t - BRIG.BOAT) / 2.4 : 0, cheer: clamp01((t - BRIG.BOAT - 1.4) / 0.6), look: info.look });
+    zoom = 1 + 0.12 * ease(clamp01((t - BRIG.BOAT) / 2.6));
+    fx = lerp(PW / 2, 150, ease(clamp01((t - BRIG.BOAT) / 2.6)));
+    fy = lerp(PH / 2, 104, ease(clamp01((t - BRIG.BOAT) / 2.6)));
   } else {
-    g.drawImage(art.dawn, 0, 0);
-    const s2 = t - BRIG.ACT2;
-    waves(g, t, 62, '#fff0d0', 9);
-    // The sloop coming home, her sail furled at the anchorage.
-    const ax = lerp(-30, 70, ease(clamp01(s2 / (BRIG.ANCHOR - BRIG.ACT2))));
-    const anchored = t > BRIG.ANCHOR;
-    ship(g, ax, 92, { len: 40, hull: '#1a161c', trim: '#3a2a2a', sail: '#22202a', sailShade: '#121016', masts: 1, ports: 2, flag: info.flag, skull: true, speed: !anchored, furl: clamp01((t - BRIG.ANCHOR + 1) / 1.5) }, t);
-    if (anchored && t - BRIG.ANCHOR < 1.2) {
-      const k = (t - BRIG.ANCHOR) / 1.2;
-      g.strokeStyle = `rgba(255,255,255,${1 - k})`;
-      g.beginPath();
-      g.ellipse(ax + 14, 96, 2 + k * 10, 1 + k * 3, 0, 0, Math.PI * 2);
-      g.stroke();
-    }
-    // Gulls.
-    for (let i = 0; i < 4; i++) {
-      const gx = (i * 63 + s2 * (10 + i * 3)) % (PW + 20) - 10;
-      const gy = 20 + i * 7 + Math.sin(s2 * 2 + i) * 3;
-      const wing = Math.sin(s2 * 8 + i) > 0 ? -1 : 0;
-      g.fillStyle = '#2a2a30';
-      g.fillRect(Math.round(gx - 2), Math.round(gy + wing), 2, 1);
-      g.fillRect(Math.round(gx), Math.round(gy), 1, 1);
-      g.fillRect(Math.round(gx + 1), Math.round(gy + wing), 2, 1);
-    }
-    // The haven: tents, the fire and its smoke, the black flag on its pole.
-    const by = (x) => art.sandTop(x);
-    for (const [tx, col] of [[176, '#c8b48a'], [200, '#a87a5a'], [222, '#8a6a4a']]) {
-      const yb = by(tx) + 8;
-      g.fillStyle = col;
-      g.beginPath();
-      g.moveTo(tx - 9, yb);
-      g.lineTo(tx, yb - 11);
-      g.lineTo(tx + 9, yb);
-      g.closePath();
-      g.fill();
-      g.fillStyle = 'rgba(0,0,0,0.3)';
-      g.beginPath();
-      g.moveTo(tx, yb - 11);
-      g.lineTo(tx + 9, yb);
-      g.lineTo(tx + 2, yb);
-      g.closePath();
-      g.fill();
-      g.fillStyle = '#2a1a10';
-      g.fillRect(tx - 1, yb - 5, 3, 5);
-    }
-    const fx = 190;
-    const fy = by(fx) + 20;
-    const fl = Math.sin(t * 12) > 0 ? 1 : 0;
-    glow(g, fx, fy - 3, 16, '#ffa040', 0.45);
-    g.fillStyle = '#4a2a1a';
-    g.fillRect(fx - 3, fy, 7, 1);
-    g.fillStyle = fl ? '#ffe070' : '#ff9030';
-    g.fillRect(fx - 1, fy - 3 - fl, 3, 3);
-    g.fillStyle = '#ff5020';
-    g.fillRect(fx - 2, fy - 1, 5, 1);
-    for (let i = 0; i < 8; i++) {
-      const k = ((t * 0.3 + i / 8) % 1);
-      g.globalAlpha = 0.35 * (1 - k);
-      g.fillStyle = '#a8a4a8';
-      g.beginPath();
-      g.arc(fx + Math.sin(k * 6 + i) * 3 + k * 8, fy - 6 - k * 40, 1.5 + k * 4, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
-    // The flag pole, its flag snapping.
-    const px0 = 232;
-    const py0 = by(px0) + 10;
-    g.fillStyle = '#5a3a24';
-    g.fillRect(px0, py0 - 46, 1, 46);
-    for (let x = 0; x < 16; x++) {
-      const wv = Math.round(Math.sin(t * 7 - x * 0.6) * 1.5);
-      g.fillStyle = info.flag;
-      g.fillRect(px0 + 1 + x, py0 - 46 + wv, 1, 10);
-    }
-    g.fillStyle = '#ece8dc';
-    const sw = Math.round(Math.sin(t * 7 - 3.5) * 1.5);
-    g.fillRect(px0 + 7, py0 - 44 + sw, 3, 3);
-    g.fillRect(px0 + 8, py0 - 41 + sw, 1, 1);
-    g.fillRect(px0 + 6, py0 - 39 + sw, 5, 1);
-    // The brethren on the beach, cheering you home.
-    const rng = new RNG(info.seed);
-    const cheer = t > 14;
-    for (let i = 0; i < 7; i++) {
-      const x = 152 + i * 12 + rng.int(-2, 2);
-      const yb = by(x) + 18 + (i % 2) * 7;
-      const jump = cheer ? Math.max(0, Math.sin(t * 6 + i)) * 2 : 0;
-      drawPerson((xx, yy, col) => px(g, xx, yy, col), x, yb - jump, { size: 'normal', face: 'front', pose: cheer ? 'wave' : i % 3 ? 'stand' : 'point', dir: -1, shirt: ['#5a1a1a', '#e8e0d0', '#2a2a2a', '#3a2a2a'][i % 4], skin: ['#e8b48c', '#b07a4a', '#8a5a34', '#f4d0b0'][i % 4], hair: ['#8a1a1a', '#1a1a1a', '#2a2a5a'][i % 3], t: t + i, lit: -1 });
-    }
-    // And you, come ashore.
-    if (t > BRIG.ASHORE) {
-      const k = ease(clamp01((t - BRIG.ASHORE) / 1.5));
-      sprite(g, info.look, 0, Math.floor(t * 4) % 2 && k < 1 ? 1 : 0, 212, lerp(PH + 40, PH - 4, k), 1.7);
-    }
+    const k = t - BRIG.CUT3;
+    drawJetty(g, art, { t: k, walk: clamp01(k / 3.2), chief: clamp01((k - 2.6) / 1.1), cheer: clamp01(k / 0.6), look: info.look }, sprite, info);
   }
-  // Across the cut: black between the two.
-  const cut = Math.abs(t - BRIG.ACT2);
-  const fade = clamp01(t / 1.2) * (cut < 0.8 ? cut / 0.8 : 1) * (t > BRIG.BLACK - 1.5 ? clamp01((BRIG.BLACK - t) / 1.5) : 1);
-  const shake = (t > BRIG.SHOT1 && t < BRIG.SHOT1 + 0.4) || (t > BRIG.SHOT2 && t < BRIG.SHOT2 + 0.4) ? 0.4 : 0;
-  present(ctx, c, { alpha: fade, shake });
-  if (t < 5 || (act2 && t < BRIG.ACT2 + 4)) {
-    ctx.globalAlpha = fade * (t < 5 ? clamp01((5 - t) / 1.2) : clamp01((BRIG.ACT2 + 4 - t) / 1.2));
-    bigText(ctx, t < 5 ? `~ THE ${info.ship.replace(/^The /, '').toUpperCase()} ~` : `~ ${info.cove.toUpperCase()} ~`, 30, '#ffe070');
+  let fade = clamp01(t / 1.2) * (t > BRIG.BLACK - 1.5 ? clamp01((BRIG.BLACK - t) / 1.5) : 1);
+  for (const cu of [BRIG.ACT2, BRIG.CUT3]) if (Math.abs(t - cu) < 0.6) fade *= Math.abs(t - cu) / 0.6;
+  const shake = t > BRIG.SHOT1 && t < BRIG.SHOT1 + 0.3 ? 0.4 : t > BRIG.SHOT2 && t < BRIG.SHOT2 + 0.3 ? 0.4 : 0;
+  present(ctx, c, { alpha: fade, zoom, fx, fy, shake });
+  if (t < 6) {
+    ctx.globalAlpha = fade * clamp01((6 - t) / 1.2);
+    bigText(ctx, `~ ${info.ship.toUpperCase()} ~`, 30, '#e8e4d8');
     ctx.globalAlpha = 1;
   }
   talk(ctx, sc, lines, BRIG.BLACK, fade);

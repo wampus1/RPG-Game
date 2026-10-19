@@ -515,15 +515,15 @@ export function wreckScene(game, info) {
 
 const W_HORIZON = 84;
 // The ship's picture: `w` by `h`, her waterline `water` down it.
-const SHIP = { w: 112, h: 84, water: 66 };
+export const SHIP = { w: 112, h: 84, water: 66 };
 const WL = SHIP.water;
 // Where her masts stand, how high their heads are (the main's, split by
 // the bolt, lower), and the yards across them.
-const MASTS = { fore: 42, main: 66, mizzen: 93 };
+export const MASTS = { fore: 42, main: 66, mizzen: 93 };
 
 // The top of her side at x (her sheer: lowest amidships, rising to the bow
 // and, less, to the stern; the stern castle above that).
-function sheer(x) {
+export function sheer(x) {
   if (x >= 86) return WL - 20;
   if (x < 62) {
     const u = (62 - x) / 42;
@@ -539,7 +539,7 @@ function sheer(x) {
 // the jibs on the forestay, the spanker aft, the rigging, her colours.
 // Whole, and after the bolt (the main topmast split off, its sail gone,
 // the yard hanging).
-function paintShip(broken) {
+export function paintShip(broken) {
   const back = makeCanvas(SHIP.w, SHIP.h);
   const front = makeCanvas(SHIP.w, SHIP.h);
   const pen = (c) => {
