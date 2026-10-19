@@ -47,6 +47,12 @@ function breakLines(words, widths, measure) {
 export function paginate(lines, o) {
   const { w, h, size, measure } = o;
   const lh = size * (o.lh || 1.32);
+  // (Round 128) The people's way of setting it (see booktype.js): its
+  // headings' case, paragraphs indented or spaced, how deep the capital.
+  const ty = o.type || null;
+  const heads = (t) => (ty && ty.heads !== 'title' ? t.toUpperCase() : t);
+  const spaced = !!ty && ty.para === 'space';
+  const dropLines = ty ? ty.drop : 2;
   const pages = [];
   let page = null;
   let y = 0;
@@ -73,7 +79,7 @@ export function paginate(lines, o) {
       continue;
     }
     if (/^# /.test(l)) {
-      const text = l.slice(2);
+      const text = heads(l.slice(2));
       const hs = size * 1.32;
       const m = (t) => measure(t, hs, 'head');
       const rows = breakLines(text.split(/\s+/), [w * 0.86], m);
@@ -92,7 +98,7 @@ export function paginate(lines, o) {
       const ss = size * 1.04;
       if (page.rows.length && room() < ss * 1.6 + lh * 3) fresh();
       add({ t: 'gap', h: page.rows.length ? size * 0.5 : 0 });
-      add({ t: 'sub', text: l.slice(3), size: ss, h: ss * 1.5 });
+      add({ t: 'sub', text: ty && ty.heads === 'spaced' ? l.slice(3).toUpperCase() : l.slice(3), size: ss, h: ss * 1.5 });
       dropNext = false;
       continue;
     }
@@ -134,20 +140,21 @@ export function paginate(lines, o) {
     // dropped two lines deep), justified but for its last line.
     let words = l.split(/\s+/).filter(Boolean);
     let cap = null;
-    const indent = size * 1.4;
+    const indent = spaced ? 0 : size * 1.4;
     let widths = [w - indent, w];
-    if (dropNext && /^[A-Za-z]/.test(words[0])) {
+    if (dropNext && dropLines > 0 && /^[A-Za-z]/.test(words[0])) {
       const letter = words[0][0].toUpperCase();
-      const cs = lh * 2 - size * 0.12;
+      const cs = lh * dropLines - size * 0.12;
       const cw = measure(letter, cs, 'cap') + size * 0.35;
-      cap = { letter, size: cs, w: cw };
+      cap = { letter, size: cs, w: cw, lines: dropLines };
       words = [words[0].slice(1) || '', ...words.slice(1)];
       if (!words[0]) words.shift();
-      widths = [w - cw, w - cw, w];
+      widths = [...new Array(dropLines).fill(w - cw), w];
     }
     const m = (t) => measure(t, size, 'text');
     const rows = breakLines(words, widths, m);
-    if (cap && room() < lh * 2) fresh();
+    if (cap && room() < lh * cap.lines) fresh();
+    if (spaced && page.rows.length && page.rows[page.rows.length - 1].t === 'text') add({ t: 'gap', h: lh * 0.45 });
     // (No line left alone at the top or the foot of a page: a break that
     // would leave one is made a line sooner.)
     const fit = Math.floor(room() / lh);
@@ -155,8 +162,9 @@ export function paginate(lines, o) {
     if (early === 0) fresh();
     rows.forEach((r, i) => {
       if (room() < lh || (early > 0 && i === early)) fresh();
-      const x0 = cap && i < 2 ? cap.w : !cap && i === 0 ? indent : 0;
-      add({ t: 'text', words: r.words, w: r.w, x0, width: (cap && i < 2 ? w - cap.w : !cap && i === 0 ? w - indent : w), last: i === rows.length - 1, cap: i === 0 ? cap : null, size, h: lh });
+      const inCap = cap && i < cap.lines;
+      const x0 = inCap ? cap.w : !cap && i === 0 ? indent : 0;
+      add({ t: 'text', words: r.words, w: r.w, x0, width: (inCap ? w - cap.w : !cap && i === 0 ? w - indent : w), last: i === rows.length - 1, cap: i === 0 ? cap : null, size, h: lh });
     });
     dropNext = false;
   }
@@ -243,8 +251,10 @@ export function paintEndpaper(g, W, H, seed, tint = [120, 60, 40]) {
   g.fillRect(0, 0, W, H);
 }
 
-// A small ornament: a diamond between two rules.
-export function ornament(g, cx, cy, s, ink) {
+// A small ornament: a diamond between two rules (Round 128: or a people's
+// own: a knot, a star, a sun, a wave, a leaf, a flame).
+export function ornament(g, cx, cy, s, ink, kind = 'diamond') {
+  if (kind !== 'diamond' && ORNS[kind]) return ORNS[kind](g, cx, cy, s, ink);
   g.save();
   g.strokeStyle = ink;
   g.fillStyle = ink;
@@ -266,6 +276,102 @@ export function ornament(g, cx, cy, s, ink) {
   g.restore();
 }
 
+// The two rules either side of an ornament, and its ink.
+function rules(g, cx, cy, s, ink, gap = 0.9) {
+  g.strokeStyle = ink;
+  g.fillStyle = ink;
+  g.globalAlpha = 0.7;
+  g.lineWidth = Math.max(1, s * 0.06);
+  g.beginPath();
+  g.moveTo(cx - s * 2.6, cy);
+  g.lineTo(cx - s * gap, cy);
+  g.moveTo(cx + s * gap, cy);
+  g.lineTo(cx + s * 2.6, cy);
+  g.stroke();
+}
+const ORNS = {
+  knot(g, cx, cy, s, ink) {
+    g.save();
+    rules(g, cx, cy, s, ink, 1.1);
+    g.beginPath();
+    for (const d of [-1, 1]) g.ellipse(cx + d * s * 0.32, cy, s * 0.42, s * 0.26, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.restore();
+  },
+  star(g, cx, cy, s, ink) {
+    g.save();
+    rules(g, cx, cy, s, ink);
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 ? s * 0.22 : s * 0.55;
+      g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+    g.restore();
+  },
+  sun(g, cx, cy, s, ink) {
+    g.save();
+    rules(g, cx, cy, s, ink, 1.0);
+    g.beginPath();
+    g.arc(cx, cy, s * 0.24, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.moveTo(cx + Math.cos(a) * s * 0.36, cy + Math.sin(a) * s * 0.36);
+      g.lineTo(cx + Math.cos(a) * s * 0.62, cy + Math.sin(a) * s * 0.62);
+    }
+    g.stroke();
+    g.restore();
+  },
+  wave(g, cx, cy, s, ink) {
+    g.save();
+    g.strokeStyle = ink;
+    g.globalAlpha = 0.7;
+    g.lineWidth = Math.max(1, s * 0.07);
+    g.beginPath();
+    g.moveTo(cx - s * 2.6, cy);
+    for (let k = 0; k < 8; k++) g.quadraticCurveTo(cx - s * 2.6 + (k + 0.5) * s * 0.65, cy + (k % 2 ? s * 0.3 : -s * 0.3), cx - s * 2.6 + (k + 1) * s * 0.65, cy);
+    g.stroke();
+    g.restore();
+  },
+  leaf(g, cx, cy, s, ink) {
+    g.save();
+    rules(g, cx, cy, s, ink, 1.0);
+    for (const d of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + d * s * 0.45, cy - s * 0.45, cx + d * s * 0.85, cy);
+      g.quadraticCurveTo(cx + d * s * 0.45, cy + s * 0.45, cx, cy);
+      g.fill();
+    }
+    g.restore();
+  },
+  flame(g, cx, cy, s, ink) {
+    g.save();
+    rules(g, cx, cy, s, ink, 0.7);
+    g.beginPath();
+    g.moveTo(cx, cy - s * 0.6);
+    g.quadraticCurveTo(cx + s * 0.42, cy - s * 0.05, cx, cy + s * 0.4);
+    g.quadraticCurveTo(cx - s * 0.42, cy - s * 0.05, cx, cy - s * 0.6);
+    g.fill();
+    g.restore();
+  },
+};
+
+// A heading's words drawn with their letters spread (where the people
+// set them so), or as they are.
+function spacedText(g, text, x, y, sp) {
+  if (!sp) return g.fillText(text, x, y);
+  let cx = x;
+  for (const ch of text) {
+    g.fillText(ch, cx, y);
+    cx += g.measureText(ch).width + sp;
+  }
+}
+
 // One page's words, set on it (`font(size, style)` the type).
 export function paintRows(g, page, o) {
   const { x, y, w, font, ink, size } = o;
@@ -273,17 +379,27 @@ export function paintRows(g, page, o) {
   g.fillStyle = ink;
   for (const row of page.rows) {
     const by = y + row.y;
+    const ty = o.type || null;
+    const sp = ty && ty.heads === 'spaced' ? size * 0.14 : 0;
     if (row.t === 'head') {
       g.font = font(row.size, 'head');
-      g.fillText(row.text, x + (w - row.w) / 2, by + row.size);
+      g.fillStyle = (ty && ty.headInk) || ink;
+      const hx = ty && ty.align === 'left' ? x : x + (w - row.w) / 2;
+      spacedText(g, row.text, hx, by + row.size, sp);
+      if (ty && ty.rule) {
+        g.globalAlpha = 0.4;
+        g.fillRect(ty.align === 'left' ? x : x + (w - row.w) / 2, by + row.size * 1.2, row.w, Math.max(1, size * 0.06));
+        g.globalAlpha = 1;
+      }
+      g.fillStyle = ink;
     } else if (row.t === 'sub') {
       g.font = font(row.size, 'sub');
-      g.fillText(row.text, x, by + row.size * 1.05);
+      spacedText(g, row.text, x, by + row.size * 1.05, sp * 0.6);
       g.globalAlpha = 0.35;
-      g.fillRect(x, by + row.size * 1.3, Math.min(w, g.measureText(row.text).width), 1);
+      g.fillRect(x, by + row.size * 1.3, Math.min(w, g.measureText(row.text).width + sp * 0.6 * row.text.length), 1);
       g.globalAlpha = 1;
     } else if (row.t === 'orn') {
-      ornament(g, x + w / 2, by + row.h * 0.5, size * (row.end ? 0.9 : 0.7), ink);
+      ornament(g, x + w / 2, by + row.h * 0.5, size * (row.end ? 0.9 : 0.7), (ty && ty.capInk) || ink, ty ? ty.orn : 'diamond');
     } else if (row.t === 'sign') {
       g.font = font(row.size, 'sign');
       g.fillText(row.text, x + w - row.w, by + row.size * 1.05);
@@ -306,7 +422,7 @@ export function paintRows(g, page, o) {
       // spreading it would gape.)
       const gaps = row.words.length - 1;
       const extra = row.width - row.w;
-      const spread = !row.last && gaps > 0 && extra < row.width * 0.25 ? extra / gaps : 0;
+      const spread = !row.last && gaps > 0 && extra < row.width * 0.25 && !(o.type && !o.type.justify) ? extra / gaps : 0;
       let cx = x + row.x0;
       const sp = g.measureText(' ').width;
       for (const word of row.words) {

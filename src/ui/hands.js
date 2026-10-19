@@ -4,6 +4,7 @@
 // licences beside them), and how that writer holds the pen: the size of
 // their letters, the slant, how close they crowd them, their ink. Books
 // are in a printer's type. The easier reading of any of them: plain print.
+import { FACES } from './booktype.js';
 export const HANDS = [
   { font: 'Caveat', file: 'caveat', size: 1.32, slant: -2, spacing: 0, ink: '#2a1c12' },
   { font: 'Dancing Script', file: 'dancingscript', size: 1.12, slant: 0, spacing: 0.01, ink: '#1c2438' },
@@ -44,7 +45,8 @@ let loading = null;
 export function loadHands() {
   if (loading) return loading;
   if (typeof document === 'undefined' || typeof globalThis.FontFace === 'undefined' || !document.fonts) return (loading = Promise.resolve(false));
-  loading = Promise.all([...HANDS, PRINT].map((h) => {
+  // (Round 128: and the printers' faces, each people's: see booktype.js.)
+  loading = Promise.all([...HANDS, PRINT, ...FACES].map((h) => {
     const f = new globalThis.FontFace(h.font, `url(src/fonts/${h.file}.woff2) format('woff2')`);
     return f.load().then((ff) => {
       document.fonts.add(ff);

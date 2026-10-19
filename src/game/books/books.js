@@ -27,6 +27,8 @@ import { Writer, tidy } from './write.js';
 import { voiceFor } from './voice.js';
 import { DISHES, DRINKS } from './corpus/table.js';
 import { RECIPES } from './corpus/recipes.js';
+import { DISH_RECIPES } from '../../world/recipes.js';
+import { ITEMS } from '../../world/items.js';
 import { newSeries, addBook, writeNovel, nextBookType } from './novels.js';
 import { MEATY, FISHY } from '../../sim/culture.js';
 import { alive, mayorOf } from '../../sim/econ.js';
@@ -131,8 +133,26 @@ function citable(lore, meta, near = () => true) {
 // The book on a shelf at (x, y, z): one of the library, more likely one on
 // where the shelf is.
 export function bookAt(game, x, y, z) {
+  const e = shelfEntry(game, x, y, z, 0);
+  return e ? writeBook(loreOf(game), e) : null;
+}
+
+// (Round 128) The few books a shelf holds (their ids, each one different):
+// what its container is filled with the first time it's looked in.
+export function shelfBooks(game, x, y, z, n = 3) {
+  const out = [];
+  for (let k = 0; k < n * 4 && out.length < n; k++) {
+    const e = shelfEntry(game, x, y, z, k);
+    if (!e) break;
+    const id = idOf(e);
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+function shelfEntry(game, x, y, z, salt) {
   const lore = loreOf(game);
-  const rng = new RNG(hash4(x, y, z, game.seed ^ 0x600c));
+  const rng = new RNG(hash4(x, y, z, (game.seed ^ 0x600c) + salt * 0x9e37));
   const ow = game.world.ow;
   const here = ow.settlementAt(x, z) || null;
   const lib = library(lore);
@@ -167,7 +187,7 @@ export function bookAt(game, x, y, z) {
       break;
     }
   }
-  return writeBook(lore, pick);
+  return pick;
 }
 
 // A book of the library, written out.
@@ -177,7 +197,7 @@ export function writeBook(lore, entry) {
   const W = new Writer(new RNG(meta.seed ^ 0x51ed), meta.author.voice, { records: !['road', 'table', 'deeps', 'beasts'].includes(entry.genre) });
   const rng = new RNG(meta.seed ^ 0x7a11);
   const lines = G.write(W, lore, entry.subj, meta, rng);
-  return { title: meta.title, by: meta.author.name, sign: meta.author.sign, year: meta.year, lines, genre: entry.genre, id: idOf(entry) };
+  return { title: meta.title, by: meta.author.name, sign: meta.author.sign, year: meta.year, lines, genre: entry.genre, id: idOf(entry), style: meta.style || null };
 }
 
 // ------------------------------------------------------------ helpers
@@ -386,7 +406,7 @@ GENRES.annals = {
     if (kind === 'dungeon') {
       const d = T.dungeons.find((x) => x.origin && x.origin.short && cap(x.origin.short) === q.text);
       if (d) {
-        when = untold(d.origin.text.replace(/ They say[^.]*\.$/, ''), (W.told ||= new Set()));
+        when = retell(W, untold(d.origin.text.replace(/ They say[^.]*\.$/, ''), (W.told ||= new Set())));
         more = { dungeon: d.name, where: lore.whereOf(d) };
       }
     }
@@ -617,11 +637,11 @@ GENRES.realm = {
       const years = k.to - k.from + 1;
       const still = reigns ? ', who reigns still' : '';
       let open;
-      if (!prev) open = rng.pick([`The first to reign was ${k.full}, chosen by the great families at ${R.capName} in ${k.from}`, `${k.full} was the first ruler of ${R.name}, and reigned from ${k.from}${reigns ? '' : ` until ${k.to}`}`, `The line begins with ${k.full}, who took the throne in ${k.from}`]);
-      else if (!skipped.length) open = rng.pick([`${prev.name} ${passing(prev)}, and the throne passed to ${k.full}${still}`, `When ${prev.name} ${passing(prev).replace(/ in \d+.*$/, '')}, in ${prev.to}, the crown went to ${k.full}${still}`, `On the death of ${prev.name} in ${prev.to}, ${k.full} came to the throne${still}`]);
+      if (!prev) open = freshPick(W, rng, [`The first to reign was ${k.full}, chosen by the great families at ${R.capName} in ${k.from}`, `${k.full} was the first ruler of ${R.name}, and reigned from ${k.from}${reigns ? '' : ` until ${k.to}`}`, `The line begins with ${k.full}, who took the throne in ${k.from}`]);
+      else if (!skipped.length) open = freshPick(W, rng, [`${prev.name} ${passing(prev)}, and the throne passed to ${k.full}${still}`, `When ${prev.name} ${passing(prev).replace(/ in \d+.*$/, '')}, in ${prev.to}, the crown went to ${k.full}${still}`, `On the death of ${prev.name} in ${prev.to}, ${k.full} came to the throne${still}`]);
       else {
         const names = listOf(skipped.map((q) => q.name));
-        open = `${prev.name} ${passing(prev)}. ${rng.pick([`Of the reigns that followed, ${skipped.length > 1 ? `those of ${names}` : `that of ${names}`}, the chronicles say little; it was ${k.full}, crowned in ${k.from}, who next left a mark on the realm${still}`, `${names} ${skipped.length > 1 ? 'reigned in their turn' : 'reigned after'}, and left little for the chroniclers; then, in ${k.from}, came ${k.full}${still}`, `There followed ${skipped.length > 1 ? `${NUM[skipped.length] || skipped.length} quiet reigns, those of ${names}` : `the quiet reign of ${names}`}, before ${k.full} took the throne in ${k.from}${still}`])}`;
+        open = `${prev.name} ${passing(prev)}. ${freshPick(W, rng, [`Of the reigns that followed, ${skipped.length > 1 ? `those of ${names}` : `that of ${names}`}, the chronicles say little; it was ${k.full}, crowned in ${k.from}, who next left a mark on the realm${still}`, `${names} ${skipped.length > 1 ? 'reigned in their turn' : 'reigned after'}, and left little for the chroniclers; then, in ${k.from}, came ${k.full}${still}`, `There followed ${skipped.length > 1 ? `${NUM[skipped.length] || skipped.length} quiet reigns, those of ${names}` : `the quiet reign of ${names}`}, before ${k.full} took the throne in ${k.from}${still}`, `After ${names} the record grows thin, until ${k.full} was crowned in ${k.from}${still}`, `Little is written of the years of ${names}; the next reign the chroniclers dwell on is that of ${k.full}, from ${k.from}${still}`])}`;
       }
       if (!reigns && prev !== null && years > 1 && rng.chance(0.4)) open += `, and held it ${NUMW(years)} years`;
       skipped = [];
@@ -869,8 +889,12 @@ GENRES.table = {
       const Rx = RECIPES[k];
       if (Rx) {
         out.push(sentence(rng.pick([`Enough for ${Rx.serves}.`, `This makes enough for ${Rx.serves}.`, `For ${Rx.serves}.`])));
+        // (Round 128) What the game's own recipe takes, and where it's made:
+        // see world/recipes.js DISH_RECIPES.
+        const G = DISH_RECIPES[k];
         out.push('## You Will Need');
-        for (const x of Rx.needs) out.push(`- ${cap(x)}`);
+        for (const [it, q] of Object.entries(G ? G.in : {})) out.push(`- ${cap(measure(it, q))}`);
+        if (G) out.push(sentence(`${G.bake ? 'Bake it at a furnace, or at a baker\'s oven' : 'Cook it in the pot of a furnace'}; this makes ${NUMW(G.n)}${G.bake ? ` (a baker's oven, ${NUMW(G.n + 1)})` : ''}`));
         out.push('## The Method');
         Rx.steps.forEach((x, j) => out.push(`${j + 1}. ${x}`));
         if (Rx.tip && rng.chance(0.75)) {
@@ -911,6 +935,81 @@ function oldPlaceFacts(lore, d, meta) {
     delves: now && d.delves > 0 ? String(d.delves) : null, clearedby: cleared ? by || 'a band of delvers' : null,
   };
 }
+// (Round 128) How much of a thing a cook's list asks for, in the kitchen's
+// own words: "two sheaves of wheat", "a honeycomb".
+const MEASURES = {
+  wheat: ['a sheaf of wheat', 'sheaves of wheat'], flour: ['a sack of flour', 'sacks of flour'], herb: ['a bunch of herbs', 'bunches of herbs'],
+  berries: ['a handful of berries', 'handfuls of berries'], glowberries: ['a handful of glowberries', 'handfuls of glowberries'], olives: ['a handful of olives', 'handfuls of olives'],
+  seeds: ['a handful of wheat seeds', 'handfuls of wheat seeds'], raw_meat: ['a cut of raw meat', 'cuts of raw meat'], fish: ['a fish', 'fish'],
+  salt: ['a measure of salt', 'measures of salt'], kelp: ['a frond of kelp', 'fronds of kelp'], crab_meat: ['a portion of crab meat', 'portions of crab meat'],
+  bread: ['a loaf of bread', 'loaves of bread'], fish_oil: ['a jar of fish oil', 'jars of fish oil'], flower_white: ['a daisy', 'daisies'],
+  honeycomb: ['a honeycomb', 'honeycombs'], ember_pod: ['an ember pod', 'ember pods'], cactus_fruit: ['a cactus fruit', 'cactus fruits'],
+};
+function measure(k, n) {
+  const m = MEASURES[k];
+  const name = (ITEMS[k] ? ITEMS[k].name : k).toLowerCase();
+  if (m) return n === 1 ? m[0] : `${NUMW(n)} ${m[1]}`;
+  return n === 1 ? `${/^[aeiou]/.test(name) ? 'an' : 'a'} ${name}` : `${NUMW(n)} ${plural(name)}`;
+}
+
+// (Round 128) An old place's story in other words, where the book has told
+// one of the same kind already (two mines that fell in are not told in the
+// same sentence twice): the first way of it not yet used.
+const RETELL = [
+  [/^In (\d+), (.+?) mine (.+?) fell in on its deepest gallery, and (.+?) miners were lost\./, [
+    (m) => `The roof of ${m[2]} mine ${m[3]} came down in ${m[1]}, and ${m[4]} miners were buried with it.`,
+    (m) => `${m[1]} was the year the deepest gallery of ${m[2]} mine ${m[3]} gave way, and took ${m[4]} of the miners with it.`,
+    (m) => `Of the miners in ${m[2]} mine ${m[3]} on the day it failed, in ${m[1]}, ${m[4]} never came up.`,
+  ]],
+  [/^In (\d+), (.+?) stopped going into the old wood (.+?): there's a hollow under the roots there, they say, that belongs to (.+?), and what goes in is kept\./, [
+    (m) => `Since ${m[1]}, ${m[2]} have kept out of the old wood ${m[3]}, for under its roots, they say, is a hollow that is ${m[4]}'s, and ${m[4]} keeps whatever goes in.`,
+    (m) => `${cap(m[2])} gave up the old wood ${m[3]} in ${m[1]}; beneath its roots is a hollow belonging to ${m[4]}, and nothing that goes into it comes back.`,
+  ]],
+  [/^In (\d+), (.+?) sealed the great forge under the mountain (.+?) with their smiths still inside, so no lesser hand should ever work its fires\./, [
+    (m) => `${cap(m[2])} shut the great forge ${m[3]} in ${m[1]}, and left their smiths inside it, sooner than let a lesser hand work its fires.`,
+    (m) => `The forge under the mountain ${m[3]} has been sealed since ${m[1]}, when ${m[2]} walled it up with the smiths still at their anvils.`,
+  ]],
+  [/^In (\d+), (.+?) went into the sea caves (.+?) after the great pearl beds, and the tide came in behind them\./, [
+    (m) => `${cap(m[2])} went down into the sea caves ${m[3]} in ${m[1]}, after the great pearl beds; the tide came in behind them, and they were not seen again.`,
+    (m) => `The sea caves ${m[3]} took ${m[2]} in ${m[1]}: they went in after the pearl beds, and the tide closed the way behind them.`,
+  ]],
+  [/^In (\d+), (.+?) was laid in a barrow (.+?) with their hearth-guard and their grave goods, and the stone door was sealed\./, [
+    (m) => `${cap(m[2])} was buried ${m[3]} in ${m[1]}, in a barrow with the hearth-guard and the grave goods, and the stone door was shut on them all.`,
+    (m) => `The barrow ${m[3]} was closed in ${m[1]} over ${m[2]}, laid there with the hearth-guard about them and the grave goods at their feet.`,
+  ]],
+];
+export function retell(W, text) {
+  const t = String(text);
+  const first = (t.match(/^[^.!?]+[.!?]+/) || [t])[0];
+  let out = t;
+  if (W.repeats(first)) {
+    for (const [re, ways] of RETELL) {
+      const m = re.exec(first);
+      if (!m) continue;
+      // (The fewest words in common with what's been said: where it is,
+      // "a half day south of", may be the same as another's.)
+      const fresh = ways.map((f) => f(m)).reduce((a, b) => (W.repeats(b) < W.repeats(a) ? b : a));
+      if (W.repeats(fresh) < W.repeats(first)) out = fresh + t.slice(first.length);
+      break;
+    }
+  }
+  // (What follows the first sentence is the telling's colour, "the hammers
+  // are still heard": left out where it's been said of another place.)
+  const parts = (out.match(/[^.!?]+[.!?]+/g) || [out]).map((p) => p.trim());
+  const kept = parts.filter((p, i) => i === 0 || (W.repeats(p) < 2 && !W.written.has(p)));
+  for (const p of kept) W.keep(p);
+  return kept.join(' ');
+}
+
+// (Round 128) One of a few ways of saying a thing: one in words the book
+// hasn't used yet, if there is one.
+function freshPick(W, rng, ways) {
+  const all = rng.shuffle(ways.slice());
+  const s = all.find((q) => !W.repeats(q)) || all.reduce((a, b) => (W.repeats(b) < W.repeats(a) ? b : a));
+  W.keep(s);
+  return s;
+}
+
 // A story, less the sentences of it already told in the book (old places of
 // a kind often end the same way).
 function untold(text, told) {
@@ -975,7 +1074,7 @@ GENRES.deeps = {
       const pools = { what, fate: fateOf(f) };
       if ((d.depth | 0) <= 1) pools.deep = 'oldplace.deep.one';
       if (d.type === 'kavorent') pools.dwell = 'oldplace.dwell.kav';
-      out.push(W.para('oldplace', f, { min: 3, max: 5, fixed: { story: sentence(f.story) }, pools }));
+      out.push(W.para('oldplace', f, { min: 3, max: 5, fixed: { story: sentence(retell(W, f.story)) }, pools }));
     }
     out.push('~');
     return out;
@@ -1025,7 +1124,7 @@ GENRES.elders = {
       chapter(out, n++, 'The Things Older Still');
       for (const d of elders) {
         const land = d.isle ? LANDS[d.isle] : null;
-        out.push(W.para('elder', { ...base, story: d.origin.text, place: d.name, land: land || base.land, where: lore.whereOf(d), master: d.origin.who || null, dwellers: listOf(lore.dwellers(d).slice(0, 3).map(pluralName)) }, { min: 2, max: 4, fixed: { story: sentence(d.origin.text) }, pools: d.type === 'champion' ? { what: 'elder.what.hero' } : {} }));
+        out.push(W.para('elder', { ...base, story: d.origin.text, place: d.name, land: land || base.land, where: lore.whereOf(d), master: d.origin.who || null, dwellers: listOf(lore.dwellers(d).slice(0, 3).map(pluralName)) }, { min: 2, max: 4, fixed: { story: sentence(retell(W, d.origin.text)) }, pools: d.type === 'champion' ? { what: 'elder.what.hero' } : {} }));
       }
     }
     out.push('~');

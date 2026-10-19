@@ -14,6 +14,7 @@
 import { Window } from './window.js';
 import { handFor, signerOf, loadHands, PRINT } from './hands.js';
 import { isBookDoc, paginate, paintPaper, paintEndpaper, paintRows, ornament } from './bookview.js';
+import { typeFor } from './booktype.js';
 import { overlay, overlayCtx, OVER_W, OVER_H, OVER_SCALE } from '../render/overlay.js';
 import { drawText, textWidth } from '../render/font.js';
 import { COLS, ROWS } from '../config.js';
@@ -101,6 +102,8 @@ export class DocumentWindow extends Window {
     this.easy = false;
     // (Round 126) A book: held open, two pages at a time (see bookview.js).
     this.bookMode = isBookDoc(this.doc);
+    // (Round 128) Set as its writer's people set their books (booktype.js).
+    this.type = this.bookMode ? typeFor(this.doc) : null;
     this.spread = 0;
     this.turn = null;
     this.laid = null;
@@ -167,16 +170,20 @@ export class DocumentWindow extends Window {
     const PH = Math.round(OVER_H * (easy ? 0.87 : 0.86));
     const board = Math.round(PW * 0.035);
     const size = OVER_W * (easy ? 0.0158 : 0.0166);
+    const ty = this.type;
+    const face = (style) => (!ty ? PRINT.font : style === 'head' ? ty.head : style === 'cap' ? ty.cap : ty.body);
     const font = (sz, style) => {
       const it = style === 'sign' || style === 'sub' ? 'italic ' : '';
-      return easy ? `${style === 'head' ? 'bold ' : ''}${it}${sz.toFixed(1)}px ${PRINT_FONT}` : `${it}${sz.toFixed(1)}px '${PRINT.font}', Georgia, serif`;
+      return easy ? `${style === 'head' ? 'bold ' : ''}${it}${sz.toFixed(1)}px ${PRINT_FONT}` : `${it}${sz.toFixed(1)}px '${face(style)}', '${PRINT.font}', Georgia, serif`;
     };
+    // (Headings spread letter by letter, where the people set them so.)
+    const spread = !easy && ty && ty.heads === 'spaced';
     const measure = (t, sz, style) => {
       g.font = font(sz, style);
-      return g.measureText(t).width;
+      return g.measureText(t).width + (spread && style === 'head' ? String(t).length * size * 0.14 : 0);
     };
     const pad = { top: PH * 0.095, bottom: PH * 0.095, outer: PW * 0.11, inner: PW * 0.095 };
-    const pages = paginate(this.doc.lines, { w: PW - pad.outer - pad.inner, h: PH - pad.top - pad.bottom, size, measure, lh: easy ? 1.42 : 1.3 });
+    const pages = paginate(this.doc.lines, { w: PW - pad.outer - pad.inner, h: PH - pad.top - pad.bottom, size, measure, lh: easy ? 1.42 : 1.3, type: easy ? null : ty });
     const leaves = ['end', 'title', ...pages];
     if (leaves.length % 2) leaves.push('blank');
     leaves.push('blank', 'end');
@@ -198,11 +205,12 @@ export class DocumentWindow extends Window {
     const g = c.getContext('2d');
     const leaf = B.leaves[i];
     const side = i % 2 ? 'right' : 'left';
-    const ink = this.easy ? '#1a1410' : PRINT.ink;
+    const ty = this.easy ? null : this.type;
+    const ink = this.easy ? '#1a1410' : ty ? ty.ink : PRINT.ink;
     const tint = this.coverTint();
     if (leaf === 'end') paintEndpaper(g, B.PW, B.PH, this.seed + i, tint);
     else {
-      paintPaper(g, B.PW, B.PH, side, this.seed ^ (i * 7919), grainOf(), this.easy ? '#f6efdc' : '#f1e6cc');
+      paintPaper(g, B.PW, B.PH, side, this.seed ^ (i * 7919), grainOf(), this.easy ? '#f6efdc' : ty ? ty.paper : '#f1e6cc');
       const x = side === 'left' ? B.pad.outer : B.pad.inner;
       const w = B.PW - B.pad.outer - B.pad.inner;
       if (leaf === 'title') this.paintTitle(g, x, w, ink);
@@ -223,7 +231,7 @@ export class DocumentWindow extends Window {
         const num = String(n);
         g.fillText(num, x + (w - g.measureText(num).width) / 2, B.PH - B.pad.bottom * 0.42);
         g.restore();
-        paintRows(g, leaf, { x, y: B.pad.top, w, font: B.font, ink, size: B.size, capInk: this.easy ? '#5a1a10' : '#6a2014' });
+        paintRows(g, leaf, { x, y: B.pad.top, w, font: B.font, ink, size: B.size, capInk: this.easy ? '#5a1a10' : ty ? ty.capInk : '#6a2014', type: ty });
       }
     }
     B.cache.set(i, c);
@@ -252,7 +260,8 @@ export class DocumentWindow extends Window {
       g.fillText(l, x + (w - g.measureText(l).width) / 2, y);
       y += ts * 1.18;
     }
-    ornament(g, x + w / 2, y + B.size * 0.8, B.size * 1.1, ink);
+    const ty = this.easy ? null : this.type;
+    ornament(g, x + w / 2, y + B.size * 0.8, B.size * 1.1, ty ? ty.capInk : ink, ty ? ty.orn : 'diamond');
     y += B.size * 3.4;
     const by = this.doc.by;
     if (by) {

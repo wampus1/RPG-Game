@@ -29,6 +29,9 @@ const PRON = {
 
 const TRADES = ['a cooper\'s apprentice', 'the miller\'s youngest', 'a clerk at the hall', 'a net-mender', 'a baker', 'a stable hand at the inn', 'a schoolmaster\'s assistant', 'a woodcutter', 'a carter', 'a dyer', 'a candle-maker', 'a shepherd'];
 const FLAWS = ['too proud to ask for help', 'afraid of the dark, though {he} would have died before admitting it', 'quick to anger and slow to forgive', 'trusting to a fault', 'more curious than was good for {him}', 'stubborn as a gatepost'];
+// (Round 128) The same flaw, come back to later in the book: said another
+// way, not word for word as it was in the first chapter.
+const FLAWBACK = ['the pride that would not let {him} call out for help', 'the old fear of the dark that {he} had never owned to', 'the temper {he} had never learned to keep', 'the trust {he} gave too easily', 'the curiosity that had brought {him} down here in the first place', 'the stubbornness that had carried {him} this far'];
 const FWAS = ['who had been {his} friend since they were six', 'the smith\'s youngest, and the only person in {home} who could beat {him} at anything', 'a fisher\'s child with a laugh you could hear across the harbour', 'who had once, at the age of eight, bitten {him}, and been {his} friend ever since'];
 const VWHAT = ['the steward of the hall', 'the moneylender', 'the reeve', 'the keeper of the granary', 'a member of the council'];
 const MTRADES = ['a farmer\'s child with a borrowed spear', 'a thatcher\'s apprentice', 'the youngest of six', 'a drover\'s child'];
@@ -208,7 +211,7 @@ function factsOf(lore, s, k) {
     place: placeName, where: d ? lore.whereOf(d) : `in the hills above ${T.name}`, dwellers: dwell.length ? listOf(dwell) : 'rats, and worse than rats',
     thing: sub(thingT.name), thingshort: thingT.short, thingwhat: sub(thingT.what), kept: thingT.kept,
     town2, dish: T.dishes[0] ? T.dishes[0].toLowerCase() : 'bread', drink: T.cuisine.drink,
-    trade: TRADES[b.type === 'sequel' ? s.trade2 : s.trade], thetrade: TRADES[b.type === 'sequel' ? s.trade2 : s.trade].replace(/^an? /, 'the '), flaw: FLAWS[s.flaw], fwas: FWAS[s.fwas], vwhat: VWHAT[s.vwhat], mtrade: MTRADES[s.mtrade],
+    trade: TRADES[b.type === 'sequel' ? s.trade2 : s.trade], thetrade: TRADES[b.type === 'sequel' ? s.trade2 : s.trade].replace(/^an? /, 'the '), flaw: FLAWS[s.flaw], flawback: FLAWBACK[s.flaw], fwas: FWAS[s.fwas], vwhat: VWHAT[s.vwhat], mtrade: MTRADES[s.mtrade],
     gate: way, way, year: String(b.type === 'prequel' ? (battle ? battle.y - 1 : b.year) : b.year),
     titlething: titled(sub(thingT.name)), titleplace: titled(cap(placeName)),
   };

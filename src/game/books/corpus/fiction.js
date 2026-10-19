@@ -18,7 +18,7 @@
 //   {villain} {VHe} {vhe} {VHis} {vhis} {vhim} {vhimself}
 //   {home} {homekind} {people} {ground} {water} {god} {feast} {clergy}
 //   {war} {battle} {enemy} {place} {where} {dwellers} {thing}
-//   {thingshort} {kept} {town2} {dish} {drink} {trade} {flaw} {fwas}
+//   {thingshort} {kept} {town2} {dish} {drink} {trade} {flaw} {flawback} {fwas}
 //   {vwhat} {gate} {way}
 //
 // A sequel adds {years} (since the last book), {prevplace}, {prevthing},
@@ -120,7 +120,7 @@ export const FICTION = {
     'The roof came down between them. When {hero} had dug {mentor} out {mhe} was alive and furious, with one leg pinned and no chance of walking on it, and {villain} was gone. "Leave me," {mentor} said. "I have been in worse places, and in worse company. Get after {vhim}."',
   ],
   'quest.alone': [
-    'So {hero} went on alone, with half a lamp of oil and no idea of the way. {He} was {flaw}, and for an hour in that dark {he} was nothing else at all. {He} sat down on the cold stone and wept, and when {he} had finished weeping {he} got up again, because there was nothing else to do.',
+    'So {hero} went on alone, with half a lamp of oil and no idea of the way. It was {flawback} that undid {him} then, and for an hour in that dark {he} was nothing else at all. {He} sat down on the cold stone and wept, and when {he} had finished weeping {he} got up again, because there was nothing else to do.',
     'Afterwards, {hero} could never say how long {he} walked in the dark. {He} thought of {home}, of the lamps at {feast}, of {friend}\'s voice. {He} thought of turning back more often than {he} would ever admit.',
   ],
   'quest.alone@lyrical': [

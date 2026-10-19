@@ -323,10 +323,19 @@ export class ContainerWindow extends Window {
     this.hoverSlot = null;
     const p = game.player;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: this.title.toUpperCase() });
-    const h = slotTable(this, g, 1, 1, 9, this.slots, 0, this.slots.length, { quick: () => p.inv });
+    // (Round 128) A bookshelf: a book on it read where it stands (see
+    // game/library.js).
+    const shelf = this.pos.shelf;
+    const onClick = shelf ? (i, ck, gm) => {
+      const s = this.slots[i];
+      const d = s && ITEMS[s.item];
+      if (ck.button === 2 && d && d.kind === 'book' && d.work && !this.ui.cursorStack) gm.readBook(d.work, 0.1);
+      else slotClick(this.ui, this.slots, i, ck, p.inv);
+    } : undefined;
+    const h = slotTable(this, g, 1, 1, 9, this.slots, 0, this.slots.length, { quick: () => p.inv, onClick });
     g.text(2, 1 + h, 'Your inventory', C.dim);
     slotTable(this, g, 1, 2 + h, 9, p.inv, 0, INV_SIZE, { quick: () => this.slots, selected: p.selected });
-    g.text(2, this.h - 1, ' SHIFT+click to transfer ', C.faint);
+    g.text(2, this.h - 1, shelf ? ' Right-click: read · SHIFT+click: take ' : ' SHIFT+click to transfer ', C.faint);
   }
   update(dt, game) {
     // Walking away closes the chest.

@@ -127,6 +127,7 @@ import { biomeSpawn } from '../mod/biomes.js';
 import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
 import { bookAt, bookById } from './books/books.js';
+import { openShelf, tookFromShelf, putOnShelf, libraryTick } from './library.js';
 import { loreOf } from './books/lore.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -2171,7 +2172,11 @@ export class Game {
     if (!atSea) this.sim.update(dt);
     // (Each player's own dealings with the towns: their work, their favours
     // owed, the law's view of them.)
-    if (party && !atSea) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => this.sim.updateSeat(dt));
+    if (party && !atSea) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => {
+      this.sim.updateSeat(dt);
+      libraryTick(this, dt);
+    });
+    if (!atSea) libraryTick(this, dt);
     this.respawnT = (this.respawnT || 0) - dt;
     if (this.respawnT <= 0) {
       this.respawnT = 2;
@@ -3808,6 +3813,16 @@ export class Game {
     if (c && c.place && c.place.ok) this.tryPlace(c.place);
   }
 
+  // (Round 127) A book of the library, opened to read; `bump`: how much
+  // the more it's read for it. (Round 128: off a shelf, too.)
+  readBook(id, bump = 0.2) {
+    const b = bookById(loreOf(this), id);
+    if (b) {
+      this.ui.openBook([b.title, ...b.lines], { kind: 'book', by: b.by, sign: b.sign, year: b.year, genre: b.genre, style: b.style });
+      this.sim.publishing?.bump(id, bump);
+    } else this.ui.msg('The pages have stuck together. Whatever this was, it can\'t be read now.', '#c8c8c8');
+  }
+
   // (Round 51) Things in the hand that are used where you stand: an
   // instrument played (see ui/instrument.js), a pipe smoked, a recipe on a
   // scroll read, a blank scroll written on. True if it was one.
@@ -3817,11 +3832,7 @@ export class Game {
     if (!d || p.dead) return false;
     // (Round 127) A book of the library, bought or found: read it.
     if (d.kind === 'book' && d.work) {
-      const b = bookById(loreOf(this), d.work);
-      if (b) {
-        this.ui.openBook([b.title, ...b.lines], { kind: 'book', by: b.by, sign: b.sign, year: b.year });
-        this.sim.publishing?.bump(d.work, 0.2);
-      } else this.ui.msg('The pages have stuck together. Whatever this was, it can\'t be read now.', '#c8c8c8');
+      this.readBook(d.work, 0.2);
       return true;
     }
     // (A story's letter, note or map: see sim/saga.)
@@ -4065,6 +4076,8 @@ export class Game {
         if (byPlayer && got.owner) this.tookPlaced(x, z, got);
       }
     } else {
+      // (Round 128) A shelf's books come down with it.
+      if (b.interact === 'bookshelf') for (const q of w.peekContainer(x, y, z) || []) if (q) drops.push({ ...q });
       if (b.interact === 'container' || b.display) {
         const slots = w.getContainer(x, y, z);
         if (b.display) this.markContainer(x, y, z, true);
@@ -5229,11 +5242,9 @@ export class Game {
       }
       case 'bookshelf': {
         // (Round 126: one of the world's own books; see game/books.)
-        const b = bookAt(this, x, y, z);
-        if (b) {
-          this.ui.openBook([b.title, ...b.lines], { kind: 'book', by: b.by, sign: b.sign, year: b.year });
-          this.sim.publishing?.bump(b.id, 0.1);
-        } else this.ui.openBook(this.bookText(x, y, z));
+        // (Round 128: a few of them, to take down and read: see library.js.)
+        if (bookAt(this, x, y, z)) openShelf(this, x, y, z);
+        else this.ui.openBook(this.bookText(x, y, z));
         break;
       }
       case 'grave':
@@ -5625,6 +5636,11 @@ export class Game {
   // Items taken out of a container that isn't yours (called by the window).
   onContainerTake(pos, taken) {
     const owner = pos.owner;
+    // (Round 128) A library's books: yours to read, here (see library.js).
+    if (owner && owner.kind === 'library') {
+      tookFromShelf(this, owner, taken);
+      return false;
+    }
     // (Round 125) The coffers of the town you govern: no theft, but the
     // coin you take is the treasury's, and it goes in the minutes.
     if (owner && owner.kind === 'office') {
@@ -5653,6 +5669,10 @@ export class Game {
 
   // Items put into a container (shop helpers stocking up).
   onContainerPut(pos, added) {
+    if (pos.owner && pos.owner.kind === 'library') {
+      putOnShelf(this, pos.owner, added);
+      return false;
+    }
     return this.sim.careers.onContainerPut(pos, added);
   }
 
@@ -7995,7 +8015,7 @@ export class Game {
       landmarksFound: this.landmarksFound || {},
       // (Round 78) What's drawn on blueprints (see plans.js).
       plans: plansSave(this),
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null, loans: p.loans && p.loans.length ? p.loans : undefined },
       name: this.playerName,
       hero: this.hero || null,
       // (Down below: where, and the floor as it stands. Before the sim's
@@ -8101,6 +8121,8 @@ export class Game {
     // cooking.js and ui/cook.js.)
     if (pd.recipes) this.player.recipes = pd.recipes;
     if (pd.kinds) this.player.kinds = pd.kinds;
+    // (Round 128) Books taken down from a library's shelves (see library.js).
+    if (Array.isArray(pd.loans)) this.player.loans = pd.loans.filter((l) => l && typeof l.item === 'string');
     if (pd.raft) this.player.raft = { ...pd.raft, v: 0 };
     if (pd.mount) this.player.mount = pd.mount;
     if (pd.vigor) {

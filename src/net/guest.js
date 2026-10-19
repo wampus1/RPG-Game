@@ -4,6 +4,7 @@
 // they're doing, the blows in the air, your own windows, how you are. It
 // draws that, plays its sounds, and sends back what you press and click
 // and point at, for the host to do as you.
+import { BOOKS } from '../world/bookreg.js';
 import { heard } from './chat.js';
 import { applyEntity, resolveEntity, dec, unpackPlan } from './wire.js';
 import { applyFrame } from './uiwire.js';
@@ -475,6 +476,8 @@ export class GuestNet {
     game.charging = o.charging || null;
     if (o.ops) this.ops = new Map(o.ops);
     if (o.qm) this.qms = new Map(o.qm);
+    // (Round 128) The books you carry, as the host's library has them.
+    if (o.books) for (const [id, b] of Object.entries(o.books)) BOOKS.set(id, b);
     this.scene(o.scene);
   }
 

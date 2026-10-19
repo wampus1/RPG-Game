@@ -97,11 +97,21 @@ export function uiFrame(ui, game, last, pixels = null) {
     }
     // (Round 125) A letter or a page held up to read: what it says, for
     // the player's own screen to draw (see ui/document.js).
-    if (w.doc) win.doc = w.doc;
+    // (Round 128: sent once; a whole book is too much to send again each
+    // time something else on the screen changes.)
+    if (w.doc) {
+      last.docs ||= new Set();
+      if (last.docs.has(w.netId)) win.docd = 1;
+      else {
+        win.doc = w.doc;
+        last.docs.add(w.netId);
+      }
+    }
     out.wins.push(win);
   }
   last.n = n;
   if (last.grids) for (const id of [...last.grids.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.grids.delete(id);
+  if (last.docs) for (const id of [...last.docs]) if (!ui.windows.some((w) => w.netId === id)) last.docs.delete(id);
   out.tip = ui.tooltip || null;
   out.stack = ui.cursorStack ? { item: ui.cursorStack.item, count: ui.cursorStack.count } : null;
   out.fade = ui.fade || 0;
@@ -193,9 +203,9 @@ export function applyFrame(ui, f) {
     keep.add(wf.id);
     // (Round 125) A page held up to read: this screen's own window, drawn
     // and read here (put down, it's put down at the host too).
-    if (wf.doc) {
+    if (wf.doc || wf.docd) {
       // (One put down here is waiting on the host to put it down too.)
-      if (!ui.windows.some((q) => q.mirrorOf === wf.id) && !(ui.putDown && ui.putDown.has(wf.id))) {
+      if (wf.doc && !ui.windows.some((q) => q.mirrorOf === wf.id) && !(ui.putDown && ui.putDown.has(wf.id))) {
         const d = new DocumentWindow(ui, wf.doc, { mirror: true });
         d.mirrorOf = wf.id;
         ui.windows.push(d);

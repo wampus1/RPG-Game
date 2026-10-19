@@ -21,6 +21,7 @@ import { guildMates } from '../game/guilds.js';
 import { runCommand } from '../game/commands.js';
 import { packShip, shipById } from '../game/ships3d.js';
 import { REACH } from '../config.js';
+import { bookInfo, bookIdOf } from '../world/bookreg.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -74,6 +75,21 @@ export class RemoteInput {
 
 // (Each screen's own picture, and the console: never for a player.)
 const HOST_IGNORES = new Set(['F2', 'F3', 'Backquote', 'Slash']);
+
+// (Round 128) The books in a player's pack, as the host's library has them
+// (their titles, writers, how they're selling): the player's own screen
+// names them by these (see world/bookreg.js), not by guessing at a library
+// it doesn't keep.
+function booksHeld(p) {
+  const out = {};
+  for (const s of p.inv || []) {
+    const id = s && bookIdOf(s.item);
+    if (!id || out[id]) continue;
+    const b = bookInfo(id);
+    if (b) out[id] = { id, title: b.title, by: b.by, year: b.year, genre: b.genre, novel: !!b.novel, town: b.town ?? null, pop: b.pop || 0 };
+  }
+  return out;
+}
 
 const regionKeyOf = (x, z) => `${Math.floor(x / REGION_W)},${Math.floor(z / REGION_D)}`;
 
@@ -876,6 +892,7 @@ export class HostNet {
       qm: g.qms || [],
       storm: game.stormSea ? enc(game.stormSea, 2) : null,
       charging: game.charging ? enc(game.charging, 2) : null,
+      books: booksHeld(p),
     };
   }
 

@@ -14,7 +14,7 @@ import { rollContainerLoot } from './loot.js';
 import { settleSites } from './sites.js';
 import { MODS } from '../mod/state.js';
 // (Round 73) What keeps things in it: a chest, or a rack or stand for show.
-const holds = (b) => !!b && (b.interact === 'container' || !!b.display);
+const holds = (b) => !!b && (b.interact === 'container' || b.interact === 'bookshelf' || !!b.display);
 
 export class World {
   // `o.wg`: how the world's made (see worldgen.WORLD_GEN).
@@ -283,6 +283,15 @@ export class World {
   peekContainer(x, y, z) {
     const r = this.regionAt(x, z);
     return r ? r.containers.get(((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y) || null : null;
+  }
+
+  // (Round 128) A container filled from outside (a library's shelf: see
+  // game/library.js).
+  putContainer(x, y, z, c) {
+    const r = this.regionAt(x, z);
+    if (!r) return;
+    r.containers.set(((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y, c);
+    r.modified = true;
   }
 
   getContainer(x, y, z) {

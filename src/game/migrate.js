@@ -965,6 +965,15 @@ export const STEPS = [
       void d;
       log.push('Books: written better, each writer in a voice of their own; novels, with sequels and prequels; and the bookish of every town now write and publish, their books rising and falling in favour, sold by merchants and read on the benches.');
     },
+  },  {
+    to: '1.28.0',
+    data(d, log) {
+      // (Nothing to change: a shelf's books are put on it the first time
+      // it's looked in, and the bigger inns are for towns laid out from
+      // now on; the towns already standing keep theirs.)
+      void d;
+      log.push('Library shelves hold books to take down and read (pay a scholar before you walk out with one); wagons can be clicked and walked into; the people\'s own dishes can be cooked at a furnace, as their cookery books say; and every people sets its books in its own type.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

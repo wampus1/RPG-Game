@@ -307,6 +307,50 @@ r('sporewright', 'spore_tincture', 1, { glowcap: 2, glass: 1 });
 r('pearldiver', 'pearl_necklace', 1, { pearl: 4, string: 1 });
 r('pearldiver', 'harpoon', 1, { stick: 2, iron_ingot: 1, string: 1 });
 
+// (Round 128) Each people's own dishes, as the cookery books give them
+// (see game/books): what goes in and how many it makes. A pot of it at a
+// furnace; the baked ones at a baker's oven too.
+export const DISH_RECIPES = {
+  pottage: { st: 'furnace', n: 2, in: { wheat: 2, cabbage: 1, herb: 1 } },
+  apple_tart: { st: 'furnace', n: 2, bake: true, in: { apple: 2, flour: 1, honeycomb: 1 } },
+  chowder: { st: 'furnace', n: 2, in: { fish: 2, cabbage: 1, bread: 1 } },
+  smoked_fish: { st: 'furnace', n: 2, in: { fish: 2, salt: 1 } },
+  spiced_lentils: { st: 'furnace', n: 2, in: { seeds: 2, herb: 1, salt: 1 } },
+  flatbread: { st: 'furnace', n: 2, bake: true, in: { flour: 2, berries: 1 } },
+  tamales: { st: 'furnace', n: 2, in: { wheat: 2, raw_meat: 1, pumpkin: 1 } },
+  cocoa: { st: 'furnace', n: 2, in: { coconut: 1, honeycomb: 1, ember_pod: 1 } },
+  goulash: { st: 'furnace', n: 2, in: { raw_meat: 2, carrot: 1, herb: 1 } },
+  oatcakes: { st: 'furnace', n: 2, bake: true, in: { wheat: 3, salt: 1 } },
+  pepper_stew: { st: 'furnace', n: 2, in: { raw_meat: 1, ember_pod: 2, carrot: 1 } },
+  ash_bread: { st: 'furnace', n: 2, bake: true, in: { flour: 2, salt: 1 } },
+  mushroom_broth: { st: 'furnace', n: 1, in: { mushroom: 2, glowcap: 1 } },
+  glowcap_tea: { st: 'furnace', n: 2, in: { glowcap: 1 } },
+  crab_boil: { st: 'furnace', n: 2, in: { crab_meat: 2, kelp: 1, salt: 1 } },
+  kelp_cakes: { st: 'furnace', n: 2, bake: true, in: { kelp: 2, flour: 1 } },
+  olive_bread: { st: 'furnace', n: 2, bake: true, in: { flour: 2, olives: 1 } },
+  garum_stew: { st: 'furnace', n: 2, in: { fish: 2, olives: 1, herb: 1 } },
+  reindeer_roast: { st: 'furnace', n: 2, in: { raw_meat: 2, berries: 1, herb: 1 } },
+  cloudberry_cakes: { st: 'furnace', n: 2, bake: true, in: { berries: 2, flour: 1 } },
+  dumplings: { st: 'furnace', n: 2, in: { flour: 1, raw_meat: 1, cabbage: 1 } },
+  jasmine_tea: { st: 'furnace', n: 2, in: { flower_white: 2, honeycomb: 1 } },
+  chili_squash: { st: 'furnace', n: 2, in: { pumpkin: 1, ember_pod: 1, herb: 1 } },
+  blue_corn_cakes: { st: 'furnace', n: 2, bake: true, in: { wheat: 2, cactus_fruit: 1 } },
+  whale_stew: { st: 'furnace', n: 2, in: { raw_meat: 2, kelp: 1, salt: 1 } },
+  oat_bannock: { st: 'furnace', n: 2, bake: true, in: { wheat: 2, honeycomb: 1 } },
+  shrimp_soup: { st: 'furnace', n: 2, in: { crab_meat: 1, fish: 1, coconut: 1 } },
+  salt_fish: { st: 'furnace', n: 2, in: { fish: 2, salt: 2 } },
+  root_stew: { st: 'furnace', n: 2, in: { carrot: 2, mushroom: 1, glowcap: 1 } },
+  glowberry_tart: { st: 'furnace', n: 2, bake: true, in: { glowberries: 2, flour: 1 } },
+  seer_stew: { st: 'furnace', n: 2, in: { fish: 1, mushroom: 1, herb: 2 } },
+  heather_bread: { st: 'furnace', n: 2, bake: true, in: { flour: 2, herb: 1 } },
+  fish_pie: { st: 'furnace', n: 2, bake: true, in: { fish: 2, flour: 1, carrot: 1 } },
+  seaweed_crisps: { st: 'furnace', n: 2, in: { kelp: 2, salt: 1, fish_oil: 1 } },
+};
+for (const [out, D] of Object.entries(DISH_RECIPES)) {
+  r(D.st, out, D.n, D.in);
+  if (D.bake) r('baker', out, D.n + 1, D.in);
+}
+
 export const RECIPES = R;
 
 export function recipesFor(station) {

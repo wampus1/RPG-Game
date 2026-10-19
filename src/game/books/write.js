@@ -182,6 +182,32 @@ export class Writer {
     // library drawn on (none leant on twice).
     this.written = new Set();
     this.frames = new Set();
+    // (Round 128) Every run of six words the book has said: a later chapter
+    // doesn't say any of them again (only a fact the chapter has to give
+    // is said in words the book has used before, and then as few as can be).
+    this.grams = new Set();
+  }
+
+  // The runs of six words in a sentence (its plain words: no numbers).
+  gramsOf(s) {
+    const w = s.toLowerCase().replace(/[^a-z' ]+/g, ' ').split(/\s+/).filter(Boolean);
+    const out = [];
+    for (let i = 0; i + 6 <= w.length; i++) out.push(w.slice(i, i + 6).join(' '));
+    return out;
+  }
+
+  // How many of them the book has said already.
+  repeats(s) {
+    let n = 0;
+    for (const g of this.gramsOf(s)) if (this.grams.has(g)) n++;
+    return n;
+  }
+
+  // A sentence set down: written, and its words remembered.
+  keep(s) {
+    this.written.add(s);
+    for (const g of this.gramsOf(s)) this.grams.add(g);
+    return s;
   }
 
   has(pool) {
@@ -237,6 +263,10 @@ export class Writer {
     if (!A.length || /["?!]/.test(s) || s.split(' ').length < 9 || !/\.$/.test(s) || /;/.test(s)) return s;
     const a = fill([this.rng.pick(A)], facts, this.rng).replace(/^,?\s*/, '').replace(/,\s*$/, '');
     if (s.toLowerCase().includes(a.toLowerCase())) return s;
+    // (Round 128) Never the same aside twice in a book.
+    this.asided ||= new Set();
+    if (this.asided.has(a.toLowerCase())) return s;
+    this.asided.add(a.toLowerCase());
     return `${s.slice(0, -1)}, ${a.charAt(0).toLowerCase()}${a.slice(1)}.`;
   }
 
@@ -247,30 +277,38 @@ export class Writer {
     if (!c || !c.size) return null;
     const allow = (w) => slotsIn(w).every((k) => has(facts, k));
     const wanted = (want || []).filter((k) => has(facts, k));
-    for (let t = 0; t < 3; t++) {
+    for (let t = 0; t < 5; t++) {
       const used = (seg) => [...seg].every((id) => this.frames.has(`${pool}:${id}`));
       const best = compose(c, this.rng, { min, max, aim, allow, want: wanted, ban: this.ban, tries: 12, reject: (w) => w.segs.some(used) });
       if (!best) continue;
-      for (const seg of best.segs) this.frames.add(`${pool}:${[...seg][0]}`);
       const s = fill(best.words, facts, this.rng, said);
-      if (this.written.has(s)) continue;
-      this.written.add(s);
-      return s;
+      if (this.written.has(s) || this.repeats(s)) continue;
+      for (const seg of best.segs) this.frames.add(`${pool}:${[...seg][0]}`);
+      return this.keep(s);
     }
     // (Nothing new: one of the move's own sentences, as written, if one fits
     // and hasn't been used.)
     // (Every one of them used already: one used before, then, said again
     // with this place's facts, rather than nothing.)
     const all = c.corpus.map((l, i) => [l, c.srcOf[i]]).filter(([l]) => tokens(l).every(allow) && (!wanted.length || wanted.some((k) => l.includes(`{${k}}`))));
+    // (Round 128) Never in words the book has used already, unless it's a
+    // fact the chapter must give; then in the fewest of them.
     const unused = all.filter(([, id]) => !this.frames.has(`${pool}:${id}`));
-    const fits = unused.length ? this.rng.shuffle(unused) : this.rng.shuffle(all);
+    const fits = [...this.rng.shuffle(unused), ...this.rng.shuffle(all.filter((q) => !unused.includes(q)))];
+    let least = null;
     for (const [l, id] of fits) {
       const s = fill(tokens(l), facts, this.rng, said);
-      if (!this.written.has(s)) {
-        this.written.add(s);
+      if (this.written.has(s)) continue;
+      const r = this.repeats(s);
+      if (!r) {
         this.frames.add(`${pool}:${id}`);
-        return s;
+        return this.keep(s);
       }
+      if (!least || r < least.r) least = { s, id, r };
+    }
+    if (least && wanted.length) {
+      this.frames.add(`${pool}:${least.id}`);
+      return this.keep(least.s);
     }
     return null;
   }

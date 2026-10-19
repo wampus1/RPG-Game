@@ -17,6 +17,7 @@ import { VOICES, voiceFor, asideFits } from '../src/game/books/voice.js';
 import { newSeries, addBook, writeNovel, nextBookType, prose } from '../src/game/books/novels.js';
 import { FICTION, PLOTS } from '../src/game/books/corpus/fiction.js';
 import { RECIPES } from '../src/game/books/corpus/recipes.js';
+import { DISH_RECIPES } from '../src/world/recipes.js';
 import { DISHES } from '../src/game/books/corpus/table.js';
 import { wellMade } from '../src/game/talk/grammar.js';
 import { paginate } from '../src/ui/bookview.js';
@@ -79,7 +80,8 @@ test('a cookery book gives what each dish needs, and the method, numbered', () =
   const { lore } = world();
   for (const k of Object.keys(DISHES)) {
     const R = RECIPES[k];
-    assert.ok(R && R.needs.length >= 2 && R.steps.length >= 3 && R.serves, k);
+    // (Round 128: what it needs is the game's own recipe: see round128.)
+    assert.ok(R && DISH_RECIPES[k] && R.steps.length >= 3 && R.serves, k);
   }
   const e = library(lore).find((q) => q.genre === 'table');
   const b = writeBook(lore, e);
@@ -222,7 +224,7 @@ test('the bookish write and publish; books rise and fall; merchants stock them; 
 });
 
 test('version 1.27.0, and a world from 1.26 is brought up to it', () => {
-  assert.equal(GAME_VERSION, '1.27.0');
+  assert.ok(compareVersions('1.27.0', GAME_VERSION) <= 0);
   assert.ok(compareVersions('1.26.0', GAME_VERSION) < 0);
   assert.ok(stepsFor('1.26.0').some((q) => q.to === '1.27.0'));
 });

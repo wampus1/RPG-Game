@@ -23,6 +23,7 @@ import { authority, rulerTitle, shortTitle } from '../sim/realms.js';
 import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
+import { duesIn, payDues } from './library.js';
 import { rainedRecently, weatherWord } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
 import { smallTalk } from './markov.js';
@@ -515,6 +516,12 @@ function topicsRaw(npc, game) {
   if (rec.job === 'guard' && !npc.hired && !npc.visit && rec.age === 'adult' && rep >= 30 && !sim.office.isHolder(s.id) && (sim.isCitizen(s.id) || rep >= 50)) add('sound', '(Quietly) This town needs a firmer hand...');
   // A researcher or a scholar: what they're working on, and the tree of
   // learning it's part of.
+  // (Round 128) The books you took down from the library's shelves: bought,
+  // to take away (see library.js).
+  if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) {
+    const due = duesIn(game, s.id);
+    if (due.n) add('libpay', `I'd like to take ${due.n > 1 ? `these ${due.n} books` : 'this book'} from the shelves with me. (Pay ¤${due.cost})`);
+  }
   if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) add('research', rec.job === 'researcher' ? 'What are you working on? (the tree of learning)' : 'What are the scholars studying? (the tree of learning)');
   // Out gathering signatures: anyone grown up in the town can sign.
   const pet = sim.petition;
@@ -1981,6 +1988,13 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
     case 'research': return researchTalk(npc, game);
+    case 'libpay': {
+      const due = duesIn(game, s.id);
+      if (!due.n) return { lines: ['You\'ve nothing of ours with you. Read what you like, while you\'re here.'] };
+      if (!payDues(game, s.id, npc.rec)) return { lines: [`That's ¤${due.cost} for ${due.n > 1 ? 'them' : 'it'}. Read ${due.n > 1 ? 'them' : 'it'} here for nothing, by all means; but they don't leave without it.`] };
+      game.ui.msg(`Paid ¤${due.cost}: ${due.n > 1 ? 'the books are' : 'the book is'} yours to take.`, '#ffe070');
+      return { lines: [pick(rng, ['There. Yours now. Mind the spine.', 'A good choice. We\'ll get another copy in.', 'Paid and written in the book. Off you go, and happy reading.'])] };
+    }
     case 'give_core': return arg === 'yes' ? coreTalk(npc, game) : confirmGift(npc, game, 'kav_core');
     case 'ancient_view': return { lines: ['Come, see. The scholars have drawn it out already.'], open: 'ancient' };
     case 'give_plans': return arg === 'yes' ? plansTalk(npc, game) : confirmGift(npc, game, 'old_blueprint');

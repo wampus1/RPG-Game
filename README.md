@@ -9984,6 +9984,82 @@ write and publish them.
 - In multiplayer, a guest holding a book that was published in the host's
   world may see it named just "A Book".
 
+## Round 128: Libraries, wagons, leaders and the weather
+
+### Books
+
+- **Library shelves.** A bookshelf is now a container with two to four
+  of the world's books on it, the same ones each time. Right-click a book
+  to read it where you stand, or take it. Taking a book down in a library
+  (or an academy, study or college) is not theft. Walking out of the
+  building with it unpaid is: theft, with witnesses or found out later.
+  Put it back, or pay a scholar or researcher of the town ("I'd like to
+  take this book from the shelves with me"), and it's yours. Shelves in
+  homes and shops belong to their owners, like any chest. The books you
+  have taken down are kept in your save.
+- **Multiplayer.** Shelves, reading, buying and borrowing all work for
+  guests (the host runs them, and each player's loans and thefts are
+  their own). The host now sends each guest the titles, writers and
+  popularity of the books they carry, so their hotbar names them right.
+  A book being read is sent to the guest's screen once, not again every
+  time something else on screen changes.
+- **No repeats.** A book no longer says the same thing twice in the
+  same words. The writer remembers every run of six words a book has
+  used and won't reuse it, unless the sentence carries a fact the
+  chapter has to give. A second mine that fell in, barrow, forge or sea
+  cave is told in other words, and its colour sentence is left out if
+  it was already said of another place. Reigns, asides and a novel's
+  callback to its hero's flaw don't repeat either.
+- **Recipes are the game's own.** All 34 of the peoples' dishes can now
+  be cooked: in the pot of a furnace, and the baked ones at a baker's
+  oven too, from things you can find or buy (wheat, cabbage, herbs,
+  fish, salt, honeycomb, ember pods, kelp...). A cookery book's *You
+  Will Need* lists exactly those items, says where the dish is made
+  and how many it makes, and its method uses nothing else.
+- **Each people's type.** Every people sets its books in its own
+  typeface, with its own paper, ink, capital colours, ornaments (knots,
+  stars, suns, waves, leaves, flames), heading style, drop caps (two
+  lines, three, or none), indented or spaced paragraphs, and justified
+  or ragged text. Each writer's book varies a little within that. There
+  are eleven new print faces, all SIL Open Font License (see
+  `src/fonts`).
+
+### Fixes
+
+- **Wagons and coaches** can be clicked again, and are solid: you walk
+  round a parked wagon, not through it.
+- **Leaders** are spoken to as leaders: the call-up to war, deserting it,
+  the guards' recruiting line, petitions on the town's laws, gossip, the
+  HUD ("Mayor of Redford", "Queen · in your realm"), and the halt and the
+  hearing, with their own lines for a mayor or a ruler before the court.
+- **The town cell.** Its corner post is there, and the open door matches
+  the bars. If someone is already doing time in it when you're brought
+  in, they're let out early and stood by the door, so you're never put
+  in on top of them or turned out after a night's sleep. A prisoner
+  lies on the cot at night.
+- **Map.** The tier marks of dungeons only show once you've zoomed in,
+  and never over the dungeon's icon.
+- **People.** Stretches and waving are drawn on each person's own body,
+  not a stand-in. Guards no longer shove each other round in circles.
+- **Bigger city inns.** A city's or an empire's tavern is laid out up to
+  15 by 9 where there's room (for towns laid out from this version on).
+- **Ships.** The block outline follows a tilted hull, and shows in green
+  where a block you're holding would go.
+- **Acacias** come down whole from their bottom log: felling follows a
+  crooked or leaning trunk.
+
+### The weather
+
+- Grass, bushes, flowers and crops sway in every weather (a little even
+  on a still day), harder in rain and gales.
+- Leaves rustle in bands that ripple, with paler flecks, instead of the
+  whole texture sliding.
+- The heat shimmer over the screen is gone.
+- The wind drives sails: gales fill them (in gusts), fog leaves them
+  slack, and the sails visibly fill and flutter with it. A raft runs a
+  little faster with the wind behind it and slower against it.
+- Bamboo is thinner, rounder and bends a little. Tigers are tiger-sized.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
