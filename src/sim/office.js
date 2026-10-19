@@ -34,6 +34,7 @@ import { RNG, hash4, clamp } from '../util/rng.js';
 import { pidOf, playerOf } from './saga/refs.js';
 import { countItem, removeItem, addItem } from '../game/inventory.js';
 import { isOutworlder } from '../game/hero.js';
+import { traitsOf, hasTrait, suits, OTRAITS } from './officertraits.js';
 
 export const FEE = { village: 20, town: 40, city: 80 };
 export const CITIZEN_DAYS = 3; // a citizen this long before standing
@@ -50,6 +51,10 @@ export const OFFICES = {
   magistrate: { name: 'Magistrate', short: 'Sets the fines, not the council.', about: 'Sets the fines without troubling the council: a stern one raises them after thefts, a lenient one eases them.' },
 };
 export const OFFICE_IDS = Object.keys(OFFICES);
+// (Round 125) The watch's pay, to the coin: and the level of it the
+// factions reckon by.
+export const WAGE = { min: 3, max: 10 };
+export const wageLevel = (w) => (w < 5 ? 0 : w < 7 ? 1 : 2);
 
 // Standing orders: what the steward does with matters you leave.
 // (Each choice: its key, what it means, and a word for it.)
@@ -90,6 +95,7 @@ export class Office {
     this.towns = {}; // sid -> the town's office (see town())
     this.offers = []; // { pid, sid, how, from, text, until }
     this.shows = []; // windows to open for a player: { pid, kind, data }
+    this.notes = []; // (Round 125) small notes in the corner for a player: { pid, text, color }
     this.realmVotes = {}; // civ id -> { change, day, votes, text }
   }
 
@@ -194,6 +200,36 @@ export class Office {
   show(pid, kind, data) {
     this.shows.push({ pid, kind, data });
     if (this.shows.length > 12) this.shows.shift();
+  }
+
+  // (Round 125) A small note in the corner of a player's screen: a matter
+  // tabled, a vote called, how it went. Kept till they're about to see it
+  // (not over an opening scene).
+  note(pid, text, color = '#e8d8a0') {
+    if (pid === null || pid === undefined) return;
+    this.notes.push({ pid, text, color });
+    if (this.notes.length > 24) this.notes.shift();
+  }
+
+  // (Round 125) Something only the player can answer (a crisis, a vote
+  // that waits on them): if they're asleep, or waiting out the hours,
+  // time stops racing and they're roused for it.
+  wake(pid, why) {
+    this.asPid(pid, () => {
+      const g = this.game;
+      if (g.waiting || (g.sleep && g.sleep.phase !== 'out')) g.disturb?.(why);
+      return true;
+    });
+  }
+
+  // (Round 125) How a matter went, kept for the record (the council
+  // window's Record page): { day, title, choice, outcome, aye, nay, by }.
+  // `outcome`: carried, decreed, decided, defeated, vetoed, standing (the
+  // steward, by standing orders), set aside.
+  record(T, it, outcome, o = {}) {
+    const opt = it && it.choice !== undefined && it.choice !== null ? it.opts[it.choice] : null;
+    (T.record ||= []).push({ day: o.day ?? this.dayNow ?? this.sim.crown?.dayNow ?? this.game.day, title: it ? it.title : o.title || '', choice: o.choice ?? (opt ? opt.label : null), outcome, aye: o.aye ?? null, nay: o.nay ?? null, by: o.by || null, crisis: !!(it && it.crisis) });
+    if (T.record.length > 240) T.record.shift();
   }
 
   // What townsperson `r` thinks of player `pid` (the current player's own
@@ -653,7 +689,14 @@ export class Office {
     this.paths(L, day, rng);
     const T = this.of(L.settlement.id);
     if (!T || !T.holder) return false;
-    this.session(L, T, day, rng);
+    // (Round 125: the sitting's own day, whatever the clock says: a town
+    // caught up after a long sleep or a long wait sits each day it missed.)
+    this.dayNow = day;
+    try {
+      this.session(L, T, day, rng);
+    } finally {
+      this.dayNow = null;
+    }
     return true;
   }
 
@@ -673,6 +716,8 @@ export class Office {
     }
     // 1. What was decided since the last sitting is carried out; what
     //    wasn't is left to the steward.
+    const sent = T.agenda.filter((it) => !it.done && (it.state === 'sent' || it.state === 'voting')).length;
+    if (sent) this.note(T.holder.pid, `${L.settlement.name} · The council sits: ${sent} matter${sent > 1 ? 's' : ''} put to the vote.`, '#a0e8ff');
     for (const it of T.agenda.slice()) {
       if (it.done) continue;
       if (it.state === 'sent' || it.state === 'voting') {
@@ -708,10 +753,15 @@ export class Office {
     const open = T.agenda.filter((q) => !q.crisis && !q.done && ['open', 'sent', 'voting'].includes(q.state));
     const busy = (key) => T.agenda.some((q) => q.key === key && !q.done) || (T.quiet[key] ?? -99) > day - 3;
     const specs = matters(this.sim, L, T, day).filter((q) => !busy(q.key)).sort((a, b) => b.prio - a.prio);
+    const fresh = [];
     for (const spec of specs) {
       if (open.length >= MAX_OPEN) break;
-      open.push(this.addItem(T, spec, day, abs));
+      const it = this.addItem(T, spec, day, abs);
+      open.push(it);
+      fresh.push(it);
     }
+    // (Round 125) A note in the corner for the one who governs.
+    if (fresh.length) this.note(T.holder.pid, `${L.settlement.name}: ${fresh.length === 1 ? `a new matter: ${fresh[0].title}` : `${fresh.length} new matters: ${fresh[0].title} and more`} (N)`, '#ffd890');
     if (!first) {
       const c = crisisFor(this.sim, L, T, day);
       if (c && !busy(c.key)) this.crisis(L, T, c, day, abs);
@@ -729,10 +779,17 @@ export class Office {
 
   crisis(L, T, spec, day, abs) {
     const it = this.addItem(T, spec, day, abs);
+    // (Round 125) A crisis come up while the hours raced by (a long sleep,
+    // a long wait, a town caught up): its hours count from now, so there's
+    // time to answer it.
+    const now = this.sim.abs;
+    if (spec.hours && it.until < now + spec.hours * 60 * 0.5) it.until = now + spec.hours * 60;
     T.crisisDay = day;
     T.crises[spec.crisis] = day;
     ledger(L, day, `${spec.title}. ${spec.why[0]}`);
     this.tell(T.holder.pid, `CRISIS in ${L.settlement.name}: ${spec.title}. Decide within ${spec.hours} hours (N: the council).`, '#ff8070');
+    this.note(T.holder.pid, `CRISIS in ${L.settlement.name}: ${spec.title}. ${spec.hours} hours to decide (N).`, '#ff8070');
+    this.wake(T.holder.pid, `You're roused: a crisis in ${L.settlement.name} needs you (N).`);
     this.asPid(T.holder.pid, () => this.game.audio?.play('alarm'));
     return it;
   }
@@ -746,7 +803,9 @@ export class Office {
       k = map[T.orders[key]] ?? -1;
     } else if (it.crisis) k = 0;
     // (A careless steward forgets the odd one.)
-    if (k >= 0 && !it.crisis && st && (st.personality.diligence ?? 0.5) < 0.3 && noise(it.id, day, st.idx) < -0.2) k = -1;
+    // (Round 125: by their traits: a careless one, now and then; a
+    // diligent one, never.)
+    if (k >= 0 && !it.crisis && st && hasTrait(st, 'careless') && !hasTrait(st, 'diligent') && noise(it.id, day, st.idx) < -0.2) k = -1;
     if (k >= 0 && it.opts[k] && it.opts[k].off) k = it.opts.findIndex((o) => o.trivial);
     // (Nor what the council has voted down.)
     if (k >= 0 && it.struck.includes(k)) k = -1;
@@ -755,6 +814,7 @@ export class Office {
       it.outcome = 'set aside';
       T.quiet[it.key] = day;
       this.minute(T, day, it.title, 'set aside: left undecided');
+      this.record(T, it, 'set aside', { choice: null });
       return null;
     }
     return this.carry(L, T, it, day, k, 'steward');
@@ -771,6 +831,8 @@ export class Office {
     const who = by === 'steward' ? `${(this.stewardOf(L, T) && full(this.stewardOf(L, T))) || 'The steward'}, by standing order,` : whoOf(L, T);
     if (text) ledger(L, day, `${who} ${text}`);
     this.minute(T, day, it.title, `${opt.label}${by === 'steward' ? ' (the steward, by your standing orders)' : ''}`);
+    const vs = it.vote && it.vote.state;
+    this.record(T, it, by === 'steward' ? 'standing' : vs === 'decreed' ? 'decreed' : vs === 'carried' ? 'carried' : 'decided', { aye: it.vote && it.vote.ballots && it.vote.ballots.length ? it.vote.aye : null, nay: it.vote && it.vote.ballots && it.vote.ballots.length ? it.vote.nay : null, by });
     if (it.by && FACTIONS[it.by] && !opt.trivial) T.favour[it.by] = clamp((T.favour[it.by] || 0) + 2, -FAVOUR_MAX, FAVOUR_MAX);
     T.quiet[it.key] = day;
     if (T.today) T.today.decided.push(it.title);
@@ -780,6 +842,22 @@ export class Office {
   minute(T, day, title, what) {
     T.minutes.push({ day, title, what });
     if (T.minutes.length > 40) T.minutes.shift();
+  }
+
+  // (Round 125) Coin drawn from the hall's chests by the one who governs:
+  // the treasury's, and noted in the minutes (the guilds and the poor see
+  // the books).
+  drawn(sid, n) {
+    const T = this.of(sid);
+    if (!T || !T.holder || n <= 0) return;
+    const day = this.game.day;
+    const L = this.laid(T);
+    const title = L ? this.title(L, T) : 'The head';
+    this.minute(T, day, 'The coffers', `The ${title} drew ¤${n} from the treasury.`);
+    T.drawnDay = day;
+    T.drawn = (T.drawn || 0) + n;
+    this.tell(T.holder.pid, `You draw ¤${n} from the town's coffers. It's in the minutes: the guilds and the poor will hear of it.`, '#ffd890');
+    if (L) for (const f of ['merchants', 'poor']) T.favour[f] = clamp((T.favour[f] || 0) - Math.min(8, Math.ceil(n / 25)), -FAVOUR_MAX, FAVOUR_MAX);
   }
 
   // ------------------------------------------------------------ deciding
@@ -813,7 +891,12 @@ export class Office {
     if (v.state === 'waiting') {
       it.state = 'voting';
       it.vote = v;
-      for (const b of v.ballots) if (b.pid && b.v === null) this.show(b.pid, 'vote', { sid: L.settlement.id, id: it.id });
+      for (const b of v.ballots) if (b.pid && b.v === null) {
+        this.show(b.pid, 'vote', { sid: L.settlement.id, id: it.id });
+        this.note(b.pid, `${L.settlement.name} · A VOTE IS CALLED: ${it.title.replace(/\?$/, '')}: ${opt.label}`, '#a0e8ff');
+        this.wake(b.pid, `You're roused: the council of ${L.settlement.name} is voting, and waits on you.`);
+      }
+      this.note(T.holder.pid, `${L.settlement.name} · Put to the vote: ${opt.label}. Waiting on ${v.ballots.filter((b) => b.pid && b.v === null).length} councillor(s).`, '#a0e8ff');
       return { ok: true, state: 'waiting', vote: v };
     }
     this.settle(L, T, it, v, day);
@@ -833,18 +916,32 @@ export class Office {
     it.vote = v;
     if (v.state === 'carried' || v.state === 'decreed') {
       it.state = 'carried';
+      // (Round 125) How it went, for those who'd want to know: at a
+      // sitting, or a vote that waited on players.
+      if (v.state === 'carried' && (atSession || v.ballots.some((b) => b.pid))) for (const pid of this.voters(T, v)) this.note(pid, `${L.settlement.name} · CARRIED: ${it.title.replace(/\?$/, '')}: ${it.opts[it.choice].label} (${v.aye}-${v.nay})`, '#90e890');
       if (it.crisis && !atSession) this.carry(L, T, it, day, it.choice, 'you');
     } else {
       it.state = 'open';
       if (!it.struck.includes(it.choice)) it.struck.push(it.choice);
       const opt = it.opts[it.choice];
       if (!atSession) this.tell(T.holder.pid, `The council voted down "${opt.label}" (${v.aye} to ${v.nay}).`, '#ffb080');
+      this.record(T, it, v.state === 'vetoed' ? 'vetoed' : 'defeated', { aye: v.aye, nay: v.nay });
+      if (atSession || v.ballots.some((b) => b.pid)) for (const pid of this.voters(T, v)) this.note(pid, `${L.settlement.name} · ${v.state === 'vetoed' ? 'VETOED' : 'DEFEATED'}: ${it.title.replace(/\?$/, '')}: ${opt.label} (${v.aye}-${v.nay})`, '#ff9070');
       else ledger(L, day, `The council of ${L.settlement.name} voted down ${whoOf(L, T)}'s proposal: ${it.title.replace(/\?$/, '')}: ${opt.label.toLowerCase()} (${v.aye} to ${v.nay}).`);
       this.minute(T, day, it.title, `${opt.label}: ${v.state === 'vetoed' ? 'vetoed by the priest' : 'voted down'} (${v.aye} to ${v.nay})`);
       // Nothing left that the council would carry: it lapses at the sitting.
     }
     T.agenda = T.agenda.filter((q) => !q.done);
     return v;
+  }
+
+  // (Round 125) Whom a vote's result is news to: the head, and any player
+  // who sat on it.
+  voters(T, v) {
+    const out = new Set();
+    if (T.holder) out.add(T.holder.pid);
+    for (const b of (v && v.ballots) || []) if (b.pid) out.add(b.pid);
+    return [...out];
   }
 
   // A player councillor's vote on a matter waiting for them.
@@ -962,12 +1059,18 @@ export class Office {
       return v;
     };
     let u = 0;
-    u += t((pv.by[f] || 0) / 9, (pv.by[f] || 0) >= 0 ? `good for the ${FACTIONS[f].name.toLowerCase()}` : `bad for the ${FACTIONS[f].name.toLowerCase()}`);
-    u += t((pv.overall || 0) / 15, (pv.overall || 0) >= 0 ? 'good for the town' : 'bad for the town');
+    // (Round 125) Their traits: the learned weigh the town before their
+    // faction; the ambitious want your seat; the steadfast stand by you;
+    // a bribe sways the grasping twice as far, and the honest not at all.
+    const learned = hasTrait(r, 'learned');
+    u += t(((pv.by[f] || 0) / 9) * (learned ? 0.6 : 1), (pv.by[f] || 0) >= 0 ? `good for the ${FACTIONS[f].name.toLowerCase()}` : `bad for the ${FACTIONS[f].name.toLowerCase()}`);
+    u += t(((pv.overall || 0) / 15) * (learned ? 1.6 : 1), (pv.overall || 0) >= 0 ? 'good for the town' : 'bad for the town');
+    if (hasTrait(r, 'ambitious')) u += t(-0.3, 'wants your seat');
+    if (hasTrait(r, 'loyal')) u += t(0.3, 'stands by you');
     u += t(((T.loyal[r.idx] ?? 0) / 100) * 0.7, (T.loyal[r.idx] ?? 0) >= 0 ? 'thinks well of you' : 'thinks ill of you');
     u += t(this.taste(L, T, opt, r), 'their own convictions');
     if (opt.sense) u += t(opt.sense * (0.7 + (r.personality?.diligence ?? 0.5) * 0.8), 'the town needs it');
-    if (T.bribed[`${it.id}:${r.idx}`]) u += t(0.9, 'paid for');
+    if (T.bribed[`${it.id}:${r.idx}`] && !hasTrait(r, 'honest')) u += t(hasTrait(r, 'grasping') ? 1.8 : 0.9, 'paid for');
     u += noise(r.idx, it.id, k, 0xb07) * 0.35;
     terms.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
     const v = u > 0 ? 1 : 0;
@@ -1003,8 +1106,8 @@ export class Office {
     removeItem(p.inv, 'coin', cost);
     r.coins = (r.coins || 0) + cost;
     T.bribed[key] = this.game.day;
-    // (Honest folk talk.)
-    const leak = 0.12 + ((r.personality?.kindness ?? 0.5) > 0.7 ? 0.15 : 0);
+    // (Honest folk talk: an honest one takes it, and tells. Round 125.)
+    const leak = hasTrait(r, 'honest') ? 0.6 : hasTrait(r, 'grasping') ? 0.05 : 0.12 + ((r.personality?.kindness ?? 0.5) > 0.7 ? 0.15 : 0);
     if ((hash4(idx, it.id, this.game.day, 0xb21) % 1000) / 1000 < leak) T.leak = { day: this.game.day, who: full(r), cost };
     return { ok: true, cost };
   }
@@ -1037,6 +1140,15 @@ export class Office {
       if (T.charter === 'commune' && k === 'relief' && v < 1) continue;
       if (T.budget[k] !== v) words.push(`set ${BUDGET[k].name.toLowerCase()} to ${BUDGET[k].levels[v].toLowerCase()}`);
       T.budget[k] = v;
+      // (A level of the watch's pay: its own wage, not one set to the point.)
+      if (k === 'watch') delete T.wage;
+    }
+    // (Round 125) The watch's pay set to the coin.
+    if (fx.wage !== undefined) {
+      const w = clamp(Math.round(fx.wage), WAGE.min, WAGE.max);
+      if (T.wage !== w) words.push(`set the watch's pay at ¤${w} a day`);
+      T.wage = w;
+      T.budget.watch = wageLevel(w);
     }
     if (fx.fines) {
       words.push(`${fx.fines > e.fineScale ? 'raised' : 'eased'} fines (×${fx.fines})`);
@@ -1139,7 +1251,7 @@ export class Office {
       this.sim.events.feast(L, day, spend);
     }
     // The watch's pay (see econ.payWages), and its spirits.
-    e.guardWage = [4, 5, 7][T.budget.watch ?? 1];
+    e.guardWage = T.wage ?? [4, 5, 7][T.budget.watch ?? 1];
     if (T.budget.watch !== 1) for (const r of S.living) if (r.job === 'guard') r.mood = clamp((r.mood ?? 0.55) + (T.budget.watch === 2 ? 0.02 : -0.02), 0, 1);
     // A kitchen with no money to buy food: a small grant.
     const k = kitchenOf(L);
@@ -1150,9 +1262,13 @@ export class Office {
     // The officers at their work.
     const cap = this.officer(L, T, 'captain');
     L.econ.captain = cap ? cap.idx : null;
+    // (Round 125) How much stronger the watch counts for its captain.
+    L.econ.captainBonus = cap ? Math.max(0, 1 + (hasTrait(cap, 'stern') ? 0.5 : 0) + (hasTrait(cap, 'brave') ? 1 : 0) - (hasTrait(cap, 'timid') ? 1 : 0)) : 0;
     const tr = this.officer(L, T, 'treasurer');
-    e.taxBoost = tr ? 1 + Math.min(0.2, (tr.skills?.trading || 0) * 0.2) : 1;
-    if (tr && (tr.personality.kindness ?? 0.5) < 0.3 && rng.chance(0.08) && e.taxY) {
+    // (Round 125: by their traits: shrewd, diligent or careless with it; a
+    // grasping one skims, an honest one never.)
+    e.taxBoost = tr ? 1 + Math.min(0.2, (tr.skills?.trading || 0) * 0.2 + (hasTrait(tr, 'shrewd') ? 0.08 : 0)) + (hasTrait(tr, 'diligent') ? 0.05 : 0) - (hasTrait(tr, 'careless') ? 0.05 : 0) : 1;
+    if (tr && hasTrait(tr, 'grasping') && !hasTrait(tr, 'honest') && rng.chance(0.08) && e.taxY) {
       const n = Math.max(2, Math.round(e.taxY * 0.25));
       e.treasury = Math.max(0, e.treasury - n);
       tr.coins = (tr.coins || 0) + n;
@@ -1164,12 +1280,14 @@ export class Office {
     }
     const mg = this.officer(L, T, 'magistrate');
     if (mg) {
-      const stern = (mg.personality.temper ?? 0.5) > 0.6 || (mg.personality.kindness ?? 0.5) < 0.4;
-      if ((e.recent.thefts || 0) >= 2 && e.fineScale < 1.6 && stern) {
-        e.fineScale = Math.round(Math.min(1.6, e.fineScale * 1.25) * 100) / 100;
+      // (Round 125: by their traits.)
+      const stern = hasTrait(mg, 'stern') || hasTrait(mg, 'grasping');
+      const most = hasTrait(mg, 'learned') ? 1.3 : 1.6;
+      if ((e.recent.thefts || 0) >= 2 && e.fineScale < most && stern) {
+        e.fineScale = Math.round(Math.min(most, e.fineScale * 1.25) * 100) / 100;
         e.recent.thefts = 0;
         ledger(L, day, `The magistrate, ${full(mg)}, raised fines after a spate of thefts.`);
-      } else if ((e.recent.calm || 0) >= (stern ? 9 : 4) && e.fineScale > (stern ? 1 : 0.85)) {
+      } else if ((e.recent.calm || 0) >= (stern ? 9 : hasTrait(mg, 'merciful') ? 3 : 5) && e.fineScale > (stern ? 1 : 0.85)) {
         e.fineScale = Math.max(stern ? 1 : 0.85, Math.round(e.fineScale * 0.85 * 100) / 100);
         e.recent.calm = 0;
         ledger(L, day, `The magistrate, ${full(mg)}, eased the fines: the streets have been calm.`);
@@ -1497,7 +1615,9 @@ export class Office {
       treasurer: (r) => (r.skills?.trading || 0) * 2 + (r.personality.kindness ?? 0.5) * 0.5,
       magistrate: (r) => (r.age === 'elder' ? 0.6 : 0) + (r.personality.kindness ?? 0.5) * 0.3 + respect(r) * 0.5,
     }[k];
-    return pool.filter((r) => !(k !== 'steward' && r.steward)).sort((a, b) => score(b) - score(a)).slice(0, 12).map((r) => ({ r, score: score(r), loyal: T ? T.loyal[r.idx] ?? null : null }));
+    // (Round 125: how well their traits suit it, too.)
+    const sc = (r) => score(r) + suits(k, r) * 0.5;
+    return pool.filter((r) => !(k !== 'steward' && r.steward)).sort((a, b) => sc(b) - sc(a)).slice(0, 12).map((r) => ({ r, score: sc(r), stars: suits(k, r), traits: traitsOf(r), loyal: T ? T.loyal[r.idx] ?? null : null }));
   }
 
   appoint(L, k, idx, day = this.game.day, quiet = false) {
@@ -1520,7 +1640,10 @@ export class Office {
       if (k === 'captain') r.captain = true;
     }
     const f = factionOf(r);
-    if (f) T.favour[f] = clamp((T.favour[f] || 0) + 3, -FAVOUR_MAX, FAVOUR_MAX);
+    // (Round 125: one who's well liked, the more so; a merciful one, the
+    // poor too.)
+    if (f) T.favour[f] = clamp((T.favour[f] || 0) + (hasTrait(r, 'popular') ? 6 : 3), -FAVOUR_MAX, FAVOUR_MAX);
+    if (hasTrait(r, 'merciful')) T.favour.poor = clamp((T.favour.poor || 0) + 2, -FAVOUR_MAX, FAVOUR_MAX);
     if (k === 'captain') T.favour.guards = clamp((T.favour.guards || 0) + 2, -FAVOUR_MAX, FAVOUR_MAX);
     this.sim.changeRep?.(r.ent || { rec: r, settlement: L.settlement }, 6, { why: 'office' });
     const text = `named ${full(r)} ${OFFICES[k].name.toLowerCase()}`;
@@ -1535,7 +1658,7 @@ export class Office {
     if (k === 'captain') delete r.captain;
     delete T.offices[k];
     const f = factionOf(r);
-    if (f) T.favour[f] = clamp((T.favour[f] || 0) - 3, -FAVOUR_MAX, FAVOUR_MAX);
+    if (f) T.favour[f] = clamp((T.favour[f] || 0) - (hasTrait(r, 'popular') ? 6 : 3), -FAVOUR_MAX, FAVOUR_MAX);
     this.sim.changeRep?.(r.ent || { rec: r, settlement: L.settlement }, -6, { why: 'office' });
     ledger(L, this.game.day, `${whoOf(L, T)} dismissed ${full(r)} as ${OFFICES[k].name.toLowerCase()}.`);
     return true;
@@ -1568,6 +1691,12 @@ export class Office {
       const S = sums(this.sim, L, T);
       const sense = v > e.tax ? clamp((S.reserve - e.treasury) / Math.max(1, S.reserve), 0, 1) * 0.7 : e.treasury > S.pop * 35 ? 0.2 : -0.1;
       spec = { key: 'tax', kind: 'tax', title: `Set taxes at ${pc(v)}?`, why: [`Taxes are ${pc(e.tax)} now; the treasury holds ¤${Math.floor(e.treasury)} (the town should keep ¤${S.reserve} in hand).`, ...(below ? [`That's under the realm's least tax of ${pc(floor)}: it defies the decree.`] : [])], opts: [{ label: `Set them at ${pc(v)}`, fx: below ? { tax: v, defy: 'taxFloor' } : { tax: v }, sense }, { label: 'Withdraw it', fx: {}, trivial: true }] };
+    } else if (kind === 'wage') {
+      const w = clamp(Math.round(a), WAGE.min, WAGE.max);
+      const now = T.wage ?? [4, 5, 7][T.budget.watch ?? 1];
+      if (w === now) return { ok: false, why: 'That\'s their pay already.' };
+      const g = residents(L).filter((r) => r.job === 'guard').length;
+      spec = { key: 'budget:watch', kind: 'budget', title: `Pay the watch ¤${w} a day?`, why: [`Each guard is paid ¤${now} a day now: ¤${now * g} a day for ${g}. At ¤${w}, it would be ¤${w * g}.`, w > now ? 'Better paid, the watch is keener, and thinks better of you.' : 'Cheaper, but the watch will grumble.'], opts: [{ label: `Pay them ¤${w}`, fx: { wage: w } }, { label: 'Withdraw it', fx: {}, trivial: true }] };
     } else if (kind === 'budget') {
       if (T.charter === 'commune' && a === 'relief' && b < 1) return { ok: false, why: 'A commune can never cut relief.' };
       if ((T.budget[a] ?? 1) === b) return { ok: false, why: 'That\'s how it stands already.' };
@@ -2096,11 +2225,21 @@ export class Office {
     for (const sh of this.shows.slice()) {
       const done = this.asPid(sh.pid, () => {
         const ui = this.game.ui;
-        if (!ui || !ui.showOffice || this.game.player.dead) return false;
+        // (Not over an opening scene: once it's done. Round 125.)
+        if (!ui || !ui.showOffice || this.game.player.dead || this.game.scene) return false;
         ui.showOffice(sh.kind, sh.data);
         return true;
       });
       if (done) this.shows.splice(this.shows.indexOf(sh), 1);
+    }
+    for (const n of this.notes.slice()) {
+      const done = this.asPid(n.pid, () => {
+        const ui = this.game.ui;
+        if (!ui || !ui.notify || this.game.scene || this.game.player.dead) return false;
+        ui.notify(n.text, null, n.color);
+        return true;
+      });
+      if (done) this.notes.splice(this.notes.indexOf(n), 1);
     }
   }
 
@@ -2153,6 +2292,7 @@ export class Office {
       T.goals ||= {};
       T.quiet ||= {};
       T.crises ||= {};
+      T.record ||= [];
     }
   }
 }
@@ -2356,4 +2496,5 @@ function feverDeaths(o, L, day, p, how, most = 1) {
   return `${how}; ${lost.length ? `the fever took ${lost.join(' and ')}` : 'the fever passed, and nobody was lost'}`;
 }
 
+export { OTRAITS };
 export { CHARTERS, CHARTER_IDS, FACTIONS, FACTION_IDS, BUDGET, stated, whoOf, sums, nextSession, residents };

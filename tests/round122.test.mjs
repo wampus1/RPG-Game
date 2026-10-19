@@ -326,8 +326,9 @@ test('the council window, decluttered: six pages; the realm and ambitions are vi
   w.draw(g, W.game);
   assert.equal(w.tab, 'charter');
   assert.equal(w.view, 'realm');
-  assert.ok(g.ch.join('').includes('1-6: pages'));
-  assert.ok(!g.ch.join('').includes('7·'));
+  // (Round 125: and a seventh, the record.)
+  assert.ok(g.ch.join('').includes('1-7: pages'));
+  assert.ok(!g.ch.join('').includes('8·'));
 });
 
 test('the console: "crown" takes a realm\'s throne, sits, brings on a crisis, and abdicates', () => {

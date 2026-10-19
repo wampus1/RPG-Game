@@ -23,6 +23,8 @@ import { describe, lcFirst } from '../sim/justice.js';
 import { agoText, timeText } from '../game/saves.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
+import { headTitle } from '../sim/charters.js';
+import { shortTitle } from '../sim/realms.js';
 import { SETTING_ROWS, SETTING_TABS, SETTING_ACTIONS, changeSetting, setSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
@@ -178,7 +180,7 @@ export class InventoryWindow extends Window {
     g.box(x - 1, 1, 23, 17, { fg: C.faint });
     const pr = playerProfile(game);
     g.text(x + 1, 2, pr.name.toUpperCase().slice(0, 20), C.hi);
-    wrap(pr.title, 20).slice(0, 2).forEach((l, i) => g.text(x + 1, 3 + i, l, pr.citizen ? C.green : C.cyan));
+    wrap(pr.title, 20).slice(0, 2).forEach((l, i) => g.text(x + 1, 3 + i, l, pr.color));
     if (pr.job) g.text(x + 1, 5, pr.job.slice(0, 20), C.purple);
     if (pr.renown) g.text(x + 1, pr.job ? 6 : 5, pr.renown.title.slice(0, 20), C.hi);
     g.text(x + 1, 7, `HP     ${Math.ceil(p.hp)}/${p.maxHp}`, C.red);
@@ -1300,10 +1302,19 @@ export function playerProfile(game) {
   const sim = game.sim;
   const cz = sim.citizen;
   const town = cz ? game.world.ow.settlements[cz.sid] : null;
+  // (Round 125) A ruler or a town's head is that first.
+  const pid = sim.office ? sim.office.pid() : null;
+  const K = sim.crown && pid ? sim.crown.heldBy(pid) : null;
+  const kciv = K ? game.world.ow.civs[K.civ] : null;
+  const T = !kciv && sim.office ? sim.office.heldBy(pid) : null;
+  const ts = T ? game.world.ow.settlements[T.sid] : null;
+  const lead = kciv ? `${shortTitle(kciv)} of the ${kciv.name.replace(/^The /, '')}` : ts ? `${headTitle(T.charter, ts, T.holder && T.holder.style)} of ${ts.name}` : null;
   return {
     name: game.playerName,
     citizen: !!town,
-    title: town ? `Citizen of ${town.name}` : 'Adventurer',
+    leader: !!lead,
+    color: lead ? '#ffd070' : town ? C.green : C.cyan,
+    title: lead || (town ? `Citizen of ${town.name}` : 'Adventurer'),
     job: sim.careers.title(),
     renown: sim.bestRenown(),
   };
@@ -1321,7 +1332,7 @@ export class JournalWindow extends Window {
     const pr = playerProfile(game);
     g.box(0, 0, this.w, this.h, { bg: 'rgba(28,22,16,0.96)', double: true, title: 'JOURNAL' });
     g.text(3, 1, pr.name, C.hi);
-    g.text(4 + pr.name.length, 1, `· ${pr.title}`, pr.citizen ? C.green : C.cyan);
+    g.text(4 + pr.name.length, 1, `· ${pr.title}`, pr.color);
     if (pr.renown) g.text(3, 2, `The ${pr.renown.title}`, C.hi);
     // (Written out line by line, then shown from wherever it's scrolled to.)
     const rows = [];

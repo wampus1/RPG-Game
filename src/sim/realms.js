@@ -476,7 +476,9 @@ export class Realms {
     const realmName = civ.name.replace(/^The /, '');
     const violence = towns.reduce((n, L) => n + (L.econ.recent.violence || 0) + (L.econ.recent.raids || 0), 0);
     const poor = towns.filter((L) => L.econ.treasury < residents(L).length * 6).length;
-    const i = TAX_FLOORS.indexOf(d.taxFloor);
+    // (Round 125: the nearest of the usual steps, a ruler having set it to
+    // the point.)
+    const i = TAX_FLOORS.reduce((b, v, k) => (Math.abs(v - (d.taxFloor || 0)) < Math.abs(TAX_FLOORS[b] - (d.taxFloor || 0)) ? k : b), 0);
     const put = (change) => {
       if (advise) return change;
       if (this.sim.office && this.sim.office.realmProposal(civ, change, day)) return change.key;

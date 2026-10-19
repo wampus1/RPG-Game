@@ -334,7 +334,7 @@ function raid(sim, L, S, band) {
 export function raidOdds(L, S, hired) {
   if (hired) return 0.9;
   const militia = !!(L.econ.laws || {}).militia;
-  const strength = S.guards + (militia ? S.living.filter((r) => r.age === 'adult').length * 0.2 : 0) + (L.econ.captain !== null && L.econ.captain !== undefined ? 1 : 0);
+  const strength = S.guards + (militia ? S.living.filter((r) => r.age === 'adult').length * 0.2 : 0) + (L.econ.captain !== null && L.econ.captain !== undefined ? L.econ.captainBonus ?? 1 : 0);
   return clamp(0.2 + strength * 0.13, 0.1, 0.95);
 }
 
@@ -447,6 +447,7 @@ export function stated(sim, L, T, opt, charters, day) {
     money.push(`taxes ${pc(fx.tax)}${base ? ` (≈${d >= 0 ? '+' : '-'}¤${Math.abs(d)} a day)` : ''}`);
   }
   if (fx.budget) for (const [k, v] of Object.entries(fx.budget)) money.push(`${BUDGET[k].name.toLowerCase()}: ${BUDGET[k].levels[v].toLowerCase()}`);
+  if (fx.wage !== undefined) money.push(`the watch paid ¤${fx.wage} a day`);
   if (fx.law) money.push(`${fx.law.on ? 'passes' : 'throws out'} the ${LAWS[fx.law.id].name.toLowerCase()}`);
   if (fx.fines) money.push(`fines ×${fx.fines}`);
   if (fx.relief) money.push(`¤4 for each of the hungry`);
@@ -464,6 +465,8 @@ export function overOf(L, T, fx) {
   if (fx.tax !== undefined) over.tax = fx.tax;
   if (fx.law) over.laws = { [fx.law.id]: fx.law.on };
   if (fx.budget) over.budget = fx.budget;
+  // (Round 125: the watch's pay to the coin, as the factions reckon it.)
+  if (fx.wage !== undefined) over.budget = { ...(over.budget || {}), watch: fx.wage < 5 ? 0 : fx.wage < 7 ? 1 : 2 };
   if (fx.charter) over.charter = fx.charter;
   if (fx.favour) over.favour = fx.favour;
   return over;

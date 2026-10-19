@@ -5399,7 +5399,7 @@ export class Game {
     this.audio?.play('chest');
     const pk = this.packAt(x, y, z);
     this.ui.openContainer(pk ? packLabel(pk) : owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
-    if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
+    if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work' && owner.kind !== 'office') this.peekWarning(owner);
     if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
   }
 
@@ -5529,6 +5529,9 @@ export class Game {
       const host = this.sim.isGuest(s.id, b.id);
       return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family${host ? ' (your hosts)' : ''}` : null, b };
     }
+    // (Round 125) The hall of a town you govern: its chests are yours to
+    // open (the coin in them is still the town's: see onContainerTake).
+    if (b.type === 'townhall' && this.sim.office && this.sim.office.isHolder(s.id)) return { kind: 'office', id: b.id, sid: s.id, label: 'the town\'s coffers', b };
     // Staff on shift may use the shop's chests and barrels.
     if (this.sim.careers.onShift(s.id, b.id)) return { kind: 'work', id: b.id, sid: s.id, label: `${b.name} (work)`, b };
     return { kind: 'biz', id: b.id, sid: s.id, label: b.name, b };
@@ -5547,6 +5550,13 @@ export class Game {
   // Items taken out of a container that isn't yours (called by the window).
   onContainerTake(pos, taken) {
     const owner = pos.owner;
+    // (Round 125) The coffers of the town you govern: no theft, but the
+    // coin you take is the treasury's, and it goes in the minutes.
+    if (owner && owner.kind === 'office') {
+      const coin = taken.filter((t) => t.item === 'coin').reduce((n, t) => n + t.count, 0);
+      if (coin) this.sim.office.drawn(owner.sid, coin);
+      return false;
+    }
     // Your hosts share what they have while you stay with them.
     if (!owner || owner.kind === 'mine' || owner.kind === 'work' || owner.kind === 'host' || !taken.length) return false;
     const value = taken.reduce((n, t) => n + (ITEMS[t.item]?.value || 1) * t.count, 0);

@@ -19,7 +19,8 @@ import { drawText } from '../render/font.js';
 import { humanoidSheet, SHEET_H } from '../render/sprites.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 import { REALM_FORMS, FORM_IDS } from '../sim/realmforms.js';
-import { FLOORS, WATCHES, DRAFTS, CROWN_ORDERS, CROWN_ORDER_IDS, SHARES } from '../sim/crown.js';
+import { WATCHES, DRAFTS, CROWN_ORDERS, CROWN_ORDER_IDS, FLOOR_MAX, SHARE_MIN, SHARE_MAX } from '../sim/crown.js';
+import { slider, button, drawRecord, wheelRecord, drawWar } from './govkit.js';
 import { shortTitle } from '../sim/realms.js';
 import { seatOfPid } from '../sim/saga/refs.js';
 import { approvalColor, whoMoves } from './council.js';
@@ -30,6 +31,8 @@ const TABS = [
   { id: 'towns', label: 'Towns' },
   { id: 'court', label: 'Court' },
   { id: 'realms', label: 'Realms' },
+  { id: 'war', label: 'War' },
+  { id: 'record', label: 'Record' },
 ];
 const W = 84;
 const H = 34;
@@ -166,12 +169,12 @@ export class CrownWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: BG, double: true, fg: F.color, title: `${F.glyph} THE ${plain(civ).toUpperCase()} ${F.glyph}`, titleFg: F.color });
     this.header(g, civ, R, C0, F);
     this.tabs(g, C0, F);
-    const fn = { matters: this.drawMatters, decrees: this.drawDecrees, towns: this.drawTowns, court: this.drawCourt, realms: this.drawRealms }[this.tab];
+    const fn = { matters: this.drawMatters, decrees: this.drawDecrees, towns: this.drawTowns, court: this.drawCourt, realms: this.drawRealms, war: this.drawWarPage, record: this.drawRecordPage }[this.tab];
     fn.call(this, g, civ, R, C0, F);
     if (this.flash && this.flash.t < 4) {
       const text = ` ${this.flash.text} `.slice(0, W - 4);
       g.text(Math.floor((W - text.length) / 2), H - 2, text, this.flash.color, 'rgba(20,16,28,0.95)');
-    } else g.text(2, H - 2, '1-5: pages   ↑↓: choose   Enter: decide   Esc: close', C.faint);
+    } else g.text(2, H - 2, '1-7: pages   ↑↓: choose   Enter: decide   Esc: close', C.faint);
   }
 
   header(g, civ, R, C0, F) {
@@ -223,7 +226,9 @@ export class CrownWindow extends Window {
   }
 
   goTab(id) {
-    if (this.reveal) return;
+    // (Round 125: a vote being shown doesn't hold the pages shut: it's
+    // put away, its result kept in the record.)
+    this.reveal = null;
     this.tab = id;
     this.confirm = null;
     this.ui.audio?.play('page');
@@ -428,10 +433,28 @@ export class CrownWindow extends Window {
       });
       y += 2;
     };
-    const cap = F.shareCap || 0.16;
-    row('Least tax', FLOORS.map((v) => [v, v ? pc(v) : 'none']), d.taxFloor || 0, 'taxFloor', 'The least tax every town must levy. The towns resent it, and the realm\'s tribute grows.', (v) => ({ taxFloor: v }));
-    const shares = SHARES.some((v) => Math.abs(v - R.share) < 1e-6) ? SHARES : [...SHARES, R.share].sort((p, q) => p - q);
-    row('Tribute', shares.map((v) => [v, pc(v), v > cap + 1e-9]), R.share, 'share', `What every town sends the capital, of its taxes: the realm's coffers, and your pay.${F.shareCap ? ` (A ${F.name.toLowerCase()}: never above ${pc(F.shareCap)}.)` : ''}`, (v) => ({ share: v }));
+    const cap = F.shareCap || SHARE_MAX;
+    // (Round 125) The least tax and the tribute, set to the point: a draft
+    // on a slider, then decreed (or put to the vote).
+    const rate = (name, key, cur, min, max, about, overOf) => {
+      this.drafts ||= {};
+      const v = this.drafts[key] ?? cur;
+      g.text(2, y, name, C.fg);
+      const ex = slider(this, g, 16, y, { v, cur, min, max, step: 0.01, fmt: (q) => (q ? pc(q) : 'none'), set: (q) => {
+        this.drafts[key] = q;
+      } });
+      if (Math.abs(v - cur) > 1e-9) {
+        look = { key, about, over: overOf(v), v };
+        button(this, g, ex + 1, y, ' Decree it ', F.color, () => {
+          set(key, v);
+          delete this.drafts[key];
+        });
+      } else if (this.hovering(16, y, 30, 1)) look = { key, about, over: null, v };
+      g.text(16, y + 1, `now ${cur ? pc(cur) : 'none'}${Math.abs(v - cur) > 1e-9 ? ` · to ${v ? pc(v) : 'none'}` : ''}`, C.faint);
+      y += 2;
+    };
+    rate('Least tax', 'taxFloor', d.taxFloor || 0, 0, FLOOR_MAX, 'The least tax every town must levy. The towns resent it, and the realm\'s tribute grows.', (v) => ({ taxFloor: v }));
+    rate('Tribute', 'share', R.share, SHARE_MIN, cap, `What every town sends the capital, of its taxes: the realm's coffers, and your pay.${F.shareCap ? ` (A ${F.name.toLowerCase()}: never above ${pc(F.shareCap)}.)` : ''}`, (v) => ({ share: v }));
     row('Weapons ban', [[false, 'none'], [true, 'in every town']], !!d.armsBan, 'armsBan', 'No drawn weapons in the streets of any town of the realm.', (v) => ({ armsBan: v }));
     row('The watch', WATCHES.map((v) => [v, v]), d.watch || 'standard', 'watch', 'How many of the grown folk stand watch in every town: a light watch costs less, a heavy one keeps order.');
     row('The draft', DRAFTS.map((v) => [v, v === 'none' ? 'none' : v === 'elders' ? 'elders' : 'young and old']), d.draft || 'none', 'draft', 'Who is called to the watch in time of war.');
@@ -1004,6 +1027,27 @@ export class CrownWindow extends Window {
   }
 
   // ------------------------------------------------------------ keys
+  // (Round 125) How the war goes, at a glance; and the means to end it.
+  drawWarPage(g, civ) {
+    const w = drawWar(this, g, this.game, civ, { x: 2, y: BODY, w: W - 4, h: H - BODY - 5 });
+    const war = this.game.sim.war;
+    if (w && war && war.wars.includes(w)) {
+      const foe = war.civ(w.lead[war.sideOf(w, civ) === 'a' ? 'b' : 'a']);
+      let bx = this.btn(g, 2, H - 4, ' Sue for peace ', '#a0e8a0', () => this.act(civ, 'sue', foe ? foe.id : null), !!foe);
+      bx = this.btn(g, bx, H - 4, ' The draft and the watch (Decrees) ', C.fg, () => this.goTab('decrees'));
+      this.btn(g, bx, H - 4, ' Realms ', C.fg, () => this.goTab('realms'));
+    }
+  }
+
+  // (Round 125) The record of what was decided, carried, defeated.
+  drawRecordPage(g, civ, R, C0) {
+    drawRecord(this, g, C0.record, { x: 2, y: BODY, w: W - 4, h: H - BODY - 2 }, 'the chancellor');
+  }
+
+  onWheel(d) {
+    if (this.tab === 'record') wheelRecord(this, d);
+  }
+
   onKey(k) {
     if (k.code === 'Escape' || k.code === 'KeyN') {
       if (this.reveal) {
@@ -1015,6 +1059,10 @@ export class CrownWindow extends Window {
     }
     if (this.reveal) {
       if (k.code === 'Enter' || k.code === 'Space') this.endReveal();
+      else if (/^Digit\d$/.test(k.code)) {
+        this.reveal = null;
+        return this.onKey(k);
+      }
       return true;
     }
     const n = parseInt((k.code.match(/^Digit(\d)$/) || [])[1], 10);

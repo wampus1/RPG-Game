@@ -19,7 +19,8 @@ import { LAWS, LAW_IDS, lawOn, lawList, lawFits, stance, willSign, needed, decid
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4, RNG } from '../util/rng.js';
-import { authority, rulerTitle } from '../sim/realms.js';
+import { authority, rulerTitle, shortTitle } from '../sim/realms.js';
+import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { rainedRecently, weatherWord } from '../world/weather.js';
@@ -59,6 +60,30 @@ export function griefOf(rec) {
   return (rec.grief || []).filter((g) => g.rel !== 'acquaintance').sort((a, b) => (a.rel === 'family' ? -1 : 1) - (b.rel === 'family' ? -1 : 1))[0] || null;
 }
 
+// (Round 125) Whether the one talking to them governs here (this town, or
+// the realm it belongs to), and so how they're spoken to: { scope, title,
+// address }. Null for anyone else.
+const ADDRESS = { King: 'Your Majesty', Queen: 'Your Majesty', Monarch: 'Your Majesty', Hierarch: 'Your Holiness', Doge: 'Your Serenity', Lord: 'my lord', Lady: 'my lady', Liege: 'my liege', 'High Elder': 'Elder' };
+export function leaderOf(game, s) {
+  const sim = game && game.sim;
+  if (!sim || !sim.office || !s) return null;
+  const o = sim.office;
+  const pid = o.pid();
+  const T = o.of(s.id);
+  if (T && T.holder && T.holder.pid === pid) {
+    const title = headTitle(T.charter, s, T.holder.style);
+    return { scope: 'town', title, address: ADDRESS[title] || title };
+  }
+  const K = sim.crown && sim.crown.heldBy(pid);
+  const civ = K && s.civ && s.civ.id === K.civ ? s.civ : null;
+  if (civ) {
+    const title = shortTitle(civ);
+    return { scope: 'realm', title, address: ADDRESS[title] || title };
+  }
+  return null;
+}
+const up = (t) => t[0].toUpperCase() + t.slice(1);
+
 // A short remark as the player walks past.
 export function greetLine(npc, game, rep, citizen) {
   return speak(npc.rec, greetRaw(npc, game, rep, citizen), { first: true, warm: rep >= 35, cold: rep <= -25 });
@@ -78,6 +103,14 @@ function greetRaw(npc, game, rep, citizen) {
   // (Round 79) A story you had a hand in, brought up now and then.
   const sc = rng.chance(0.15) && game.sim && game.sim.saga ? storyCallback(game.sim.saga, npc, game, rng) : null;
   if (sc) return sc.text;
+  // (Round 125) The one who governs here, known on sight.
+  const lead = leaderOf(game, npc.settlement);
+  if (lead && rep > -60 && rng.chance(0.75)) {
+    const A = lead.address;
+    if (npc.rec.age === 'child') return pick(rng, [`Is that the ${lead.title}?!`, `Hello, ${lead.title}! *waves*`, `Mum! It's the ${lead.title}!`]);
+    if (rep <= -25) return pick(rng, [`${up(A)}.`, '*a stiff little bow*', `Hmph. ${up(A)}.`, `*mutters something about the ${lead.title}*`]);
+    return pick(rng, [`Good ${tw}, ${A}!`, `${up(A)}! *bows*`, `${up(A)}. An honour.`, `Long life to the ${lead.title}!`, `*doffs a cap* ${up(A)}.`, lead.scope === 'town' ? `Good ${tw}, ${A}. The council keeping you busy?` : `${up(A)}! In our own streets!`]);
+  }
   if (rep <= -60) return pick(rng, ['Get lost.', 'You again...', '*glares*', 'Leave us be.']);
   if (rep <= -25) return pick(rng, ['Hmph.', 'Watch yourself.', 'Keep walking.', '*mutters*']);
   if (npc.rec.hungry >= 2 && rng.chance(0.5)) return pick(rng, ['So hungry...', 'Got any bread to spare?']);
@@ -238,6 +271,16 @@ function openingRaw(npc, game) {
   if (npc.visit) return pick(rng, [`Greetings, traveller! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
   if (npc.hired) return npc.hired.companion ? pick(rng, [`What is it, ${name}?`, 'Yes, friend?', 'Need something?']) : pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
   const car = sim.careers;
+  // (Round 125) The one who governs here, spoken to as such: never as a
+  // stranger, a visitor, or just another neighbour.
+  const lead = leaderOf(game, s);
+  if (lead && rep > -60 && rec.age !== 'child') {
+    entry.met = true;
+    const A = lead.address;
+    if (rep <= -25) return pick(rng, [`What does the ${lead.title} want with me?`, `Yes, ${A}? Make it quick.`, `${up(A)}. I've nothing to say that'd please you.`]);
+    return pick(rng, [`${up(A)}! What can I do for you?`, `An honour, ${A}. How can I help?`, `${up(A)}. Is it about the ${lead.scope === 'town' ? 'council' : 'court'}?`, `*bows* ${up(A)}. You wanted a word?`, rep >= 35 ? `${up(A)}! Always glad to see you, ${A}.` : `Good ${tw}, ${A}.`]);
+  }
+  if (lead && rec.age === 'child' && rep > -60) return pick(rng, [`Are you really the ${lead.title}?`, `Do you have a crown? Can I see it?`, `Wow. The ${lead.title}. Hello!`]);
   if (car.employs(npc)) {
     const j = car.job;
     const late = game.minute >= j.shift[0] && game.minute < j.shift[1] && game.buildingAtPlayer()?.id !== j.building;
@@ -1554,11 +1597,16 @@ function questions(npc, game) {
   const s = npc.settlement;
   const sim = game.sim;
   const qs = [];
-  const citizen = sim.isCitizen(s.id);
+  const lead = leaderOf(game, s);
+  const citizen = sim.isCitizen(s.id) || !!lead;
   const title = sim.careers.title();
   qs.push({
-    id: 'stay', q: citizen ? `How are you finding life in ${s.name}, neighbour?` : `So, are you planning to stay in ${s.name} long?`,
-    answers: citizen ? [
+    id: 'stay', q: lead ? `How do you find governing ${lead.scope === 'town' ? s.name : 'us'}, ${lead.address}?` : citizen ? `How are you finding life in ${s.name}, neighbour?` : `So, are you planning to stay in ${s.name} long?`,
+    answers: lead ? [
+      ['It\'s an honour to serve.', () => [3, 'And we\'re glad of you.']],
+      ['Hard work, and thankless.', () => [0, 'Somebody has to. Better you than some.']],
+      ['I do as I please.', () => (p.temper > 0.6 ? [-3, 'So we\'ve noticed.'] : [-1, 'Hm. Well. You\'re the one in charge.'])],
+    ] : citizen ? [
       ['I love it here.', () => [3, 'That warms my heart!']],
       ['It\'s... fine.', () => [0, 'Give it time.']],
       ['Honestly? I miss the road.', () => (p.bravery > 0.6 ? [1, 'I know the feeling. The road calls to some of us.'] : [-1, 'Hm. Well, nobody\'s stopping you.'])],
@@ -1571,6 +1619,7 @@ function questions(npc, game) {
   qs.push({
     id: 'living', q: 'What do you do for a living, anyway?',
     answers: [
+      ...(lead ? [[`I'm your ${lead.title}.`, () => [1, `Ha! So you are, ${lead.address}. Forgive me.`]]] : []),
       ...(title ? [[`I'm ${/^[AEIOU]/.test(title) ? 'an' : 'a'} ${title.split(',')[0]}.`, () => [2, sim.careers.isGuard(s.id) ? 'Glad to have you on the watch!' : 'Good, honest work.']]] : []),
       ['I\'m an adventurer.', () => (p.bravery > 0.55 ? [2, 'How exciting! I\'d love to hear your stories.'] : [0, 'Sounds dangerous... rather you than me.'])],
       ['A bit of this, a bit of that.', () => (p.diligence > 0.65 ? [-2, 'Hm. Idle hands, as they say.'] : [1, 'Ha! Me too, honestly.'])],

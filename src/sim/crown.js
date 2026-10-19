@@ -40,6 +40,11 @@ const FAVOUR_MAX = 30;
 const MAX_OPEN = 4;
 const SHARES = [0.06, 0.08, 0.1, 0.12, 0.14, 0.16];
 export const FLOORS = [0, 0.04, 0.06, 0.08, 0.1];
+// (Round 125) The least tax and the tribute are set to the point now,
+// within these.
+export const FLOOR_MAX = 0.15;
+export const SHARE_MIN = 0.02;
+export const SHARE_MAX = 0.2;
 export const WATCHES = ['light', 'standard', 'heavy'];
 export const DRAFTS = ['none', 'elders', 'all'];
 export const CROWN_ORDERS = {
@@ -368,7 +373,18 @@ export class Crown {
 
   // ------------------------------------------------------------ the sitting
   // Each morning, at the capital (see realms.court).
+  // (Round 125: the sitting's own day, whatever the clock says: caught up
+  // after a long sleep or wait, each day it missed.)
   session(civ, capL, day, rng) {
+    this.dayNow = day;
+    try {
+      return this.sitting(civ, capL, day, rng);
+    } finally {
+      this.dayNow = null;
+    }
+  }
+
+  sitting(civ, capL, day, rng) {
     const C = this.rec(civ);
     if (!C.holder) {
       // (A realm whose ruling player is gone: its own ruler again.)
@@ -428,10 +444,15 @@ export class Crown {
     const open = C.agenda.filter((q) => !q.crisis && !q.done && q.state === 'open');
     const busy = (key) => C.agenda.some((q) => q.key === key && !q.done) || (C.quiet[key] ?? -99) > day - 3;
     const specs = this.matters(civ, C, day).filter((q) => !busy(q.key)).sort((a, b) => b.prio - a.prio);
+    const fresh = [];
     for (const spec of specs) {
       if (open.length >= MAX_OPEN) break;
-      open.push(this.addItem(C, spec, day, abs));
+      const it = this.addItem(C, spec, day, abs);
+      open.push(it);
+      fresh.push(it);
     }
+    // (Round 125) A note in the corner for the ruler.
+    if (fresh.length) this.office.note(C.holder.pid, `The ${plain(civ)}: ${fresh.length === 1 ? `a new matter: ${fresh[0].title}` : `${fresh.length} new matters: ${fresh[0].title} and more`} (N)`, '#ffd890');
     const cr = this.crisisFor(civ, C, day);
     if (cr && !busy(cr.key)) this.crisis(civ, C, cr, day, abs);
   }
@@ -447,10 +468,17 @@ export class Crown {
 
   crisis(civ, C, spec, day, abs) {
     const it = this.addItem(C, spec, day, abs);
+    // (Round 125) A crisis come up while the hours raced by (a long sleep,
+    // a long wait, a town caught up): its hours count from now, so there's
+    // time to answer it.
+    const now = this.sim.abs;
+    if (spec.hours && it.until < now + spec.hours * 60 * 0.5) it.until = now + spec.hours * 60;
     C.crisisDay = day;
     C.crises[spec.crisis] = day;
     this.sim.realms.proclaim(civ, day, `${spec.title}. ${spec.why[0]}`);
     this.office.tell(C.holder.pid, `CRISIS in the ${plain(civ)}: ${spec.title}. Decide within ${spec.hours} hours (N).`, '#ff8070');
+    this.office.note(C.holder.pid, `CRISIS in the ${plain(civ)}: ${spec.title}. ${spec.hours} hours to decide (N).`, '#ff8070');
+    this.office.wake(C.holder.pid, `You're roused: a crisis in the ${plain(civ)} needs you (N).`);
     return it;
   }
 
@@ -678,7 +706,12 @@ export class Crown {
     if (v.state === 'waiting') {
       it.state = 'voting';
       it.vote = v;
-      for (const b of v.ballots) if (b.pid && b.v === null) this.office.show(b.pid, 'vote', { civ: civ.id, id: it.id });
+      for (const b of v.ballots) if (b.pid && b.v === null) {
+        this.office.show(b.pid, 'vote', { civ: civ.id, id: it.id });
+        this.office.note(b.pid, `The ${plain(civ)} · A VOTE IS CALLED: ${it.title.replace(/\?$/, '')}: ${opt.label}`, '#a0e8ff');
+        this.office.wake(b.pid, `You're roused: the ${plain(civ)} is voting, and waits on you.`);
+      }
+      this.office.note(C.holder.pid, `The ${plain(civ)} · Put to the vote: ${opt.label}. Waiting on ${v.ballots.filter((b) => b.pid && b.v === null).length} player(s).`, '#a0e8ff');
       return { ok: true, state: 'waiting', vote: v };
     }
     this.settle(civ, C, it, v);
@@ -687,10 +720,18 @@ export class Crown {
 
   settle(civ, C, it, v) {
     it.vote = v;
-    if (v.state === 'carried' || v.state === 'decreed') return this.carry(civ, C, it, it.choice, 'you', v);
+    // (Round 125) A vote that waited on players: its result, to all of them.
+    const told = v.ballots.some((b) => b.pid) ? [C.holder.pid, ...v.ballots.filter((b) => b.pid).map((b) => b.pid)] : [];
+    const label = it.opts[it.choice].label;
+    if (v.state === 'carried' || v.state === 'decreed') {
+      for (const pid of new Set(told)) this.office.note(pid, `The ${plain(civ)} · CARRIED: ${it.title.replace(/\?$/, '')}: ${label} (${v.aye}-${v.nay})`, '#90e890');
+      return this.carry(civ, C, it, it.choice, 'you', v);
+    }
     it.state = 'open';
     if (!it.struck.includes(it.choice)) it.struck.push(it.choice);
-    this.minute(C, `${it.title}: ${it.opts[it.choice].label}: ${v.state === 'vetoed' ? 'vetoed' : 'voted down'} (${v.aye} to ${v.nay})`);
+    this.minute(C, `${it.title}: ${label}: ${v.state === 'vetoed' ? 'vetoed' : 'voted down'} (${v.aye} to ${v.nay})`);
+    this.office.record(C, it, v.state === 'vetoed' ? 'vetoed' : 'defeated', { aye: v.aye, nay: v.nay });
+    for (const pid of new Set(told)) this.office.note(pid, `The ${plain(civ)} · ${v.state === 'vetoed' ? 'VETOED' : 'DEFEATED'}: ${it.title.replace(/\?$/, '')}: ${label} (${v.aye}-${v.nay})`, '#ff9070');
     return null;
   }
 
@@ -819,6 +860,7 @@ export class Crown {
       it.done = true;
       C.quiet[it.key] = day;
       this.minute(C, `${it.title}: set aside`);
+      this.office.record(C, it, 'set aside', { choice: null });
       return null;
     }
     return this.carry(civ, C, it, k, 'chancellor');
@@ -830,19 +872,22 @@ export class Crown {
     it.choice = k;
     it.state = 'carried';
     if (v) it.vote = v;
-    const day = this.game.day;
+    const day = this.dayNow ?? this.game.day;
     const text = this.apply(civ, C, opt.fx || {}, day, it);
     const ch = this.sim.realms.ruler(civ);
     const who = by === 'chancellor' ? `${ch ? `Chancellor ${full(ch)}` : 'The chancellor'}, for ${this.who(civ)},` : this.who(civ);
     if (text) this.sim.realms.proclaim(civ, day, `${who} ${text}`);
     this.minute(C, `${it.title}: ${opt.label}${by === 'chancellor' ? ' (the chancellor, by your orders)' : ''}`);
+    const vs = it.vote && it.vote.state;
+    const counted = it.vote && it.vote.ballots && it.vote.ballots.length > 1;
+    this.office.record(C, it, by === 'chancellor' ? 'standing' : vs === 'decreed' ? 'decreed' : vs === 'carried' ? 'carried' : 'decided', { aye: counted ? it.vote.aye : null, nay: counted ? it.vote.nay : null, by });
     C.quiet[it.key] = day;
     C.agenda = C.agenda.filter((q) => !q.done);
     return text;
   }
 
   minute(C, what) {
-    C.minutes.push({ day: this.game.day, what });
+    C.minutes.push({ day: this.dayNow ?? this.game.day, what });
     if (C.minutes.length > 40) C.minutes.shift();
   }
 
@@ -1013,6 +1058,8 @@ export class Crown {
     const day = this.game.day;
     const who = this.who(civ);
     let text = null;
+    if (key === 'taxFloor') v = Math.round(Math.max(0, Math.min(FLOOR_MAX, +v || 0)) * 100) / 100;
+    if (key === 'share') v = Math.round(Math.max(SHARE_MIN, Math.min(SHARE_MAX, +v || 0)) * 100) / 100;
     if (key === 'taxFloor' && d.taxFloor !== v) {
       d.taxFloor = v;
       text = v ? `set a least tax of ${pc(v)} for every town of the realm` : 'no longer sets a least tax for the towns';

@@ -30,7 +30,9 @@ import { FACTIONS, FACTION_IDS, BUDGET, BUDGET_IDS, members, factionStances, tow
 import { CHARTERS, CHARTER_IDS, headTitle, charterFits } from '../sim/charters.js';
 import { LAWS, LAW_IDS, lawFits, lawOn, byDecree } from '../sim/laws.js';
 import { stated, sums, forChange, full } from '../sim/agenda.js';
-import { OFFICES, OFFICE_IDS, ORDERS, ORDER_IDS } from '../sim/office.js';
+import { OFFICES, OFFICE_IDS, ORDERS, ORDER_IDS, WAGE, wageLevel } from '../sim/office.js';
+import { slider, button, drawRecord, wheelRecord, drawWar } from './govkit.js';
+import { OTRAITS, traitsOf, suits } from '../sim/officertraits.js';
 import { authority, formOf } from '../sim/realms.js';
 import { seatOfPid } from '../sim/saga/refs.js';
 import { seatPart } from '../game/party.js';
@@ -44,6 +46,7 @@ const TABS = [
   { id: 'people', label: 'People' },
   { id: 'officers', label: 'Offices' },
   { id: 'charter', label: 'Charter' },
+  { id: 'record', label: 'Record' },
 ];
 const W = 84;
 const H = 34;
@@ -183,13 +186,13 @@ export class CouncilWindow extends Window {
       this.tab = 'charter';
       this.view = 'realm';
     }
-    const fn = { sitting: this.drawSitting, treasury: this.drawTreasury, laws: this.drawLaws, people: this.drawPeople, officers: this.drawOfficers, charter: this.drawCharter }[this.tab];
+    const fn = { sitting: this.drawSitting, treasury: this.drawTreasury, laws: this.drawLaws, people: this.drawPeople, officers: this.drawOfficers, charter: this.drawCharter, record: this.drawRecordPage }[this.tab];
     fn.call(this, g, L, T);
     // A word on what just happened.
     if (this.flash && this.flash.t < 4) {
       const text = ` ${this.flash.text} `.slice(0, W - 4);
       g.text(Math.floor((W - text.length) / 2), H - 2, text, this.flash.color, 'rgba(20,16,28,0.95)');
-    } else g.text(2, H - 2, this.mine() ? '1-6: pages   ↑↓: choose   Enter: decide   Esc: close' : '1-6: pages   You sit on this council: you vote when it asks you.   Esc: close', C.faint);
+    } else g.text(2, H - 2, this.mine() ? '1-7: pages   ↑↓: choose   Enter: decide   Esc: close' : '1-7: pages   You sit on this council: you vote when it asks you.   Esc: close', C.faint);
   }
 
   header(g, L, T) {
@@ -244,7 +247,9 @@ export class CouncilWindow extends Window {
   }
 
   goTab(id) {
-    if (this.reveal) return;
+    // (Round 125: a vote being shown doesn't hold the pages shut: it's
+    // put away, its result kept in the record.)
+    this.reveal = null;
     this.tab = id;
     this.confirm = null;
     this.ui.audio?.play('page');
@@ -777,28 +782,44 @@ export class CouncilWindow extends Window {
       g.text(bx, by, label, on ? (hov ? '#1a1420' : C.hi) : C.faint, on ? (hov ? C.hi : '#2a2236') : undefined);
       if (on) this.hit(bx, by, label.length, 1, fn);
     };
-    btn(x, y, ' ◄ ', mine && draft > 0, () => {
-      this.taxDraft = Math.max(0, Math.round((draft - 0.01) * 100) / 100);
-    });
-    g.text(x + 4, y, `${pc(draft)}`.padStart(4), draft !== e.tax ? C.white : C.fg);
-    btn(x + 9, y, ' ► ', mine && draft < cap - 1e-9, () => {
-      this.taxDraft = Math.min(cap, Math.round((draft + 0.01) * 100) / 100);
-    });
-    if (draft !== e.tax) btn(x + 14, y, ' Propose it ', mine, () => this.proposeIt(L, 'tax', draft));
+    // (Round 125: on a slider, to the point; click anywhere along it.)
+    slider(this, g, x, y, { v: draft, cur: e.tax, min: 0, max: cap, step: 0.01, fmt: pc, on: mine, w: 16, set: (q) => {
+      this.taxDraft = Math.round(q * 100) / 100;
+    } });
     y++;
+    if (Math.abs(draft - e.tax) > 1e-9) btn(x, y++, ' Propose it ', mine, () => this.proposeIt(L, 'tax', draft));
     g.text(x, y++, `now ${pc(e.tax)} · realm's least ${pc(floor)}${CHARTERS[T.charter].taxCap ? ` · most ${pc(cap)}` : ''}`, C.dim);
     if (draft !== e.tax) {
       const st = stated(sim, L, T, { fx: { tax: draft } }, CHARTERS, this.game.day);
       g.text(x, y, ((st.lines[0] && st.lines[0].text) || '').slice(0, W - x - 2), '#c8b890');
       factionDeltas(g, x, y + 1, st.by, T.counts);
       if (draft < floor - 1e-9) g.text(x, y + 2, 'Under the realm\'s least tax: defiance.', '#ff9070');
-    } else g.text(x, y, '◄ ► to set a new rate, then propose it.', C.faint);
-    y += 4;
+    } else g.text(x, y, 'Slide to a new rate, then propose it.', C.faint);
+    y += 3;
     g.text(x, y++, 'Spending', C.hi);
     for (const id of BUDGET_IDS) {
       const B = BUDGET[id];
       const cur = T.budget[id] ?? 1;
       g.text(x, y, B.name, C.fg);
+      // (Round 125) The watch's pay, to the coin.
+      if (id === 'watch') {
+        const now = T.wage ?? [4, 5, 7][cur];
+        if (this.wageDraft === null || this.wageDraft === undefined) this.wageDraft = now;
+        const wd = this.wageDraft;
+        const ex = slider(this, g, x + 13, y, { v: wd, cur: now, min: WAGE.min, max: WAGE.max, step: 1, fmt: (q) => `¤${q}`, on: mine, w: 10, set: (q) => {
+          this.wageDraft = Math.round(q);
+        } });
+        if (wd !== now) {
+          btn(ex + 1, y, ' Propose ', mine, () => {
+            this.proposeIt(L, 'wage', wd);
+            this.wageDraft = null;
+          });
+          this.budgetHover = { id: 'watch', k: wageLevel(wd), wage: wd };
+        }
+        y++;
+        g.text(x + 1, y++, `¤${now} a guard a day: ${B.about}`.slice(0, W - x - 3), C.faint);
+        continue;
+      }
       let bx = x + 13;
       B.short.forEach((lv, k) => {
         const label = ` ${lv} `;
@@ -819,8 +840,8 @@ export class CouncilWindow extends Window {
     const bh = this.budgetHover;
     this.budgetHover = null;
     if (bh) {
-      const st = stated(sim, L, T, { fx: { budget: { [bh.id]: bh.k } } }, CHARTERS, this.game.day);
-      g.text(x, y + 1, `${BUDGET[bh.id].levels[bh.k]}:`, C.fg);
+      const st = stated(sim, L, T, { fx: bh.wage !== undefined ? { wage: bh.wage } : { budget: { [bh.id]: bh.k } } }, CHARTERS, this.game.day);
+      g.text(x, y + 1, bh.wage !== undefined ? `The watch at ¤${bh.wage}:` : `${BUDGET[bh.id].levels[bh.k]}:`, C.fg);
       factionDeltas(g, x, y + 2, st.by, T.counts);
     } else g.text(x, y + 1, mine ? 'Each change is put before the council.' : '', C.faint);
   }
@@ -1080,6 +1101,7 @@ export class CouncilWindow extends Window {
       g.text(3, y + 1, O.short, sel ? '#c8b890' : C.faint);
       if (mine) this.hit(1, y, 48, 2, () => {
         this.officeSel = sel ? null : k;
+        this.inspect = null;
         this.ui.audio?.play('select');
       });
       y += 2;
@@ -1102,8 +1124,15 @@ export class CouncilWindow extends Window {
         const r = L.npcs[c.idx];
         if (!r) continue;
         const f = this.facOf(L, c.idx);
+        const hv = this.hovering(3, y, 46, 1);
+        if (hv) g.fill(3, y, 46, 1, ' ', C.fg, '#221c2a');
         g.text(3, y, FACTIONS[f].glyph, FACTIONS[f].color);
-        g.text(5, y, `${full(r)}, ${FACTIONS[f].name.toLowerCase()}`.slice(0, 34), C.fg);
+        g.text(5, y, `${full(r)}, ${FACTIONS[f].name.toLowerCase()}`.slice(0, 30), hv ? C.white : C.fg);
+        traitsOf(r).slice(0, 3).forEach((id, i) => g.put(36 + i, y, OTRAITS[id].glyph, OTRAITS[id].color));
+        this.hit(3, y, 46, 1, () => {
+          this.inspect = c.idx;
+          this.ui.audio?.play('select');
+        });
         const loy = T.loyal[c.idx];
         g.text(41, y, loy === undefined ? '' : loy >= 30 ? 'loyal' : loy >= 0 ? 'fair' : 'hostile', loy >= 30 ? '#80e070' : loy >= 0 ? C.dim : '#ff8060');
       }
@@ -1123,11 +1152,15 @@ export class CouncilWindow extends Window {
       }
     }
     for (let j = BODY + 2; j < H - 3; j++) g.put(50, j, '│', '#3a3040');
-    // Right: someone to name.
+    // Right: someone to name; or (Round 125) someone looked over first.
     const x = 52;
     let ry = BODY + 3;
+    if (this.inspect !== null && this.inspect !== undefined && L.npcs[this.inspect]) {
+      this.personCard(g, x, ry, W - x - 2, L, T, L.npcs[this.inspect], mine ? this.officeSel : null);
+      return;
+    }
     if (!this.officeSel || !mine) {
-      wrap(mine ? 'Choose an office on the left to name someone to it.' : 'The town\'s officers and its council.', W - x - 2).forEach((l) => g.text(x, ry++, l, C.faint));
+      wrap(mine ? 'Choose an office on the left to name someone to it. Click a councillor to look them over.' : 'The town\'s officers and its council.', W - x - 2).forEach((l) => g.text(x, ry++, l, C.faint));
       return;
     }
     {
@@ -1135,6 +1168,7 @@ export class CouncilWindow extends Window {
       g.text(x, ry++, `Name a ${OFFICES[k].name.toLowerCase()}`, C.hi);
       wrap(OFFICES[k].about, W - x - 2).slice(0, 3).forEach((l) => g.text(x, ry++, l, C.faint));
       ry++;
+      g.text(x, ry++, 'Click one to look them over.', C.faint);
       const cur = this.office.officer(L, T, k);
       for (const c of this.office.candidates(L, k).slice(0, 10)) {
         const r = c.r;
@@ -1142,12 +1176,12 @@ export class CouncilWindow extends Window {
         const hov = this.hovering(x, ry, W - x - 2, 1);
         g.fill(x, ry, W - x - 2, 1, ' ', C.fg, r === cur ? '#203a28' : hov ? '#30283c' : undefined);
         g.text(x, ry, FACTIONS[f].glyph, FACTIONS[f].color);
-        g.text(x + 2, ry, full(r).slice(0, 17), r === cur ? '#a0f0b0' : C.fg);
-        g.text(x + 20, ry, this.trait(k, r).slice(0, W - x - 22), C.dim);
-        if (r !== cur) this.hit(x, ry, W - x - 2, 1, () => {
-          this.office.appoint(L, k, r.idx);
-          this.say(`${full(r)} is ${OFFICES[k].name.toLowerCase()} now.`, '#a0e8a0');
-          this.ui.audio?.play('chime');
+        g.text(x + 2, ry, full(r).slice(0, 16), r === cur ? '#a0f0b0' : C.fg);
+        for (let i = 0; i < 4; i++) g.put(x + 19 + i, ry, i < c.stars ? '★' : '☆', i < c.stars ? '#ffd070' : '#4a4458');
+        c.traits.slice(0, 3).forEach((id, i) => g.put(x + 24 + i * 2, ry, OTRAITS[id].glyph, OTRAITS[id].color));
+        this.hit(x, ry, W - x - 2, 1, () => {
+          this.inspect = r.idx;
+          this.ui.audio?.play('select');
         });
         ry++;
       }
@@ -1159,6 +1193,61 @@ export class CouncilWindow extends Window {
       }
       return;
     }
+  }
+
+  // (Round 125) Someone looked over before they're named to an office (or
+  // a councillor, to know who you're dealing with): who they are, their
+  // traits and what each does, their character, what they think of you.
+  personCard(g, x, y, w, L, T, r, k) {
+    const f = this.facOf(L, r.idx);
+    g.text(x, y++, full(r).slice(0, w), C.hi);
+    const job = r.job ? `${r.job[0].toUpperCase()}${r.job.slice(1)}` : 'No trade';
+    g.text(x, y, `${job}, ${r.age || 'adult'} · `.slice(0, w), C.dim);
+    g.text(x + Math.min(w - 8, `${job}, ${r.age || 'adult'} · `.length), y++, `${FACTIONS[f].glyph} ${FACTIONS[f].name}`.slice(0, 14), FACTIONS[f].color);
+    const loy = T.loyal[r.idx];
+    g.text(x, y++, loy === undefined ? 'Doesn\'t know you yet.' : `Toward you: ${loy >= 30 ? 'loyal' : loy >= 0 ? 'fair' : 'hostile'} (${loy > 0 ? '+' : ''}${Math.round(loy)})`, loy === undefined ? C.faint : loy >= 30 ? '#80e070' : loy >= 0 ? C.dim : '#ff8060');
+    const offices = OFFICE_IDS.filter((q) => (q === 'steward' ? this.office.stewardOf(L, T) === r : T.offices[q] === r.idx));
+    const seat = T.council.some((c) => c.idx === r.idx);
+    if (offices.length || seat) g.text(x, y++, `${[...offices.map((q) => OFFICES[q].name), ...(seat ? ['on the council'] : [])].join(', ')}`.slice(0, w), '#a0f0b0');
+    y++;
+    g.text(x, y++, 'Traits', C.fg);
+    for (const id of traitsOf(r)) {
+      const O = OTRAITS[id];
+      g.text(x, y, `${O.glyph} ${O.name}`, O.color);
+      y++;
+      wrap(O.about, w - 2).slice(0, 2).forEach((l) => g.text(x + 2, y++, l, C.faint));
+    }
+    y++;
+    const P = r.personality || {};
+    const bars = [['Diligence', P.diligence], ['Kindness', P.kindness], ['Bravery', P.bravery], ['Temper', P.temper], ['Sociable', P.sociability], ['Trading', r.skills?.trading], ['Fighting', r.skills?.combat]];
+    for (const [nm, v] of bars) {
+      if (y > H - 6) break;
+      g.text(x, y, nm, C.dim);
+      const n = Math.round(Math.max(0, Math.min(1, v ?? 0.5)) * 10);
+      for (let i = 0; i < 10; i++) g.put(x + 10 + i, y, i < n ? '▪' : '·', i < n ? '#c8a060' : '#3a3448');
+      y++;
+    }
+    let by = H - 4;
+    if (k) {
+      const st = suits(k, r);
+      g.text(x, by - 1, `As ${OFFICES[k].name.toLowerCase()}: `.slice(0, w - 5), C.dim);
+      for (let i = 0; i < 4; i++) g.put(x + Math.min(w - 5, `As ${OFFICES[k].name.toLowerCase()}: `.length) + i, by - 1, i < st ? '★' : '☆', i < st ? '#ffd070' : '#4a4458');
+      const cur = this.office.officer(L, T, k);
+      const can = cur !== r && this.office.candidates(L, k).some((c) => c.r === r);
+      let bx = x;
+      if (can) bx = button(this, g, bx, by, ` Appoint ${r.name.first} `, '#a0e8a0', () => {
+        this.office.appoint(L, k, r.idx);
+        this.say(`${full(r)} is ${OFFICES[k].name.toLowerCase()} now.`, '#a0e8a0');
+        this.ui.audio?.play('chime');
+        this.inspect = null;
+      });
+      button(this, g, bx, by, ' Back ', C.dim, () => {
+        this.inspect = null;
+      });
+    } else button(this, g, x, by, ' Back ', C.dim, () => {
+      this.inspect = null;
+    });
+    by++;
   }
 
   drawOrders(g, L, T, mine) {
@@ -1188,15 +1277,6 @@ export class CouncilWindow extends Window {
     }
   }
 
-  trait(k, r) {
-    const P = r.personality || {};
-    if (k === 'steward') return (P.diligence ?? 0.5) > 0.65 ? 'diligent' : (P.diligence ?? 0.5) < 0.3 ? 'careless' : 'steady';
-    if (k === 'captain') return (P.bravery ?? 0.5) > 0.7 ? 'bold' : 'steady';
-    if (k === 'treasurer') return `${(r.skills?.trading || 0) > 0.5 ? 'shrewd' : 'plain'}${(P.kindness ?? 0.5) < 0.3 ? ', sly' : ''}`;
-    if (k === 'magistrate') return (P.temper ?? 0.5) > 0.6 || (P.kindness ?? 0.5) < 0.4 ? 'stern' : 'lenient';
-    return '';
-  }
-
   // Other players, citizens of this town, who could take a council seat.
   citizensPlaying(L, T) {
     const game = this.game;
@@ -1214,8 +1294,14 @@ export class CouncilWindow extends Window {
   // ------------------------------------------------------------ 6 charter
   drawCharter(g, L, T) {
     const choosing = !!T.chooseCharter && this.mine();
-    const view = choosing ? 'charter' : this.subtabs(g, [['charter', 'Charter'], ['realm', 'The realm'], ['goals', 'Ambitions']], 'view', 'charter');
+    const view = choosing ? 'charter' : this.subtabs(g, [['charter', 'Charter'], ['realm', 'The realm'], ['war', 'War'], ['goals', 'Ambitions']], 'view', 'charter');
     if (view === 'realm') return this.drawRealm(g, L, T);
+    // (Round 125) How the realm's war goes, at a glance.
+    if (view === 'war') {
+      if (!L.settlement.civ) g.text(2, BODY + 3, `${L.settlement.name} answers to no realm, and is at war with no one.`, C.dim);
+      else drawWar(this, g, this.game, L.settlement.civ, { x: 2, y: BODY + 3, w: W - 4, h: H - BODY - 6 });
+      return null;
+    }
     if (view === 'goals') return this.drawAmbitions(g, L, T);
     let y = BODY + 3;
     g.text(2, y++, choosing ? 'Write your village\'s charter:' : 'How the town is governed:', choosing ? C.hi : C.dim);
@@ -1386,6 +1472,15 @@ export class CouncilWindow extends Window {
     }
   }
 
+  // (Round 125) The record of what was decided, carried, defeated.
+  drawRecordPage(g, L, T) {
+    drawRecord(this, g, T.record, { x: 2, y: BODY, w: W - 4, h: H - BODY - 2 }, 'the steward');
+  }
+
+  onWheel(d) {
+    if (this.tab === 'record') wheelRecord(this, d);
+  }
+
   // ------------------------------------------------------------ keys
   onKey(k) {
     if (k.code === 'Escape' || k.code === 'KeyN') {
@@ -1398,6 +1493,10 @@ export class CouncilWindow extends Window {
     }
     if (this.reveal) {
       if (k.code === 'Enter' || k.code === 'Space') this.endReveal();
+      else if (/^Digit\d$/.test(k.code)) {
+        this.reveal = null;
+        return this.onKey(k);
+      }
       return true;
     }
     const n = parseInt((k.code.match(/^Digit(\d)$/) || [])[1], 10);
