@@ -1,12 +1,19 @@
-// (Round 126) The old places, and what was here before anyone: a delver's
+// (Round 126; rewritten Round 127) The old places, and what was here
+// before anyone: a delver's
 // notes on the barrows, mines, crypts and caves about a town (each one's
 // story, what it's like, what lives in it, how deep it goes, who has gone
 // down and who came back), and the scholars' books of the Kavorent, their
 // spires and their arts, and the four things older still. See annals.js
 // for how these are written.
+//
+// The models are the old guides for walkers in wild country, and the notes
+// of people who go into caves for pleasure: practical, unboastful, exact
+// about the way in and the way out, and quietly frightened.
 export const FLOWS = {
   oldplace: [
     ['story', 'what', 'dwell', 'deep', 'fate'],
+    ['story', 'way', 'what', 'dwell', 'fate', 'warn'],
+    ['story', 'way', 'dwell', 'deep', 'warn'],
     ['story', 'what', 'deep', 'dwell', 'warn'],
     ['story', 'dwell', 'what', 'fate', 'warn'],
     ['story', 'what', 'dwell', 'fate'],
@@ -48,86 +55,121 @@ export const FLOWS = {
 export const POOLS = {
   // ------------------------------------------------------------ a delver's notes
   'delvefar.open': [
-    '(These|The places that follow) are not {town}\'s own, but (they are|they lie) near enough (to|that) (its|the) (folk|people of {town}) (tell|know) (of|the stories of) them, and (I|this writer) (have|) (set them down|included them) (here|too).',
-    '(Further off|A little further off), (about|near) {other} and (the|its) (towns|villages) (round about|nearby), (there are|lie) (more|other) old places, and (some|a few) of them (are|have been) (worse|stranger) (than|even than) those (above|already set down).',
+    'The places that follow are not {town}\'s own, but they lie near enough that its people know the stories of them, and I have set them down too.',
+    'Further off, about {other} and the villages round it, there are other old places, and a few of them are stranger than any already set down.',
+    'A day or two beyond {town} the country holds more old places still; I give them more briefly, for I know them less well.',
   ],
   'delvefar.warn': [
-    'I (have|) (been|gone) (down|in) (into|to) (fewer|none) of these (myself|in person), and (give|set down) (them|what follows) (as|for) (I|what I) was told.',
+    'I have been into fewer of these myself, and I give what follows as I was told it.',
+    'What follows is mostly hearsay, and I have marked it as such where I could.',
   ],
   'delveopen.why': [
-    'There are (more|more of) old places (about|near) {town} than (most|the townsfolk) (would like|care to count), and (every|each) one of them (has|keeps) (a story|its story).',
-    'I have (gone down|been down) into (some|a few) of the old places (about|near) {town}, and (heard|listened to) (the stories|what is told) of (the rest|all of them).',
-    '(These|What follow) are (my|a delver\'s) notes on the old places (about|near) {town}: (what|all that) I (saw|found) (in them|below), and (what|all that) I was told.',
+    'There are more old places about {town} than the townsfolk care to count, and each one of them has its story.',
+    'I have been down into a few of the old places near {town}, and listened to what is told of all of them.',
+    'These are a delver\'s notes on the old places about {town}: what I saw below, and what I was told above.',
+    'Every town keeps a few places it does not talk about after dark, and {town} keeps more than most.',
+  ],
+  'delveopen.why@plain': [
+    'These are notes on the old places near {town}. I have been to some of them.',
+  ],
+  'delveopen.why@storyteller': [
+    'Ask anyone in {town} about the old places, and they will tell you three stories, two warnings and the name of someone who never came back.',
   ],
   'delveopen.how': [
-    'I (went|have gone) down (with|carrying) (a lamp|two lamps), (a rope|good rope), (a blade|my blade) and more (bread|courage) than I (needed|turned out to need), and came back (every time|each time), (which|and that) is more than (some|many) can say.',
+    'I went down with two lamps, good rope, a blade and more bread than I needed, and came back each time, which is more than some can say.',
+    'I am no hero, and I went into these places the way a sensible person goes into cold water: slowly, and ready to get out.',
   ],
   'delveopen.warn': [
-    'Let (no one|nobody) take these pages for (an invitation|a map to treasure).',
-    'The reader (who|that) (means|plans) to (go down|follow me) (should|had better) (go|do so) (well armed|in company) and (come back|return) (before|by) dark.',
+    'Let nobody take these pages for a map to treasure.',
+    'The reader who means to follow me had better go in company, and come back before dark.',
+    'Whoever goes down should tell someone above where they have gone, and when to start worrying.',
+  ],
+  'oldplace.way': [
+    'The way in is easy to miss: a gap in the rock no wider than a door, with a thorn bush grown half across it.',
+    'You will know the way in by the cold air that comes out of it, even on the hottest day of summer.',
+    'A track runs to it from the road, worn by more feet than you would expect, and fewer coming back than going.',
+    'There is a cairn of stones by the way in, and every delver who comes out alive adds one to it.',
   ],
   'oldplace.what': [
-    '(It is|The place is) (cold|dark) (and|) (damp|close) (inside|below), (and|) (the|its) (air|dark) (is|smells) (stale|of earth and old stone).',
-    '(Its|The) (way in|door) (is|was) (low|narrow), (and|) (beyond it|past it) the (passages|halls) (go|run) (down|on) (further|deeper) than (any lamp|a lamp) (can|will) (show|light).',
+    'It is cold and damp below, and the air smells of earth and old stone.',
+    'The way in is low and narrow, and beyond it the passages run on further than a lamp will show.',
+    'Sound carries strangely below: a dropped stone seems to go on falling long after it ought to have stopped.',
   ],
   'oldplace.what.barrow': [
-    'The barrow is (a long|a great) (mound|hill) of (earth|turf) (over|on) (stone|a stone chamber), with (a|its) (stone|great stone) door (on|in) the (east|west) side.',
-    'Inside, (the|its) (passages|halls) are (lined|walled) with (dry stone|standing slabs), (and|) the (grave goods|old offerings) (lie|are laid) (where|as) they were (left|put down).',
+    'The barrow is a long mound of turf over a stone chamber, with its great stone door on the east side, facing the sunrise.',
+    'Inside, the passages are walled with standing slabs, and the grave goods lie where they were set down, under a fur of dust.',
+    'The roof of the first chamber is low enough that a tall delver goes bent double, which, they say, is how the dead meant it.',
   ],
   'oldplace.what.mine': [
-    'The (galleries|workings) (go|run) down (and down|deep) (into the hill|under the hill), (propped|held up) with (old|rotten) (timber|props) that (creak|groan) when anyone walks under them.',
-    'The (old|miners\') (rails|tracks) (still|) (run|lead) down into the dark, and the miners\' (picks|carts) (lie|stand) where they were left.',
+    'The galleries run deep under the hill, propped with old timber that groans when anyone walks beneath it.',
+    'The miners\' rails still lead down into the dark, and their carts stand where they were left, half full of ore.',
+    'Water drips everywhere below, and in the deepest workings it stands knee-deep and very cold.',
   ],
   'oldplace.what.crypt': [
-    'The chapel (above|over it) has (fallen in|long since fallen), and the stair down (goes|runs) under (black|still) water (before the bottom|partway).',
-    'The vaults are (half drowned|full of black water), and the (tombs|niches) (stand|lie) (open|empty) along the walls.',
+    'The vaults are half drowned, and the niches stand open along the walls, most of them empty and some of them not.',
+    'The stair down is worn hollow in the middle by the feet of the old priests, and slick with the damp.',
+    'Below, the air is thick with the smell of old incense and older water, and the lamps burn low.',
   ],
   'oldplace.what.holdout': [
-    'The caves (are|were) (fortified|walled up) (like|as) a (keep|fort), with (barricades|stockades) of (timber|planks) and (murder holes|arrow slits) (cut|hacked) (into|in) the rock.',
+    'The caves are walled up like a keep, with stockades of timber and arrow slits hacked into the rock.',
+    'Whoever holds the caves has built well: there is one way in, and it is overlooked from three sides.',
   ],
   'oldplace.what.grove': [
-    'The (hollow|way in) (opens|lies) (under|among) the roots of (a|the) (great|oldest) (tree|trees) (in|of) the wood, where the air smells (green|of moss and rot).',
+    'The hollow opens among the roots of the oldest tree in the wood, where the air smells green.',
+    'The roots go down a long way, and the passages between them are lined with moss that glows faintly when touched.',
+    'It is warm below, and quiet, and there is a smell like fresh-turned earth and honey, which is not reassuring.',
   ],
   'oldplace.what.forge': [
-    'The (deep|forge) (is|was) (hot|warm) (even now|still), and (the|its) (halls|galleries) (glow|are lit) (red|dull red) (from|with) (fires|embers) (no one|nobody) (living|) (has fed|feeds).',
+    'The halls are warm even now, and glow dull red with embers that nobody living has fed.',
+    'The anvils still ring now and then, they say, though no smith has worked there in a hundred years.',
   ],
   'oldplace.what.grotto': [
-    'The sea caves fill with the tide, and can only be (entered|gone into) at the lowest tides.',
+    'The sea caves fill with the tide, and can only be entered at the lowest ebb, and left before the turn.',
+    'The rock below is slick with weed and sharp with shells, and the sea booms in the deeper chambers like a great slow drum.',
   ],
   'oldplace.what.kavorent': [
-    'The spire (stands|rises) (higher|taller) than (any|the highest) tower (of|in) {land}, (black|dark) and (smooth|seamless), (and|with) runes (crawling|that crawl) up its sides.',
+    'The spire stands taller than the highest tower of {land}, black and seamless as a blade.',
+    'Close to, the spire hums, very faintly, like a hive heard through a wall.',
   ],
   'oldplace.dwell': [
-    'What lives (in it|below) now (are|is) {dwellers}, or so (the delvers|those who came back) say.',
-    '(Those|The delvers) who (have gone|went) down (tell|speak) of {dwellers}, and (worse|worse things) (deeper|further down).',
-    'I (met|saw) {dwellers} (below|in it), and (did not|would not) (stay|linger) to (meet|see) (more|anything else).',
+    'What lives below now are {dwellers}, or so those who came back say.',
+    'The delvers who have gone down tell of {dwellers}, and of worse things deeper.',
+    'I met {dwellers} below, and did not stay to meet anything else.',
+    'Below there are {dwellers}, and they know the dark better than any visitor will.',
   ],
   'oldplace.dwell.kav': [
-    '(Those|The few) who claim to have been inside (speak|tell) of {dwellers}, (that|which) (keep|tend) (the|its) halls (still|as if their makers were coming back).',
+    'The few who claim to have been inside speak of {dwellers}, which keep its halls as if their makers were coming back.',
   ],
   'oldplace.deep': [
-    '(It|The place) (goes|runs) {depth} (deep|down), and each (level|one) is (worse|darker) than the one above.',
+    'It goes {depth} down, and each one is darker than the one above.',
     'There are {depth} below the ground, or at least that is as far as any delver has gone and come back.',
   ],
   'oldplace.deep.one': [
-    'It is (shallow|not deep), (a single|one) (level|floor) (below the ground|under the earth), (but|and) (that|one level of it) is (enough|plenty) (for anyone|for most).',
+    'It is not deep, a single level below the ground, but one level of it is plenty for most.',
   ],
   'oldplace.fate.none': [
-    '(No one|Nobody) has (yet|ever) (reached|come to) the bottom of it, or (no one|nobody) who lived to tell of it.',
-    '(No|Not one) (band|party) of (delvers|adventurers) has (gone|been) down (in my time|in living memory), so whatever is (at the bottom|down there) (is there still|has been left alone ever since).',
+    'Nobody has yet reached the bottom of it, or nobody who lived to tell of it.',
+    'No party of delvers has gone down in living memory, so whatever is down there has been left alone ever since.',
   ],
   'oldplace.fate.delved': [
-    '{delves} (bands|parties) of (delvers|adventurers) have (gone down|gone in) (in my time|in living memory), (and|but) (not all|few) of them (came|have come) back.',
-    '(Delvers|Adventurers) (go|have gone) down (into it|there) {delves} times (in my time|that I know of), (and|but) (none|not one) of them (has|) (reached|come to) the bottom.',
+    '{delves} parties of delvers have gone down in my time, and not all of them came back.',
+    'Delvers have gone down there {delves} times that I know of, and not one of them has reached the bottom.',
   ],
   'oldplace.fate.cleared': [
-    '(It was|The place was) (cleared|made safe) by {clearedby}, and the way in fell shut behind them.',
-    '{clearedby} (went down|went in) and (killed|put down) (what|the thing that) (kept|ruled) it, and the way in (has|) (fallen|stayed) shut (since|ever since).',
+    'It was made safe by {clearedby}, and the way in fell shut behind them.',
+    '{clearedby} went down and put an end to what ruled it, and the way in has stayed shut ever since.',
   ],
   'oldplace.warn': [
-    '(Do not|Never) go (in|down) (alone|by night), and never (take|carry off) anything that was (left|laid) for the dead.',
-    'Those who go in for (gold|treasure) come out with (nothing but their lives|less than they took in), if they come out at all.',
-    'This is no place for the (curious|careless), and I say so as plainly as I can.',
+    'Never go down alone, and never carry off anything that was laid there for the dead.',
+    'Those who go in for treasure come out with less than they took in, if they come out at all.',
+    'This is no place for the careless, and I say so as plainly as I can.',
+    'Take twice the oil you think you need, and turn back while you still have half of it.',
+  ],
+  'oldplace.warn@storyteller': [
+    'My advice, for what it is worth, is to admire it from the road, and then go and have your supper.',
+  ],
+  'oldplace.warn@pious': [
+    'Say a prayer to {god} at the way in, and another at the way out, if you are spared to say it.',
   ],
 
   // ------------------------------------------------------------ the Kavorent

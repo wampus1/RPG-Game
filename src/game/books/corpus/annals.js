@@ -1,20 +1,26 @@
-// (Round 126) A town's annals: how a chronicler writes of a town, from the
-// empty land before it to its own day. In the phrase grammar of talk/
-// grammar.js: "(a|b)" says one of them, "[a]" says it or not; "{town}" and
-// the like are filled in from the town (see books.js).
+// (Round 126; rewritten Round 127) A town's annals: how a chronicler writes
+// of a town, from the empty land before it to its own day. In the phrase
+// grammar of talk/grammar.js: "(a|b)" says one of them, "[a]" says it or
+// not; "{town}" and the like are filled in from the town (see books.js).
 //
 // FLOWS: the ways a paragraph of each kind has been written, as runs of
 // moves (see write.js: a chain learns what follows what). POOLS: what's
-// said for each move, `${kind}.${move}`.
+// said for each move, `${kind}.${move}`; and a writer's own, in their
+// voice, `${kind}.${move}@${voice}` (see voice.js).
+//
+// The models for these are the old county histories and parish annals:
+// unhurried, specific, fond of the particular (the baker's yard where the
+// fire began, the line on the temple wall that shows how high the water
+// came), sparing with adjectives, and given to a dry remark at the end.
 export const FLOWS = {
   preface: [
     ['purpose', 'sources', 'humble'],
-    ['purpose', 'sources', 'pious', 'humble'],
-    ['pious', 'purpose', 'sources'],
     ['purpose', 'debt', 'sources'],
     ['sources', 'purpose', 'dedicate'],
     ['purpose', 'sources', 'debt', 'humble'],
     ['purpose', 'humble', 'dedicate'],
+    ['purpose', 'sources', 'pious', 'humble'],
+    ['pious', 'purpose', 'sources'],
   ],
   land: [
     ['lie', 'before', 'why'],
@@ -54,364 +60,424 @@ export const FLOWS = {
     ['realm', 'now', 'end'],
     ['now', 'realm', 'end'],
     ['realm', 'now', 'hope', 'end'],
-    ['now', 'hope', 'end'],
+    ['now', 'realm', 'hope', 'end'],
     ['realm', 'people', 'now', 'end'],
-    ['people', 'now', 'hope', 'end'],
+    ['people', 'realm', 'now', 'hope', 'end'],
   ],
 };
 
 export const POOLS = {
   // ------------------------------------------------------------ preface
   'preface.purpose': [
-    'I have (set down|written) in these pages (what is known|all that I could learn) of {subject}, (as far as|so far as) (the records allow|it can be known).',
-    'No one had yet written (the whole|a full account) of {subject} in one (place|book), and so I have (tried|taken it upon myself) to do it.',
-    '(This book|What follows) was (many|some) years in the (making|writing), and I hope the reader will find it worth the (trouble|reading).',
-    'I have (set down|written) (here|in these pages) the (history|story) of {histtown}, from (its founding|the day {founder} came) to (the present day|our own time|the year {year}).',
-    '(This book|What follows) is (an account|a history) of {histtown}, (as far as|so far as) (it can be known|the records allow|the old folk remember).',
-    'It (was|has long been) my (wish|aim) to (gather|bring together) (what is known|everything that is told) of {histtown} (into|in) one (book|place), (before|lest) it (is|be) forgotten.',
-    '(No one|Nobody) (had yet|had ever) (written|set down) the (whole|full) story of {histtown} in one (place|book), and so I have (tried|taken it upon myself) to do it.',
-    'I (was born|grew up) in {histtown}, and (this book|these pages) (is|are) my (thanks|debt) to it.',
-    'A town (is|keeps) more than its (walls|houses), and (this book|what follows) is (an attempt|my attempt) to (write down|set down) the rest of {histtown}.',
+    'I have tried in these pages to set down the history of {histtown} from its founding to the year {year}, and to set it down truly.',
+    'This is the story of {histtown}: how it began, what it has suffered, and what it has made of itself.',
+    'No one had written the whole history of {histtown} in one book before, and the old folk who remembered it were growing fewer every winter; so I began.',
+    'A town keeps its history in odd places: in the temple rolls, in the names on the gravestones, in the stories old people tell when the fire is low. I have tried to gather it into one place.',
+    'I was born in {histtown}, and this book is, in its way, my thanks to it.',
+    'What follows is an account of {subject}, as complete as I have been able to make it.',
+    'I have set down what is known of {subject}, and marked plainly where what is known gives out and what is only told begins.',
+    'This book was many years in the writing, and longer in the gathering; I hope the reader will think it worth both.',
+  ],
+  'preface.purpose@storyteller': [
+    'I have been collecting the stories of {histtown} since I was old enough to sit at my grandmother\'s feet, and somebody had to write them down before I forgot them.',
+    'Ask anyone in {histtown} about the old days and you will get a story; ask three people and you will get three. This book is my attempt to make them agree.',
+  ],
+  'preface.purpose@scholar': [
+    'The purpose of this work is to establish, as far as the surviving records permit, the history of {subject}.',
+    'Previous accounts of {subject} have been fragmentary; this one attempts to be complete, and to distinguish what is recorded from what is merely repeated.',
+  ],
+  'preface.purpose@pious': [
+    'I began this book in the hope that {god} would look kindly on the labour, and on the people whose story it tells.',
+  ],
+  'preface.purpose@plain': [
+    'This is a history of {subject}. I have kept it short.',
+    'I wrote this book because nobody else had.',
+  ],
+  'preface.purpose@lyrical': [
+    'Every town is a kind of song, sung over and over by everyone who has ever lived in it; this book is my attempt to write down the tune.',
+    'Stand on the bridge at {histtown} at evening, when the smoke goes up from every chimney, and you will understand why I wanted to write this book.',
   ],
   'preface.sources': [
-    'I have (read|drawn on) every (book|book and roll) (on|about) {subject} (I could|that I could) (find|lay hands on), and (spoken with|asked) (anyone|those) who (knew|remembered) more.',
-    'Where (the books|the old books) (disagree|tell it differently), I have (given|set down) what (seems|seemed) to me (likeliest|the likeliest), and (said|noted) where others differ.',
-    'I have (drawn on|read|used) the (temple rolls|tax books|old rolls|council minutes) of {histtown}, and (listened to|spoken with) the (oldest folk|elders) (who|that) (still remember|remember) (more than|what) the rolls (forget|do not say).',
-    'Where the (rolls|records) (are silent|say nothing), I have (written down|given) only what (the old folk|the townsfolk) (tell|say), and (said so|marked it as such).',
-    'The (oldest|earliest) (rolls|records) of {histtown} (are|were) (kept|written) by the {clergy} of {god}, (in a hand|and in a hand) (that is|) (hard|not easy) to read.',
-    '(Much|Most) of what (follows|is written here) (comes from|was taken from) the (rolls|records) of the temple, (which|and these) (are|I have found to be) (trustworthy|careful) in (such matters|matters of years).',
-    'The (old folk|elders) of {histtown} (gave|lent) me (their|) (memories|stories) (freely|gladly), and (more than one|many a) (evening|winter evening) (was|went) (spent|by) (by|at) (their|a) fire (listening|while they talked).',
+    'My chief sources have been the rolls of the temple, kept by the {clergies} of {god} in an unbroken hand for longer than anyone can remember.',
+    'Where the rolls are silent I have listened instead to the oldest people I could find, and I have said so wherever I have done it.',
+    'The records of the council were of some use, though they are more concerned with the price of grain than with anything a reader would care to know.',
+    'I have read every book and roll on {subject} that I could lay my hands on, and asked a great many questions of a great many patient people.',
+    'Where the old books disagree, I have given the account that seemed likeliest to me, and noted where others differ.',
+    'More than one winter evening was spent at the fireside of some old soul who remembered what the rolls forgot, and I owe those evenings more than I can say.',
+  ],
+  'preface.sources@scholar': [
+    'The principal sources are the temple rolls, the council minutes and the testimony of the oldest residents; where these conflict, I have preferred the written record.',
+    'I have checked every date against at least two sources where two could be found, and noted every place where only one could.',
+  ],
+  'preface.sources@storyteller': [
+    'Most of what is in here I had from old people over a mug of something warm, and I have done my best to keep their words as they said them.',
   ],
   'preface.debt': [
-    '{otherauthor} (went over|covered) (some of|much of) (this ground|the same ground) before me, in {otherbook}, and I (owe|am in debt to) (that book|them) (a great deal|more than I can say).',
-    'The reader who wants more (of|on) {othertopic} (should|may) (turn to|read) {otherbook}, by {otherauthor}, which I have (leaned on|used) (often|freely).',
-    'Where this book and {otherbook} (disagree|tell it differently), I have (said so|noted it), without (claiming|pretending) to be the more right.',
+    '{otherauthor} covered some of the same ground in {otherbook}, and I have leaned on that book more than once.',
+    'The reader who wants to know more of {othertopic} should turn to {otherbook}, by {otherauthor}, which I have used freely.',
+    'Where this book and {otherbook} tell it differently, I have said so, without pretending to be the more right.',
+    'I owe a particular debt to {otherauthor}, whose {otherbook} I first read as a child and have never quite stopped reading.',
   ],
   'preface.humble': [
-    'Any (errors|mistakes) are my own[, and I ask the reader\'s (pardon|patience) for them].',
-    'I (do not claim|make no claim) that (this book|it) is (complete|the whole of it): there (are|will always be) more (stories|tales) than any one (book|writer) can (hold|gather).',
-    'If (I have|this book has) (left out|forgotten) (anything|anyone) that (matters|ought to be in it), the (fault|blame) is mine (alone|and nobody else\'s).',
-    'I (am|was) no (scholar|great writer), and (this|it) (is|was) (a plain book|plainly written); but (it is|everything in it is) (true|as true as I could make it).',
+    'Any errors are my own, and I ask the reader\'s patience with them.',
+    'I do not claim that this book is complete: there will always be more stories than any one writer can gather.',
+    'If I have left out anything that matters, the fault is mine, and I would be glad to be told of it.',
+    'I am no great writer, and this is a plain book; but everything in it is as true as I could make it.',
+  ],
+  'preface.humble@plain': [
+    'If anything in it is wrong, tell me and I will put it right.',
+  ],
+  'preface.humble@lyrical': [
+    'Whatever is missing from these pages is still out there, in the fields and the old walls, waiting for a better writer than I am.',
   ],
   'preface.pious': [
-    'I began this book with a prayer to {god}, and I (end|finish) it the same way.',
-    '{god} (gave|has given) me the (years|patience) to (finish|write) it, and I (give thanks|am thankful) for it.',
-    'I (wrote|have written) (it|this book) (in|by) the (light|lamp) of the temple of {god}, (between|after) the (evening|night) (prayers|rites).',
+    'I began this book with a prayer to {god}, and I end it the same way.',
+    '{god} gave me the years and the patience to finish it, and I am thankful for both.',
+    'Much of it was written by the lamp of the temple of {god}, between the evening rites and the morning ones.',
   ],
   'preface.dedicate': [
-    'I (give|dedicate) (this book|these pages) to the (people|folk) of {histtown}, who (made|have made) its history and (seldom|rarely) (wrote|write) it down.',
-    '(This book|These pages) (is|are) for (my|the) (grandchildren|children of {histtown}), (that|so that) they (know|may know) (where they come from|whose town it is).',
-    'To the (memory|memory of the dead) of {histtown}, (and|) (those|all) (who|that) (lie|are buried) (under|by) the temple of {god}.',
+    'I give this book to the people of {histtown}, who made its history and rarely had time to write it down.',
+    'This book is for the children of {histtown}, so that they may know whose town it is, and what it cost.',
+    'To the memory of the dead of {histtown}, who are most of its people, and all of its past.',
   ],
 
   // ------------------------------------------------------------ the land
   'land.lie': [
-    '{town} (lies|stands) (on|by|beside) {water}, (in|amid) {ground}[, (on|in) {land}].',
-    '{town} stands (in|among) {ground}, (on|toward) the (edge|heart) of {land}.',
-    'The (land|country) (about|around) {town} is {ground}, with {water} (running|winding) (close by|past its gates|below it).',
-    'Those who (come|travel) to {town} (come|pass) (through|across) {ground}[, (and|with) {water} (beside|alongside) them (the last mile|for the last mile)].',
-    '(Seen|Looked at) from (the hills|a distance|the road), {town} is (a cluster of roofs|a huddle of roofs|a smudge of smoke) (in|among) {ground}.',
+    '{town} stands beside {water}, in a country of {ground}, on {land}.',
+    'The land about {town} is {ground}, with {water} winding past its lower streets.',
+    'Seen from a distance, {town} is a huddle of roofs and smoke among {ground}, with {water} glinting below it.',
+    'Those who come to {town} come through {ground}, and see the smoke of it long before they see the roofs.',
+    '{town} lies in {ground}, toward the heart of {land}, where the roads from the neighbouring towns meet.',
+    'The traveller who comes to {town} for the first time is struck less by the town itself than by the country around it: {ground}, mile upon mile of it.',
+  ],
+  'land.lie@lyrical': [
+    'In the early morning, when the mist lies on {water}, {town} seems to float above it, roof by roof, like something half remembered.',
+    'There is a moment on the road into {town}, at the top of the last rise, when the whole of it comes into view at once: the roofs, the smoke, {water}, and all the {ground} beyond.',
   ],
   'land.before': [
-    'Before (there was a town|the founding|anyone settled there), the (place|land) was (nothing but|only) {ground}, (crossed|walked) by (deer|herds|hunters) and (little else|no one who stayed).',
-    '(No one|Nobody) (lived|had lived) there (before|until) {founder} (came|arrived)[, (or|at least) (no one|nobody) (who left|that left) (a mark|a name)].',
-    'The (old folk|elders) say (that|) (before|long before) the (town|first house), the (place|spot) (belonged to|was known only to) the (wolves|birds|beasts of {ground}).',
-    '(What|Whatever) was (there|on the spot) before {town} (is|has been) (forgotten|lost), (but|though) (the ploughs|ploughmen) (still|now and then) (turn up|find) (old|strange) (stones|pots|bones) (in the fields|there).',
+    'Before there was a town here, there was only {ground}, crossed now and then by hunters and herds, and settled by no one.',
+    'Nobody knows who, if anyone, lived on the spot before the founding; but the ploughs still turn up worked flints and broken pots in the fields, so somebody did.',
+    'The old folk say that before the first house was built, the place belonged to the wolves, and the wolves did not give it up gladly.',
+    'Whatever stood here before {town} is forgotten now, though every spring the ploughmen bring up some new piece of it: a bead, a blade, a bone.',
   ],
   'land.why': [
-    '(Good|Clean) water, (good|black) earth and (timber|stone) near at hand (are|were) reason enough (for a town|to stay).',
-    '{water} (gave|offered) (fish|water) and a (road|way) (to the sea|downstream), and that (is|was) (more than most places can say|reason enough to stay).',
-    'It is not (the easiest|an easy) (place|spot) to (live|make a living), but it is a (good|safe) (place|spot) to (defend|be left alone).',
-    'Whoever (chose|picked) the (spot|place) (chose|picked) (well|wisely): there is (sweet|fresh) water (in every season|all year), and (it is|it lies) (out of|sheltered from) the (worst of the wind|wind).',
+    'Good water, good earth and timber near at hand were reason enough to stay; most towns have begun with less.',
+    '{water} gave fish, water and a road downstream, which was more than most places could offer.',
+    'It was never the easiest place to make a living, but it was a good place to be left alone, and in those days that counted for a great deal.',
+    'Whoever chose the spot chose well: there is sweet water in every season, and the hill behind it keeps off the worst of the wind.',
   ],
 
   // ------------------------------------------------------------ the founding
   'founding.first': [
-    'The first (houses|halls) were (built|raised) of (timber|turf and timber|rough stone) (close to|by|along) the water, and the (fields|land) (around|about) them (was|were) (cleared|broken) by hand.',
-    '(Within|In) a (generation|few years) (there was|the settlers had) a (well|mill|market) and a (shrine|temple) to {god}[, and the beginnings of a town].',
-    'They (built|raised) the (hall|first hall) (first|before anything else), (and|then) the (houses|homes), (and|then) a (wall|fence) (of stakes|of timber) (around|about) (them all|the lot).',
-    '(The settlers|They) (cut|cleared) the (first|) ground (with|by) (axe|axes) and fire, and (sowed|planted) it (that|the first) spring.',
-    'The (first|oldest) (house|houses) of {town} (stood|stand) (still|) (near|by) the (square|well), (though|but) (it has|they have) been (rebuilt|mended) (many times|so often) (since|that little of the first is left).',
+    'The first houses were raised of rough timber close by the water, and the ground around them was cleared by hand, with axe and fire.',
+    'They built the hall first, before anything else, and lived in it together through that first year while the houses went up around it.',
+    'Within a generation the settlement had a well, a mill and a shrine to {god}, and the beginnings of a market.',
+    'The oldest house in {town} still stands near the well, though it has been patched and rebuilt so often that very little of the first one can be left.',
+    'They cut the first fields out of {ground} that spring, sowed them with seed they had carried with them, and waited.',
   ],
   'founding.hardship': [
-    'In the first (winter|years) (the settlers|they) went (hungry|short), and not all of them lived to see the spring.',
-    'The first (winters|years) were (hard|bitter), and (the settlers|they) (lived|got by) on what they could (hunt|catch|gather) (until|till) the (first|) harvest (came in|was in).',
-    '(Sickness|Fever) (took|carried off) (some|a few) of the (first|) (families|settlers) (in|before) the first year (was out|ended)[, and they are (buried|remembered) (by|near) the (old|first) well].',
-    '(It was|Those were) (hard|lean) years, (and|but) (no one|nobody) (went back|turned back) (the way they had come|to where they came from).',
+    'The first winter was hard, and not all of the settlers lived to see the spring; their graves are the oldest in the town.',
+    'Those first years were lean ones, and the settlers lived on what they could hunt and gather until the first harvest came in.',
+    'Fever took some of the first families before the year was out, and they are remembered still by a stone near the old well.',
+    'Many of them must have thought of going back the way they had come. None of them did.',
   ],
   'founding.grow': [
-    '(Others|More settlers) (followed|came after), (hearing|having heard) of the (good|black) earth, and (in|within) (twenty|thirty|forty) years the (place|settlement) (was|had become) a (village|town) (of|with) (a hundred|two hundred) (souls|hearths).',
-    'The (village|settlement) (grew|throve) (slowly|steadily), a (house|family) at a time, (until|till) (it was|it had become) (big enough|large enough) to (need|want) a (market|council) of its own.',
+    'Others followed, having heard of the good earth, and within forty years the settlement was a village of a hundred hearths.',
+    'The village grew slowly, a house and a family at a time, until it was large enough to need a market and a council of its own.',
+    'By the time the founder died, there were children in {town} who had never seen anywhere else.',
   ],
   'founding.name': [
-    '{founder} is (remembered|honoured) (still|to this day) in {town}, (where|and) (children|the young) (learn|are taught) the name (before|as soon as) they can (walk|read).',
-    '(There is|The town keeps) a (stone|carving|feast) (for|in honour of) {founder}, though (no one|nobody) now (knows|can say) (where|which) (the grave|their grave) (is|was).',
-    '(Every|Each) (child|boy and girl) in {town} (can|could) (tell you|tell) (how|the story of how) {founder} (came|founded it), (and|though) (each|every one) (tells|of them tells) it (a little|) differently.',
+    '{founder} is remembered in {town} to this day; children learn the name before they can read it.',
+    'The town keeps a feast in honour of {founder}, although nobody now can say for certain where the founder lies buried.',
+    'Every child in {town} can tell you how {founder} came, and every one of them tells it a little differently.',
   ],
 
   // ------------------------------------------------------------ an event
-  // (Something remembered, neither good nor ill.)
   'event.detail.lore': [
-    '(The rolls|The records) (say|tell) (little|less than we would like) of it, but the (old folk|elders) (tell|told) (more|much more), (though|and) (never|not always) the same way twice.',
-    '(Those|The few) who saw it (spoke|talked) of it (all their lives|to the end of their days), and their (children|grandchildren) (tell it still|still tell it).',
-    'The whole of {town} (talked|spoke) of (nothing|little) else (for a month|for a season|all that year).',
-    '(It|The thing) (is|was) (written|set down) in the (temple rolls|rolls) in (a careful|a plain|an unsteady) hand, (with|and) (nothing|no word) (said|added) of what (anyone|the writer) (thought|made) of it.',
+    'The rolls say little about it, but the old folk said a great deal, and never quite the same thing twice.',
+    'Those who saw it talked of it for the rest of their lives, and their grandchildren tell it still.',
+    'For a season, the whole of {town} talked of nothing else.',
+    'It is written into the rolls in a careful hand, with no word of what the writer thought of it; perhaps the writer did not trust themselves to say.',
   ],
   'event.after.lore': [
-    'Life in {town} (went on|returned to what it had been), as (it does|it must), (but|and) (it|the thing) was (not|never) (forgotten|quite forgotten).',
-    'It has been (told|remembered) (every year|each year) since, on the (anniversary|day itself), (by|among) (the old folk|those who keep such things).',
+    'Life in {town} went on, as it must; but the thing was not forgotten.',
+    'It is still remembered every year, on the day itself, by those who keep such things.',
   ],
-  // (A good year.)
   'event.detail.good': [
-    '(Folk|The townsfolk) (still|) (speak|talk) of (that year|those years) as the (best|happiest) {town} (ever had|has known).',
-    'There was (money|coin) (in every purse|in every house) (that|for a) (year|while), and (new|fine) (houses|roofs) (went up|were raised) (along|on) the (square|high street).',
-    '(Word|News) of it (went|spread) (all over|across) {land}, and (folk|people) (came|travelled) (from|out of) (far|the other towns) to (see|share in) it.',
-    'The {clergy} of {god} (gave|offered) (thanks|a feast of thanks) (in|at) the temple, and (the whole town|everyone) (came|turned out) (to hear it|for it).',
+    'There was money in every purse that year, and new roofs went up along the high street one after another.',
+    'Word of it spread across {land}, and people came from the other towns to see it for themselves.',
+    'The {clergies} of {god} gave thanks in the temple, and for once the whole town came to hear them.',
+    'The old folk still speak of it as the best year {town} ever had, with the particular fondness people keep for good times that did not last.',
   ],
   'event.after.good': [
-    '(It|That good fortune) did not last (for ever|forever), (as|for) (such things|good years) (never|do not) (do|last); but it (is|was) (remembered|not forgotten).',
-    '(A good deal|Much) of what (is|stands) (finest|best) in {town} (today|now) was (built|paid for) in (that year|those years).',
-    '(Since then|After that), {town} has (thought|spoken) of itself as (a lucky place|the kind of place fortune smiles on).',
+    'The good fortune did not last for ever, as such things never do; but a great deal of what is finest in {town} was paid for out of it.',
+    'Since then {town} has thought of itself as a lucky place, which is perhaps the most valuable thing a town can think.',
+    'Much of what stands on the square today was built in those years.',
   ],
-  // (A bad year.)
   'event.detail.bad': [
-    '(Folk|Families) went (hungry|short) that (year|winter), and more than one (family|household) (left|gave up and left) {town} for good.',
-    'The (worst|hardest) of it (fell|came) on the poor, as (it always does|the worst always does), and the {clergies} of {god} (fed|kept) (whom|those) they could.',
-    '(It|The year) is (remembered|spoken of) (still|to this day) as (a black year|the black year|the bad year) in {town}.',
-    '(No one|Nobody) (could|can) (remember|say) (a worse|a harder) (time|year), (and|though) (some|the old folk) (said|swore) (that|) (worse|harder) (was|were) (to come|coming).',
+    'Families went hungry that winter, and more than one of them gave up and left {town} for good.',
+    'The worst of it fell, as the worst always does, on the poor; the {clergies} of {god} fed whom they could, and buried the rest.',
+    'It is remembered still as the black year, and the old folk lower their voices when they speak of it.',
+    'Nobody living could remember a harder time, though the oldest of them insisted, with the satisfaction of the old, that worse was coming.',
   ],
   'event.after.bad': [
-    '{town} took (years|a generation) to (mend|recover), (but|and) mend it did.',
-    '(Afterwards|After that), the (council|elders) of {town} (made|passed) (new rules|a law) so that the like (should|might) not (come|happen) again.',
-    '(Those|The ones) who (lived|came) through it (were|grew) (harder|tougher) for it, (they said|or so they said), (and|but) they (never|seldom) spoke of it (gladly|willingly).',
+    'It took {town} a generation to recover, but recover it did.',
+    'Afterwards the council made new rules, so that the like should not happen again; whether the rules were kept is another matter.',
+    'Those who lived through it were harder for it, or so they said, and they seldom spoke of it willingly.',
   ],
-  // (The town's oath to its realm.)
   'event.detail.oath': [
-    '(It was|This was) not (done|decided) (lightly|in a day): the (council|elders) (argued|talked) (through|for) a whole (winter|season) before they (agreed|swore).',
-    '(Some|Many) in {town} (wanted|would have) no (lord|crown) but their own (council|elders), but they were (outvoted|fewer).',
-    'The oath was (sworn|taken) in the (square|hall), before the whole town, with the (banner|standard) of {realm} (hung|raised) over the (door|gate).',
+    'It was not done lightly: the elders argued through a whole winter before they agreed.',
+    'Some in {town} wanted no lord but their own council, and said so loudly; but they were outvoted.',
+    'The oath was sworn in the square, before the whole town, with the banner of {realm} hung over the door of the hall.',
   ],
   'event.after.oath': [
-    '(Since then|From that day), {town} (has sent|has paid) its (taxes|tithes) to {capital}, and (its|the) (young|young men and women) (have marched|march) (under|with) the (banner|standard) of {realm} (when|whenever) (it|they) (calls|are called).',
-    'Whether (it|the oath) was (wise|the right choice), (folk|the townsfolk) (still|) (argue|disagree) (over|about) it (in the taverns|over their ale) (to this day|today).',
+    'From that day {town} sent its taxes to {capital}, and its young folk marched under the banner of {realm} whenever they were called.',
+    'Whether it was wise is still argued in the taverns, usually late, and never to anyone\'s satisfaction.',
   ],
-  // (The town's young gone to war.)
   'event.detail.war': [
-    '(The|Its) (young|young folk) (marched|went) out (under|behind) the banner of {realm}, (singing|with drums), and (fewer|not all of them) (came|marched) (home|back).',
-    '(Every|Each) (house|family) in {town} (lost|gave) (someone|a son or a daughter) (that|in that) (year|war), or (knew|had) (a neighbour|someone) who (did|had).',
+    'The young folk of {town} marched out behind the banner of {realm} with drums and singing, and fewer of them came home.',
+    'There was hardly a family in {town} that did not lose someone that year, or know someone who had.',
   ],
   'event.after.war': [
-    '(Their|The) names (are|were) (cut|carved) (on|into) a stone (on|by) the square, and (each year|every year) (flowers|garlands) are (laid|left) (at its foot|there) (on|for) {feast}.',
+    'Their names are cut on a stone on the square, and every year at {feast} somebody lays flowers at its foot.',
   ],
-  // (A battle by the town, in one of the old wars.)
   'event.detail.battle': [
-    'The (fighting|battle) (came|spread) (right|) up to the (fields|gates) of {town}, and (the townsfolk|folk) (watched|saw) it from the (walls|rooftops) (with their hearts in their mouths|in silence).',
-    'The (wounded|dying) were (carried|brought) into {town} (by|on) the (cartload|wagonload), and (every|each) (house|hall) (became|was made) a (hospital|sickroom) (that|for a) (night|week).',
-    '(Arrows|Spearheads) (from|of) that (day|battle) (are|have been) (still|) (turned up|found) by the (ploughs|ploughmen) (in|of) the fields (outside|about) {town}.',
+    'The fighting came right up to the fields of {town}, and the townsfolk watched it from the walls in silence.',
+    'The wounded were carried into {town} by the wagonload, and for a week every hall in the town was a sickroom.',
+    'The ploughs still turn up arrowheads from that day in the fields outside {town}, and the children sell them to travellers.',
   ],
   'event.after.battle': [
-    'The dead (of both sides|of either side) were buried (together|side by side) in (a|one) long grave (outside|by) the {town} road, (and|where) (a|the) (cairn|stone) (marks|stands over) (it|them) (still|to this day).',
-    '(For|In) (years|a generation) (after|afterwards), (no one|nobody) in {town} (would|could) (walk|go) (that|the) (field|road) (after dark|at night).',
+    'The dead of both sides were buried together in one long grave beside the road, and a cairn stands over them still.',
+    'For a generation afterwards, nobody in {town} would walk that road after dark.',
   ],
-  // (Given away in a peace, to another realm.)
   'event.detail.ceded': [
-    '(Nobody|No one) in {town} (was|had been) asked, (and|but) the (banner|standard) of {victor} (went up|was raised) over the (gate|hall) (before|by) the (month|season) was out.',
-    '(Some|Many) (folk|families) (left|went) (for|over the border to) {loser2} (rather than|sooner than) (swear|live under) (the|a) new (oath|crown), (and|but) (most|the rest) (stayed|stayed on), as (most folk|people) (do|always do).',
+    'Nobody in {town} was asked, and the banner of {victor} went up over the gate before the season was out.',
+    'Some families left for {loser2} rather than swear a new oath; most stayed, as most people always do.',
   ],
   'event.after.ceded': [
-    '(The|Its) (old folk|oldest folk) (still|) (speak|talk) of (the|that) (year|peace) (bitterly|with a shrug), (and|but) their grandchildren (know|have known) no other (crown|realm).',
+    'The oldest folk still speak of that year with a shrug, and their grandchildren have known no other crown.',
   ],
-  // (The realm proclaimed in it.)
   'event.detail.proclaimed': [
-    '(The|Its) (chiefs|heads of the great families) (came|rode) (in|into {town}) from (every|all) (corner|part) of {land} to (see|swear to) the (new|first) ruler, and {town} (feasted|was feasting) (for|through) a (week|fortnight).',
-    '(From|After) (that day|then), {town} (has been|was) the seat of the (realm|crown), and (its|the) (hall|great hall) (grew|was rebuilt) (to match|in stone).',
+    'The heads of the great families rode in from every corner of {land} to swear to the new ruler, and {town} feasted for a fortnight.',
+    'From that day {town} was the seat of the crown, and its hall was rebuilt in stone to match.',
   ],
-  // (An old place gone bad.)
   'event.detail.dungeon': [
-    '(Mothers|Grandmothers) in {town} (still|) (frighten|hush) (their|) children (with|by naming) it, (and|though) (few|none) of them (have|has) (seen|been near) it (themselves|with their own eyes).',
-    '(Shepherds|Hunters) who (pass|passed) near it (say|have said) they (hear|have heard) (things|voices) (below|under the ground) (at night|after dark).',
-    '(Its|The) (story|tale) (is|has been) told to every (child|generation) in {town}, as a warning.',
+    'Grandmothers in {town} still hush their children with it, though none of them has ever been near the place.',
+    'Hunters who pass near it say they have heard voices under the ground after dark, and nobody laughs at them for saying so.',
+    'Its story is told to every child in {town}, partly as a story and partly as a warning.',
   ],
   'event.after.dungeon': [
-    '(No one|Nobody) has (gone|been) (down|in) since[, or (no one|nobody) who came back to say so].',
-    'The way in is (marked|shown) on no map (made in|of) {town}, but every child (knows|in {town} knows) the way all the same.',
+    'No one has gone down since, or no one who came back to say so.',
+    'The way in is marked on no map made in {town}; every child knows it anyway.',
   ],
   'event.remark': [
-    '(Such|These) are the (trials|years) by which a town (learns|finds out) what it is made of.',
-    'I (set it down|write it) (here|plainly) as the (rolls|records) (have|give) it, without adding anything of my own.',
-    '(It is|This is) (worth|well worth) (remembering|setting down) that the (people|folk) of {town} did not (give up|leave), whatever (came|befell them).',
-    '(Every|Each) town (has|keeps) (such years|years like these) in its (past|history), and {town} (has|keeps) (more than its share|its share).',
+    'These are the trials by which a town finds out what it is made of.',
+    'I set it down as the rolls give it, without adding anything of my own.',
+    'It is worth remembering that the people of {town} did not give up, whatever came.',
+    'Every town has years like these in its past, and {town} has rather more than its share.',
+  ],
+  'event.remark@storyteller': [
+    'Now, I have heard that story told a dozen ways, and this is the only one I believe.',
+    'My grandmother used to tell this one with her eyes closed, which I always took to mean it was true.',
+  ],
+  'event.remark@scholar': [
+    'The sources agree on the year; they agree on very little else.',
+    'Here, for once, the rolls and the old folk tell the same story, which is reason enough to trust it.',
+  ],
+  'event.remark@pious': [
+    'May {god} keep the souls of those who did not live to see the end of it.',
+    'It was a hard lesson, and the faithful of {town} took it to heart.',
+  ],
+  'event.remark@plain': [
+    'That was that.',
+    'Nobody forgot it.',
+  ],
+  'event.remark@lyrical': [
+    'Some years leave no mark on a town; others it wears for ever, like a scar it has learned to be proud of.',
+    'The grass has long since grown back, but the old folk still walk a little more slowly past the place.',
   ],
   'event.source': [
-    'So (say|run) the (temple rolls|old rolls|records) of {town}, (which|and these) (are|I have found to be) (careful|trustworthy) in (such matters|matters of this kind).',
-    '(The|My) (account|telling) (here|) (follows|is taken from) the (rolls|records) (of the temple|kept by the {clergy}), (which|and they) (give|have) the (year|date) (plainly|exactly).',
-    'I (had|heard) (this|the story) from (an old|the oldest) soul in {town}, whose (grandmother|grandfather) (saw it|was there).',
+    'So say the temple rolls, which are careful in matters of this kind.',
+    'My account follows the rolls kept by the {clergies}, which give the year plainly.',
+    'I had the story from the oldest soul in {town}, whose grandmother saw it with her own eyes.',
   ],
   'event.link': [
     '{when}, {other}.',
-    '{when}, {other}[, (though|but) (the rolls|the records) of {town} (say nothing of it|do not mention it)].',
-    'It is (worth|well worth) (remembering|noting) that, {whenlow}, {other}.',
+    '{when}, {other}; the rolls of {town} make no mention of it.',
+    'It is worth noting that, {whenlow}, {other}.',
   ],
   // (Each kind of thing that befalls a town.)
   'event.detail.fire': [
-    'The fire (began|started)[, it is said,] in a (baker\'s|chandler\'s|smith\'s) (shop|yard) (near|by) the (square|market), and the wind (did the rest|carried it from roof to roof).',
-    '(Thatch and timber|Timber and straw) burned (like kindling|as dry as tinder), and by (morning|nightfall) whole streets were (gone|ash|nothing but black posts).',
-    'The (people|townsfolk) (formed|made) (bucket-lines|lines with buckets) (from the well|from the water), but the flames (outran them|were faster).',
-    '(No one|Nobody) (can|could) say (how many|who) (died|were lost) that night, for the (rolls|records) (burned|went up) (with the rest|too).',
+    'The fire began, it is said, in a baker\'s yard near the square, and the wind carried it from roof to roof faster than anyone could run.',
+    'Thatch and timber burned like kindling, and by morning whole streets were nothing but black posts standing in the ash.',
+    'The townsfolk formed lines with buckets from the well to the burning streets, and passed water hand to hand all night; it was not nearly enough.',
+    'No one could say afterwards how many were lost that night, because the rolls burned with everything else.',
   ],
   'event.after.fire': [
-    '{town} was (rebuilt|built again) (in stone|in brick|street by street), and (it is|it was) (the better|a finer town) for it.',
-    'A (law|rule) was made that no (roof|house) (within|inside) the (walls|town) (should|might) be (thatched|of timber) again.',
-    'The (black|scorch) marks (can|may) (still|) be seen (on|upon) the (oldest|older) (houses|stones) (by|near) the (square|well).',
+    '{town} was rebuilt in stone, street by street, and was the finer town for it.',
+    'A law was made that no house inside the walls should ever be roofed with thatch again, and for once a law was kept.',
+    'The black marks of it can still be seen on the oldest stones by the well, if you know where to look.',
   ],
   'event.detail.flood': [
-    'The (water|flood) (came|rose) in the night, (and|so that) (by|at) (morning|dawn) the (lower|low) (streets|houses) (were|stood) (under|in) water (to the sills|to the eaves).',
-    '(The rain|It) (had|) (fallen|come down) for (nine|eleven|many) days (without|with no) (stopping|break), and the (banks|walls) (could|did) not hold.',
-    '(Folk|People) (took|went up) to the (roofs|upper floors) with what they could (carry|save), and (watched|saw) the (rest|everything else) (float|go) (away|past).',
+    'The water rose in the night, and by morning the lower streets stood in it up to the sills.',
+    'It had rained for eleven days without a break, and the banks could not hold it any longer.',
+    'Folk carried what they could to the upper floors and the roofs, and watched the rest float away below them.',
   ],
   'event.after.flood': [
-    'The (mill|fields) (was|were) (rebuilt|mended) (higher|further from the water), and (a mark|a line) (was cut|cut) (on|in) the (temple|town) wall (shows|to show) (how high|where) the water (came|rose).',
-    'When the water (went down|fell), it (left|had left) (a foot of|a crust of) (mud|silt) (over|on) (everything|the fields), and the (harvest|next harvest) (was|came) (the best|richer than) (in living memory|anyone remembered).',
+    'The mill was rebuilt further from the water, and a line was cut in the temple wall to show how high the flood had come; it is above a tall man\'s head.',
+    'When the water went down it left a foot of silt over the fields, and the next harvest was the richest anyone could remember.',
   ],
   'event.detail.plague': [
-    'The (sickness|fever) (came|began) (with|among) the (traders|travellers|sailors), and (spread|went) from house to house (faster|quicker) than (word of it|the {clergy} could pray).',
-    '(Whole|Some) (families|households) (died|were lost) (together|in a week), and the (bells|temple bell) (rang|tolled) (every day|day after day) (for|through) (a month|the summer).',
-    'The {clergy} of {god} (nursed|tended) the (sick|dying) (until|till) (they|many of them) (fell sick|sickened) themselves.',
+    'The sickness came in with the traders and went from house to house faster than the {clergies} could pray.',
+    'Whole households died within a week of each other, and the temple bell tolled every day for a month.',
+    'The {clergies} of {god} nursed the sick until many of them sickened too, and were nursed in their turn by whoever was left.',
   ],
   'event.after.plague': [
-    'The (graveyard|burial ground) (was|had to be) (doubled|made larger), and (the|a) (stone|plain stone) (by its gate|at its gate) (names|remembers) the dead of that year.',
-    '(For|In) (years|a generation) (after|afterwards), (no|few) (stranger|strangers) (was|were) (let in|welcome) (without|unless they had) (a word|a letter) (from|for) (someone|the council).',
+    'The burial ground had to be made larger, and a plain stone at its gate remembers the dead of that year.',
+    'For a generation afterwards, no stranger was let into {town} without a letter from someone the council trusted.',
   ],
   'event.detail.siege': [
-    'The (enemy|besiegers) (camped|sat down) (before|outside) the walls (for|through) (a whole season|the summer|forty days), and (tried|tested) the gates (night after night|again and again).',
-    '(Inside|Within) the walls (the people|folk) (ate|were eating) (their horses|the last of the grain|rats) (before|by) the end, (but|and still) (they did not|no one would) (open the gates|give up).',
-    'The (watch|defenders) (held|kept) the (walls|gate) with (whatever|what) they had: (spears|bows), (stones|roof tiles) and (boiling|hot) (water|pitch).',
+    'The besiegers sat down before the walls for a whole season, and tried the gates night after night.',
+    'Inside the walls the people ate their horses and then the rats, and still would not open the gates.',
+    'The watch held the walls with whatever came to hand: spears and bows, roof tiles, boiling water from the kitchens.',
   ],
   'event.after.siege': [
-    '(A stone|A plaque) (by|over) the (gate|main gate) (remembers|names) (those|the ones) (who|that) (held|kept) it, and (fell|died) (doing so|there).',
-    '(The siege|It) (is|was) (still|) (remembered|spoken of) (each year|every year) (with|by) (a vigil|a feast|a night of bonfires) on the walls.',
+    'A plaque over the gate names those who held it, and those who died doing so.',
+    'The siege is remembered every year with a night of bonfires on the walls, and the children are allowed to stay up for it.',
   ],
   'event.detail.famine': [
-    'The (harvest|crop) (failed|had failed), and (by|before) (midwinter|the new year) the (granaries|barns) were (empty|bare).',
-    '(Folk|People) (ate|were eating) (acorns|bark and roots|boiled leather) by the end, and (the old|the weakest) (died|went) (first|before the rest).',
-    'The (council|elders) (shared|gave out) (what was left|the last of the grain) by the (handful|measure), (and|but) (it was not enough|there was never enough).',
+    'The harvest failed, and before the new year the granaries were bare.',
+    'By the end, folk were eating acorns and boiled leather, and the old and the weakest went first.',
+    'The council gave out what was left a handful at a time, and there was never enough.',
   ],
   'event.after.famine': [
-    '(Since then|Ever since), {town} has kept a (granary|store of grain) against (hard years|the next bad year), and no (council|mayor) has dared to empty it.',
-    'The (spring|next spring) (came|was) (late|kind), and the fields were (sown|planted) (again|from seed begged from (neighbours|the next valley)).',
+    'Ever since, {town} has kept a granary against hard years, and no council has dared to empty it.',
+    'The spring came late but kind, and the fields were sown again from seed begged from the neighbours.',
   ],
   'event.detail.omen': [
-    '(Some|Many) took it for (a sign|an omen) of (war|plague|great change) to come, (and|while) others (said|thought) it (was|meant) nothing at all.',
-    'The {clergy} of {god} (watched|kept watch on) it (every night|night after night), but could not (say|tell) whether it (meant|was) good or ill.',
-    '(Children|Folk) (stayed|were kept) (indoors|in) after dark, and (the|every) (temple|shrine) was (full|crowded) (every|each) night (it shone|it hung there).',
+    'Some took it for an omen of war or plague to come; others said it was nothing at all, and went back to their suppers.',
+    'The {clergies} of {god} watched it every night, but could not say whether it meant good or ill.',
+    'Children were kept indoors after dark, and the shrine was crowded every night it shone.',
   ],
   'event.detail.temple': [
-    '(The|Its) (stone|stones) (was|were) (hauled|brought) from (the hills|far off) (by|on) (ox-cart|the backs of the faithful), and (it|the work) (took|was) (a generation|thirty years) (to finish|in the building).',
-    '(Every|Each) (family|household) in {town} (gave|paid for) (a stone|something), and (their names|the givers\' names) are (cut|carved) (inside|in) the (porch|walls) (still|to this day).',
-    '(It|The temple) (stands|has stood) (since|ever since), (and|) (the|its) (bell|bells) (can|may) be heard (all the way to|as far as) the (fields|hills) on (a|any) (still|quiet) day.',
+    'The stone was hauled from the hills by ox-cart and on the backs of the faithful, and the building took thirty years.',
+    'Every household in {town} gave something toward it, and the givers\' names are carved in the porch to this day.',
+    'Its bell can be heard all the way out to the farthest fields on a still evening.',
   ],
   'event.detail.realm': [
-    '(It was|This was) (not|) (done|decided) (lightly|in a day): the (council|elders) (argued|talked) (for|through) (a whole|the) (winter|season) (before|until) they (agreed|swore).',
-    '(Some|Many) in {town} (wanted|would have) (no lord|no crown) (but|except) their own (council|elders), (and|but) (they were|the rest) (outvoted|fewer).',
-    'The oath was (sworn|taken) in the (square|hall), before (the whole town|everyone), with (a|the) (banner|standard) of {realm} (hung|raised) (above|over) the (door|gate).',
+    'It was not done lightly: the council argued through a whole winter before they swore.',
   ],
   'event.detail.news': [
-    '(It|This) (is|was) (still|) (fresh|new) (enough|) (in|to) the (memory|minds) of (the|most) (townsfolk|people of {town}) (that|and) (they|folk) (speak|talk) of it (often|still).',
-    '(Those|All) (who|that) (were|lived) in {town} (then|at the time) (remember|will remember) (where|what) (they were|they were doing) when (they heard|the word came).',
-    '(The|What) (rolls|records) (have|say) (of it|) (is|are) (short|brief); (the|what) (talk|is said) in the (taverns|square) (is|) (longer|much longer).',
+    'It is still fresh enough in the memory of the townsfolk that they speak of it often.',
+    'Those who were in {town} at the time can tell you exactly where they were when the word came.',
+    'What the rolls say of it is short; what is said in the taverns is a good deal longer.',
   ],
   'event.detail.wreck': [
-    'The (ship|wreck) (broke|went to pieces) on the rocks (within sight of|in plain sight of) the (town|shore), and (the people|folk) (went|waded) out (into the surf|in the storm) to (pull|drag) the (sailors|survivors) (ashore|out).',
-    '(Its|The) (timbers|cargo) (washed|came) (ashore|up) for (weeks|a month) after, and (more than one|many a) house in {town} (is|was) (roofed|built) with (them|its timbers).',
+    'The ship broke up on the rocks in plain sight of the shore, and the people of {town} waded out into the surf to drag the survivors ashore.',
+    'Her timbers washed up for a month afterwards, and more than one house in {town} is roofed with them still.',
   ],
   'event.detail.drought': [
-    'The (wells|springs) (sank|dropped) (lower|deeper) (every|each) (week|day), and (folk|the people) (walked|went) (miles|half a day) (for|to fetch) (water|a jar of water).',
-    'The (fields|ground) (cracked|split) (in|under) the sun, and the (herds|beasts) (were|had to be) (slaughtered|killed) (before|rather than let them) (they|) (starved|starve).',
+    'The wells sank lower every week, and folk walked half a day for a jar of water.',
+    'The fields cracked in the sun, and the herds had to be slaughtered before they starved.',
   ],
   'event.detail.winter': [
-    'The (snow|drifts) (lay|came) (to|over) the (eaves|doors), and (folk|the people) (went|passed) (from house to house|between houses) by (tunnels|paths) (dug|cut) (through|in) (it|the snow).',
-    'The (watch|night watch) kept the fires (high|burning) (all night|through the dark), (and|while) (the wolves|the pack) (called|howled) (from|in) the (trees|forest) (close by|outside the walls).',
+    'The snow lay over the eaves, and folk went from house to house by tunnels cut through the drifts.',
+    'The watch kept the fires high all night, and the wolves howled in the forest outside the walls.',
   ],
   'event.detail.fog': [
-    'The fog (lay|sat) so (thick|heavy) (that|) (folk|the townsfolk) (could not|could hardly) see their own hands (before|in front of) their faces.',
-    '(Boats|Fishers) (that|who) (went out|put out) (into it|in it) (did not|never) come back, and (their|the) (names|boats) (are|were) (cut|carved) (on|into) the (post|stone) by the (landing|water).',
+    'The fog lay so thick that the townsfolk could not see their own hands in front of their faces.',
+    'Boats that put out into it did not come back, and their names are cut on the post by the landing.',
   ],
   'event.detail.statue': [
-    'The (statue|likeness) (was|is) (cut|carved) from (white|grey|local) stone, and (it|the face) (is|was) (said to be|thought) (a fair|a good) likeness[, (though|but) (those|the folk) (who knew them|who remember) (say otherwise|are not so sure)].',
-    '(The whole of|All) {town} (turned out|came) (to see it|for the raising), and (there was|it was) (feasting|a feast) (till|until) (dawn|the small hours).',
+    'The statue was carved from local stone, and is said to be a fair likeness, though those who knew the subject are not so sure.',
+    'The whole of {town} came out for the raising, and there was feasting until the small hours.',
   ],
 
   // ------------------------------------------------------------ the town's ways
   'ways.famous': [
-    '{town} is (known|famous|spoken of) (far and wide|across {land}|beyond its walls) for {famous}[, and (its people|the townsfolk) (are|have always been) (proud|vain) of it].',
-    '(Ask|Speak to) anyone (on the road|in the markets of {land}) about {town}, and the first thing they will (mention|speak of) is {famous}.',
-    'Whatever else {town} (is|has been) (known|remembered) for, it (is|has always been) {famous} (first|above all).',
+    '{town} is known across {land} for {famous}, and the townsfolk have never been modest about it.',
+    'Ask anyone on the road about {town}, and the first thing they mention will be {famous}.',
+    'Whatever else {town} has been known for, it has always been known first for {famous}.',
   ],
   'ways.table': [
-    '(The table|The food) of {town} is the (food|table) of the {people}: {dish} (above all|first of all), and {dish2}, (washed down|taken) with {drink}.',
-    'No (feast|table) in {town} is (thought|counted) (complete|whole) without {dish}, and a guest (who refuses|that refuses) it (is|will be) (thought|counted) (rude|ill-mannered).',
-    '(Every|Each) (house|kitchen) in {town} (has|keeps) its own (way with|way of making) {dish}, and (each|every one) (swears|holds) (theirs|its own) (is|to be) the (only|true) (one|way).',
-    '{drink} is (drunk|taken) (at every meal|with everything) in {town}, by (young and old|old and young) alike; but (strangers|visitors) (should|had better) (go carefully|take care) with it.',
+    'The table of {town} is the table of the {people}: {dish} above everything, and {dish2}, with {drink} to wash it down.',
+    'No feast in {town} is thought complete without {dish}, and a guest who refuses it will be remembered, and not kindly.',
+    'Every kitchen in {town} has its own way with {dish}, and every one of them is certain that the others are doing it wrong.',
+    '{drink} is drunk at every meal in {town}, by young and old alike; strangers would do well to go carefully with it.',
   ],
   'ways.faith': [
-    'The faithful of {town} keep {faith}, and honour {god}, whose (sign|token) is {symbol}.',
-    '{town} (keeps|has always kept) {faith}, and its {clergies} are (much|well) (loved|respected) (there|in the town).',
-    'In {faith}, the (first|highest) virtue is {virtue}, and the folk of {town} (try|are said) to (live by it|keep to it)[, (more or less|for the most part)].',
+    'The faithful of {town} keep {faith}, and honour {god}, whose sign is {symbol}.',
+    '{town} has always kept {faith}, and its {clergies} are well loved there, which cannot be said of every town.',
+    'In {faith} the first virtue is {virtue}, and the folk of {town} try, for the most part, to live by it.',
   ],
   'ways.feast': [
-    '{holyday} is the holy day, and (on it|then) (the|no) (shops|work) (close|is done) (till|until) (evening|the evening bell).',
-    '(At|For) {feast}, the whole of {town} (turns out|gathers) (in|on) the (square|streets), and the {clergy} leads the (procession|rites).',
-    '{feast} is the (great|greatest) (feast|day) of the year in {town}, and (folk|people) (come|walk) (from|out of) the (farms|villages) (for miles|round about) (to keep it|for it).',
+    '{holyday} is the holy day, and no shop in {town} opens until the evening bell.',
+    'At {feast} the whole of {town} turns out into the square, and the {clergy} leads the procession through the streets.',
+    '{feast} is the great day of the year in {town}, and folk walk in from the farms for miles around to keep it.',
   ],
 
   // ------------------------------------------------------------ the legend
   'legend.open': [
-    '(Every|Each) town (has|keeps) its (old|) (story|stories), (told|that are told) (round|by) the fire (on|in) (winter|long) (nights|evenings), and {town} (is|) no (different|exception).',
-    '(I|It) (would|) (not|) (be|seem) (right|fair) to (leave|end) (this book|a history of {town}) without (its|the) (oldest|best-known) (story|tale).',
+    'Every town has its old stories, told by the fire on winter nights, and {town} is no exception.',
+    'It would not be right to end a history of {town} without its best-known tale.',
   ],
   'legend.belief': [
-    '(Whether|How much of) it is true, I (cannot|could not) say; but (no one|nobody) in {town} will (go|walk) there after dark.',
-    'The {clergy} (call|calls) it (a tale for children|an old wives\' tale), but (they|the {clergy}) (do not|never) (laugh|smile) when they (say so|say it).',
-    'I have heard it (told|said) (three|four|five) (ways|different ways), and (in every one|each time) the ending was the same.',
-    '(Sensible|Learned) (folk|people) (laugh|smile) at it by day, (but|and) the same folk (bar|lock) their (doors|shutters) at night.',
+    'Whether it is true, I cannot say; but nobody in {town} will go there after dark.',
+    'The {clergies} call it a story for children, but they do not smile when they say so.',
+    'I have heard it told five different ways, and every one of them ended the same.',
+    'Sensible people laugh at it by daylight, and bar their shutters at night.',
+  ],
+  'legend.belief@scholar': [
+    'There is no evidence for any of it, which has never yet stopped a good story.',
+  ],
+  'legend.belief@storyteller': [
+    'I have been out there myself, once, at night. I did not stay long.',
   ],
   'legend.place': [
-    '(Some|Others) (say|hold) (that|) (it has|the story has) (something|much) to do with {dungeon}, (out|which lies) {where}.',
-    '(Folk|The old folk) (who|that) (tell|know) it (best|well) (point|nod) (toward|in the direction of) {dungeon}, {where}, (when|as) they (tell|finish) it.',
+    'Some say it has something to do with {dungeon}, which lies {where}.',
+    'Those who tell it best nod toward {dungeon}, {where}, when they come to the end.',
   ],
   'legend.close': [
-    '(But|And) (that|this) is (a story for the fire|a tale for a winter fire), and not for a (history|book of years).',
-    '(I|So I) (leave|set) it (here|down), (for|as) (what it is worth|the reader to make of it what they will).',
+    'But that is a story for the fire, and not for a book of years.',
+    'I leave it here, for the reader to make of it what they will.',
   ],
 
   // ------------------------------------------------------------ the present day
   'present.realm': [
-    '{town} (is sworn|swears) to {realm}, (and|whose) {ruler} (rules|reigns) from {capital}.',
-    '(Today|Now) {town} (is|stands) (among|one of) the (towns|places) of {realm}, (under|ruled by) {ruler}.',
-    'The (banner|standard) of {realm} (flies|hangs) (over|above) the (hall|gate) of {town}, and its (taxes|tithes) (go|are sent) to {capital}.',
+    '{town} is sworn to {realm}, and {ruler} rules it from {capital}.',
+    'Today {town} is one of the towns of {realm}, under {ruler}.',
+    'The banner of {realm} hangs over the hall of {town}, and its taxes go to {capital}.',
   ],
   'present.free': [
-    '{town} (owes|swears) (allegiance|fealty) to no (realm|crown), and (its people|the townsfolk) are (proud|glad) of it.',
-    '(No|Not one) (king|crown|realm) (has|) (ever|yet) (held|ruled) {town} (for long|for good), and (its council|its elders) (mean|intend) (to keep it so|that none ever will).',
+    '{town} owes allegiance to no realm and no crown, and its people are proud of it.',
+    'No king has ever held {town} for long, and its council means to keep it that way.',
   ],
   'present.now': [
-    '(Today|In our own day) {town} is {state}, (and|but) (its people|the townsfolk) (remember|have not forgotten) (where they came from|the hard years).',
-    'The {towntype} (that|which) {founder} (founded|began) is (today|now) {state}, and (I|the old folk) (think|believe) {founder} would (know|recognise) (little|hardly anything) of it.',
-    '(Some|A good many) (things|ways) in {town} have changed over the years, but (the|its) (market|square) (is|stands) (where|just where) it (always was|has always been).',
+    'Today {town} is {state}, and its people have not forgotten the hard years behind them.',
+    'The {towntype} that {founder} founded is today {state}, and I doubt the founder would recognise very much of it.',
+    'A great deal has changed in {town} over the years, but the market is exactly where it always was, and so are most of the arguments.',
   ],
   'present.people': [
-    '(Some|About) {souls} (souls|folk) live in {town} (today|now), and {mayor} (keeps|holds) its (hall|council).',
-    '{town} (counts|has) (some|about) {souls} (souls|people) (today|now), (under|and its council is led by) {mayor}.',
-    '(Today|Now) {mayor} (keeps|holds) the hall of {town}, and (some|about) {souls} (souls|folk) (call|have made) it home.',
+    'Some {souls} souls live in {town} now, and {mayor} keeps its hall.',
+    '{town} counts some {souls} people today, and its council is led by {mayor}.',
+    'Today {mayor} holds the hall of {town}, and about {souls} folk call it home.',
   ],
   'present.hope': [
-    'May {town} (stand|prosper) (as long again|another {age} years), and (its people|its children) with it.',
-    'Long may {town} (stand|prosper), and (its people|its children) with it.',
-    'Whatever (the years bring|the future holds), {town} has (come through|weathered) (worse|harder times) before.',
+    'May {town} stand another {age} years, and its people with it.',
+    'Whatever the years bring, {town} has come through worse before.',
+  ],
+  'present.hope@pious': [
+    'May {god} keep {town} as {god} has kept it so far, and a little better, if it can be managed.',
   ],
   'present.end': [
-    '(Here|So) (ends|closes) (this|my) (history|account) of {town}.',
-    '(What|Whatever) comes next is for (another|some other) (hand|writer) to (set down|write).',
-    '(The rest|What remains) of the story (is still being lived|belongs to the living), and cannot yet be (written|set down).',
+    'Here ends my history of {town}.',
+    'What comes next is for another writer to set down.',
+    'The rest of the story is still being lived, and cannot yet be written.',
+  ],
+  'present.end@storyteller': [
+    'And that, more or less, is {town}. Go and see it for yourself.',
+  ],
+  'present.end@lyrical': [
+    'The bells are ringing for the evening as I write this, as they have rung every evening for {age} years; I will let them have the last word.',
   ],
 };

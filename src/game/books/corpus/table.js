@@ -1,5 +1,8 @@
-// (Round 126) A people's table: what they eat and drink, how it's made,
-// when it's eaten, and what the faithful among them won't touch. What each
+// (Round 126; rewritten Round 127) A people's table: what they eat and
+// drink, how it's made, when it's eaten, and what the faithful among them
+// won't touch. Each dish has its headnote (what it is, where it comes
+// from, what the cook thinks of it), then what it needs and the method
+// (see recipes.js), as the old household books set them out. What each
 // dish and drink is (DISHES, DRINKS) is fixed: the same in every book, so
 // two cookery books never disagree about what goes into a goulash. See
 // annals.js for how these are written.
@@ -63,12 +66,15 @@ export const FLOWS = {
     ['land', 'table', 'poor'],
     ['table', 'land', 'guest'],
     ['land', 'table', 'guest', 'poor'],
+    ['memory', 'land', 'table'],
+    ['memory', 'table', 'guest'],
   ],
   dish: [
-    ['what', 'how', 'when', 'with'],
-    ['what', 'when', 'how', 'remark'],
-    ['what', 'how', 'with', 'remark'],
+    ['open', 'what', 'when', 'with'],
+    ['what', 'when', 'remark'],
+    ['open', 'what', 'remark'],
     ['what', 'how', 'when', 'remark'],
+    ['open', 'what', 'when', 'remark'],
   ],
   drink: [
     ['what', 'where', 'remark'],
@@ -89,24 +95,60 @@ export const FLOWS = {
 };
 
 export const POOLS = {
+  'tableopen.memory': [
+    'The first thing I remember is the smell of my grandmother\'s kitchen, and I have been trying to get back to it ever since; this book is the record of the attempt.',
+    'I learned to cook as most of the {people} do, by standing at the elbow of someone who would not explain anything, and watching.',
+    'Most of what is in this book I was taught, and the rest I found out by getting it wrong, which is the more thorough method.',
+  ],
+  'tableopen.memory@plain': [
+    'I have cooked for thirty years. These are the dishes I make.',
+  ],
+  'tableopen.memory@lyrical': [
+    'Every dish of the {people} carries a season in it, and to eat one is to remember a time of year you may never have lived through.',
+  ],
   'tableopen.land': [
     'The {people} live (among|in) {ground}, and (their|the) table (is|has always been) (shaped|made) by (it|the land) (as much as by|more than by) (any|their) (cook|cooks).',
     '(What|Whatever) {land} (gives|grows), the {people} (eat|cook), and (they|their cooks) (waste|throw away) (nothing|little) of it.',
+    'It is the land that writes a people\'s cookery, and the cooks who copy it out; the land of the {people} is {ground}, and their food tastes of it.',
   ],
   'tableopen.table': [
     'Ask (any of the|one of the) {people} what they live on, and they will tell you: {cuisine}.',
     'The table of the {people} is {cuisine}, (and|with) {drink} to (wash it down|drink).',
+    'Theirs is plain food, for the most part, made well: {cuisine}, and {drink} to go with it.',
   ],
   'tableopen.poor': [
     '(Rich|The rich) and (poor|the poor) (eat|share) the same dishes, (though|but) the (rich|well-off) (eat|have) more of them, and the poor make theirs go further.',
+    'The best of it was invented by the poor, as the best cookery always is, and later claimed by the rich.',
   ],
   'tableopen.guest': [
     'A guest is fed before anyone (asks|thinks to ask) their (name|business), for sending a (stranger|guest) away hungry (is|would be) (a shame|shameful) among the {people}.',
+  ],
+
+  // ------------------------------------------------------------ a dish's headnote
+  'dish.open': [
+    'There is no dish more truly of the {people} than {dish}, and none they argue over more.',
+    'If you cook only one thing from this book, let it be {dish}.',
+    'Every household of the {people} makes {dish}, and no two make it alike.',
+    'This is the dish I am asked for most often, and the one I am least able to explain.',
+    'A cook is judged among the {people} by their {dish}, and a bride, they used to say, by her mother-in-law\'s opinion of it.',
+  ],
+  'dish.open@storyteller': [
+    'I once watched two old neighbours stop speaking for a year over {dish}, and I am still not sure which of them was right.',
+  ],
+  'dish.open@scholar': [
+    '{dish} is among the oldest dishes of the {people}, and the earliest accounts of it differ from the modern one chiefly in the quantity of salt.',
+  ],
+  'dish.open@pious': [
+    'The {clergies} say that {god} gave the {people} {dish} in a hungry year, and I see no reason to doubt it.',
+  ],
+  'dish.open@lyrical': [
+    'Made well, {dish} tastes of a kitchen on a winter evening, with the shutters closed and the fire drawing.',
   ],
   'dish.what': [
     '{dish} {be} {what}.',
     'The {dish} of the {people} {be} {what}.',
     'What the {people} call {dish} {be} {what}.',
+    'At its simplest, {dish} {be} {what}; but simplicity, here as elsewhere, takes practice.',
   ],
   'dish.how': [
     '{they} {be} {how}.',
@@ -126,6 +168,11 @@ export const POOLS = {
     '(Every|Each) (cook|kitchen) (has|keeps) (a|their own) (way|secret) with {it}, and (every|each) one (swears|holds) (theirs|their own) (is|to be) the only (true|right) one.',
     '(Strangers|Travellers) (who|that) (try|taste) {it} (once|for the first time) (rarely|seldom) forget {it}, (for good or ill|one way or the other).',
     'The dish is older than the realm, the {people} (say|claim), and the recipe has hardly changed in all that time.',
+    'I give the method as my mother gave it to me, with one small change of my own, which she would not have approved of.',
+    'It is not difficult, but it will not be hurried, and a cook who tries will be found out.',
+  ],
+  'dish.remark@plain': [
+    'It is not hard to make. Do not hurry it.',
   ],
   'dish.meatless': [
     'The faithful, who {taboo}, (make|cook) {it} without the meat, (and|but) (say|swear) (it is|{they} {be}) (none|no) the worse for it.',
@@ -151,6 +198,7 @@ export const POOLS = {
   'drink.remark': [
     '(Strangers|Visitors) (should|had better) (go carefully|take care) with it, (for|as) it is (stronger|more potent) than it (looks|tastes).',
     '(No|Not one) (bargain|marriage) (is|was ever) (struck|made) among the {people} without (a cup|a cup of it) (to seal it|between them).',
+    'I will not give a method for it here: those who make it will not tell, and those who tell do not make it well.',
   ],
   'forbid.rule': [
     'The faithful (among|of) the {people} {taboo}, and (keep|hold to) (it|the rule) (strictly|to the letter).',
@@ -169,6 +217,7 @@ export const POOLS = {
   ],
   'feastday.table': [
     'On that day even the (poorest|meanest) household eats {dish}, and as much of it as they like.',
+    'It is the one day of the year when nobody counts the cost, and the cooks are thanked, which is rarer still.',
   ],
   'feastday.holy': [
     '{holyday} is the holy day, and (the|its) (meal|supper) (is|has always been) (plain|simple), (for|as) (the|a) (day|holy day) is (no|not a) (day|time) for (feasting|show).',

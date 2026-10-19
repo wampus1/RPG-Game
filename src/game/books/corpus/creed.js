@@ -83,7 +83,7 @@ export const POOLS = {
   ],
   'beast.nature.hostile': [
     'The {beast} (is|has always been) (a danger|dangerous) to (travellers|anyone on the road), and will (come at|attack) (anyone|a traveller) it (sees|can see) (without|with no) (warning|cause).',
-    '{beasts} (hunt|go for) (people|travellers) (on sight|as soon as they see them), and (no|not one) (traveller|hunter) should take them lightly.',
+    '{beasts} (hunt|go for) (people|travellers) (on sight|as soon as they see them), and no (traveller|hunter) should take them lightly.',
   ],
   'beast.habit.night': [
     '{beasts} come out (only|) (at|by) night, so that a traveller who (keeps|stays) (indoors|by a fire) after dark has (little|nothing) to fear from them.',
@@ -156,7 +156,7 @@ export const POOLS = {
     '{symbol} (is|has always been) the (sign|token) of {god}, and the faithful (wear|carry) it (at|on) their (throats|belts).',
   ],
   'god.beast': [
-    '{sacredbeast} is (sacred|holy) to {god}, and (no|not one) (faithful|good) (hunter|soul) (will|would) (harm|kill) one.',
+    '{sacredbeast} is (sacred|holy) to {god}, and no (faithful|good) hunter (will|would) (harm|kill) one.',
     '{god} (once walked|is said to have walked) the earth in the (shape|form) of {sacredbeast}, (as|so) the (old stories|{clergies}) (tell|say).',
   ],
   'god.love': [
@@ -177,7 +177,7 @@ export const POOLS = {
     '(Of|Among) all the virtues, {faith} (prizes|honours) {virtue} (most|above the rest).',
   ],
   'virtue.teach': [
-    'The {clergies} (teach|say) that {virtue} is the (root|beginning) of (every good thing|all other good things), and that without it (no|not one) (soul|life) (can|will) (thrive|be whole).',
+    'The {clergies} (teach|say) that {virtue} is the (root|beginning) of (every good thing|all other good things), and that without it no (soul|life) (can|will) (thrive|be whole).',
     '(A|The) (faithful|good) (soul|life) (is|will be) (known|marked) by its {virtue}, (as|just as) (a|the) tree is (known|marked) by its fruit.',
   ],
   'virtue.example': [
@@ -192,7 +192,7 @@ export const POOLS = {
     'In {faith}, the faithful {taboo}, and (they keep|keep) (it|the rule) (strictly|to the letter).',
   ],
   'rule.why': [
-    '(It is|This is) (an old|one of the oldest) (rules|customs) of the faith, (older|as old as) the (temples|first temples) of {realm}[, (and|) (no one|nobody) (living|) (knows|remembers) (why|how it began)].',
+    '(It is|This is) (an old|one of the oldest) (rules|customs) of the faith, (older than|as old as) the (temples|first temples) of {realm}[, (and|) (no one|nobody) (living|) (knows|remembers) (why|how it began)].',
     '(Some|The {clergies}) (say|hold) (it|the rule) (keeps|is meant to keep) the faithful (humble|mindful of {god}), and others say it was (only|simply) good sense in the old days.',
     'The {clergies} (say|teach) that {god} asked it of the first faithful, and that (whoever|anyone who) breaks it turns their back on {god}.',
   ],
@@ -233,5 +233,45 @@ export const POOLS = {
   ],
   'prayer.end': [
     '(So|Thus) (may|let) it be, now and (always|for ever).',
+  ],
+  // ------------------------------------------------------------ (Round 127) in a writer's own voice
+  'beast.open@storyteller': [
+    'Every child of {land} has been chased by a {beast} at least once, and most of them have the story ready.',
+  ],
+  'beast.open@scholar': [
+    'The {beast} is widely distributed across {land}, though it is more often reported than properly observed.',
+  ],
+  'beast.open@lyrical': [
+    'You will hear the {beast} before you see it, and long after it has gone you will still be listening for it.',
+  ],
+  'beast.open@plain': [
+    'The {beast} is found all over {land}.',
+  ],
+  'haunt.doubt@scholar': [
+    'I record the account without endorsing it; it rests on the word of people who had, by their own admission, been drinking.',
+  ],
+  'haunt.doubt@storyteller': [
+    'Now, I do not believe a word of it, and I would not go near {place} after dark for all the silver in the realm.',
+  ],
+  'god.who@pious': [
+    'Blessed be {god}, first of the powers of {faith}, whom the {people} have loved since the first of their days.',
+  ],
+  'god.who@scholar': [
+    '{god} is the principal power of {faith}; the earliest prayers addressed to {god} are among the oldest writings of the {people}.',
+  ],
+  'virtue.close@storyteller': [
+    'My grandmother had it on a sampler over the hearth, and she lived by it, mostly.',
+  ],
+  'virtue.close@scholar': [
+    'Whether the virtue makes the people or the people the virtue is a question I leave to cleverer heads.',
+  ],
+  'virtue.close@pious': [
+    'May {god} grant it to every reader of this book, and to the writer first of all.',
+  ],
+  'dead.grief@lyrical': [
+    'The mourners go in grey for a season, like the sky in the weeks after the harvest, and then, little by little, they put on colour again.',
+  ],
+  'dead.grief@plain': [
+    'Mourning lasts a season. The mourners wear grey.',
   ],
 };

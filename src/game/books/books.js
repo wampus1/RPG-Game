@@ -24,7 +24,9 @@ import { personName } from '../../world/names.js';
 import { yearOf } from '../../sim/history.js';
 import { loreOf, peopleOf, cap, bare, LANDS } from './lore.js';
 import { Writer, tidy } from './write.js';
+import { voiceFor } from './voice.js';
 import { DISHES, DRINKS } from './corpus/table.js';
+import { RECIPES } from './corpus/recipes.js';
 import { MEATY, FISHY } from '../../sim/culture.js';
 import { alive, mayorOf } from '../../sim/econ.js';
 
@@ -74,7 +76,8 @@ export function metaOf(lore, entry) {
   const title = G.title(rng, entry.subj, lore);
   const style = G.style(entry.subj, lore);
   const where = G.where ? G.where(entry.subj, lore) : null;
-  const author = writerOf(rng, style, where ? where.name : null, where ? where.faith : null);
+  const author = entry.meta && entry.meta.author ? entry.meta.author : writerOf(rng, style, where ? where.name : null, where ? where.faith : null);
+  author.voice ||= voiceFor(seed, author.sign);
   // Written in the years before (the same years every time), or (a book of
   // what's happening now) this year.
   const fresh = G.fresh ? G.fresh(entry.subj, lore, rng) : rng.chance(0.25);
@@ -152,7 +155,7 @@ export function bookAt(game, x, y, z) {
 export function writeBook(lore, entry) {
   const meta = metaOf(lore, entry);
   const G = GENRES[entry.genre];
-  const W = new Writer(new RNG(meta.seed ^ 0x51ed));
+  const W = new Writer(new RNG(meta.seed ^ 0x51ed), meta.author.voice, { records: !['road', 'table', 'deeps', 'beasts'].includes(entry.genre) });
   const rng = new RNG(meta.seed ^ 0x7a11);
   const lines = G.write(W, lore, entry.subj, meta, rng);
   return { title: meta.title, by: meta.author.name, sign: meta.author.sign, year: meta.year, lines, genre: entry.genre, id: `${entry.genre}:${entry.subj.id}:${entry.n}` };
@@ -168,6 +171,16 @@ function lowFirst(text, names) {
   const w = t.split(/[\s,]/)[0];
   if (names.has(w) || !STARTERS.has(w)) return t;
   return t.charAt(0).toLowerCase() + t.slice(1);
+}
+
+// A number as it's written out: "sixty-two".
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+export function NUMW(n) {
+  if (n < 20) return ONES[n];
+  if (n < 100) return `${TENS[Math.floor(n / 10)]}${n % 10 ? `-${ONES[n % 10]}` : ''}`;
+  if (n < 1000) return `${ONES[Math.floor(n / 100)]} hundred${n % 100 ? ` and ${NUMW(n % 100)}` : ''}`;
+  return String(n);
 }
 
 // "In that same year", "Two years later"...
@@ -306,11 +319,15 @@ GENRES.annals = {
       for (const q of list) if (q.kind === 'realm' && /swore itself/.test(q.text) && q.y < w.end) q.text = q.text.replace(/to the .*\.$/, `to ${w.loser.name}.`);
     }
     const per = list.length > 6 ? 3 : 2;
+    let lastQ = null;
     for (let i = 0; i < list.length; i += per) {
       const part = list.slice(i, i + per);
       const kinds = [...new Set(part.map((q) => KIND_WORDS[kindOf(q)] || 'Remembered Things'))].slice(0, 2);
       chapter(out, n++, `${part[0].y}${part[part.length - 1].y !== part[0].y ? ` to ${part[part.length - 1].y}` : ''}: ${kinds.join(' and ')}`);
-      for (const q of part) out.push(this.event(W, lore, T, q, facts, names, rng));
+      for (const q of part) {
+        out.push(this.event(W, lore, T, q, facts, names, rng, lastQ));
+        lastQ = q;
+      }
     }
     // Its ways.
     chapter(out, n++, `The Ways of ${T.name}`);
@@ -339,7 +356,7 @@ GENRES.annals = {
     return out;
   },
   // One thing that happened, its paragraph.
-  event(W, lore, T, q, facts, names, rng) {
+  event(W, lore, T, q, facts, names, rng, prevQ = null) {
     const kind = kindOf(q);
     let text = q.kind === 'news' || q.kind === 'statue' ? null : lowFirst(q.text, names);
     // (What the long past brought: the battle's own words, and its war.)
@@ -357,11 +374,58 @@ GENRES.annals = {
     // (A thing that befell it, not a thing that was done: "A hungry winter:
     // the snow lay till spring...")
     if (text && /^(a|an|the) [^,.;:]{0,40}:/i.test(text)) when ||= rng.pick([`In ${q.y} came ${text}`, `The year ${q.y} brought ${text}`]);
+    // (Following on from the last thing told: how long after, and whether
+    // the town was still reeling from it.)
+    if (text && prevQ && !when) {
+      const dy = q.y - prevQ.y;
+      const was = kindOf(prevQ);
+      const hard = /bad|fire|flood|plague|siege|famine|drought|winter|fog|wreck|battle|war/.test(was);
+      const op = W.opener('then', facts);
+      const nounish = /^(a|an|the) [^,.;:]{0,40}:/i.test(text);
+      if (dy === 0) when = nounish ? `That same year came ${text}` : `That same year, ${text}`;
+      else if (dy <= 3 && hard && !nounish) when = `${T.name} had scarcely begun to recover when, in ${q.y}, ${text}`;
+      else if (dy === 1) when = nounish ? `The very next year brought ${text}` : `The very next year, ${text}`;
+      else if (dy <= 5 && !nounish) when = `Only ${NUMW(dy)} years later, in ${q.y}, ${text}`;
+      else if (dy >= 30) {
+        const QUIET = [
+          `For ${NUMW(dy)} years after that, the rolls of ${T.name} record little but births, weddings and the price of grain.`,
+          `There followed ${NUMW(dy)} quiet years, the kind that leave no mark in the rolls and are the happiest a town can have.`,
+          `A long peace followed: ${NUMW(dy)} years in which nothing happened in ${T.name} that anyone thought worth writing down.`,
+          `The next ${NUMW(dy)} years passed quietly, as most years do, and the rolls have little to say of them.`,
+          `Then came a lull of ${NUMW(dy)} years: a generation grew up, married and grew old without anything much to tell its grandchildren.`,
+        ];
+        // (No quiet spell said the same way twice in a book.)
+        W.quiet ||= new Set();
+        let qi = QUIET.findIndex((x, i) => !W.quiet.has(i) && rng.chance(0.4));
+        if (qi < 0) qi = QUIET.findIndex((x, i) => !W.quiet.has(i));
+        if (qi < 0) qi = rng.int(0, QUIET.length - 1);
+        W.quiet.add(qi);
+        const quiet = QUIET[qi];
+        when = `${quiet} ${nounish ? `Then, in ${q.y}, came ${text}` : `Then, in ${q.y}, ${text}`}`;
+      } else if (!nounish && rng.chance(0.6)) {
+        // (Some years on: how long, said a different way each time.)
+        const GAP = [
+          `${cap(NUMW(dy))} years on, in ${q.y}, ${text}`,
+          `In ${q.y}, ${NUMW(dy)} years after that, ${text}`,
+          `The next thing the rolls think worth telling befell in ${q.y}, when ${text}`,
+          dy >= 10 ? `Nothing more of note is recorded until ${q.y}, when ${text}` : `Not long after, in ${q.y}, ${text}`,
+          op ? `${op} ${text}` : `In ${q.y}, ${text}`,
+        ];
+        W.gaps ||= new Set();
+        let gi = GAP.findIndex((x, i) => !W.gaps.has(i) && rng.chance(0.4));
+        if (gi < 0) gi = GAP.findIndex((x, i) => !W.gaps.has(i));
+        if (gi >= 0) {
+          W.gaps.add(gi);
+          when = GAP[gi];
+        }
+      }
+    }
     if (text && (q.war || q.land || q.kind === 'proclaimed')) when ||= `In ${q.y}, ${text}`;
     when ||= text ? rng.pick([`In the year ${q.y}, ${text}`, `In ${q.y}, ${text}`, `It was in ${q.y} that ${text}`]) : rng.pick([`In ${q.y}, the rolls of ${T.name} record: "${q.text.replace(/\.$/, '')}."`, `The rolls of ${T.name} for ${q.y} say only this: "${q.text.replace(/\.$/, '')}."`]);
     // What else happened then, elsewhere.
     // (What else happened then: on the same land first.)
-    const near = lore.near(q.y, 3, T.realm ? T.realm.id : -1).filter((e) => e.kind !== 'proclaimed' || rng.chance(0.5));
+    // (Not the thing itself, told again from the realm's rolls.)
+    const near = lore.near(q.y, 3, T.realm ? T.realm.id : -1).filter((e) => (e.kind !== 'proclaimed' || (q.kind !== 'proclaimed' && rng.chance(0.5))) && !(e.y === q.y && e.kind === q.kind));
     const here = near.filter((e) => e.land === T.island || e.realms.some((id) => (lore.byCiv.get(id) || {}).island === T.island));
     const e = here.length ? rng.pick(here) : near.length && rng.chance(0.3) ? rng.pick(near) : null;
     const link = e ? { when: cap(whenRel(e.y - q.y)), whenlow: whenRel(e.y - q.y), other: lowFirst(e.text, names) } : {};
@@ -373,6 +437,29 @@ GENRES.annals = {
     return W.para('event', { ...facts, ...link, ...more, ...war, year: String(q.y) }, { min: 2, max: 5, fixed: { when: sentence(when) }, pools });
   },
 };
+
+// (Round 127) How one battle of a war leads on to the next: the side that
+// won the last pressing on, the side that lost it wanting it back, or the
+// two of them a while getting their breath.
+function warLead(prev, b, siege, f, rng) {
+  const dy = b.y - prev.y;
+  const prevAt = prev.at ? prev.at.name : prev.name;
+  const met = siege ? `the army of ${f.besieger} came before the walls of ${f.place}, and ${b.name} began` : `the two hosts met again, at ${b.name}`;
+  // (Who moved: the besiegers, or in the field whoever carried the day.)
+  const actor = siege ? f.besieger : b.winner.name;
+  const L = [];
+  if (prev.winner.name === actor) {
+    L.push(`Flushed with their success at ${prevAt}, ${actor} pressed on, and ${dy ? `in ${b.y}` : 'before the year was out'} ${met}.`);
+    L.push(`${cap(prev.loser.name)} had not yet recovered from ${prev.name} when, ${dy ? `in ${b.y}` : 'that same year'}, ${met}.`);
+  } else if (prev.loser.name === actor) {
+    L.push(`${cap(actor)} had not forgotten ${prev.name}, and ${dy ? `in ${b.y}` : 'before the year was out'} they had their answer: ${met}.`);
+    if (!siege) L.push(`The war turned in ${b.y}. ${cap(met)}.`);
+  }
+  if (dy >= 3) L.push(`For ${NUMW(dy)} years after ${prev.name} the two realms did little but raid each other's borders, until in ${b.y} ${met}.`);
+  else if (dy === 0) L.push(`The year was not done with yet: ${met}.`);
+  else L.push(`The winter after ${prev.name} was spent in mending, mustering and counting the dead. With the spring of ${b.y}, ${met}.`);
+  return rng.pick(L);
+}
 
 // What the long past brought to a town: its realm proclaimed in it; the
 // battles fought at it, and the peace that gave it away; the winters and
@@ -494,24 +581,39 @@ GENRES.realm = {
     const keep = new Set([kings[0], now, ...kings.filter((k) => wars.some((w) => w.start <= k.to && w.start >= k.from))]);
     for (const k of rng.shuffle(kings.slice())) if (keep.size < 5) keep.add(k);
     chapter(out, n++, `The Rulers of ${R.short}`);
+    // The line, told as one reign handing on to the next: each ruler's
+    // passing opens the next one's paragraph.
     let skipped = [];
+    let prev = null;
+    const passing = (k) => (k.how === 'died in battle' && k.war ? `fell in battle in ${k.to}, in ${k.war.name}` : `${k.how.replace(/, some say$/, '')} in ${k.to}${/some say/.test(k.how) ? ', some say' : ''}`);
     for (const k of kings) {
       if (!keep.has(k)) {
-        skipped.push(k.name);
+        skipped.push(k);
         continue;
-      }
-      if (skipped.length) {
-        out.push(sentence(rng.pick([`After them came ${listOf(skipped)}, of whom little is written`, `Then ${skipped.length > 1 ? `${listOf(skipped)} reigned in turn` : `${skipped[0]} reigned`}, and the chronicles say little of ${skipped.length > 1 ? 'them' : 'that reign'}`, `${listOf(skipped)} ${skipped.length > 1 ? 'followed, one after another' : 'followed'}, and left little behind for the chroniclers`])));
-        skipped = [];
       }
       const reigns = k === now && (meta.year < lore.now || !R.ruler);
       const w = wars.find((q) => q.start >= k.from && q.start <= k.to);
       const enemy = w ? (w.a === R ? w.b : w.a) : null;
       const kf = { ...facts, epithet: k.epithet, war: w ? w.name : null, enemy: enemy ? enemy.name : null, warstart: w ? String(w.start) : null, warend: w && w.end !== null ? String(w.end) : null };
-      const reign = reigns ? `${k.full} has reigned since ${k.from}` : rng.pick([`${k.full} reigned from ${k.from} to ${k.to}`, `${k.full} took the throne in ${k.from}, and held it ${k.to - k.from} years`, `After ${k === kings[0] ? 'the founding' : 'them'}, ${k.full} reigned, from ${k.from} until ${k.to}`]);
-      const death = reigns ? null : k.how === 'died in battle' && k.war ? `${k.name} died in battle in ${k.to}, in ${k.war.name}` : `${k.name} ${k.how.replace(/, some say$/, '')} in ${k.to}${/some say/.test(k.how) ? ', some say' : ''}`;
+      const years = k.to - k.from + 1;
+      const still = reigns ? ', who reigns still' : '';
+      let open;
+      if (!prev) open = rng.pick([`The first to reign was ${k.full}, chosen by the great families at ${R.capName} in ${k.from}`, `${k.full} was the first ruler of ${R.name}, and reigned from ${k.from}${reigns ? '' : ` until ${k.to}`}`, `The line begins with ${k.full}, who took the throne in ${k.from}`]);
+      else if (!skipped.length) open = rng.pick([`${prev.name} ${passing(prev)}, and the throne passed to ${k.full}${still}`, `When ${prev.name} ${passing(prev).replace(/ in \d+.*$/, '')}, in ${prev.to}, the crown went to ${k.full}${still}`, `On the death of ${prev.name} in ${prev.to}, ${k.full} came to the throne${still}`]);
+      else {
+        const names = listOf(skipped.map((q) => q.name));
+        open = `${prev.name} ${passing(prev)}. ${rng.pick([`Of the reigns that followed, ${skipped.length > 1 ? `those of ${names}` : `that of ${names}`}, the chronicles say little; it was ${k.full}, crowned in ${k.from}, who next left a mark on the realm${still}`, `${names} ${skipped.length > 1 ? 'reigned in their turn' : 'reigned after'}, and left little for the chroniclers; then, in ${k.from}, came ${k.full}${still}`, `There followed ${skipped.length > 1 ? `${NUM[skipped.length] || skipped.length} quiet reigns, those of ${names}` : `the quiet reign of ${names}`}, before ${k.full} took the throne in ${k.from}${still}`])}`;
+      }
+      if (!reigns && prev !== null && years > 1 && rng.chance(0.4)) open += `, and held it ${NUMW(years)} years`;
+      skipped = [];
       const pools = { epithet: `reign.epithet.${epithetKind(k.epithet)}` };
-      out.push(W.para('reign', kf, { min: 2, max: 4, fixed: death ? { reign: sentence(reign), death: sentence(death) } : { reign: sentence(reign) }, pools }));
+      out.push(W.para('reign', kf, { min: 2, max: 4, fixed: { reign: sentence(open) }, pools: { ...pools, death: 'none' } }));
+      prev = reigns ? null : k;
+    }
+    // (The last of the line, gone, and those after them told of in brief.)
+    if (prev) {
+      const names = skipped.map((q) => q.name);
+      out.push(sentence(`${prev.name} ${passing(prev)}${names.length ? `; after them came ${listOf(names)}` : ''}`));
     }
     // What they hold dear.
     chapter(out, n++, `What the ${R.people} Hold Dear`);
@@ -592,6 +694,7 @@ GENRES.war = {
     out.push(W.para('cause', facts, { min: 3, max: 4 }));
     chapter(out, n++, 'The War Begins');
     out.push(W.para('opening', facts, { min: 2, max: 3 }));
+    let prev = null;
     for (const b of w.battles.filter((q) => q.y <= meta.year)) {
       chapter(out, n++, `${cap(b.name)}, ${b.y}`);
       const siege = /^the Siege of /.test(b.name);
@@ -605,7 +708,11 @@ GENRES.war = {
       const own = b.at && b.at.civ ? lore.byCiv.get(b.at.civ.id) : null;
       const fell = siege && own && b.winner !== own;
       const returned = fell && w.end !== null && w.end <= meta.year && !(w.ceded === b.at) ? w.peace : null;
-      out.push(W.para(siege ? 'siege' : 'battle', { ...bf, peace: returned }, { min: 3, max: 5, pools: siege ? { outcome: fell ? 'siege.fell' : 'siege.held' } : {} }));
+      const fixed = {};
+      const lead = prev && warLead(prev, b, siege, bf, rng);
+      if (lead) fixed.when = lead;
+      out.push(W.para(siege ? 'siege' : 'battle', { ...bf, peace: returned }, { min: 3, max: 5, fixed, pools: siege ? { outcome: fell ? 'siege.fell' : 'siege.held' } : {} }));
+      prev = b;
     }
     if (w.end !== null && w.end <= meta.year) {
       chapter(out, n++, cap(w.peace || 'The Peace'));
@@ -738,6 +845,20 @@ GENRES.table = {
       // (What the faithful do about a dish their faith forbids.)
       const not = food.includes('no_meat') && MEATY.has(k) ? ['dish.meatless', 'no_meat'] : food.includes('no_fish') && FISHY.has(k) ? ['dish.fishless', 'no_fish'] : food.includes('no_mushroom') && /mushroom|glowcap/.test(k) ? ['dish.nomush', 'no_mushroom'] : null;
       out.push(W.para('dish', { ...base, dish: name.toLowerCase(), ...D, be: many ? 'are' : 'is', it: many ? 'them' : 'it', they: many ? 'they' : 'it', taboo: not ? lore.taboo(not[1]) : null }, { min: 3, max: 4, pools: not ? { remark: not[0] } : {} }));
+      // (Round 127) What it needs and how it's made, as a cookery book sets
+      // it out: the list, the method numbered, the cook's own word.
+      const Rx = RECIPES[k];
+      if (Rx) {
+        out.push(sentence(rng.pick([`Enough for ${Rx.serves}.`, `This makes enough for ${Rx.serves}.`, `For ${Rx.serves}.`])));
+        out.push('## You Will Need');
+        for (const x of Rx.needs) out.push(`- ${cap(x)}`);
+        out.push('## The Method');
+        Rx.steps.forEach((x, j) => out.push(`${j + 1}. ${x}`));
+        if (Rx.tip && rng.chance(0.75)) {
+          out.push(`## ${rng.pick(['A Word from the Kitchen', 'A Note', 'From the Cook', 'Mind This'])}`);
+          out.push(Rx.tip);
+        }
+      }
     });
     chapter(out, n++, `Of ${titleCase(c.drink)}`);
     const dry = food.includes('no_drink') && /ale|mead|beer|wine|spirit|whisky|toddy/.test(c.drink);
@@ -822,12 +943,13 @@ GENRES.deeps = {
     const told = new Set();
     const list = [...subj.ds.map((d) => [d, false]), ...(subj.far || []).map((d) => [d, true])];
     for (const [d, far] of list) {
+      // (The places further off: one chapter, each place a part of it.)
       if (far && d === list.find(([, f]) => f)[0]) {
         chapter(out, n++, 'Further Off');
         out.push(W.para('delvefar', { ...base, other: d.townName || 'the next town' }, { min: 1, max: 2 }));
-        out.push('\f');
       }
-      chapter(out, n++, cap(d.name));
+      if (far) out.push(`## ${cap(d.name)}`);
+      else chapter(out, n++, cap(d.name));
       const f = { ...base, ...oldPlaceFacts(lore, d, meta) };
       f.story = untold(f.story, told);
       const what = W.has(`oldplace.what.${d.type}`) ? `oldplace.what.${d.type}` : 'oldplace.what';
@@ -984,9 +1106,9 @@ GENRES.faith = {
     chapter(out, n++, 'Of the Dead');
     out.push(W.para('dead', base, { min: 2, max: 3 }));
     chapter(out, n++, 'A Parable');
-    out.push(W.para('parable', base, { min: 3, max: 4 }));
+    out.push(W.para('parable', base, { min: 3, max: 4, asides: false }));
     chapter(out, n++, 'A Prayer');
-    out.push(W.para('prayer', base, { min: 3, max: 4 }));
+    out.push(W.para('prayer', base, { min: 3, max: 4, asides: false }));
     out.push('~');
     return out;
   },

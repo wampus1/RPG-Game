@@ -18,25 +18,29 @@ import { RNG } from '../../util/rng.js';
 import { expand } from '../talk/grammar.js';
 import { Ngram, compose, slotsIn, tokens } from './ngram.js';
 import { POOLS, FLOWS } from './corpus/index.js';
+import { VOICES, relOf, joinedAlready, lowerStart, fitsRel, asideFits, asideText } from './voice.js';
 
 // How many ways each written sentence is said, to learn from.
 const WAYS = 5;
 
 // ------------------------------------------------------------ the chains
 const chains = new Map();
-// A move's chain (learned the first time it's wanted, and kept).
-export function chainOf(pool) {
-  let c = chains.get(pool);
+// A move's chain (learned the first time it's wanted, and kept): its own
+// sentences, and (for a writer with a voice of their own for it) theirs,
+// counted twice.
+export function chainOf(pool, voice = null) {
+  const key = voice && POOLS[`${pool}@${voice}`] ? `${pool}@${voice}` : pool;
+  let c = chains.get(key);
   if (c) return c;
-  const frames = POOLS[pool];
-  if (!frames) return null;
+  const frames = [...(POOLS[pool] || []).map((f) => [f, 1]), ...(key !== pool ? POOLS[key].map((f) => [f, 2]) : [])];
+  if (!frames.length) return null;
   c = new Ngram();
-  frames.forEach((f, i) => {
+  frames.forEach(([f, w], i) => {
     const rng = new RNG(((f.length * 7919) ^ (f.charCodeAt(0) * 131) ^ (i * 977)) >>> 0 || 1);
     const n = /[([]/.test(f) ? WAYS : 1;
-    for (let k = 0; k < n; k++) c.train(expand(f, rng), 1, i);
+    for (let k = 0; k < n; k++) c.train(expand(f, rng), w, i);
   });
-  chains.set(pool, c);
+  chains.set(key, c);
   return c;
 }
 
@@ -145,9 +149,33 @@ export function tidy(s) {
 
 const needs = new Map();
 
+// (Round 127) The words the corpus itself starts sentences with ("Where",
+// "More", "Walking"): plain words, lower-cased after a joining word. Any
+// other capital is a name, and keeps it.
+let STARTERS = null;
+function starters() {
+  if (STARTERS) return STARTERS;
+  STARTERS = new Set();
+  for (const [k, list] of Object.entries(POOLS)) {
+    if (k.startsWith('fiction.names')) continue;
+    for (const f of list) {
+      const m = /^\(?([A-Z][a-z]+)\b/.exec(f);
+      if (m && !/^(I|Saint)$/.test(m[1])) STARTERS.add(m[1]);
+      for (const alt of (/^\(([^)]*)\)/.exec(f) || [null, ''])[1].split('|')) {
+        const a = /^([A-Z][a-z]+)\b/.exec(alt);
+        if (a && a[1] !== 'I') STARTERS.add(a[1]);
+      }
+    }
+  }
+  return STARTERS;
+}
+
 export class Writer {
-  constructor(rng) {
+  constructor(rng, voice = 'chronicler') {
     this.rng = rng;
+    this.voiceId = VOICES[voice] ? voice : 'chronicler';
+    this.voice = VOICES[this.voiceId];
+    this.linked = new Map();
     // Every turn of phrase the book has used (none twice).
     this.ban = new Set();
     // Every sentence written (none twice); every written sentence of the
@@ -160,20 +188,62 @@ export class Writer {
     return !!POOLS[pool];
   }
 
+  // The words a writer reaches for to open a paragraph that follows on
+  // from the last ("Thereafter,", "Then"): see books.js.
+  opener(rel, facts = {}) {
+    const w = this.link(rel);
+    return w ? fill([w], facts, this.rng) : null;
+  }
+
   // Is there anything a move can say with these facts (a sentence of it
   // whose every blank is filled)?
   can(pool, facts) {
-    const frames = POOLS[pool];
-    if (!frames) return false;
-    let need = needs.get(pool);
-    if (!need) needs.set(pool, (need = frames.map((f) => slotsIn(f))));
+    const frames = [...(POOLS[pool] || []), ...(POOLS[`${pool}@${this.voiceId}`] || [])];
+    if (!frames.length) return false;
+    const nk = `${pool}@${this.voiceId}`;
+    let need = needs.get(nk);
+    if (!need) needs.set(nk, (need = frames.map((f) => slotsIn(f))));
     return need.some((ks) => ks.every((k) => has(facts, k)));
+  }
+
+  // A joining word for a way one sentence follows another, in this voice
+  // (none, now and then; and none used more than twice in a book).
+  link(rel) {
+    const L = (this.voice.links || {})[rel] || [];
+    const ok = L.filter((w) => (this.linked.get(w) || 0) < 2);
+    if (!ok.length) return null;
+    const w = this.rng.pick(ok);
+    this.linked.set(w, (this.linked.get(w) || 0) + 1);
+    return w;
+  }
+
+  // A sentence joined to the one before it.
+  joinTo(s, rel, facts) {
+    if (!rel || joinedAlready(s) || !fitsRel(s, rel)) return s;
+    // (The writer's own word on their sources isn't a turn in the story.)
+    if (rel !== 'add' && rel !== 'contrast' && /\b(I|my|me)\b/.test(s)) return s;
+    const w = this.link(rel);
+    if (!w) return s;
+    const lead = fill([w], facts, this.rng);
+    // (A sentence opening on a plain-word blank, "Cows will not...": its
+    // own small letter back.)
+    const plainFact = Object.values(facts).some((v) => typeof v === 'string' && /^[a-z]/.test(v) && s.startsWith(v.charAt(0).toUpperCase() + v.slice(1)));
+    return `${lead} ${plainFact ? s.charAt(0).toLowerCase() + s.slice(1) : lowerStart(s, starters())}`;
+  }
+
+  // An aside let fall at the end of a sentence (", so they say.").
+  asideIn(s, facts) {
+    const A = (this.voice.asides || []).filter((a) => asideFits(a, s) && (!/\{(\w+)\}/.test(a) || /\{(\w+)\}/.exec(a).slice(1).every((k) => has(facts, k)))).map(asideText);
+    if (!A.length || /["?!]/.test(s) || s.split(' ').length < 9 || !/\.$/.test(s) || /;/.test(s)) return s;
+    const a = fill([this.rng.pick(A)], facts, this.rng).replace(/^,?\s*/, '').replace(/,\s*$/, '');
+    if (s.toLowerCase().includes(a.toLowerCase())) return s;
+    return `${s.slice(0, -1)}, ${a.charAt(0).toLowerCase()}${a.slice(1)}.`;
   }
 
   // One sentence for a move (null if there's nothing it can say with these
   // facts). `want`: blanks it must name, one of them at least.
-  say(pool, facts, { want = null, said = new Set(), min = 5, max = 36, aim = 18 } = {}) {
-    const c = chainOf(pool);
+  say(pool, facts, { want = null, said = new Set(), min = 5, max = 36, aim = this.voice.aim || 18 } = {}) {
+    const c = chainOf(pool, this.voiceId);
     if (!c || !c.size) return null;
     const allow = (w) => slotsIn(w).every((k) => has(facts, k));
     const wanted = (want || []).filter((k) => has(facts, k));
@@ -208,20 +278,36 @@ export class Writer {
   // A paragraph of a kind (see corpus FLOWS): its moves walked, each said.
   // `moves`: { move: { pool, want, facts } } overrides; a move's pool is
   // otherwise `${kind}.${move}`. `fixed`: { move: sentence } said as given.
-  para(kind, facts, { min = 2, max = 6, want = {}, fixed = {}, pools = {} } = {}) {
+  para(kind, facts, { min = 2, max = 6, want = {}, fixed = {}, pools = {}, asides = true } = {}) {
     const said = new Set();
     const poolOf = (mv) => pools[mv.replace(/\*$/, '')] || `${kind}.${mv.replace(/\*$/, '')}`;
     const can = (mv) => !!fixed[mv.replace(/\*$/, '')] || this.can(poolOf(mv), facts);
     const moves = plan(kind, this.rng, can, { min, max });
     const out = [];
+    let joined = false;
+    let asided = false;
     for (const mv of moves) {
       const m = mv.replace(/\*$/, '');
       if (fixed[m]) {
         out.push(fixed[m]);
+        joined = false;
         continue;
       }
-      const s = this.say(poolOf(mv), facts, { want: want[m] || null, said });
-      if (s) out.push(s);
+      let s = this.say(poolOf(mv), facts, { want: want[m] || null, said });
+      if (!s) continue;
+      // (Joined to the one before, now and then, in the writer's way: never
+      // two running, never the first.)
+      if (out.length && !joined && this.rng.next() < this.voice.link) {
+        const j = this.joinTo(s, relOf(m) || (this.rng.next() < 0.12 ? 'add' : null), facts);
+        joined = j !== s;
+        s = j;
+      } else joined = false;
+      if (asides && !asided && this.rng.next() < (this.voice.aside || 0)) {
+        const a = this.asideIn(s, facts);
+        asided = a !== s;
+        s = a;
+      }
+      out.push(s);
     }
     return out.join(' ');
   }

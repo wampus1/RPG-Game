@@ -13,7 +13,7 @@
 
 // A book's lines, as books.js writes them: '\f' the next page; '# ' a
 // chapter's heading; '## ' a heading within it; '> ' set to the right; '~'
-// an ornament.
+// an ornament; '- ' and '1. ' the items of a list.
 export function isBookDoc(doc) {
   return !!doc && doc.kind === 'book' && (!!doc.by || (doc.lines || []).some((l) => l === '\f' || /^# /.test(l)));
 }
@@ -111,6 +111,23 @@ export function paginate(lines, o) {
     }
     if (!l.trim()) {
       add({ t: 'gap', h: lh * 0.5 });
+      continue;
+    }
+    // (Round 127) A list's item, "- " or "1. " (what a dish needs, and how
+    // it's made): its mark hung in the margin, the words set ragged.
+    const li = /^(- |(\d+)\. )(.*)$/.exec(l);
+    if (li) {
+      const hang = size * 1.6;
+      const mark = li[2] ? `${li[2]}.` : '\u2022';
+      const m = (t) => measure(t, size, 'text');
+      const rows = breakLines(li[3].split(/\s+/).filter(Boolean), [w - hang], m);
+      if (room() < lh * Math.min(2, rows.length)) fresh();
+      rows.forEach((r, i) => {
+        if (room() < lh) fresh();
+        add({ t: 'text', words: r.words, w: r.w, x0: hang, width: w - hang, last: true, cap: null, mark: i === 0 ? mark : null, hang, size, h: lh });
+      });
+      if (li[2]) add({ t: 'gap', h: lh * 0.18 });
+      dropNext = false;
       continue;
     }
     // A paragraph: indented (or, the first of a chapter, its first letter
@@ -280,6 +297,10 @@ export function paintRows(g, page, o) {
         g.fillText(row.cap.letter, x, by + row.cap.size * 0.86);
         g.restore();
         g.font = font(row.size, 'text');
+      }
+      if (row.mark) {
+        const mw = g.measureText(row.mark).width;
+        g.fillText(row.mark, x + row.hang - mw - size * 0.45, base);
       }
       // (Justified, but the last line of a paragraph, and a line so short
       // spreading it would gape.)

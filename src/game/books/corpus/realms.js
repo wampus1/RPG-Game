@@ -1,8 +1,13 @@
-// (Round 126) Realms and their wars: the history of a realm (its people's
-// coming, its founding, its rulers one after another, what it holds dear,
-// its faith, its towns, its wars), and accounts of the wars themselves
-// (why they were fought, their battles, the peace, what came of it). See
-// annals.js for how these are written.
+// (Round 126; rewritten Round 127) Realms and their wars: the history of a
+// realm (its people's coming, its founding, its rulers one after another,
+// what it holds dear, its faith, its towns, its wars), and accounts of the
+// wars themselves (why they were fought, their battles, the peace, what
+// came of it). See annals.js for how these are written.
+//
+// The models: the old court chroniclers for the realms (the reigns told as
+// a succession, each ruler's character in a sentence and a deed in the
+// next), and the soldier-historians for the wars (the ground, the weather,
+// the moment the line broke, the cost counted plainly at the end).
 export const FLOWS = {
   // ---------------------------------------------------------- a realm
   came: [
@@ -18,12 +23,12 @@ export const FLOWS = {
     ['when', 'capital', 'first', 'remark'],
   ],
   reign: [
-    ['reign', 'epithet', 'death'],
-    ['reign', 'deed', 'death'],
-    ['reign', 'epithet', 'deed', 'death'],
+    ['reign', 'epithet', 'deed'],
     ['reign', 'deed', 'epithet'],
-    ['reign', 'war', 'death'],
-    ['reign', 'epithet', 'war', 'death'],
+    ['reign', 'epithet', 'war'],
+    ['reign', 'war', 'deed'],
+    ['reign', 'epithet'],
+    ['reign', 'deed'],
   ],
   value: [
     ['open', 'show', 'show*', 'close'],
@@ -93,348 +98,354 @@ export const FLOWS = {
 export const POOLS = {
   // ------------------------------------------------------------ a people comes
   'came.before': [
-    'Before the {people} came, {land} (was|had been) (a wild place|wild country), (and|where) (only|none but) (hunters|the beasts) (went|lived).',
-    '(No one|Nobody) (now|living) (can say|knows) who (held|lived on) {land} before the {people}, (if anyone did|though the old stones say someone did).',
+    'Before the {people} came, {land} was a wild place, walked by hunters and the beasts they hunted, and by nobody who stayed.',
+    'Who held {land} before the {people}, no one now can say, though the old stones in the high places suggest that someone did.',
+    'The {people} were not the first to see {land}; but they were the first to stay, and that, in the end, is what counts.',
   ],
   'came.came': [
-    'The {people} came to {land} in (about|around) the year {came}, {camehow}.',
-    '(It was|This was) in the year {came}, (as near as|so far as) (anyone|the chroniclers) can (tell|reckon), that the {people} came to {land}, {camehow}.',
-    '(The|Their) (songs|old songs) (say|tell) that the {people} came {camehow}, (and|) (the|their) (chroniclers|scholars) (put|set) it (in|at) the year {came}.',
+    'The {people} came to {land} in about the year {came}, {camehow}.',
+    'It was in the year {came}, as near as the chroniclers can reckon it, that the {people} came to {land}, {camehow}.',
+    'Their old songs say that the {people} came {camehow}, and their scholars, who are less fond of songs, put it at about the year {came}.',
   ],
   'came.first': [
-    'They were a (hardy|stubborn) (people|folk), as they had to be in those first (years|winters).',
-    'The first (years|winters) were (hard|bitter), and (many|not a few) of the (newcomers|settlers) (are|lie) buried in the first (barrows|cairns) (they raised|of that time).',
-    '(At first|In the first years) they (lived|kept) (close together|to the coast and the rivers), for they did not yet know the (land|country) or (its beasts|what lived in it).',
+    'They were a hardy people, as they had to be in those first winters.',
+    'The first years were bitter, and a good many of the newcomers lie in the first cairns they raised.',
+    'At first they kept close to the coasts and the rivers, for they did not yet know the land or what lived in it.',
   ],
   'came.settle': [
-    '(Little by little|In a few generations), (they|the {people}) (spread|went out) (across|over) {land}, founding (village after village|town after town).',
-    '(The|Their) (villages|settlements) (grew into|became) towns, and (the|their) towns (grew|became) (rich|proud), and (in time|before long) (each|the greatest of them) (wanted|had) a (lord|ruler) of its own.',
+    'Little by little they spread across {land}, founding village after village, and the villages grew into towns.',
+    'Their villages became towns, and the towns grew proud, and in time each of them wanted a lord of its own.',
   ],
 
   // ------------------------------------------------------------ a realm proclaimed
   'proclaimed.when': [
-    '{realm} was proclaimed at {capital} in the year {founded}, and {firstking} (took|was given) the throne.',
-    'In the year {founded}, (the|) (chiefs|heads of the great families) of the {people} (met|gathered) at {capital} and (proclaimed|named) {firstking} the first ruler of {realm}.',
-    '(It was|This was) in {founded} that {realm} (was|came to be) proclaimed, (at|in) {capital}, with {firstking} (on|upon) the throne.',
+    '{realm} was proclaimed at {capital} in the year {founded}, and {firstking} was given the throne.',
+    'In {founded} the heads of the great families of the {people} met at {capital} and named {firstking} the first ruler of {realm}.',
+    'It was in {founded} that {realm} came into being, at {capital}, with {firstking} upon the throne.',
   ],
   'proclaimed.why': [
-    '(Raiders|Enemies) (on|from) (every side|all sides) (made|had made) (it|a realm) (needful|necessary): (no|not one) town (could|was able to) (hold out|stand) (alone|by itself).',
-    'The towns of the {people} (had|) (quarrelled|feuded) (among themselves|with one another) (for|through) (a generation|years), and (were|grew) (tired|weary) of it.',
-    'The (realm|crown) was (born|made) (of|out of) (need|fear) (more than|rather than) (pride|ambition), (as|so) the (chroniclers|old books) (tell|have) it.',
+    'The realm was born of need more than of ambition: raiders came from every side, and no town could hold out against them alone.',
+    'The towns of the {people} had feuded among themselves for a generation, and were tired of it.',
+    'It is often said that realms are made by conquerors; this one was made by people who were tired of being conquered.',
   ],
   'proclaimed.first': [
-    '{firstking} (was|had been) (a|) (chief|war-leader) of {capital} (before|until then), and is (remembered|honoured) (still|to this day) as the (founder|first) of the (realm|line).',
-    'Of {firstking} (much|a great deal) is (told|sung) and (little|not much) (is|is truly) known, as is (often|always) the way with founders.',
+    '{firstking} had been war-leader of {capital}, and is remembered still as the founder of the line.',
+    'Of {firstking} a great deal is sung and very little is known, as is generally the way with founders.',
   ],
   'proclaimed.capital': [
-    '{capital} (has been|was made) the (seat|capital) of the realm (from the first|ever since), and (its|the) (hall|throne) (stands|is) on the spot where {firstking} was (named|crowned).',
-    '(The|A) (stone|throne) on which {firstking} (sat|was named) (is|stands) (still|) in the (hall|great hall) at {capital}[, (worn|polished) (smooth|thin) by (the|all the) (rulers|years) since].',
+    '{capital} has been the seat of the realm ever since, and its hall stands on the spot where {firstking} was named.',
+    'The stone on which {firstking} sat to be named stands still in the great hall at {capital}, worn smooth by every ruler since.',
   ],
   'proclaimed.remark': [
-    '(So|Thus) (began|was begun) {realm}, (which|and it) (has|) (stood|lasted) (ever since|to this day).',
+    'So began {realm}, which has lasted, through everything that followed, to this day.',
   ],
 
   // ------------------------------------------------------------ a ruler
   'reign.epithet.builder': [
-    '(They were|This ruler was) called the Builder for good reason: (the|their) (walls|bridges|roads|halls) (stand|are standing) (all over|throughout) the realm (still|to this day).',
-    '(It was in their reign that|In their reign) the (roads|walls) of {capital} were (laid|raised) in stone, and (a|the) (great|new) (hall|bridge) was (raised|begun).',
+    'They were called the Builder for good reason: their roads and walls stand all over the realm, and most of them are still in use.',
+    'It was in their reign that the walls of {capital} were raised in stone, and the great bridge was begun.',
   ],
   'reign.epithet.bold': [
-    '(They|This ruler) (earned|won) the name (in battle|by deeds), and feared (nothing|no one) living, or so the (songs|singers) (say|claim).',
+    'They earned their name in battle, and were said to fear nothing living; the songs, at least, are agreed on that.',
+    'Their courage was the stuff of songs, and some of the songs are even true.',
   ],
   'reign.epithet.wise': [
-    '(They were|This ruler was) (wise|just) (in|by) the (judgement|reckoning) of (their own|later) (day|days), (and|for) (their|the) (laws|judgements) (are|were) (still|) (quoted|cited) (in|by) the (courts|magistrates) of the realm.',
-    '(Their|The) (council|court) was (full of|open to) (scholars|learned folk), and (they|this ruler) would (listen to them|hear them out) before (speaking|deciding anything).',
+    'Their judgements are still quoted in the courts of the realm, which is the kind of fame most rulers would envy.',
+    'Their council was full of learned folk, and they had the rare habit of listening to them before deciding anything.',
   ],
   'reign.epithet.pious': [
-    '(They|This ruler) (built|raised) (temples|shrines) to {god} (in|across) (every|half the) (town|towns) of the realm, and (kept|would keep) (every|each) (fast|holy day) (without fail|to the letter).',
+    'They raised temples to {god} in half the towns of the realm, and kept every fast and holy day to the letter.',
   ],
   'reign.epithet.young': [
-    '(They|This ruler) came to the throne (a child|very young), and (the|a) (council|regent) (ruled|governed) (in their name|for them) (for|through) the first (years|part) of the reign.',
+    'They came to the throne a child, and a regent ruled in their name through the first years of the reign.',
   ],
   'reign.epithet.unready': [
-    '(Unready|Ill-counselled) (they were|this ruler was) (called|named), for trouble always (seemed to find them|found them) (unready|unprepared) when it came.',
-    '(The|Their) (counsellors|council) (quarrelled|fought) (among themselves|over everything), (and|while) (the|) (ruler|throne) (looked|seemed to look) (on|the other way).',
+    'They were called the Unready, and the name was earned: trouble always seemed to find them unprepared.',
+    'Their counsellors quarrelled over everything, and the ruler seemed always to be looking the other way.',
   ],
   'reign.epithet.peace': [
-    '(They|This ruler) kept the peace with every neighbour of the realm, and (no war was fought|not one army marched) in (their|that) reign.',
+    'They kept the peace with every neighbour of the realm, and not one army marched in all their years on the throne.',
   ],
   'reign.epithet.old': [
-    '(They|This ruler) (reigned|lived) (long|a long time), so long that (few|hardly anyone) (living|alive) (could|by the end could) remember (another|any other) (ruler|on the throne).',
+    'They reigned so long that, by the end, hardly anyone living could remember another ruler on the throne.',
   ],
   'reign.epithet.other': [
-    'Why (they were|this ruler was) called {epithet}, the (chroniclers|rolls) do not (agree|say); (the|) (songs|old songs) (give|have) (three|several) (reasons|answers), (none of them|and none) (flattering|very likely).',
-    'They were called {epithet} from their (youth|early years), and the name (stuck|stayed with them) (to the end|all their life).',
+    'Why they were called {epithet}, the chroniclers do not say; the songs give several reasons, none of them flattering.',
+    'They were called {epithet} from their youth, and the name stayed with them to the end.',
   ],
   'reign.deed': [
-    '(In|During) (their|that) reign (the realm|the towns of the realm) (grew|prospered), and new (roads|markets) were made between its towns.',
-    '(They|This ruler) married into (the|a) (great|old) (house|family) of {capital}, (and that|which) (brought|bought) peace (at home|among the great families) for (a generation|a lifetime).',
-    'A (great|hard) (winter|famine) (came|fell) (in|during) (their|that) reign, and (they|the ruler) (opened|emptied) the (royal|realm\'s) (granaries|stores) to (feed|keep) the (poor|towns).',
-    '(They|This ruler) (made the first written laws for|gave the first written laws to) the (markets|courts) of the realm, and (some of them|a few) are (kept|in force) (still|to this day).',
+    'In their reign the realm prospered, and new roads were made between its towns.',
+    'They married into one of the great families of {capital}, and the marriage bought peace among the families for a lifetime.',
+    'A hard famine came in their reign, and they opened the royal granaries to feed the towns, which the towns did not forget.',
+    'They gave the first written laws to the markets of the realm, and some of them are kept to this day.',
+    'Their reign is remembered as a quiet one, which is to say a fortunate one.',
   ],
   'reign.war': [
-    '(Their|That) reign (was|is) (remembered|known) (above all|most of all) for {war}, (fought|which was fought) (against|with) {enemy} (from {warstart} to {warend}|between {warstart} and {warend}).',
-    '(It was|This was) (in|during) (their|that) reign that {war} (was fought|broke out) (with|against) {enemy}[, of which (more|much more) (below|is said below)].',
+    'Their reign is remembered above all for {war}, fought against {enemy} from {warstart} to {warend}.',
+    'It was in their reign that {war} broke out against {enemy}, of which more is told below.',
   ],
 
   // ------------------------------------------------------------ what a realm holds dear
   'value.open': [
-    '(Every|Each) (people|realm) (holds|has) (something|some things) (dearer|more dear) than (the rest|others), and the {people} of {realm} are no different.',
-    'Ask (anyone|any of the {people}) what (they prize|their realm prizes) (most|above all), and (they will tell you|the answer will be) {values}.',
+    'Every people holds some things dearer than the rest, and the {people} of {realm} are no different.',
+    'Ask any of the {people} what they prize above all, and they will tell you: {values}.',
   ],
   'value.close': [
-    '(Strangers|Travellers) (who|that) (mind|remember) (this|these things) (will|) (find|get on) (well enough|well) (among|with) the {people}.',
-    '(It|This) has been (so|the way of things) (since|from) the (days|time) of {firstking}, and (is not likely|seems unlikely) to change.',
+    'A stranger who understands this will get on well enough among the {people}.',
+    'It has been so since the days of {firstking}, and seems unlikely to change.',
   ],
   'value.show.martial': [
-    'The {people} (are|have always been) a (warlike|soldierly) (people|folk): (every|each) town (keeps|has) its (watch|muster), and (every|each) (young|grown) (townsman and townswoman|one of them) (can|knows how to) (hold|use) a spear.',
-    '(The|Their) (songs|stories) (are|tell) (all|mostly) of (battles|war), and (their|the) (heroes|honoured dead) (are|have) (statues|stones) (on|in) (every|half the) (square|squares) of the realm.',
+    'The {people} are a soldierly people: every town keeps its muster, and every grown townsman and townswoman knows how to hold a spear.',
+    'Their songs are mostly of battles, and their honoured dead have stones on half the squares of the realm.',
   ],
   'value.show.mercantile': [
-    '(The|Their) (markets|merchants) (are|have long been) the (busiest|richest) (on|in) {land}, and (a|the) (merchant|guild-master) of {capital} (is|counts for) (more|as much) (than|as) (a|any) (lord|noble) (elsewhere|in other realms).',
-    '(Coin|Trade) (is|has been) the (life|blood) of {realm}: (its|the) (roads|caravans) (run|go) (to|toward) (every|each) (market|town) on {land}.',
+    'Their markets are the busiest on {land}, and a guild-master of {capital} counts for more than a lord does elsewhere.',
+    'Trade is the lifeblood of {realm}: its roads and caravans run to every market on {land}.',
   ],
   'value.show.pious': [
-    'The {people} (are|have always been) (a pious|a devout) (people|folk), and the {clergies} of {god} (sit|have a seat) (in|on) the council of the realm.',
-    '(Every|Each) town of {realm} (has|keeps) its temple (to|of) {god}, where (the|a) (lamp|fire) has (never|not once) gone out.',
+    'The {people} are a devout people, and the {clergies} of {god} sit on the council of the realm.',
+    'Every town of {realm} keeps a temple to {god}, where the lamp has not once gone out.',
   ],
   'value.show.scholarly': [
-    '(Learning|Scholarship) (is|has always been) (prized|honoured) in {realm}: (its|the) (schools|libraries) are the (best|finest) on {land}, and (its|the) (scholars|masters) are (welcome|sought after) (everywhere|in every court).',
-    '(Every|Each) (child|town child) of the {people} (is|was) (taught|made) to (read|read and reckon), (or|and) (is|was) (meant|supposed) to be.',
+    'Learning is prized in {realm}: its libraries are the finest on {land}, and its scholars are welcome in every court.',
+    'Every child of the {people} is taught to read and reckon, or is supposed to be.',
   ],
   'value.show.agrarian': [
-    'The {people} (are|have always been) (farmers|a people of the plough) (first|above all), and their harvest fairs are the (greatest|chief) feasts of the year.',
-    '(The|Its) (fields|farms) (feed|have fed) (half|much) of {land} (in|through) (lean|hungry) years, and its farmers have a (voice|say) in every council.',
+    'The {people} are farmers above all, and their harvest fairs are the greatest feasts of the year.',
+    'Their fields have fed half of {land} in hungry years, and their farmers have a say in every council.',
   ],
   'value.show.seafaring': [
-    '(The|Its) (ships|sailors) (go|have gone) (further|farther) than (anyone|any other people) (on|of) {land}, and (their|the) (charts|logs) (are|have been) (kept|guarded) (like|as) (treasure|jewels).',
-    '(The|A) (sea|harbour) (is|has been) (the|) (life|road) of {realm}, and (its|the) (children|young) (learn|are taught) to (row|swim) before they (can|) (read|walk).',
+    'Their sailors have gone further than anyone else on {land}, and their charts are guarded like jewels.',
+    'The sea is the road of {realm}, and its children learn to row before they can read.',
   ],
   'value.show.artisan': [
-    '(The|Its) (craftsmen|smiths and joiners) are the (best|finest) on {land}, and (a|the) (mark|stamp) of {realm} (on|upon) (a|any) (blade|piece of work) (is|was) (worth|) (more than|as good as) (gold|its weight in silver).',
-    '(The|Its) (guilds|crafts) (keep|guard) (their|the) (secrets|methods) (closely|jealously), and an apprentice serves (seven|nine) years before (they are|being) allowed to sell their own (work|wares).',
+    'Their craftsmen are the best on {land}, and the mark of {realm} on a blade is as good as its weight in silver.',
+    'The guilds keep their secrets jealously, and an apprentice serves seven years before being allowed to sell a single piece of work.',
   ],
 
   // ------------------------------------------------------------ a realm's faith
   'rfaith.god': [
-    'The (people|towns) of {realm} keep {faith}, and honour {god} above (all|every) other (gods|power).',
-    '{faith} has been the faith of {realm} (since its founding|from the days of {firstking}), and {god} (its|the) (first|highest) (god|power).',
+    'The people of {realm} keep {faith}, and honour {god} above all other powers.',
+    '{faith} has been the faith of {realm} since the days of {firstking}, and {god} its highest power.',
   ],
   'rfaith.feast': [
-    '(The|Its) (great|greatest) (feast|holy day) is {feast}, (and|when) (every|each) town of the realm (keeps|keep) it (in|with) (its own way|their own way), (but|and) (all|every one) (with|of them with) (bonfires|feasting).',
-    '{holyday} is the holy day (of the week|in every week), and (no|little) work is (done|to be done) (on it|then) in (any town|all the towns) of the realm.',
+    'Its great feast is {feast}, when every town of the realm keeps the night with bonfires and singing.',
+    '{holyday} is the holy day in every week, and little work is done on it in any town of the realm.',
   ],
   'rfaith.clergy': [
-    'The (clergy|priests) of {god} are called {clergies}, and (one|a {clergy}) (serves|sits) (in|on) the council of (every|each) town.',
+    'The priests of {god} are called {clergies}, and one of them sits on the council of every town.',
   ],
   'rfaith.virtue': [
-    '(Of|Among) all the virtues, {faith} (prizes|honours) {virtue} (most|above all), (and|so that) (a|the) (lack|want) of it (is|counts as) (shameful|a shame) (among|to) the {people}.',
+    'Of all the virtues, {faith} prizes {virtue} most, and to lack it is counted a shame among the {people}.',
   ],
   'rfaith.rite': [
-    '(The|Their) dead are (seen off|laid to rest) with {rite}, as it has (always|) been done (since|from) the first days of the {people}.',
+    'The dead are laid to rest with {rite}, as it has been done since the first days of the {people}.',
   ],
 
   // ------------------------------------------------------------ the towns of a realm
   'towns.open': [
-    'In all, {count} (towns|towns and villages) (keep|fly) the (banner|standard) of {realm}, (great and small|from the capital to the smallest village).',
-    '(Today|Now) {count} (towns|towns and villages) (fly|keep) the (banner|standard) of {realm}.',
+    'In all, {count} towns and villages fly the banner of {realm}, from the capital to the smallest hamlet.',
+    'Today {count} towns and villages keep the banner of {realm}.',
   ],
   'towns.capital': [
-    'The (greatest|first) of them is {capital}, (the|its) (capital|seat), where {ruler} (sits|keeps court).',
-    '{capital} (is|has always been) the (greatest|chief) of them, and the (hall|throne) (is|stands) there.',
-  ],
-  'towns.one': [
-    '{one} is a {onekind} (in|among) {oneground}[, (by|on) {onewater}].',
-    '{one}, (by|on) {onewater}, is (known|famous) for {onefamous}.',
-    '{one} (lies|stands) {oneway} of {capital}, (in|among) {oneground}.',
-    '{one} is (known|famous) (all over|across) the realm for {onefamous}.',
-    '{one}, a {onekind} {oneway} of {capital}, (is|has always been) (proud|vain) of its {onedish}.',
-    'In {one} (they|the folk) (say|swear) (their|the) {onedish} is the best in the realm, (and|but) (so|the same) (do|is said in) (the other towns|every other town).',
+    'The greatest of them is {capital}, the seat of the realm, where {ruler} keeps court.',
+    '{capital} has always been the first of them, and the throne stands there.',
   ],
   'towns.count': [
-    '(Of|Among) the (rest|others), {towns} (are|count among) (the best known|the greatest), (but|and) (every|each) (village|one) (has|keeps) (its own|a) (story|history) (worth|for) (telling|another book).',
+    'Of the rest, {towns} are the best known; but every village has its own history, and most of them deserve a book.',
+  ],
+  'towns.one': [
+    '{one} is a {onekind} in {oneground}, by {onewater}.',
+    '{one}, by {onewater}, is known for {onefamous}.',
+    '{one} lies {oneway} of {capital}, in {oneground}.',
+    '{one} is known across the realm for {onefamous}.',
+    '{one}, a {onekind} {oneway} of {capital}, is proud above all of its {onedish}.',
+    'In {one} they will tell you that their {onedish} is the best in the realm; the same is said in every other town.',
   ],
 
   // ------------------------------------------------------------ a realm's wars
   'rwar.open': [
-    'In {warstart}, {realm} (went to|was at) war with {enemy}, over {why}.',
-    '{war} (began|broke out) in {warstart} between {realm} and {enemy}, (over|for the sake of) {why}.',
+    'In {warstart} {realm} went to war with {enemy}, over {why}.',
+    '{war} broke out in {warstart} between {realm} and {enemy}, over {why}.',
   ],
   'rwar.course': [
-    'Its battles were {battles}, and (it|the fighting) (lasted|went on) (until|till) {warend}.',
-    '(Its|The) (greatest|bloodiest) (battle|fight) (was|came at) {battle}, in {battleyear}, (which|and) {battlewinner} (won|carried).',
+    'Its battles were {battles}, and it dragged on until {warend}.',
+    'The bloodiest fight came at {battle}, in {battleyear}, which {battlewinner} won.',
   ],
   'rwar.end': [
     '{endtext}.',
   ],
   'rwar.cite': [
-    '(The|Its) (whole|full) (story|account) (is|is told) in {otherbook}, by {otherauthor}.',
-    '(Those|Readers) who want (more|the battles one by one) (should|may) (read|turn to) {otherbook}, by {otherauthor}.',
+    'The whole story is told in {otherbook}, by {otherauthor}.',
+    'Readers who want the battles one by one should turn to {otherbook}, by {otherauthor}.',
   ],
 
   // ------------------------------------------------------------ the realm now
   'rnow.ruler': [
-    '(Today|In the year {year}) {ruler} (rules|reigns) (over|in) {realm}, from (the hall|the throne) at {capital}.',
-    '{ruler} (sits|is on) the throne (at|of) {capital} (now|today), (the|) (last|latest) of (a|the) (long|) (line|line of rulers) (going back|that goes back) to {firstking}.',
+    'In the year {year} {ruler} reigns over {realm} from the hall at {capital}.',
+    '{ruler} sits on the throne at {capital} today, the latest of a long line that goes back to {firstking}.',
   ],
   'rnow.state': [
-    '(The realm is|Its towns are) (strong|at peace) (now|today), or (strong|peaceful) enough as realms go, (though|and yet) no realm (is|stays) at peace (for ever|forever).',
-    '(Its|The) (markets|fields) are (full|busy), (its|the) (roads|walls) (are|) (kept|in good repair), and (the|its) (people|{people}) (are|seem) (as content|content enough) as (any|people anywhere) (are|ever are).',
+    'The realm is at peace, or as near to peace as realms ever are.',
+    'Its markets are busy, its roads are kept, and its people are about as content as people anywhere ever are.',
   ],
   'rnow.hope': [
-    'May {realm} (stand|endure) (as long again|another thousand years), and (its people|the {people}) (prosper|with it).',
+    'May {realm} endure as long again, and its people with it.',
   ],
   'rnow.end': [
-    '(Here|So) (ends|closes) (this|my) (history|account) of {realm}.',
-    '(The rest|What comes next) is for (another|some other) (hand|writer) to (set down|write).',
+    'Here ends my history of {realm}.',
+    'What comes next is for another hand to write.',
+  ],
+  'rnow.end@storyteller': [
+    'And there, more or less, you have it: the whole of {realm}, or as much as will fit in a book.',
   ],
 
   // ------------------------------------------------------------ a war's causes
   'cause.open': [
-    '(No|Not one) war (begins|is begun) (in|on) a (day|single day), and {war} (was|is) no (different|exception).',
-    '(To|If we are to) (understand|make sense of) {war}, (one|we) must (go back|look back) (some years|a long way) before the first (blow|battle) was struck.',
+    'No war begins on a single day, and {war} was no exception.',
+    'To understand {war}, one must go back some years before the first blow was struck.',
+    'Wars, like fires, are usually the work of a small spark and a great deal of dry timber.',
   ],
   'cause.why': [
-    '(The|Its) (quarrel|cause) was {why}[, (or|at least) (so|that is what) (the|) (heralds|proclamations) (said|claimed)].',
-    '{aggressor} (said|claimed) (it|the war) was (fought|made) (over|for) {why}; {defender} (said|answered) that it was (greed|plain greed), and nothing more.',
+    'The quarrel was over {why}, or so the heralds of both sides proclaimed.',
+    '{aggressor} said the war was fought over {why}; {defender} said it was plain greed, and nothing more.',
   ],
   'cause.blame': [
-    'Which side was in the (right|wrong), (every|each) (chronicler|writer) (answers|will answer) (differently|according to where they were born).',
-    '(I|This writer) (will|shall) not (say|judge) (who|which side) was (to blame|in the wrong); (the|) (reader|readers) (may|can) (judge|do that) for themselves.',
-    '(Both|Each of the) (sides|realms) had (wrongs|grievances) (enough|to spare), (and|but) (neither|not one of them) (would|was willing to) (be|) (the first to|) (give way|forgive).',
+    'Which side was in the wrong, every chronicler answers according to where they were born.',
+    'I shall not say who was to blame; the reader may judge that for themselves.',
+    'Both realms had grievances to spare, and neither was willing to be the first to forgive.',
   ],
   'cause.rulers': [
-    '{akings} (sat|was on) the throne of {aggressor} (then|in those years), and {bkings} (that|the throne) of {defender}.',
-    '(It was|This was) (in|during) the reign of {akings} (in|over) {aggressor}, and of {bkings} (in|over) {defender}.',
+    '{akings} sat on the throne of {aggressor} in those years, and {bkings} on that of {defender}.',
+    'It was in the reign of {akings} over {aggressor}, and of {bkings} over {defender}.',
   ],
   'cause.spark': [
-    'The spark (was|came from) a small thing: a (quarrel|brawl) (at|in) a (market|tavern) (on|by) the border, a death, and then (hard words|insults) between the two (courts|thrones).',
-    '(Messengers|Envoys) (went|rode) (back and forth|to and fro) (for|through) a (year|whole season), (and|but) (each|every one) (came|went) back (with|bearing) (harder|angrier) words than (the last|before).',
+    'The spark was a small thing: a quarrel in a tavern by the border, a death, and then hard words between the two courts.',
+    'Envoys rode to and fro for a whole season, and each came back with angrier words than the last.',
   ],
 
   // ------------------------------------------------------------ the war begins
   'opening.declare': [
-    '(War|The war) was declared in {warstart}, (at|in) {acapital}, (before|in front of) the (whole|assembled) court.',
-    'In {warstart} {aggressor} (declared|made) war (on|against) {defender}, and (heralds|riders) (carried|took) the word to (every|each) town of both realms.',
+    'War was declared in {warstart}, at {acapital}, before the assembled court.',
+    'In {warstart} {aggressor} declared war on {defender}, and riders carried the word to every town of both realms.',
   ],
   'opening.muster': [
-    '(Every|Each) town (sent|gave) its (watch|young folk) to the muster, (and|) (smiths|the forges) (worked|were at work) day and night (on|making) (spears|blades) and (helms|mail).',
-    'The (muster|levy) (was|went) (called|out) in (every|each) town, and (by|before) (summer|midsummer) (two|both) (armies|hosts) were (in|on) the field.',
+    'Every town sent its young folk to the muster, and the forges worked day and night on spearheads and helms.',
+    'The levy was called in every town, and by midsummer both armies were in the field.',
   ],
   'opening.mood': [
-    '(At first|In the first weeks) the (folk|people) on both sides (thought|said) (it|the war) (would|should) (be over|be done) (by|before) (harvest|the winter); (it was not|they were wrong).',
-    'There was (singing|music) in the (roads|streets), as there always is at the start of a war, and (less|much less) of it at the end.',
+    'In the first weeks, people on both sides said it would be over by harvest. They were wrong.',
+    'There was singing in the streets, as there always is at the start of a war, and much less of it at the end.',
   ],
   'opening.march': [
-    '(The|Their) (host|army) (marched|went) (out|) (toward|on) the border (with|behind) (banners|drums), (and|while) (the|) (towns|people) (watched|lined the road) (them go|to see them go).',
+    'The host marched out toward the border behind its banners, and the people lined the road to watch it go.',
   ],
 
   // ------------------------------------------------------------ a battle
   'battle.when': [
     '{battle} was fought in {battleyear}.',
-    'In {battleyear} the (two|) (hosts|armies) (met|came together) at {battle}.',
-    '(Then|Next) came {battle}, in {battleyear}.',
+    'In {battleyear} the two hosts met at {battle}.',
   ],
   'battle.field': [
-    '(The|Its) (ground|field) (was|lay) (near|before|outside) {place}, (on|in) {ground}, and (it|the ground) (favoured|helped) (neither|no) (side|one) (much|greatly).',
-    '(They|The armies) (met|drew up) (on|in) {ground} (near|outside|before) {place}, where the (road|ford) (crosses|crossed) the (low|open) ground.',
+    'The ground was open, near {place}, in {ground}, and favoured neither side.',
+    'The armies drew up in {ground} outside {place}, where the road crosses the low ground.',
+    'They met in {ground} before {place}, on ground that the farmers there still will not plough.',
   ],
   'battle.fight': [
-    'The (fighting|battle) (lasted|went on) from (dawn|first light) (until|till) (dusk|the light failed), and (more than once|again and again) the line (seemed|looked) (lost|about to break).',
-    '(Arrows|Spears) (fell|came) (thick|like rain) (on|upon) both (lines|sides), and (then|after that) it was (shield to shield|hand to hand).',
-    '(The|A) (charge|rush) (of|from) {winner} (broke|went through) the (line|lines) of {loser}, and (the rest was|after that it was) (slaughter|a rout).',
+    'The fighting went on from first light until the light failed, and more than once the line seemed about to break.',
+    'Arrows fell like rain on both lines, and then it was shield to shield, and then it was only noise.',
+    'A charge from {winner} went through the lines of {loser}, and after that it was not a battle but a rout.',
   ],
   'battle.turn': [
-    'What (turned|won) the day, the soldiers said afterwards, was a (flank|line) that (held|did not break) when all the rest (gave way|broke).',
-    '(Late in the day|Toward evening), a (storm|rain) (came|swept) (in|across the field), (and|so that) the bows were (useless|no use) (to|for) {loser}.',
+    'What won the day, the soldiers said afterwards, was a single company that held when all the rest gave way.',
+    'Toward evening a storm swept across the field, and the bows of {loser} were suddenly no use at all.',
   ],
   'battle.outcome': [
-    'The day (went|belonged) to {winner}, (and|while) {loser} (fell back|drew off) (in good order|in disorder).',
-    '{winner} (won|carried) the (field|day), and {loser} left (its|their) (dead|banners) (behind|on the field).',
-    '(When|By the time) the (dark|night) (came|fell), {winner} (held|had) the (field|ground), and {loser} (was in flight|was gone|had fled).',
+    'The day went to {winner}, and {loser} drew off in what order it could.',
+    '{winner} carried the field, and {loser} left its dead and its banners behind.',
+    'By nightfall {winner} held the ground, and {loser} was in flight.',
   ],
   'battle.cost': [
-    '(Some|About) {fallen} (were|lay) dead (on|upon) the field, (on both sides|on either side).',
-    '(It|The victory) (cost|was bought with) (some|nearly) {fallen} (lives|dead), and the (crows|ravens) (ate|fed) (well|for a week).',
+    'Some {fallen} lay dead on the field, on both sides.',
+    'The victory was bought with nearly {fallen} lives, and the crows ate well for a week.',
   ],
   'battle.remember': [
-    '(A|The) (cairn|stone) (stands|was raised) on the field, (and|where) the (folk|farmers) (of|near) {place} (lay|leave) (flowers|wreaths) (on|at) {feast}.',
-    '(The|A) (song|ballad) of {battle} (is|was) (sung|still sung) in the (taverns|halls) of {winner} (to this day|still), (and|but) (never|not) (in|among) {loser}.',
+    'A cairn stands on the field, and the farmers of {place} lay flowers on it at {feast}.',
+    'A ballad of {battle} is still sung in the taverns of {winner}, and never in those of {loser}.',
   ],
 
   // ------------------------------------------------------------ a siege
   'siege.when': [
-    '{battle} (began|was laid) in {battleyear}.',
-    'In {battleyear} the (army|host) of {besieger} (came|marched) (before|to) the walls of {place}, and {battle} began.',
+    '{battle} began in {battleyear}.',
+    'In {battleyear} the army of {besieger} came before the walls of {place}, and {battle} began.',
   ],
   'siege.invest': [
-    '(They|The besiegers) (dug|threw up) (earthworks|ditches) (round|about) the (city|walls), and (built|raised) (engines|siege towers) from timber felled (nearby|round about).',
-    '(No|Not one) (cart|boat) (went|came) (in|into) {place} or (out|out of it) (for|through) (weeks|months), (and|while) the (engines|stones) (beat|struck) (at|on) the walls (day and night|night and day).',
+    'The besiegers dug ditches around the walls, and built siege towers from timber felled in the woods nearby.',
+    'For weeks no cart went in or out of {place}, while the engines beat at the walls night and day.',
   ],
   'siege.inside': [
-    '(Inside|Within) the walls (the|) (folk|people) (ate|were eating) (their horses|rats) (before|by) the end, (but|and) (still|yet) (they did not|would not) (open|give up) the (gates|city).',
-    '(The|Its) (watch|defenders) (held|kept) the walls (with|by) (whatever|what) they had: (spears|bows), (stones|roof tiles), (boiling|hot) (water|pitch).',
+    'Inside the walls the people ate their horses before the end, and still they would not open the gates.',
+    'The defenders held the walls with whatever they had: spears and bows, roof tiles, boiling water.',
   ],
   'siege.held': [
-    '(In the end|At last) the siege was (broken|lifted), and {loser} (went|marched) (home|away) (with nothing|empty-handed).',
-    '{place} (held|held out), and {loser} (gave up|abandoned) the siege (before|when) the (winter|autumn rains) came.',
-    '(When|After) (it was|the siege was) (over|done), {winner} (still|) held {place}, and the walls (stood|were still standing).',
+    'In the end the siege was lifted, and {loser} marched home with nothing to show for it.',
+    '{place} held, and {loser} gave up the siege before the autumn rains came.',
   ],
   'siege.fell': [
-    '(In the end|At last) the gates (were opened|gave way), and {place} (fell|was taken) to {winner}.',
-    '(Hunger|Sickness) (did|finished) what the engines could not, and {place} (opened its gates|was given up) to {winner}.',
+    'In the end the gates gave way, and {place} fell to {winner}.',
+    'Hunger did what the engines could not, and {place} opened its gates to {winner}.',
   ],
   'siege.returned': [
-    '{place} was given back (at|in) {peace}[, but (its|the) (people|folk) never (forgot|forgave) the (siege|hunger)].',
+    '{place} was given back at {peace}, but its people never forgot the hunger.',
   ],
   'siege.cost': [
-    '(Some|About) {fallen} (died|were lost) (before|in) (it was over|the siege), (more|many) of (hunger|sickness) than of (wounds|steel).',
+    'Some {fallen} died before it was over, more of hunger and sickness than of wounds.',
   ],
   'siege.remember': [
-    'The (breach|mended stretch of wall) (can|may) (still|) be (seen|made out) (on|in) the walls of {place}, where the stone is (newer|paler) than the rest.',
+    'The mended stretch of wall can still be seen at {place}, where the stone is paler than the rest.',
   ],
 
   // ------------------------------------------------------------ peace
   'peace.tired': [
-    '(By|In) {warend} (both|the two) (realms|sides) were (tired|weary) of (it|war), and (their|the) (treasuries|coffers) (empty|bare).',
-    '(Neither|Not one) (side|realm) could (win|finish it) (outright|by force), and (both|the two) (knew|came to know) it.',
+    'By {warend} both realms were tired of war, and their treasuries were empty.',
+    'Neither side could win outright, and by {warend} both of them knew it.',
   ],
   'peace.terms': [
     '{endtext}.',
   ],
   'peace.after': [
-    'The (treaty|peace) was (signed|sealed) (in wax and ink|with seals), and sworn before the {clergies} of both realms.',
-    '(Heralds|Riders) (carried|took) the (news|word) (home|to every town), (and|) (the|) (bells|temple bells) (rang|were rung) (from|in) (every|each) town (on|of) (both|either) (sides|side).',
+    'The treaty was sealed in wax and sworn before the {clergies} of both realms.',
+    'Riders took the news home, and the bells were rung in every town on both sides of the border.',
   ],
   'peace.judge': [
-    'Whether (it|the peace) was (just|a fair one) or not, the treaty held, and that is more than (most|many) (peaces|treaties) can say.',
-    '(Few|Not many) on either side were (happy|pleased) with the terms, and that, (some|the wise) (say|would say), is the mark of a (fair|good) peace.',
+    'Whether or not the peace was a fair one, the treaty held, which is more than most treaties can say.',
+    'Nobody on either side was pleased with the terms, which, the wise say, is the mark of a good peace.',
   ],
 
   // ------------------------------------------------------------ after a war
   'aftermath.ceded': [
-    '{ceded} (has been|is) (a town|part) of {victor} ever since, (and|though) (its|the) (old folk|oldest folk) (still|) (call|remember) themselves (people|subjects) of {loser}.',
+    '{ceded} has belonged to {victor} ever since, though its oldest folk still think of themselves as subjects of {loser}.',
   ],
   'aftermath.remember': [
-    'The (dead|fallen) are (remembered|named) on (stones|plaques) in both realms, and (each|every) (year|spring) their names are read aloud again.',
-    '(Songs|Ballads) of {war} are (still|) sung, (and|though) the songs (tell|sing) it (very|quite) differently on (either|each) side of the border.',
+    'The dead are named on stones in both realms, and every spring their names are read aloud again.',
+    'Songs of {war} are still sung, though they tell it very differently on either side of the border.',
   ],
   'aftermath.judge': [
-    '(It|The war) (changed|settled) (less|little) than (anyone|those who fought it) (hoped|had hoped), (as|which is the way of) (wars|most wars) (do|go).',
-    'Whether it was worth (it|the dead), (I|this writer) will not say; (those|the ones) (who|that) (fought|fell) in it (were|) (not|never) asked.',
+    'The war changed less than anyone had hoped, as wars generally do.',
+    'Whether it was worth the dead, I will not say; those who died in it were never asked.',
   ],
   'aftermath.end': [
-    '(Here|So) (ends|closes) (this|my) (account|history) of {war}.',
-    '(This|That) (is|was) {war}, (as|so far as) (it|the truth of it) (can|may) (now|still) be (told|known).',
+    'Here ends my account of {war}.',
+    'That was {war}, as far as the truth of it can now be told.',
   ],
   'ongoing.now': [
-    '(As|Even as) (I|this) (write|is written), the war (goes on|is not over), and (no one|nobody) (can|could) say (how|when) it will end.',
-    '(At|In) the (time|year) of (writing|this writing), {war} (goes on|is still being fought), (and|) (the|) (news|word) (from|of) the (border|front) (comes|arrives) (every|each) week.',
+    'As I write, the war goes on, and no one can say when it will end.',
+    'At the time of writing, {war} is still being fought, and the news from the border comes in every week.',
   ],
   'ongoing.mood': [
-    '(In|On) (the|both) (towns|sides) (folk|people) (pray|hope) for (peace|an end to it), (and|while) the (young|soldiers) (march|go) (off|out) (to the muster|again).',
+    'In the towns on both sides, people pray for peace, and the young go off to the muster all the same.',
   ],
   'ongoing.end': [
-    '(Whatever|What) (comes|happens) next (must|will have to) be (written|told) (by|in) (another|some other) (hand|book).',
+    'Whatever happens next will have to be told in another book.',
   ],
 };
