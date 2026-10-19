@@ -287,9 +287,9 @@ test('drafted laws: only a governor can put them forward, and they do what they 
   assert.ok(T.agenda.includes(p.item));
 });
 
-test('charters: six of them; reformed, the seats and the rules change with it', () => {
+test('charters: six of them (and since Round 122, a lordship); reformed, the seats and the rules change with it', () => {
   const { L, T, o, game } = governing();
-  assert.equal(CHARTER_IDS.length, 6);
+  assert.ok(CHARTER_IDS.length >= 6);
   assert.ok(['council', 'assembly', 'theocracy'].includes(defaultCharter(L)));
   o.reform(L, T, 'guild', game.day);
   assert.equal(T.charter, 'guild');
