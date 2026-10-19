@@ -3,6 +3,7 @@
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
 import { segNow, shelterFor, outdoors, chatterAt, dayOf as festDayOf } from '../sim/festival.js';
+import { rowdy } from '../game/festplay.js';
 import { npcChair } from '../game/chairs.js';
 import { idleTick } from './idleanims.js';
 import { Entity } from './entity.js';
@@ -2758,7 +2759,8 @@ export class NPC extends Entity {
         if (this.goal && this.goal.face !== undefined && !this.sitting && this.rng.chance(dt * 0.3)) this.dir = this.goal.face;
         if (this.lineCd > 0 || this.distTo(game.player) > 16) return;
         this.lineCd = this.rng.float(14, 32);
-        const lines = chatterAt(seg, this.rec.age === 'child');
+        // (Round 129) The ale spiked: the ale tables louder than anyone meant.
+        const lines = seg.v === 'alehouse' && this.rec.age !== 'child' && rowdy(ev, game.sim.abs) ? ['Wheee! Another!', '*hic* Who moved the table?', 'I LOVE this town!', 'Sing it again! SING IT!', 'Is the ground meant to... spin?'] : chatterAt(seg, this.rec.age === 'child');
         if (lines && lines.length && this.rng.chance(0.5)) this.say(this.rng.pick(lines), 2.6);
         return;
       }

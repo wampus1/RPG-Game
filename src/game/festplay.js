@@ -19,7 +19,7 @@
 // did, which is checked here (see `result`). The race is run in the world,
 // the bout is a friendly bout (see Game.startDuel).
 import { ITEMS } from '../world/items.js';
-import { countItem, removeItem } from './inventory.js';
+import { removeItem } from './inventory.js';
 import { alive, ledger, DAY } from '../sim/econ.js';
 import { hash4, clamp } from '../util/rng.js';
 import { asSeat } from './party.js';
@@ -29,6 +29,8 @@ import { dishesOf, forbiddenFood } from '../sim/culture.js';
 import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { yearOf } from '../sim/history.js';
+import { FACTION_IDS } from '../sim/factions.js';
+import { closeOf } from '../sim/festival.js';
 
 // ------------------------------------------------------------ the contests
 // v: the places it can be held at (the first the do has); slots: the parts
@@ -44,6 +46,11 @@ export const CONTESTS = {
   riddles: { name: 'the riddling', short: 'RIDDLES', v: ['alehouse'], slots: ['fair', 'night', 'feast'], play: 'win', tries: 1, max: 5, unit: 'right', glyph: '?' },
   dance: { name: 'the dance', short: 'THE DANCE', v: ['stage'], slots: ['feast'], play: 'win', tries: 3, max: 1000, unit: 'points', glyph: '♪' },
   cookoff: { name: 'the cook-off', short: 'COOK-OFF', v: ['stage'], slots: ['feast'], play: 'dish', tries: 1, max: 30, unit: 'points', glyph: '♨' },
+  // (Phase 3) Each people's own, at its festivals only.
+  hammer: { name: 'the bell-ringing', short: 'RING THE BELL', v: ['green', 'stage'], slots: ['fair', 'feast'], play: 'win', tries: 2, max: 100, unit: '', glyph: '♦', people: ['vale', 'ember', 'wild', 'sun', 'velari', 'kesh'] },
+  logtoss: { name: 'the log toss', short: 'LOG TOSS', v: ['green', 'stage'], slots: ['fair', 'feast'], play: 'win', tries: 2, max: 60, unit: 'ft', glyph: '|', people: ['north', 'high', 'rime', 'corrow'] },
+  raft: { name: 'the raft race', short: 'RAFT RACE', v: ['stalls', 'alehouse', 'stage'], slots: ['fair', 'feast'], play: 'win', tries: 2, max: 120, min: 18, low: true, unit: 's', glyph: '~', people: ['tide', 'salt', 'skerry'] },
+  lantern: { name: 'the lantern walk', short: 'LANTERN WALK', v: ['shrine', 'stage'], slots: ['fair', 'feast', 'procession'], play: 'win', tries: 2, max: 100, unit: '', glyph: '*', people: ['mist', 'jade', 'wyrd', 'hollow'] },
 };
 export const CONTEST_KEYS = Object.keys(CONTESTS);
 
@@ -118,6 +125,10 @@ function skill(r, k) {
     case 'riddles': return clamp(0.3 + (['scholar', 'priest', 'researcher', 'mayor', 'noble'].includes(r.job) ? 0.35 : 0) + (has(r, 'witty') || has(r, 'bookish') || has(r, 'curious') ? 0.2 : 0) + (has(r, 'absent-minded') ? -0.15 : 0) + (r.age === 'elder' ? 0.1 : 0), 0.05, 1);
     case 'dance': return clamp(0.4 + (has(r, 'outgoing') || has(r, 'cheerful') || has(r, 'romantic') ? 0.25 : 0) + (has(r, 'reserved') || has(r, 'gloomy') ? -0.2 : 0) + (has(r, 'clumsy') ? -0.25 : 0) + young * 0.5, 0.05, 1);
     case 'cookoff': return clamp(0.3 + (['cook', 'innkeeper', 'baker'].includes(r.job) ? 0.4 : 0) + (has(r, 'patient') || has(r, 'hardworking') ? 0.1 : 0), 0.05, 1);
+    case 'hammer':
+    case 'logtoss': return clamp(0.35 + young + (['blacksmith', 'miner', 'lumberjack', 'laborer', 'guard', 'farmer'].includes(r.job) ? 0.3 : 0) + brave * 0.5, 0.05, 1);
+    case 'raft': return clamp(0.35 + young + (['fisher', 'pearldiver', 'laborer'].includes(r.job) ? 0.35 : 0) + (has(r, 'hardworking') ? 0.1 : 0), 0.05, 1);
+    case 'lantern': return clamp(0.4 + (has(r, 'devout') || has(r, 'patient') || has(r, 'disciplined') ? 0.25 : 0) + (r.job === 'priest' ? 0.2 : 0) + (has(r, 'clumsy') || has(r, 'absent-minded') ? -0.2 : 0), 0.05, 1);
     default: return 0.4;
   }
 }
@@ -126,8 +137,8 @@ function skill(r, k) {
 function wouldEnter(r, k) {
   if (!r || !alive(r) || r.away) return false;
   if (r.age === 'child') return k === 'race' || k === 'eating' || k === 'riddles';
-  if (k === 'wrestling') return r.age === 'adult';
-  if (k === 'race') return r.age === 'adult';
+  if (k === 'wrestling' || k === 'hammer' || k === 'logtoss') return r.age === 'adult';
+  if (k === 'race' || k === 'raft') return r.age === 'adult';
   return true;
 }
 
@@ -145,6 +156,10 @@ function npcScore(L, ev, r, k, i) {
     case 'riddles': return Math.round(clamp(noisy * 5.2 - 0.4 + y * 0.6, 0, 5));
     case 'dance': return Math.round(clamp(250 + noisy * 620 + (y - 0.5) * 80, 0, 1000));
     case 'cookoff': return Math.round(clamp(9 + noisy * 17 + (y - 0.5) * 3, 3, 30));
+    case 'hammer': return Math.round(clamp(30 + noisy * 68 + (y - 0.5) * 6, 10, 100));
+    case 'logtoss': return Math.round(clamp(12 + noisy * 34 + (y - 0.5) * 4, 4, 58));
+    case 'raft': return Math.round((60 - noisy * 28 + (y - 0.5) * 4) * 10) / 10;
+    case 'lantern': return Math.round(clamp(35 + noisy * 60 + (y - 0.5) * 6, 10, 100));
     default: return 0;
   }
 }
@@ -157,8 +172,10 @@ export function contestsFor(events, L, ev) {
   const prog = ev.prog || [];
   if (!prog.length || ev.rite === 'vigil') return;
   const out = {};
+  const style = L.settlement.style || L.settlement.culture || 'vale';
   for (const k of CONTEST_KEYS) {
     const C = CONTESTS[k];
+    if (C.people && !C.people.includes(style)) continue;
     let slot = null;
     let v = null;
     for (const sk of C.slots) {
@@ -338,6 +355,7 @@ export function scoreText(c, q) {
   if (C.play === 'bout') return q.champ ? 'champion' : q.score > 0 ? 'beat the champion' : 'thrown';
   if (C.unit === 's') return `${q.score.toFixed(1)}s`;
   if (c.k === 'eating') return `${q.score.toFixed(1)} plates`;
+  if (c.k === 'logtoss') return `${q.score} ft`;
   if (c.k === 'riddles') return `${q.score} of 5`;
   return `${q.score}`;
 }
@@ -436,8 +454,9 @@ function windowCfg(game, L, ev, c, token) {
   if (c.k === 'eating') {
     const dishes = dishesOf(s);
     cfg.food = dishes[hash4(seed, 2) % dishes.length] || 'stew';
-    cfg.rivals = c.npc.slice(0, 2).map((q) => ({ name: q.name, plates: q.score, look: (L.npcs[q.idx] || {}).look || null }));
+    cfg.rivals = rivalsFor(game, L, c, 2).map((q) => ({ name: q.name, plates: q.score, look: q.look }));
   }
+  if (c.k === 'raft') cfg.rivals = rivalsFor(game, L, c, 2).map((q) => ({ name: q.name, time: q.score, look: q.look }));
   if (c.k === 'riddles') {
     const pool = RIDDLES.map((_, i) => i);
     const picks = [];
@@ -471,6 +490,25 @@ function windowCfg(game, L, ev, c, token) {
   return cfg;
 }
 
+// Who you're up against at the table (or on the water): whoever else is
+// playing who's had a go already (their best), then the townsfolk.
+function rivalsFor(game, L, c, n) {
+  const me = `pl:${pidOf(game.player)}`;
+  const C = CONTESTS[c.k];
+  const best = new Map();
+  for (const q of c.entries) {
+    if (q.who === me || !q.who.startsWith('pl:') || q.score === null) continue;
+    const was = best.get(q.who);
+    if (!was || (C.low ? q.score < was.score : q.score > was.score)) best.set(q.who, q);
+  }
+  const out = [...best.values()].map((q) => {
+    const p = playerOf(game, q.who.slice(3));
+    return { name: q.name, score: q.score, look: p ? p.look : null };
+  });
+  for (const q of c.npc) out.push({ name: q.name, score: q.score, look: (L.npcs[q.idx] || {}).look || null });
+  return out.slice(0, n);
+}
+
 // How a player did, sent back by the window (theirs, or their own screen's
 // in someone else's world). `res`: { token, score } (the riddles: picks).
 // Checked: their go, and a score that could be had.
@@ -488,8 +526,10 @@ export function result(game, L, ev, k, res) {
     const picks = Array.isArray(res.picks) ? res.picks : [];
     score = (open.answers || []).reduce((n, a, i) => n + (picks[i] === a ? 1 : 0), 0);
   } else score = clamp(Math.round((+res.score || 0) * 10) / 10, 0, C.max);
+  // (A crossing quicker than could be: as if it never finished.)
+  if (C.low && score < (C.min || 0)) score = C.max;
   // (Too quick a go to be true: nothing.)
-  if (game.sim.abs - open.at < 5 && score > 0 && k !== 'riddles') score = 0;
+  if (game.sim.abs - open.at < 5 && k !== 'riddles') score = C.low ? C.max : 0;
   // (Late in: still counted, if it was begun before the close.)
   if (c.done) return { score, late: true };
   c.entries.push({ who: `pl:${pid}`, pid, name: playerName(game, pid), score, t: game.sim.abs });
@@ -539,6 +579,9 @@ export function tick(events, L, ev, now) {
     for (const q of c.npc) {
       if (q.said || q.at === null || q.at === undefined || now < q.at) continue;
       q.said = true;
+      // (The ale spiked: whoever has their go at the ale tables after does
+      // worse for it.)
+      if (c.v === 'alehouse' && ev.spiked && q.at >= ev.spiked.at && q.at < ev.spiked.until + 60) q.score = c.k === 'riddles' ? Math.max(0, q.score - 2) : Math.round(q.score * 6.5) / 10;
       const e = L.npcs[q.idx] && L.npcs[q.idx].ent;
       if (e && !e.dead && e.say && C.play !== 'dish') e.say(C.play === 'bout' ? 'Oof! You\'re too strong for me!' : q.score >= (C.max || 1) * 0.6 ? 'Ha! Beat that!' : 'Not my best...', 2.4, '#ffe8a0');
     }
@@ -912,4 +955,196 @@ export function helpable(ev, now) {
 // How much a player's helped (for the host's thanks).
 export const helped = (ev, pid) => (ev && ev.helpers && ev.helpers[pid]) || 0;
 
-void countItem;
+// ------------------------------------------------------------ the speech
+// (Phase 3) The one who governs the town (or rules the realm), if they're
+// there, opens the feast: grandly, plainly, or with a joke; and the town
+// thinks the better (or the worse) of them for it.
+export const SPEECHES = {
+  grand: { label: 'Speak of the town\'s good year, and the years to come.', ok: 0.8, up: 3, flop: 1 },
+  plain: { label: 'Thank them all, plainly, and bid them eat.', ok: 0.95, up: 2, flop: 1 },
+  jest: { label: 'Tell them a joke first.', ok: 0.6, up: 5, flop: -2 },
+};
+const SPEECH_LINES = {
+  grand: (t) => [`People of ${t}! This year we have built, and traded, and stood together. Next year we do more!`, `${t} has never been stronger. Eat, drink, and be proud!`],
+  plain: (t) => [`Thank you, all of you. ${t} is what you make it. Now eat, before it goes cold!`, 'I won\'t keep you. Thank you for this year. Let the feast begin!'],
+  jest: (t) => [`They asked me to keep this short. So: the ale's free, the speech is over, and ${t}'s the best town there is!`, 'I had a speech, but the goat ate it. Let the feast begin!'],
+};
+
+// Whether a player may open this one, now (and as what).
+export function canSpeak(game, L, ev, now) {
+  if (!ev || ev.speech || !ev.prog) return null;
+  const feast = ev.prog.find((q) => q.k === 'feast');
+  const at = feast ? feast.from : ev.s;
+  if (now < at - 30 || now > at + 15) return null;
+  const s = L.settlement;
+  if (game.sim.office.isHolder(s.id)) return 'office';
+  if (s.civ && game.sim.crown.isRuler(s.civ)) return 'crown';
+  return null;
+}
+
+export function speech(game, L, ev, tone) {
+  const as = canSpeak(game, L, ev, game.sim.abs);
+  const S = SPEECHES[tone];
+  if (!as || !S) return null;
+  const s = L.settlement;
+  const ok = Math.random() < S.ok;
+  const n = ok ? S.up : S.flop;
+  const name = playerName(game, pidOf(game.player));
+  if (as === 'office') {
+    const T = game.sim.office.of(s.id);
+    if (T) for (const f of FACTION_IDS) T.favour[f] = clamp((T.favour[f] || 0) + n + (tone === 'plain' && f === 'poor' ? 2 : 0), -30, 30);
+  } else {
+    const C = game.sim.crown.of(s.civ);
+    if (C) C.favour[s.id] = clamp((C.favour[s.id] || 0) + n + 2, -30, 30);
+  }
+  const lines = SPEECH_LINES[tone](s.name);
+  const said = lines[Math.floor(Math.random() * lines.length)];
+  ev.speech = { pid: pidOf(game.player), name, tone, ok, as };
+  game.sim.events.tellTown(L, `${name} opens the festival: "${said}"`, '#ffe8a0');
+  game.sim.events.tellTown(L, ok ? (tone === 'jest' ? 'The square roars with laughter!' : 'The square cheers!') : tone === 'jest' ? 'The joke falls flat. Somebody coughs.' : 'A polite murmur goes round the square.', ok ? '#ffe070' : '#c8b890');
+  for (const e of game.npcs || []) {
+    if (e.dead || !e.rec || !e.say || e.distTo(game.player) > 14 || Math.random() < 0.5) continue;
+    e.say(ok ? ['Hear, hear!', 'Huzzah!', `To ${s.name}!`, 'Well said!'][Math.floor(Math.random() * 4)] : ['Hmph.', '...', 'Get on with it!'][Math.floor(Math.random() * 3)], 2.6, ok ? '#ffe8a0' : '#c8b8a0');
+  }
+  ledger(L, ev.day, `${name} opened ${game.sim.events.title(L, ev)}${ok ? ', to cheers' : ', to a polite murmur'}.`);
+  return { ok, said };
+}
+
+// ------------------------------------------------------------ mischief
+// (Phase 3) Lifting a purse in the crush at one of the places, when
+// everyone's watching the games; and the ale cask, for a mug (or, with a
+// potion tipped in, a livelier night than anyone bargained for). Seen
+// doing either, it's a crime like any other.
+function fairNow(L, now) {
+  for (const ev of L.econ.events || []) {
+    if (!ev.prog || ev.state === 'off' || ev.state === 'done') continue;
+    const slot = ev.prog.find((q) => now >= q.from && now < q.to);
+    if (slot) return { ev, slot };
+  }
+  return null;
+}
+
+// Whether someone could have their purse lifted (crowded round them, at a
+// place where something's on).
+export function canLift(game, npc) {
+  const L = npc.layout;
+  if (!L || !npc.rec || npc.rec.age === 'child' || npc.rec.job === 'guard' || npc.hired) return false;
+  const f = fairNow(L, game.sim.abs);
+  if (!f || (f.ev.lifted && f.ev.lifted[npc.rec.idx])) return false;
+  if (!f.slot.venues.some((v) => nearVenue(f.ev, v, npc.x, npc.z, 4))) return false;
+  const crowdN = (game.npcs || []).filter((e) => e !== npc && !e.dead && e.rec && e.distTo(npc) <= 4).length;
+  return crowdN >= 3;
+}
+
+export function liftPurse(game, npc) {
+  const L = npc.layout;
+  const f = fairNow(L, game.sim.abs);
+  if (!f || !canLift(game, npc)) return { ok: false, lines: ['(There\'s no crowd here to hide in.)'] };
+  const ev = f.ev;
+  const p = game.player;
+  const sid = L.settlement.id;
+  const crowdN = (game.npcs || []).filter((e) => e !== npc && !e.dead && e.rec && e.distTo(npc) <= 4).length;
+  const watching = openNow(ev, game.sim.abs).some((c) => nearVenue(ev, c.v, npc.x, npc.z, 5));
+  const wary = has(npc.rec, 'nosy') || has(npc.rec, 'shrewd') || has(npc.rec, 'stingy');
+  const chance = Math.min(0.9, 0.45 + crowdN * 0.04 + (watching ? 0.15 : 0) - (wary ? 0.2 : 0));
+  (ev.lifted ||= {})[npc.rec.idx] = true;
+  if (Math.random() < chance) {
+    const n = Math.min(npc.rec.coins || 0, 4 + Math.floor(Math.random() * 12));
+    if (n <= 0) return { ok: true, lines: ['(Their purse is empty. Not a coin in it.)'] };
+    npc.rec.coins -= n;
+    const left = p.give('coin', n);
+    if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
+    ev.mischief = (ev.mischief || 0) + 1;
+    return { ok: true, lines: [`(In the crush, ¤${n} from their purse, and they never felt a thing.)`] };
+  }
+  const wits = game.sim.witnesses(sid, npc.x, npc.z, 8);
+  if (!wits.includes(npc)) wits.push(npc);
+  npc.say(npc.rng.pick(['Thief! Hands off!', 'Oi! My purse!', 'Pickpocket!']), 3, '#ff9080');
+  game.sim.justice.commit(sid, 'theft', { witnesses: wits, value: 6, desc: 'Picking a pocket at the festival', owner: { kind: 'rec', id: npc.rec.idx }, victimNpc: npc });
+  ev.crimes = (ev.crimes || 0) + 1;
+  return { ok: false, lines: ['(They feel your hand at their belt and spin round!)'], close: true };
+}
+
+// The ale cask at the ale tables: a mug of the festival's ale; or, with a
+// potion in your hand, tipped in.
+export function cask(game, L, x, z) {
+  const f = fairNow(L, game.sim.abs);
+  const p = game.player;
+  if (!f || !nearVenue(f.ev, 'alehouse', x, z, 2)) return 'An ale cask, tapped for the festival.';
+  const ev = f.ev;
+  const pid = pidOf(p);
+  const it = p.heldDef();
+  if (it && it.kind === 'potion') {
+    removeItem(p.inv, it.key, 1);
+    const now = game.sim.abs;
+    ev.spiked = { by: pid, at: now, until: now + 90 };
+    const sid = L.settlement.id;
+    const wits = game.sim.witnesses(sid, x, z, 7);
+    if (wits.length) {
+      game.sim.justice.commit(sid, 'vandalism', { witnesses: wits, desc: 'Spiking the festival ale' });
+      ev.crimes = (ev.crimes || 0) + 1;
+      return null;
+    }
+    ev.mischief = (ev.mischief || 0) + 1;
+    return `You tip the ${it.name.toLowerCase()} into the cask. Nobody saw. It should be a lively night.`;
+  }
+  ev.mugs ||= {};
+  if (ev.mugs[pid]) return 'You\'ve had your festival mug. The tavern will sell you the next.';
+  ev.mugs[pid] = true;
+  const left = p.give('ale', 1);
+  if (left) game.spawnDrop('ale', left, p.x, p.y, p.z, true);
+  return 'The keeper pours you a mug of the festival ale, on the house.';
+}
+
+// Whether the ale tables are rowdy (the cask spiked) now.
+export const rowdy = (ev, now) => !!(ev && ev.spiked && now < ev.spiked.until);
+
+// ------------------------------------------------------------ how it went
+// (Phase 3) Once the day's done: how good a do it was (who came, what was
+// put up, who helped, the music, the contests and who had a go, the
+// speech, the weather, any trouble), and what comes of it: the guests'
+// mood, the host's thanks, a line in the ledger and, naming the winners,
+// in the town's annals; and something for people to talk of after.
+export function quality(L, ev) {
+  const sum = (o) => Object.values(o || {}).reduce((a, b) => a + b, 0);
+  const came = ev.came || (ev.guests || []).filter((g) => g.set).length;
+  const parts = {
+    turnout: Math.min(30, (came / Math.max(8, L.npcs.length * 0.45)) * 30),
+    places: Math.min(16, (ev.venues || []).length * 4),
+    gifts: Math.min(12, sum(ev.gifts) * 3),
+    music: Math.min(10, (ev.musicians || []).length * 5),
+    contests: Math.min(12, Object.values(ev.contests || {}).filter((c) => c.places && c.places.length >= 2).length * 2),
+    players: Math.min(12, new Set(Object.values(ev.contests || {}).flatMap((c) => c.entries.filter((q) => q.who && q.who.startsWith('pl:')).map((q) => q.who))).size * 4),
+    speech: ev.speech ? (ev.speech.ok ? 8 : -3) : 0,
+    fun: ev.spiked ? 4 : 0,
+    trouble: -6 * (ev.crimes || 0),
+    weather: ev.wasWet ? -10 : 0,
+  };
+  return { q: clamp(Math.round(sum(parts) + 10), 0, 100), parts };
+}
+
+export function wrapUp(events, L, ev) {
+  if (ev.wrapped || !ev.prog) return;
+  ev.wrapped = true;
+  const { q } = quality(L, ev);
+  ev.quality = q;
+  const word = q >= 75 ? 'the best in years' : q >= 55 ? 'a fine day' : q >= 35 ? 'a decent do' : 'a damp squib';
+  // The guests go home the happier (or not).
+  for (const g of ev.guests || []) {
+    const r = L.npcs[g.idx];
+    if (r && alive(r) && g.set) r.mood = clamp((r.mood ?? 0.5) + (q - 50) / 500, 0, 1);
+  }
+  const title = events.title(L, ev);
+  const champs = (ev.champs || []).slice(0, 6);
+  // (Each winner once, with all they won.)
+  const by = new Map();
+  for (const c of champs) by.set(c.name, [...(by.get(c.name) || []), CONTESTS[c.k] ? CONTESTS[c.k].name : 'a prize']);
+  const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0]);
+  const named = [...by].map(([n, ks]) => `${n} won ${andList(ks)}`);
+  ledger(L, ev.day, `${cap(title)} was ${word}.${named.length ? ` ${cap(named.join(', '))}.` : ''}`);
+  if (named.length && events.sim.history && events.sim.history.add) events.sim.history.add(L, `At ${title}, ${named.join(', ')}.`, 'festival', ev.day);
+  L.econ.lastFest = { day: ev.day, q, word, title, champs: champs.map((c) => ({ k: c.k, name: c.name })), speech: ev.speech ? { name: ev.speech.name, ok: ev.speech.ok } : null, spiked: !!ev.spiked };
+}
+
+// Whether a do's day is over (for the reckoning).
+export const dayDone = (ev, now) => !!ev.prog && now >= closeOf(ev) && (ev.state === 'over' || ev.state === 'done');

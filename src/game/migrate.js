@@ -975,6 +975,16 @@ export const STEPS = [
       log.push('Library shelves hold books to take down and read (pay a scholar before you walk out with one); wagons can be clicked and walked into; the people\'s own dishes can be cooked at a furnace, as their cookery books say; and every people sets its books in its own type.');
     },
   },
+  {
+    to: '1.29.0',
+    data(d, log) {
+      // (Nothing to change: festivals already announced are laid out round
+      // the town, and given their games, when their day's put up; an ale
+      // cask already standing is one to drink from like any new one.)
+      void d;
+      log.push('Festivals spread round the town (ale tables by the tavern, a blessing at the temple, stalls, games on the green) to a programme from morning to night; and they have games to play: archery, a foot race, wrestling the champion, an eating match, riddles, the dance, a cook-off, and each people\'s own (ringing the bell, the log toss, the raft race, the lantern walk), with prizes; music for tips, helping beforehand, a leader\'s speech, and mischief in the crowd.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -45,12 +45,16 @@ const FEST_COLOURS = {
   tide: ['#1a8ab0', '#f0e0b0', '#e05a3a', '#3ac0a0'],
   jade: ['#c8201a', '#f0c030', '#2a2a2a', '#e8e0d0'],
 };
+// (The far peoples, by their nearest kin of the isle's, where they've
+// nothing of their own here.)
+const KIN = { velari: 'vale', rime: 'north', skerry: 'tide', wyrd: 'mist', salt: 'tide', kesh: 'sun', hollow: 'mist', corrow: 'high' };
+export const kinOf = (style) => (FEST_COLOURS[style] ? style : KIN[style] || 'vale');
 export function festColours(style) {
-  return FEST_COLOURS[style] || FEST_COLOURS.vale;
+  return FEST_COLOURS[kinOf(style)];
 }
 // The land's green, by people (the south drier, the jungle lusher).
 const LAND = { vale: '#5a9a40', north: '#5a8a5a', sun: '#a89a50', wild: '#3a8a3a', high: '#6a8a4a', ember: '#7a7a4a', mist: '#5a7a5a', tide: '#6aa04a', jade: '#5a9a5a' };
-export const landOf = (style) => LAND[style] || LAND.vale;
+export const landOf = (style) => LAND[kinOf(style)] || LAND.vale;
 
 // ------------------------------------------------------------ the sky
 // The sky's bands at an hour (top to the hills), and how much light
@@ -481,3 +485,37 @@ export class Pops {
     }
   }
 }
+
+// ------------------------------------------------------------ shared
+// Someone to show when we don't know what they look like.
+export const DEFAULT_LOOK = { skin: '#e0b090', hair: '#5a3a1a', hairStyle: 'short', shirt: '#7a5a3a', pants: '#3a3a4a', shoes: '#2a1a10', outfit: 'plain', accent: '#c8a030', hat: null };
+
+// How dark it is on someone (for their sprite at dusk, at night).
+export const dusk = (light) => Math.max(0, 0.55 - light * 0.62);
+export const tintOf = (light) => (dusk(light) > 0.02 ? `rgba(10,12,40,${dusk(light).toFixed(3)})` : null);
+
+// Darken what's painted below `y0` of a bitmap (the land at dusk).
+export function darken(b, y0, light) {
+  const k = dusk(light);
+  if (k <= 0) return;
+  const n = [10, 12, 40];
+  for (let y = y0; y < b.h; y++) {
+    for (let x = 0; x < b.w; x++) {
+      const o = (y * b.w + x) * 4;
+      if (!b.d[o + 3]) continue;
+      for (let i = 0; i < 3; i++) b.d[o + i] = b.d[o + i] + (n[i] - b.d[o + i]) * k;
+    }
+  }
+}
+
+// Rain over the scene: streaks a few pixels long.
+export function rain(g, t, level = 1) {
+  const r = rand(77);
+  g.fillStyle = 'rgba(190,210,235,0.45)';
+  for (let i = 0; i < 90 * level; i++) {
+    const x = Math.floor((r() * SW + t * 30) % SW);
+    const y = Math.floor((r() * SH + t * (160 + r() * 60)) % SH);
+    g.fillRect(x, y, 1, 3);
+  }
+}
+

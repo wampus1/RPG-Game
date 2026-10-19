@@ -24,7 +24,7 @@ import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { duesIn, payDues } from './library.js';
-import { openNow as contestsOpen, CONTESTS, nearVenue as nearFestVenue, helpable as festHelpable, GIFTS as FEST_GIFTS, giftsHeld as festGiftsHeld, give as festGive, helped as festHelped } from './festplay.js';
+import { openNow as contestsOpen, CONTESTS, nearVenue as nearFestVenue, helpable as festHelpable, GIFTS as FEST_GIFTS, giftsHeld as festGiftsHeld, give as festGive, helped as festHelped, canLift, liftPurse, canSpeak, speech as festSpeech, SPEECHES as FEST_SPEECHES } from './festplay.js';
 import { segNow, segLine, festive, posterLines as festPosterLines, slotAt as festSlotAt, closeOf as festClose, SLOT_WORDS as FEST_SLOT_WORDS } from '../sim/festival.js';
 import { rainedRecently, weatherWord } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
@@ -539,7 +539,14 @@ function topicsRaw(npc, game) {
       n++;
     }
     if (rec.idx === fev.host && festHelpable(fev, now)) add('festhelp', festHelped(fev, fpid) ? 'Can I help with anything else for the festival?' : 'Can I help get the festival ready?');
+    // (Phase 3) Yours to open, if you govern here (or rule the realm).
+    if (rec.idx === fev.host && canSpeak(game, npc.layout, fev, now)) add('festspeech', 'I\'ll open the festival myself.');
+    // In the crush at one of the places, a purse within reach...
+    if (canLift(game, npc)) add('festlift', '(In the crush, lift their purse)');
   }
+  // How the last one went, a day or two after.
+  const lf = s && npc.layout && npc.layout.econ && npc.layout.econ.lastFest;
+  if (lf && !fev && game.day - lf.day <= 3 && rec.age !== 'child') add('festhow', 'How was the festival?');
   // (Round 128) The books you took down from the library's shelves: bought,
   // to take away (see library.js).
   if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) {
@@ -2029,6 +2036,33 @@ function respondRaw(npc, game, id, arg) {
       const said = game.festEnter(npc.layout, ev, arg);
       if (said) return { lines: [said] };
       return { lines: [pick(rng, ['Off you go, then!', 'Good luck to you!', 'Let\'s see what you\'ve got!'])], close: true };
+    }
+    case 'festspeech': {
+      const ev = festSoon(game, npc.layout);
+      if (!ev || !canSpeak(game, npc.layout, ev, game.sim.abs)) return { lines: ['It\'s too late for speeches now. Or too early.'] };
+      if (arg && FEST_SPEECHES[arg]) {
+        const r = festSpeech(game, npc.layout, ev, arg);
+        return { lines: [r ? `"${r.said}"` : '...'], close: true };
+      }
+      const choices = Object.entries(FEST_SPEECHES).map(([k, S]) => ({ id: 'festspeech', arg: k, label: S.label }));
+      choices.push({ id: 'bye', label: 'On second thoughts, you do it.' });
+      return { lines: ['You? Of course! They\'ll want to hear from you. The square\'s waiting.', 'What will you say?'], choices };
+    }
+    case 'festlift': {
+      const r = liftPurse(game, npc);
+      return { lines: r.lines, close: true };
+    }
+    case 'festhow': {
+      const lf = npc.layout.econ.lastFest;
+      if (!lf) return { lines: ['What festival?'] };
+      const lines = [pick(rng, lf.q >= 75 ? ['The best in years! People will talk of it till the next.', 'Wasn\'t it grand? I danced till my feet hurt.'] : lf.q >= 55 ? ['A fine day. Good food, good company.', 'Lovely, it was. Did you go?'] : lf.q >= 35 ? ['It was all right. A decent do.', 'Not bad. Not the best I\'ve seen.'] : ['A damp squib, if I\'m honest.', 'Hardly anyone came. Shame.'])];
+      if (lf.champs && lf.champs.length) {
+        const c = lf.champs[rng.int(0, lf.champs.length - 1)];
+        lines.push(`Did you see ${c.name}? ${pick(rng, ['Won', 'Took'])} ${{ archery: 'the archery', race: 'the foot race', wrestling: 'the wrestling', eating: 'the eating match', riddles: 'the riddling', dance: 'the dance', cookoff: 'the cook-off', hammer: 'the bell', logtoss: 'the log toss', raft: 'the raft race', lantern: 'the lantern walk' }[c.k] || 'a prize'}!`);
+      }
+      if (lf.speech) lines.push(lf.speech.ok ? `And ${lf.speech.name} opened it. Good speech, that.` : `${lf.speech.name} opened it. Bit of a mumble, mind.`);
+      if (lf.spiked) lines.push('Somebody put something in the ale, I swear. Half the town was dancing on the tables.');
+      return { lines: lines.slice(0, 4) };
     }
     case 'festhelp': {
       const ev = festSoon(game, npc.layout);

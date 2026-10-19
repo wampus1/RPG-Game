@@ -927,7 +927,7 @@ def('hold_bunk', { ...sprite, tall: true, solid: true, tool: 'axe', hardness: 2,
 def('hold_bedroll', { ...sprite, solid: false, hardness: 0.5, drop: [{ item: 'cloth', chance: 0.5 }], label: 'Bedroll' });
 def('hold_locker', { ...sprite, solid: true, interact: 'lore', hardness: Infinity, drop: null, label: 'Footlocker' });
 def('hold_spit', { ...sprite, solid: true, light: 12, hardness: Infinity, drop: null, label: 'Spit' });
-def('ale_cask', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: null, label: 'Ale Cask' });
+def('ale_cask', { ...sprite, solid: true, interact: 'cask', tool: 'axe', hardness: 2, drop: null, label: 'Ale Cask' });
 def('dice_barrel', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'coin', chance: 0.6, min: 1, max: 3 }], label: 'Dice Barrel' });
 def('crate_star', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Star Brand)' });
 def('crate_wheel', { ...sprite, solid: true, interact: 'plunder', hardness: Infinity, drop: null, label: 'Crate (Wheel Brand)' });

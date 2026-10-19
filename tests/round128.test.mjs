@@ -349,7 +349,7 @@ test('each people sets its books in its own type, and each writer\'s a little th
 });
 
 test('version 1.28.0, and a world from 1.27 is brought up to it', () => {
-  assert.equal(GAME_VERSION, '1.28.0');
+  assert.ok(compareVersions('1.28.0', GAME_VERSION) <= 0);
   assert.ok(compareVersions('1.27.0', GAME_VERSION) < 0);
   assert.ok(stepsFor('1.27.0').some((q) => q.to === '1.28.0'));
 });

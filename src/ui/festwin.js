@@ -25,39 +25,9 @@ import { Bmp, rgb, hex, ramp, mixC, hash2, hills as paintHills, pine, broadTree,
 import {
   SW, SH, UW, UH, makeBuf, mixH, rand, festColours, landOf, paintSky, cloudShapes, drawClouds,
   rect, dot, line, disc, bunting, post, lantern, lanternString, folk, crowd, sprite, text, wrap, panel, parchment, meter, Sparks, Pops,
+  DEFAULT_LOOK, dusk, tintOf, darken, rain, kinOf,
 } from './festpaint.js';
-
-// Someone to show when we don't know what they look like.
-const DEFAULT_LOOK = { skin: '#e0b090', hair: '#5a3a1a', hairStyle: 'short', shirt: '#7a5a3a', pants: '#3a3a4a', shoes: '#2a1a10', outfit: 'plain', accent: '#c8a030', hat: null };
-
-// How dark it is on someone (for their sprite at dusk, at night).
-const dusk = (light) => Math.max(0, 0.55 - light * 0.62);
-const tintOf = (light) => (dusk(light) > 0.02 ? `rgba(10,12,40,${dusk(light).toFixed(3)})` : null);
-
-// Darken what's painted below `y0` of a bitmap (the land at dusk).
-function darken(b, y0, light) {
-  const k = dusk(light);
-  if (k <= 0) return;
-  const n = [10, 12, 40];
-  for (let y = y0; y < b.h; y++) {
-    for (let x = 0; x < b.w; x++) {
-      const o = (y * b.w + x) * 4;
-      if (!b.d[o + 3]) continue;
-      for (let i = 0; i < 3; i++) b.d[o + i] = b.d[o + i] + (n[i] - b.d[o + i]) * k;
-    }
-  }
-}
-
-// Rain over the scene: streaks a few pixels long.
-function rain(g, t, level = 1) {
-  const r = rand(77);
-  g.fillStyle = 'rgba(190,210,235,0.45)';
-  for (let i = 0; i < 90 * level; i++) {
-    const x = Math.floor((r() * SW + t * 30) % SW);
-    const y = Math.floor((r() * SH + t * (160 + r() * 60)) % SH);
-    g.fillRect(x, y, 1, 3);
-  }
-}
+import { GAMES2 } from './festwin2.js';
 
 // ------------------------------------------------------------ the band
 // The window's own instruments (the dance's tune, the twang of the bow).
@@ -1363,7 +1333,7 @@ class Dance {
   constructor(win, cfg) {
     this.win = win;
     this.cfg = cfg;
-    this.B = BANDS[cfg.style] || BANDS.vale;
+    this.B = BANDS[kinOf(cfg.style)] || BANDS.vale;
     this.bpm = cfg.tempo || 120;
     this.beat = 60 / this.bpm;
     this.notes = [];
@@ -1898,7 +1868,7 @@ class Cookoff {
 
 const sum = (a) => (a || []).reduce((x, y) => x + y, 0);
 
-const GAMES = { archery: Archery, eating: Eating, riddles: Riddles, dance: Dance, cookoff: Cookoff };
+const GAMES = { archery: Archery, eating: Eating, riddles: Riddles, dance: Dance, cookoff: Cookoff, ...GAMES2 };
 
 // ------------------------------------------------------------ the board
 // The festival's board (on the green): the day's programme, and the

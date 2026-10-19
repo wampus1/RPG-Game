@@ -130,7 +130,7 @@ import { bookAt, bookById } from './books/books.js';
 import { openShelf, tookFromShelf, putOnShelf, libraryTick } from './library.js';
 import { dayOf as festDayOf, posterLines as festPosterLines } from '../sim/festival.js';
 import { FestWindow, FestBoardWindow } from '../ui/festwin.js';
-import { enter as festEnter, result as festResultOf, boardRows as festBoardRows, boutDone as festBoutDone, raceFrame as festRaceFrame, music as festMusic } from './festplay.js';
+import { enter as festEnter, result as festResultOf, boardRows as festBoardRows, boutDone as festBoutDone, raceFrame as festRaceFrame, music as festMusic, cask as festCask } from './festplay.js';
 import { loreOf } from './books/lore.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -5321,6 +5321,14 @@ export class Game {
         const ev = L ? festDayOf(L, this.sim.abs) || (L.econ.events || []).find((q) => q.prog && q.state !== 'done' && q.state !== 'off') : null;
         if (!ev) this.ui.openSign(['Nothing chalked up here yet.', 'Come back on a feast day.'], 'FESTIVAL BOARD');
         else this.openFestBoard(L, ev);
+        break;
+      }
+      case 'cask': {
+        // (Round 129) The festival's ale cask: a mug, or something tipped in.
+        const s = this.world.ow.settlementAt(x, z);
+        const L = s && this.world.getLayout(s);
+        const said = L ? festCask(this, L, x, z) : 'An ale cask.';
+        if (said) this.ui.msg(said, '#f0c080');
         break;
       }
       case 'portal': {

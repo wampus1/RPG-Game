@@ -21,7 +21,7 @@ import { farTable } from '../world/farlands.js';
 import { festive, placeVenues, programme, plannedVenues, planGuests, posterLines, openOf, closeOf, wetNow, SLOT_WORDS, VENUES, hudLines as festHud, marks as festMarks } from './festival.js';
 import { asSeat } from '../game/party.js';
 import { pidOf, seatOfPid } from './saga/refs.js';
-import { contestsFor, tick as contestTick, closeAll as closeContests, raceState, openNow as contestsOpen, CONTESTS, nearVenue, npcFinished } from '../game/festplay.js';
+import { contestsFor, tick as contestTick, closeAll as closeContests, raceState, openNow as contestsOpen, CONTESTS, nearVenue, npcFinished, wrapUp, dayDone } from '../game/festplay.js';
 
 export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
 
@@ -496,6 +496,8 @@ export class Events {
     // (Round 129) The day done: its contests closed (for a town nobody was
     // in, with the townsfolk's own goes).
     if (ev.contests && now >= closeOf(ev)) closeContests(this, L, ev);
+    // (Round 129) And how it went, told.
+    if (ev.prog && !ev.wrapped && dayDone(ev, now)) wrapUp(this, L, ev);
   }
 
   // ------------------------------------------------------------ posters
