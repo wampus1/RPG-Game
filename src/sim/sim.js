@@ -23,6 +23,7 @@ import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
 import { Press } from './press.js';
+import { Publishing } from './publishing.js';
 import { Events } from './events.js';
 import { Roads } from './roads.js';
 import { tierOf, MERCHANT_TIERS, buyAt } from './shops.js';
@@ -156,6 +157,7 @@ export class Sim {
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
     this.press = new Press(game, this);
+    this.publishing = new Publishing(game, this);
     this.events = new Events(game, this);
     this.roads = new Roads(game, this);
     this.works = new Works(game, this);
@@ -1361,6 +1363,7 @@ export class Sim {
     this.causes.daily(L, day);
     this.war.townDay(L, day, rng);
     this.outings.daily(L, day);
+    this.publishing.townDay(L, day, rng);
     yield;
     growth(this, L, day);
     this.works.daily(L, day);
@@ -2493,6 +2496,7 @@ export class Sim {
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
       press: this.press.serialize(),
+      publishing: this.publishing.serialize(),
       tech: this.tech.serialize(),
       ships: this.ships.serialize(),
       portals: this.portals.serialize(),
@@ -2610,6 +2614,7 @@ export class Sim {
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
     this.press.load(data.press);
+    this.publishing.load(data.publishing);
     this.tech.load(data.tech);
     this.ships.load(data.ships);
     this.portals.load(data.portals);

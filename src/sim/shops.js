@@ -6,6 +6,7 @@
 import { alive, price, st, invAdd, setOverride, freeSlot } from './econ.js';
 import { ITEMS } from '../world/items.js';
 import { hash4 } from '../util/rng.js';
+import { TOP_BOOKS, BOOK_HOOKS } from '../world/bookreg.js';
 
 // What the shop charges over what it paid.
 export const MARKUP = 1.2;
@@ -69,7 +70,7 @@ export function needsOf(L, rec) {
   // (Badly hurt or sick: off to the herbalist's soon.)
   const hurt = rec.hp !== undefined && rec.maxHp && rec.hp < rec.maxHp * 0.6;
   if (rec.sick || (rec.hp !== undefined && rec.maxHp && rec.hp < rec.maxHp) || rec.age === 'elder') out.push({ key: 'remedy', items: REMEDY, every: rec.sick || hurt ? 1 : 8 });
-  if (['scholar', 'priest', 'mayor', 'noble'].includes(rec.job) || (rec.hobbies || []).includes('reading') || traits.includes('bookish')) out.push({ key: 'reading', items: READING, every: 9 });
+  if (['scholar', 'priest', 'mayor', 'noble'].includes(rec.job) || (rec.hobbies || []).includes('reading') || traits.includes('bookish')) out.push({ key: 'reading', items: [...TOP_BOOKS.slice(0, 6), ...READING], every: 9 });
   if (keepsHouse(L, rec)) out.push({ key: 'house', items: HOUSE, every: 12 });
   if (rec.job === 'guard') {
     out.push({ key: 'armour', items: ARMOUR, every: 12, spare: 30 });
@@ -171,6 +172,8 @@ export function buyAt(L, rec, o, day) {
     rec.sick = false;
     if (rec.maxHp) rec.hp = rec.maxHp;
   } else if (!equipFor(rec, item)) invAdd((rec.inv ||= []), item, 1);
+  // (Round 127) A book bought is a book read, and a sale to its name.
+  if (item.startsWith('book~') && BOOK_HOOKS.sold) BOOK_HOOKS.sold(L, rec, item);
   if (rec.shopDue && o.need) rec.shopDue[o.need] = day + (o.every || 7);
   return { item, cost };
 }

@@ -2221,6 +2221,24 @@ export function itemIcon(key) {
     iconCache.set(key, c);
     return c;
   }
+  // (Round 127) A book of the library: the plain book, its cover a colour
+  // of its own (the same every time).
+  if (it && it.kind === 'book' && it.work) {
+    c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(itemIcon('book'), 0, 0);
+    let h = 0;
+    for (const ch of it.work) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const TINTS = ['rgba(40,70,150,0.45)', 'rgba(40,110,60,0.45)', 'rgba(120,40,110,0.4)', 'rgba(110,80,30,0.4)', 'rgba(20,20,30,0.45)', 'rgba(150,30,30,0.3)'];
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = TINTS[h % TINTS.length];
+    g.fillRect(0, 0, 16, 16);
+    iconCache.set(key, c);
+    return c;
+  }
   // (Round 52) A story's letter, note or map: the paper it's on.
   if (it && it.kind === 'note') {
     c = itemIcon(it.icon || 'letter');

@@ -9902,6 +9902,88 @@ with a page or more to each chapter, and you read it as an open book.
   the book switches to larger plain print, as with letters; Tab does the
   same. Esc puts the book down.
 
+## Round 127: Better books, novels and publishing
+
+The world's books are better written, and the people of the world now
+write and publish them.
+
+### Better prose
+
+- **Each writer has a voice.** Every author writes in one of six styles:
+  the formal *chronicler*, the chatty *storyteller*, the careful
+  *scholar*, the *devout* writer, the *plain* writer with short sentences,
+  and the *lyrical* writer with long ones. Priests lean devout and
+  scholars lean scholarly. Each voice has its own linking words
+  ("Thereafter", "Mind you", "However", "In time"), its own asides and
+  some sentences of its own, so two books on the same town read
+  differently.
+- **Sentences and paragraphs follow on.** Linking words fit the sentence:
+  a time word only before something that happened, and "the gods be
+  thanked" only after good news. A town's annals link each event to the
+  one before ("That same year...", "The very next year...", "Only three
+  years later...", "Redford had scarcely begun to recover when...") or
+  describe the quiet years between, in a different way each time. A
+  realm's rulers read as one succession ("Jorn died in 967, and the
+  throne passed to Oswin the Grey"), with dull reigns summed up
+  briefly. Each battle in a war book follows from the last one ("Flushed
+  with their success at Hollowwold, the Alliance pressed on...").
+- **Rewritten text.** The annals, realm histories, travel books, cookery
+  books, delvers' notes and faith books were rewritten in the style of
+  real county histories, walking books, household cookbooks and cavers'
+  guides. Many more phrasings means chapters no longer repeat each other.
+- **Recipes.** Each dish in a cookery book now has a headnote, *You Will
+  Need* (a bulleted list), *The Method* (numbered steps) and often a word
+  from the cook. All 34 dishes of the island have one. The book reader
+  now shows bulleted and numbered lists.
+
+### Novels
+
+- **Three kinds of story:** a *quest* (a relic stolen from the temple, an
+  old soldier who knows the thief, a journey to a nearby old place), a
+  *mystery* (an old soldier found dead, suspects, clues in the war rolls)
+  and a *romance* (two young people from towns feuding since an old war).
+  Each novel has four or five chapters of story and dialogue.
+- **Made from the world.** The hero, friend, elder and villain all have
+  names (and a he or she) from the writer's culture. The story is set in
+  the writer's real town, goes to a real old place nearby, and the elder
+  fought in a real battle of the long past.
+- **Sequels and prequels.** Each book records how it ended (who died, who
+  escaped, what was lost, what was left open). A sequel picks up that
+  thread years later: the villain who fled comes back, the dead villain's
+  child turns up, the second door gets opened. A prequel goes back to the
+  elder's war and ends where the first book began.
+- **Old novels.** Many towns already have a novel series on the shelves,
+  some with sequels.
+
+### Publishing
+
+- **The bookish write.** Scholars, priests, mayors and people who read
+  for fun sometimes sit down to write a novel or a book about their own
+  town (its annals, old places, food or roads). It takes a few weeks.
+  When it's finished the town hears of it in its ledger and newspaper. A
+  writer whose novel did well may write a sequel, and later a prequel.
+- **Popularity.** Every book, old or new, has a standing. A new book
+  climbs for a few days and then fades over the weeks; a sale or a reader
+  raises it, and now and then an old book becomes popular again.
+  Popular books turn up on more bookshelves.
+- **Book items.** A book can be held and read (F or right-click). Each
+  title has its own cover colour, and its description gives the author,
+  the year and how well it's selling.
+- **Sold by merchants.** Traders' stalls and shops that sell reading
+  goods stock copies of popular books and of books by local writers, and
+  drop the ones nobody reads. Prices follow popularity.
+- **Read by the townsfolk.** Readers go to the shops for the books
+  everyone is talking about. You'll see them reading on benches and
+  hear them now and then ("Just one more chapter of..."). They also
+  talk about books with each other, especially one by a local writer.
+
+### Things to know
+
+- New books are kept in the save. Older saves load as they are: writing
+  starts from the day you load.
+- In multiplayer, a guest holding a book that was published in the host's
+  world may see it named just "A Book".
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

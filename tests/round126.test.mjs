@@ -199,8 +199,8 @@ test('a shelf in a town holds that town\'s books more often than not', () => {
   assert.ok(local >= n * 0.4, `${local}/${n} about ${T.name}`);
 });
 
-test('version 1.26.0, and a world from 1.25 is brought up to it', () => {
-  assert.equal(GAME_VERSION, '1.26.0');
+test('a world from 1.25 is brought up to 1.26', () => {
+  assert.ok(compareVersions('1.26.0', GAME_VERSION) <= 0);
   assert.ok(compareVersions('1.25.0', GAME_VERSION) < 0);
   assert.ok(stepsFor('1.25.0').some((s) => s.to === '1.26.0'));
   assert.ok(Object.keys(GENRES).length >= 9);

@@ -957,6 +957,14 @@ export const STEPS = [
       void d;
       log.push('Books: every shelf holds one of the world\'s own books, many pages long, written from its history, its realms, its wars, its roads, its tables, its old places, its beasts and its faiths.');
     },
+  },  {
+    to: '1.27.0',
+    data(d, log) {
+      // (Nothing to change: the writers of the world start from today, and
+      // every book already on the shelves stands as it always has.)
+      void d;
+      log.push('Books: written better, each writer in a voice of their own; novels, with sequels and prequels; and the bookish of every town now write and publish, their books rising and falling in favour, sold by merchants and read on the benches.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

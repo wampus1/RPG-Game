@@ -116,7 +116,7 @@ export const relOf = (move) => REL[move] || null;
 
 // (An aside marked "+" is let fall only on good news, "-" only on bad: no
 // "the gods be thanked" after a drowning.)
-const GOOD = /\b(prosper\w*|peace\w*|thriv\w*|built|raised|saved|spared|grew|good|finest|best|welcome|rich\w*|plenty|feast\w*|won|married|blessed|healed|loved)\b/i;
+const GOOD = /\b(prosper\w*|peace\w*|thriv\w*|built|raised|saved|spared|grew|good|finest|best|welcome|rich\w*|plenty|feast\w*|won|married|blessed|healed|loved|great|glad|joy\w*|merr\w*|bountiful)\b/i;
 const BAD = /\b(died|dead|death|fell|burn\w*|lost|plague|famine|war|killed|drown\w*|flood\w*|hunger|starv\w*|sick\w*|fever|siege|slain|ruin\w*|grief|mourn\w*)\b/i;
 export function asideFits(a, s) {
   // (Never on the writer's own words: "Any errors are my own, so they say.")

@@ -27,6 +27,7 @@ import { Writer, tidy } from './write.js';
 import { voiceFor } from './voice.js';
 import { DISHES, DRINKS } from './corpus/table.js';
 import { RECIPES } from './corpus/recipes.js';
+import { newSeries, addBook, writeNovel, nextBookType } from './novels.js';
 import { MEATY, FISHY } from '../../sim/culture.js';
 import { alive, mayorOf } from '../../sim/econ.js';
 
@@ -73,16 +74,19 @@ export function metaOf(lore, entry) {
   const G = GENRES[entry.genre];
   const seed = seedOf(lore, entry.genre, entry.subj.id, entry.n);
   const rng = new RNG(seed);
-  const title = G.title(rng, entry.subj, lore);
+  const title = G.title(rng, entry.subj, lore, entry.n);
   const style = G.style(entry.subj, lore);
   const where = G.where ? G.where(entry.subj, lore) : null;
-  const author = entry.meta && entry.meta.author ? entry.meta.author : writerOf(rng, style, where ? where.name : null, where ? where.faith : null);
+  const author = entry.meta && entry.meta.author ? entry.meta.author : G.authorOf ? G.authorOf(entry.subj) : writerOf(rng, style, where ? where.name : null, where ? where.faith : null);
   author.voice ||= voiceFor(seed, author.sign);
   // Written in the years before (the same years every time), or (a book of
-  // what's happening now) this year.
+  // what's happening now) this year; (Round 127) or in the year a writer of
+  // the world put it out (see sim/publishing.js).
   const fresh = G.fresh ? G.fresh(entry.subj, lore, rng) : rng.chance(0.25);
   let year = fresh ? lore.now : START_YEAR - rng.int(1, 60);
   if (G.earliest) year = Math.max(year, Math.min(lore.now, G.earliest(entry.subj, lore)));
+  if (G.yearOf) year = G.yearOf(entry.subj, entry.n);
+  if (entry.meta && entry.meta.year) year = entry.meta.year;
   return { genre: entry.genre, subj: entry.subj, n: entry.n, seed, title, author, year, style, where, lore };
 }
 
@@ -93,17 +97,29 @@ export function library(lore) {
   const out = [];
   for (const g of GENRE_IDS()) {
     const G = GENRES[g];
-    for (const subj of G.subjects(lore)) for (let n = 0; n < (G.copies || 2); n++) out.push({ genre: g, subj, n });
+    for (const subj of G.subjects(lore)) for (let n = 0; n < (G.copiesOf ? G.copiesOf(subj) : G.copies || 2); n++) out.push({ genre: g, subj, n });
   }
+  // (Round 127) And what the writers of the world have put out since.
+  const pub = lore.game.sim && lore.game.sim.publishing;
+  if (pub) out.push(...pub.entries(lore));
   lore._library = out;
   return out;
 }
+
+// (Round 127) A book of the library by its id ("annals:3:0",
+// "novel:nv1k2:1"), written out; null if there's no such book now.
+export function bookById(lore, id) {
+  const e = library(lore).find((q) => idOf(q) === id);
+  return e ? writeBook(lore, e) : null;
+}
+export const idOf = (e) => `${e.genre}:${e.subj.id}:${e.n}`;
 
 // Books to cite: older than this one, on something near it.
 function citable(lore, meta, near = () => true) {
   const out = [];
   for (const e of library(lore)) {
     if (e.genre === meta.genre && e.subj.id === meta.subj.id) continue;
+    if (e.genre === 'novel') continue;
     if (!near(e)) continue;
     const m = metaOf(lore, e);
     if (m.year < meta.year) out.push(m);
@@ -131,6 +147,9 @@ export function bookAt(game, x, y, z) {
     if (T && s.town === T.id) w *= 14;
     else if (R && s.realm === R.id) w *= 4;
     else if (s.land === land) w *= 2;
+    // (Round 127: and the more it's read, the more shelves it's on.)
+    const pub = game.sim && game.sim.publishing;
+    if (pub) w *= 0.5 + pub.popOf(idOf(e)) / 40;
     return w;
   };
   let total = 0;
@@ -158,7 +177,7 @@ export function writeBook(lore, entry) {
   const W = new Writer(new RNG(meta.seed ^ 0x51ed), meta.author.voice, { records: !['road', 'table', 'deeps', 'beasts'].includes(entry.genre) });
   const rng = new RNG(meta.seed ^ 0x7a11);
   const lines = G.write(W, lore, entry.subj, meta, rng);
-  return { title: meta.title, by: meta.author.name, sign: meta.author.sign, year: meta.year, lines, genre: entry.genre, id: `${entry.genre}:${entry.subj.id}:${entry.n}` };
+  return { title: meta.title, by: meta.author.name, sign: meta.author.sign, year: meta.year, lines, genre: entry.genre, id: idOf(entry) };
 }
 
 // ------------------------------------------------------------ helpers
@@ -1115,3 +1134,44 @@ GENRES.faith = {
 };
 
 export { loreOf };
+
+// ============================================================ novels
+// (Round 127) The stories the people of the island have written: a series
+// of a town (its writer's own), a first book, and now and then a sequel or
+// a prequel (see novels.js). These are the ones written in the years
+// before; the ones written since are the publishers' (sim/publishing.js).
+GENRES.novel = {
+  weight: 1.2,
+  subjects(lore) {
+    const out = [];
+    for (const s of lore.ow.settlements) {
+      if (s.deserted || s.condition === 'abandoned' || s.type === 'village') continue;
+      const h = hash4(lore.seed, s.id, 0x0e7e1, 5);
+      if (h % 5 < 2) continue;
+      const rng = new RNG(h);
+      const T = lore.town(s);
+      const w = writerOf(rng, T.style, s.name, T.faith);
+      const year = START_YEAR - rng.int(8, 50);
+      const series = newSeries(lore, { seed: h, home: s, author: { name: w.name, first: w.first, sign: w.sign, voice: voiceFor(h, w.sign) }, year });
+      let y = year;
+      for (let i = 0; i < 2 && rng.chance(0.55); i++) {
+        const t = nextBookType(series);
+        y += rng.int(3, 9);
+        if (!t || y >= START_YEAR) break;
+        addBook(lore, series, t, y);
+      }
+      out.push({ id: series.id, town: s.id, realm: s.civ ? s.civ.id : null, land: s.island || 'thessa', series });
+    }
+    return out;
+  },
+  copiesOf: (subj) => subj.series.books.length,
+  title: (rng, subj, lore, n) => subj.series.books[n].title,
+  authorOf: (subj) => subj.series.author,
+  yearOf: (subj, n) => subj.series.books[n].year,
+  style: (subj, lore) => lore.town(lore.ow.settlements[subj.series.home]).style,
+  topic: () => null,
+  where: (subj, lore) => ({ name: lore.ow.settlements[subj.series.home].name, faith: null }),
+  write(W, lore, subj, meta) {
+    return writeNovel(lore, subj.series, meta.n).lines;
+  },
+};

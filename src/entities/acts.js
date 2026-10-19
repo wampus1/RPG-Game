@@ -8,6 +8,7 @@
 import { B } from '../world/blocks.js';
 import { GROUND } from '../config.js';
 import { ITEMS } from '../world/items.js';
+import { bookInfo } from '../world/bookreg.js';
 import { buildingAt } from '../sim/sim.js';
 
 const FIRE = ['#ff7a2a', '#ffb03a', '#ffe48a'];
@@ -276,6 +277,15 @@ function homeCook(n, b) {
   return r === n.rec;
 }
 
+// (Round 127) A word from someone with their nose in a book.
+function readingLine(rng, b) {
+  const t = b.title;
+  if (b.novel) {
+    return rng.pick([`Just one more chapter of ${t}...`, `Oh! I did not see that coming.`, `${t}... I can't put it down.`, 'No, no, don\'t go down there...', `Third time reading ${t}. Still good.`, 'Hush. It\'s getting to the good part.']);
+  }
+  return rng.pick([`${t}. Did you know half of this?`, 'Hm. That\'s not how my grandmother told it.', `Fascinating, ${t}. Dry, but fascinating.`, 'I never knew that about the old days.']);
+}
+
 // ------------------------------------------------------------ the rest
 // Little things for each pastime and trade.
 function flourish(n, act, g, dt) {
@@ -299,6 +309,14 @@ function flourish(n, act, g, dt) {
     n.fxT = n.rng.float(4, 8);
     n.doAction(0.15);
     R.emit(at.x, at.y, at.z, { n: 1, color: job ? INK : ['#f4ecd8'], up: 6, speed: 6, gravity: 30, life: 0.4, oy: 4 });
+    // (Round 127) What they're reading, now and then aloud.
+    if (hobby === 'reading' && n.rec.reading && (n.lineCd || 0) <= 0 && near(n) && n.rng.chance(0.25)) {
+      const b = bookInfo(n.rec.reading);
+      if (b) {
+        n.lineCd = n.rng.float(30, 60);
+        n.say(readingLine(n.rng, b), 3);
+      }
+    }
   } else if (hobby === 'praying' || (job === 'priest' && target)) {
     n.fxT = n.rng.float(0.8, 1.6);
     R.emit(n.x, n.y + 1, n.z, { n: 1, color: GOLD, shape: 'star', up: 14, speed: 8, gravity: -10, life: 1.6, oy: -4, glow: true });

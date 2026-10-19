@@ -11,6 +11,7 @@ import { speak } from './voice.js';
 import { TRIP_TALK_DAYS } from '../sim/outings.js';
 import { smallTalk } from './markov.js';
 import { talkContext } from './dialogue.js';
+import { bookInfo } from '../world/bookreg.js';
 
 const CHATTY = new Set(['social', 'hobby', 'wander', 'eat', 'home', 'play', 'work', 'visit']);
 
@@ -109,6 +110,18 @@ export function exchangeFor(a, b, game) {
     const st = ed.headlines[(ra.idx + game.day) % ed.headlines.length];
     const short = st.text.length > 60 ? `${st.text.slice(0, 57)}...` : st.text;
     opts.push([`Did you read ${ed.title}, ${B}?`, rb.readEdition === ed.id ? `The bit about "${short}"? Yes!` : 'No, what does it say?', rb.readEdition === ed.id ? 'Whatever next.' : `"${short}"`]);
+  }
+  // (Round 127) The book they've their nose in, and the one everyone's
+  // talking of.
+  if (ra.reading && ra.age !== 'child') {
+    const bk = bookInfo(ra.reading);
+    if (bk) {
+      const same = rb.reading === ra.reading;
+      opts.push(same
+        ? [`Where are you up to in ${bk.title}, ${B}?`, pick(rng, ['Don\'t tell me anything! I\'m only halfway.', 'Finished it last night. I was up till the small hours.', 'The bit at the end of the third chapter. My heart!']), pick(rng, ['My lips are sealed.', 'Wait till you get to the end.', 'I cried, I don\'t mind saying.'])]
+        : [`Have you read ${bk.title}, ${B}?`, bk.pop >= 50 ? pick(rng, ['Everyone keeps asking me that!', 'Not yet. Is it as good as they say?']) : pick(rng, ['Never heard of it.', 'Is that the one by ' + bk.by.split(' ')[0] + '?']), bk.novel ? pick(rng, ['You must. I couldn\'t put it down.', 'It\'s set right here, you know. Well, near enough.']) : pick(rng, ['It\'s all about the old days. You\'d be surprised.', 'Heavy going, but worth it.'])]);
+      if (bk.town === L.settlement.id && bk.by && !bk.by.startsWith(Aname)) opts.push([`${bk.by.split(' ')[0]} wrote it, you know. Our own ${bk.by.split(' ')[0]}!`, pick(rng, ['I always said there was more to them than met the eye.', 'Well I never. Is it any good?', 'They\'ll be getting airs now.'])]);
+    }
   }
   const rum = freshRumours(e, sim.now()).pop();
   if (rum) opts.push([`A merchant from ${rum.from} was saying there's news over there.`, 'Oh? What sort of news?', `${rum.text.slice(0, 70)}${rum.text.length > 70 ? '...' : ''}`]);

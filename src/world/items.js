@@ -4,6 +4,7 @@ import { SHIP_TYPES, DESIGNS } from './shipmodels.js';
 import { deriveStarred, softArmor } from './quality.js';
 import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
 import { rule } from '../mod/rules.js';
+import { bookInfo, bookIdOf, fameWord } from './bookreg.js';
 
 export const ITEMS = {};
 // A starred piece of gear ("iron_sword~3dk7.venom": see quality.js), or
@@ -19,7 +20,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -137,6 +138,31 @@ function deriveNote(k) {
   const [, th, n, kind] = String(k).split('~');
   const [name, icon] = NOTES[kind] || NOTES.letter;
   return { key: k, kind: 'note', name, icon, stack: 1, value: 0, noSell: true, note: { th: +th, n: +n, kind: kind || 'letter' }, about: 'Read it [F/RMB].' };
+}
+
+// (Round 127) A book of the library: "book~<id>" (see bookreg.js). Its
+// title, its writer and its price (by how well it's selling) looked up
+// when asked.
+function deriveBook(k) {
+  const id = bookIdOf(k);
+  if (!id) return undefined;
+  return {
+    key: k, kind: 'book', icon: 'book', stack: 4, work: id,
+    get name() {
+      const b = bookInfo(id);
+      const t = b ? b.title : 'A Book';
+      return t.length > 34 ? `${t.slice(0, 32).replace(/\s+\S*$/, '')}...` : t;
+    },
+    get value() {
+      const b = bookInfo(id);
+      return Math.round(8 + (b ? b.pop || 0 : 0) / 4);
+    },
+    get about() {
+      const b = bookInfo(id);
+      if (!b) return 'Read it [F/RMB].';
+      return `${b.title}${b.novel ? ', a novel' : ''}, by ${b.by} (${b.year}). ${fameWord(b.pop || 0)} Read it [F/RMB].`;
+    },
+  };
 }
 
 // (Round 69) A ship of yours put in a bottle (see shipgame.js): "bottled~
