@@ -6,6 +6,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_STATE } from '../world/blocks.js';
 import { has as hasTrait } from '../game/hero.js';
+import { mutLight } from '../game/mutations.js';
 import { dishFx } from '../game/cooking.js';
 
 // (A block's picture, its top and its face, in pixels.)
@@ -179,11 +180,13 @@ export class Lighting {
     const blackout = S ? S.dark : 0;
     // (Night eyes see further by it; the night-blind hardly at all.)
     const hero = game.hero;
-    const own = hasTrait(hero, 'night_eyes') ? 6 : hasTrait(hero, 'night_blind') ? 2 : below ? 3 : 4;
+    // (Round 124: an outworlder's glowing spots, a light the storm can't put out.)
+    const glowing = mutLight(hero);
+    const own = Math.max(hasTrait(hero, 'night_eyes') ? 6 : hasTrait(hero, 'night_blind') ? 2 : below ? 3 : 4, glowing || 0);
     // (Round 85: aboard a ship, no pool of light about you: the ground
     // under it is the sea, and it lit the water round the hull.)
     const aboard = !!player.deck;
-    const pl = aboard ? 1 : Math.max(player.lightLevel, Math.round(own * (1 - blackout)), 1);
+    const pl = aboard ? 1 : Math.max(player.lightLevel, Math.round(own * (glowing ? 1 : 1 - blackout)), 1);
     const pKey = `${player.x},${player.y},${player.z},${pl}`;
     if (!this.pflood || this.pflood.key !== pKey) {
       const R = pl;

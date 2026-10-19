@@ -34,7 +34,7 @@ import { rule } from '../mod/rules.js';
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { dishFx } from './cooking.js';
 import { dishTrigger } from './dishacts.js';
-import { has as heroHas, staminaBonus } from './hero.js';
+import { has as heroHas, staminaBonus, mutationsOf } from './hero.js';
 import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 import { onTiles, apart, fits } from '../entities/footprint.js';
@@ -815,7 +815,8 @@ export function roll(game, p, dirv = null) {
   // end, or just after), or a roll when you've no breath left for one at
   // all: it costs no stamina, the wing's spent instead, and grows back
   // (see Player.update).
-  const normalCost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * rollCostMult(p);
+  // (Round 124: chitin plates, stiff in the joints.)
+  const normalCost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * rollCostMult(p) * (mutationsOf(game.hero).includes('chitin') ? 1.5 : 1);
   const winded = (p.stamina ?? MAX_STAMINA) < normalCost * 0.6;
   const wingRoll = (p.rollCd > 0 || winded) && !!p.wing && p.wing.k >= 0.999 && !(p.rollT > 0.12);
   // (Not with an arrow on the string, drawing or holding it.)

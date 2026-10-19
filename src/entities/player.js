@@ -8,7 +8,8 @@ import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandOk, offhandLight } from
 import { offhandOf } from '../game/combat.js';
 import { B, BLOCKS, LEAVES } from '../world/blocks.js';
 import { doorLocked } from '../game/doorlocks.js';
-import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
+import { has as heroHas, stepMult, WING_BACK, mutationsOf } from '../game/hero.js';
+import { mutHeadOk } from '../game/mutations.js';
 import { steer, STORM_WALL } from './raft.js';
 import { turnMount, mountStep } from '../game/riding.js';
 import { deckUpdate, tryBoardStep } from '../game/ships3d.js';
@@ -118,6 +119,11 @@ export class Player extends Entity {
     // (A one-handed blade can go in the off hand, where a shield would.)
     const slot = it && it.kind === 'armor' ? it.slot : offhandOk(s && s.item) ? 'shield' : null;
     if (!slot) return null;
+    // (Round 124: nothing goes on over an outworlder's antennae.)
+    if (slot === 'head' && !mutHeadOk(this.game.hero)) {
+      this.game.ui?.msg?.('It won\'t go on over your antennae.', '#ffb080', true);
+      return null;
+    }
     const old = this.equip[slot];
     this.equip[slot] = s.item;
     this.inv[i] = old ? { item: old, count: 1 } : s.count > 1 ? { item: s.item, count: s.count - 1 } : null;
@@ -517,7 +523,9 @@ export class Player extends Entity {
     }
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
-    const swim = (water && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1) * (water && w.isWaterAt(nx, ny - 1, nz) ? 1.25 : 1);
+    // (Round 124: gills, as fast in water as out of it.)
+    const gills = mutationsOf(this.game.hero).includes('gills');
+    const swim = (water && !gills && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1) * (water && w.isWaterAt(nx, ny - 1, nz) ? 1.25 : 1);
     // In the saddle or on the wagon's bench: quicker (and no sprinting).
     // (Round 83: on foot a quarter slower; a horse or a wagon as quick as it
     // ever was.)

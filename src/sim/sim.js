@@ -42,7 +42,7 @@ import { Caravans } from './caravans.js';
 import { Outings } from './outings.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
-import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
+import { priceMult, repGainMult, opinionBonus, has as heroHas, mutationsOf } from '../game/hero.js';
 import { lawOn } from './laws.js';
 import { titheOf, lawPrice } from './islelaws.js';
 import { tradePrice } from './isletrades.js';
@@ -619,6 +619,8 @@ export class Sim {
     if (heroHas(this.game.hero, 'sneak')) radius = Math.max(2, Math.round(radius * 0.7));
     // (A face everyone knows.)
     if (heroHas(this.game.hero, 'notorious')) radius = Math.round(radius * 1.25);
+    // (Round 124: an outworlder's glowing spots, plain to see in the dark.)
+    if (mutationsOf(this.game.hero).includes('glow') && !this.game.isDay()) radius = Math.round(radius * 2);
     // It's harder to make things out in the dark.
     const m = this.game.minute;
     const dark = m < 330 || m >= 1230;

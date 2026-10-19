@@ -95,17 +95,17 @@ export function leadOf(h) {
 }
 
 // (Round 123) An outworlder's mutations: each changes how they look, and
-// gives a gift (a trait, or a stat) and a cost (a flaw, or a stat). Up to
-// MUTATION_MAX of them.
+// (Round 124) gives a gift and a cost of its own, nothing an islander has
+// (see mutations.js for what each does). Up to MUTATION_MAX of them.
 export const MUTATION_MAX = 3;
 export const MUTATIONS = {
-  third_eye: { name: 'Third Eye', gift: 'Duelist: a longer parry window, more critical hits.', cost: 'Unsettling: everyone starts with an opinion of you 6 points lower.', grants: ['duelist'], opinion: -6 },
-  glow: { name: 'Glowing Spots', gift: 'Night Eyes: your light reaches 6 blocks at night and underground.', cost: 'Notorious: people notice your crimes from further away.', grants: ['night_eyes', 'notorious'] },
-  chitin: { name: 'Chitin Plates', gift: 'Tough: +4 health.', cost: '-1 agility.', grants: ['tough'], stats: { agi: -1 } },
-  gills: { name: 'Gills', gift: 'Strong Swimmer: water doesn\'t slow you down.', cost: 'Your skin dries: -2 stamina.', grants: ['swimmer'], stamina: -20 },
-  antennae: { name: 'Antennae', gift: 'Tracker: more meat and hide, and bandit camps spotted from far off.', cost: 'Seasick: the sea\'s rolling overwhelms them; rafts go slower.', grants: ['tracker', 'seasick'] },
-  dense: { name: 'Dense Frame', gift: '+1 strength: you were made under a heavier sky.', cost: 'Poor Swimmer: you sink like a stone.', grants: ['poor_swimmer'], stats: { str: 1 } },
-  twin_hearts: { name: 'Twin Hearts', gift: 'Tireless: +3 stamina, and it comes back 40% faster.', cost: 'Squeamish: raw meat and fish don\'t heal you at all.', grants: ['tireless', 'squeamish'] },
+  third_eye: { name: 'Third Eye', gift: 'Foresight: once every 15 seconds, a blow that would land on you is seen coming and halved.', cost: 'Sun Glare: outdoors in full daylight, your own blows land 15% softer.' },
+  glow: { name: 'Glowing Spots', gift: 'Lantern Skin: your own light reaches 5 blocks at night and underground, even in the storm\'s black.', cost: 'Beacon: at night, folk see you doing wrong from twice as far.' },
+  chitin: { name: 'Chitin Plates', gift: 'Carapace: every blow you take is 1 lighter.', cost: 'Stiff Joints: a dodge roll costs half again as much stamina.' },
+  gills: { name: 'Gills', gift: 'Water-Breather: you swim as fast as you walk, and heal slowly while in water.', cost: 'Dry Skin: five minutes out of water and your blows land 10% softer until you get wet.' },
+  antennae: { name: 'Antennae', gift: 'Tremor Sense: hostile creatures within 22 blocks show as a ring where they stand, through stone and earth.', cost: 'Ill-Fitting: no helmet or hat will go on over them.' },
+  dense: { name: 'Dense Frame', gift: 'Heavy-World Muscle: your blows land 20% harder, and you dig and chop 20% faster.', cost: 'Heavy Tread: you walk 8% slower.' },
+  twin_hearts: { name: 'Twin Hearts', gift: 'Second Heart: once a day, a blow that would kill you leaves you on your feet with a third of your health.', cost: 'Hungry Hearts: food heals you 1 less (both hearts must be fed).' },
 };
 export const MUTATION_IDS = Object.keys(MUTATIONS);
 export const mutationsOf = (h) => (h && h.origin === 'outworlder' && Array.isArray(h.mutations) ? h.mutations.filter((k) => MUTATIONS[k]).slice(0, MUTATION_MAX) : []);
@@ -236,6 +236,8 @@ export function normalizeHero(h) {
   if (out.origin === 'leader') out.lead = leadOf(out);
   out.mutations = mutationsOf(out);
   if (out.mutations.length) out.look.mut = out.mutations.slice();
+  // (Round 124: no hat over antennae.)
+  if (out.mutations.includes('antennae')) out.look.hat = null;
   else delete out.look.mut;
   if (!KITS[out.kit]) out.kit = 'wanderer';
   for (const s of STATS) out.stats[s.key] = Math.max(1, Math.min(STAT_MAX, out.stats[s.key] | 0));
@@ -243,22 +245,22 @@ export function normalizeHero(h) {
 }
 
 // ------------------------------------------------------------------ effects
-export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k) || mutationsOf(h).some((m) => MUTATIONS[m].grants.includes(k)));
-// (Round 123: what mutations add to a stat.)
-const mutStat = (h, k) => mutationsOf(h).reduce((n, m) => n + ((MUTATIONS[m].stats && MUTATIONS[m].stats[k]) || 0), 0);
+export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k));
+const mutOf = (h, k) => mutationsOf(h).includes(k);
 // Your abilities, with whatever your clothes, set gems and potions add
 // (kept up to date by the game in h.bonus).
 // (Round 63: and whatever a mod's character screen gave, in h.modStats.)
-const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0) + ((h && h.modStats && h.modStats[k]) || 0) + mutStat(h, k);
+const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0) + ((h && h.modStats && h.modStats[k]) || 0);
 
 export function damageMult(h) {
   return 1 + 0.1 * (stat(h, 'str') - STAT_BASE);
 }
 export function digMult(h) {
-  return (1 + 0.08 * (stat(h, 'str') - STAT_BASE)) * (has(h, 'miner') ? 1.25 : 1);
+  // (Round 124: a dense frame, built for a heavier world.)
+  return (1 + 0.08 * (stat(h, 'str') - STAT_BASE)) * (has(h, 'miner') ? 1.25 : 1) * (mutOf(h, 'dense') ? 1.2 : 1);
 }
 export function stepMult(h) {
-  return 1 - 0.05 * (stat(h, 'agi') - STAT_BASE);
+  return (1 - 0.05 * (stat(h, 'agi') - STAT_BASE)) * (mutOf(h, 'dense') ? 1.08 : 1);
 }
 export function cooldownMult(h) {
   return 1 - 0.06 * (stat(h, 'agi') - STAT_BASE);
@@ -278,11 +280,11 @@ export function repGainMult(h) {
 // (In tenths of a point. Light on your feet, you've a little more breath:
 // four tenths for every point of agility above the base.)
 export function staminaBonus(h) {
-  return (has(h, 'tireless') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE) + mutationsOf(h).reduce((n, m) => n + (MUTATIONS[m].stamina || 0), 0);
+  return (has(h, 'tireless') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE);
 }
 export function opinionBonus(h) {
   // Well dressed (or charming for a few hours), people warm to you at once.
   const dress = h && h.bonus ? Math.max(0, h.bonus.cha || 0) * 2 : 0;
-  // (Round 123: an outworlder, a stranger to every face; a third eye.)
-  return (has(h, 'honest_face') ? 8 : 0) + dress + (isOutworlder(h) ? -10 : 0) + mutationsOf(h).reduce((n, m) => n + (MUTATIONS[m].opinion || 0), 0);
+  // (Round 123: an outworlder, a stranger to every face.)
+  return (has(h, 'honest_face') ? 8 : 0) + dress + (isOutworlder(h) ? -10 : 0);
 }

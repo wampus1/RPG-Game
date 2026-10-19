@@ -117,8 +117,9 @@ import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickSt
 import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult, runeWard } from './mods.js';
 import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
-import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
+import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas, mutationsOf } from './hero.js';
 import { originSpot, originSetup, originIntroduce, isNewOrigin } from './origins.js';
+import { mutIncoming, mutOutgoing, mutLastBlow, mutationTick, mutHeadOk } from './mutations.js';
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
 import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain, modSwung, modBlockedBlow } from '../mod/hooks.js';
 import { rule } from '../mod/rules.js';
@@ -566,7 +567,7 @@ export class Game {
   giveOrWear(k, n) {
     const it = ITEMS[k];
     const p = this.player;
-    if (it && it.kind === 'armor' && !p.equip[it.slot]) {
+    if (it && it.kind === 'armor' && !p.equip[it.slot] && (it.slot !== 'head' || mutHeadOk(this.hero))) {
       p.equip[it.slot] = k;
       if (n > 1) p.give(k, n - 1);
       return;
@@ -2458,6 +2459,7 @@ export class Game {
     if (!this.player.limbo) {
       this.player.update(dt, input, blocked);
       playerTick(this, this.player, dt, input, blocked);
+      mutationTick(this, this.player, dt);
       // The ground gone from under you (dug, blown up, burnt away): you drop.
       this.settleFall(this.player);
     }
@@ -6314,7 +6316,8 @@ export class Game {
     // (An iron stomach gets as much from raw meat as from a roast.)
     const iron = heroHas(this.hero, 'iron_stomach');
     const raw = iron ? ITEMS[{ raw_meat: 'cooked_meat', fish: 'cooked_fish' }[slot.item]] : null;
-    const bonus = (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0);
+    // (Round 124: twin hearts, both to be fed.)
+    const bonus = (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0) - (mutationsOf(this.hero).includes('twin_hearts') ? 1 : 0);
     // (A hot dish: a little now, the rest over a while; see Player.update.)
     // (Squeamish, raw meat and fish come straight back up.)
     const sick = heroHas(this.hero, 'squeamish') && (slot.item === 'raw_meat' || slot.item === 'fish');
@@ -7016,6 +7019,8 @@ export class Game {
     }
     // Relics set down near by: a ward, a war totem, a vigil lamp.
     amount = relicDamage(this, target, source, amount);
+    // (Round 124) An outworlder's blow: a dense frame's, a sun-dazzled one's.
+    if (source && source.kind === 'player' && source !== target && !this.dotHit) amount = mutOutgoing(this, source, amount);
     // Marked by moonlight: every blow a third harder.
     if (target.markT > 0) amount = Math.round(amount * 1.33);
     const duel = this.duel;
@@ -7039,6 +7044,8 @@ export class Game {
       const d = Math.max(-0.4, Math.min(0.4, dishFx(target, 'armor')));
       if (d) amount = Math.max(1, Math.round(amount * (1 - d)));
       target.fightAt = this.sim.abs;
+      // (Round 124) An outworlder's chitin, their third eye.
+      amount = mutIncoming(this, target, source, amount);
     }
     if (source && source.kind === 'player') source.fightAt = this.sim.abs;
     // A fight you're in (the music follows it).
@@ -7121,6 +7128,8 @@ export class Game {
     }
     // (Round 72) The Champion's Gauntlet on you: a blow lands lighter.
     amount = clawSoak(target, amount);
+    // (Round 124) An outworlder's second heart.
+    if (target.kind === 'player') amount = mutLastBlow(this, target, amount);
     target.hp -= amount;
     // (Round 53) A dish that answers a blow taken, or one landed, or your
     // falling below half (see dishacts.js).

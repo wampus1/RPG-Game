@@ -27,6 +27,7 @@ import { drawPerson } from '../render/scenekit.js';
 import { Bmp, sky as skyBands, stars as paintStars, mountains, hills, palm, bush, pine, fbm, hash2, mixC, rgb as rgbOf } from '../render/brush.js';
 import { humanoidSheet, SHEET_H } from '../render/sprites.js';
 import { present, caption, bigText, darkWords } from './intros.js';
+import { paintLeader, drawSquare, drawDoorway } from '../render/art_leader.js';
 
 const PW = VIEW_W / 2;
 const PH = VIEW_H / 2;
@@ -166,7 +167,10 @@ export function leaderInfo(game) {
   };
 }
 
-const LEAD = { WALK: 2.5, ARRIVE: 9.5, CROWN0: 10.4, CROWN1: 12.2, TURN: 12.6, CHEER: 13, BLACK: 19.5 };
+// The shots: the square at the golden hour, you walking up it (to CUT1);
+// the doorway, close, the crown coming down (to CUT2); the square at dusk,
+// fireworks over the hall (to BLACK).
+const LEAD = { WALK0: 2.0, WALK1: 10.0, CUT1: 10.6, CROWN0: 12.4, CROWN1: 14.0, RISE: 15.0, CHEER: 15.6, CUT2: 17.6, BLACK: 23.5 };
 
 export function leaderScene(game, info) {
   const words = info.realm
@@ -185,12 +189,12 @@ export function leaderScene(game, info) {
       `${info.first}. ${info.title} of ${info.place}.`,
     ];
   const lines = [
-    [1.0, null, `${info.realm ? `The seat of the ${info.realm}` : info.place}. The great hall, full to the doors.`],
+    [1.0, null, `${info.realm ? `The seat of the ${info.realm}` : info.place}. The square, full to the walls.`],
     [3.4, 'The herald', `Make way! Make way for ${info.first}!`],
-    [6.5, null, info.realm ? `Every town of the ${info.realm} has sent someone to see this.` : `Half of ${info.place} has squeezed in to see this.`],
-    [LEAD.ARRIVE + 0.2, info.officiant, info.oath],
+    [6.6, null, info.realm ? `Every town of the ${info.realm} has sent someone to see this.` : `Half of ${info.place} has squeezed in to see this.`],
+    [LEAD.CUT1 + 0.8, info.officiant, info.oath],
     [LEAD.CHEER, 'The crowd', `Long live ${info.title} ${info.first}!`],
-    [16.5, null, 'The hall rings with it, and the petals fall like snow.'],
+    [LEAD.CUT2 + 0.6, null, 'Night falls, and the square is still singing.'],
   ];
   let art = null;
   return scene('leader_intro', info, {
@@ -205,276 +209,56 @@ export function leaderScene(game, info) {
         this.cheered = true;
         g.audio?.play('chime');
       }
+      if (this.t > LEAD.CUT2 + 1 && !this.bang) {
+        this.bang = true;
+        g.audio?.play('boom');
+      }
     },
     draw(ctx) {
-      if (!art) art = paintHall(info);
-      drawHall(ctx, this, art, lines);
+      if (!art) {
+        art = paintLeader(info);
+        art.robe = ROBE;
+      }
+      drawLeader(ctx, this, art, lines);
     },
   });
 }
 
-// The hall: its stone, its windows full of evening, its columns, the floor
-// in perspective, the carpet up to the dais, the throne (or the high chair).
-function paintHall(info) {
-  const b = new Bmp(PW, PH);
-  const seed = info.seed;
-  const FLOOR = 86;
-  // The back wall: courses of stone, lit warmer toward the windows.
-  for (let y = 0; y < FLOOR; y++) {
-    for (let x = 0; x < PW; x++) {
-      const row = Math.floor(y / 6);
-      const off = row % 2 ? 6 : 0;
-      const bx = Math.floor((x + off) / 12);
-      const mortar = y % 6 === 5 || (x + off) % 12 === 11;
-      const v = hash2(bx, row, seed) * 0.12 + fbm(x * 0.05, y * 0.05, seed) * 0.1;
-      const top = y / FLOOR;
-      let c = mixC([58, 46, 52], [92, 76, 72], v + top * 0.25);
-      if (mortar) c = mixC(c, [30, 22, 28], 0.6);
-      b.set(x, y, c);
-    }
-  }
-  // Windows: three, arched, full of the evening sky, their leading dark.
-  const WIN = [48, 128, 208];
-  for (const wx of WIN) {
-    const w = 20;
-    const top = 10;
-    const bot = 62;
-    for (let y = top - 10; y <= bot; y++) {
-      for (let x = wx - w / 2; x <= wx + w / 2; x++) {
-        const ay = y < top ? top - y : 0;
-        if (ay && Math.hypot(x - wx, (y - top) * 1.0) > w / 2) continue;
-        const k = clamp01((y - (top - 10)) / (bot - top + 10));
-        let c = k < 0.35 ? mixC([255, 214, 140], [255, 170, 120], k / 0.35) : mixC([255, 170, 120], [150, 90, 140], (k - 0.35) / 0.65);
-        const lead = (x - (wx - w / 2)) % 5 === 0 || (y - top) % 7 === 0;
-        if (lead) c = [40, 30, 36];
-        b.set(x, y, c);
-      }
-      // The frame: a lighter stone edge.
-      b.set(wx - w / 2 - 1, y, [120, 104, 96]);
-      b.set(wx + w / 2 + 1, y, [70, 56, 60]);
-    }
-    for (let x = wx - w / 2 - 2; x <= wx + w / 2 + 2; x++) b.set(x, bot + 1, [140, 122, 110]);
-  }
-  // Columns between: round, lit from the left.
-  for (const cx of [88, 168]) {
-    for (let y = 0; y < FLOOR; y++) {
-      for (let dx = -6; dx <= 6; dx++) {
-        const k = (dx + 6) / 12;
-        const c = mixC([170, 150, 136], [70, 58, 62], ease(k));
-        b.set(cx + dx, y, (y + Math.abs(dx)) % 9 === 0 ? mixC(c, [40, 30, 34], 0.3) : c);
-      }
-    }
-    for (const yy of [0, 1, 2, FLOOR - 3, FLOOR - 2, FLOOR - 1]) for (let dx = -8; dx <= 8; dx++) b.set(cx + dx, yy, mixC([190, 170, 150], [80, 66, 70], (dx + 8) / 16));
-  }
-  // The floor: flagstones going away to the dais, darker far off.
-  const VX = PW / 2;
-  for (let y = FLOOR; y < PH; y++) {
-    const d = (y - FLOOR + 6) / (PH - FLOOR + 6);
-    const rowI = Math.floor(Math.log(d * 8 + 1) * 6);
-    for (let x = 0; x < PW; x++) {
-      const u = (x - VX) / d;
-      const colI = Math.floor(u / 22);
-      const dark = (rowI + colI) % 2 === 0;
-      let c = dark ? [86, 74, 70] : [110, 96, 88];
-      c = mixC(c, [40, 32, 36], 0.55 * (1 - d));
-      if (Math.abs((u % 22 + 22) % 22) < 0.8 / d) c = mixC(c, [36, 28, 30], 0.5);
-      b.set(x, y, c);
-    }
-  }
-  // The carpet, wider as it comes toward you, gold at its edges.
-  for (let y = FLOOR - 4; y < PH; y++) {
-    const k = (y - (FLOOR - 4)) / (PH - FLOOR + 4);
-    const half = lerp(13, 38, k);
-    for (let x = Math.floor(VX - half); x <= Math.ceil(VX + half); x++) {
-      const edge = Math.abs(x - VX) > half - 2;
-      const n = hash2(x, y, seed + 4) * 0.08;
-      b.set(x, y, edge ? mixC([210, 170, 80], [140, 100, 40], n * 4) : mixC([150, 26, 40], [96, 14, 28], 0.3 + n + (1 - k) * 0.3));
-    }
-  }
-  // The dais: three steps across, the top one under the throne.
-  for (let s = 0; s < 3; s++) {
-    const y0 = 70 + s * 4;
-    const x0 = 92 - s * 8;
-    const x1 = 164 + s * 8;
-    for (let y = y0; y < y0 + 4; y++) for (let x = x0; x <= x1; x++) b.set(x, y, y === y0 ? [176, 156, 140] : mixC([124, 108, 100], [86, 72, 70], (y - y0) / 4));
-  }
-  // The carpet goes on up the steps.
-  for (let y = 70; y < 82; y++) for (let x = VX - 12; x <= VX + 12; x++) b.set(x, y, Math.abs(x - VX) > 10 ? [200, 160, 70] : mixC([150, 26, 40], [110, 18, 30], (y - 70) / 12));
-  // The throne (a realm's) or the high chair (a town's).
-  const gold = info.realm;
-  const back = gold ? [196, 150, 54] : [110, 70, 40];
-  const hi = gold ? [255, 224, 120] : [160, 110, 66];
-  const cush = rgbOf(info.color || '#a02030');
-  const ty = 70;
-  const th = gold ? 34 : 26;
-  for (let y = ty - th; y < ty; y++) for (let x = VX - 9; x <= VX + 9; x++) {
-    const edge = Math.abs(x - VX) >= 8 || y === ty - th;
-    b.set(x, y, edge ? hi : y < ty - 8 ? mixC(cush, [20, 10, 20], 0.35) : back);
-  }
-  if (gold) {
-    for (const fx of [VX - 9, VX + 9, VX]) for (let k = 0; k < 4; k++) b.set(fx, ty - th - 1 - k, k === 3 ? [255, 250, 210] : hi);
-    for (let x = VX - 4; x <= VX + 4; x++) b.set(x, ty - th + 3, [255, 240, 170]);
-  }
-  for (let x = VX - 10; x <= VX + 10; x++) for (let y = ty - 6; y < ty; y++) b.set(x, y, y === ty - 6 ? hi : mixC(cush, [0, 0, 0], 0.2));
-  // A shadow in the hall's upper reaches.
-  for (let y = 0; y < 20; y++) for (let x = 0; x < PW; x++) b.set(x, y, [10, 6, 14], 0.5 * (1 - y / 20));
-  const art = { bg: b.canvas() };
-  // The crowd, both sides of the carpet, row on row.
-  const rng = new RNG(seed);
-  const shirts = ['#8f2f3a', '#2f6f8f', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#3a3a4a', '#e0dccc', '#a04a2a', '#4a6aa8'];
-  const skins = ['#f4d0b0', '#e8b48c', '#d49a6a', '#b07a4a', '#8a5a34', '#5a3a22'];
-  const hairs = ['#1e1612', '#3a2418', '#6e4424', '#c87a3a', '#e8d8a0', '#8a8a92'];
-  art.crowd = [];
-  const rows = [[96, 'small', 7], [106, 'small', 7], [118, 'normal', 9], [132, 'normal', 10], [146, 'normal', 11]];
-  for (const [yb, size, gap] of rows) {
-    const half = lerp(15, 40, (yb - 86) / 58) + 6;
-    for (const side of [-1, 1]) {
-      for (let x = VX + side * half; side < 0 ? x > 4 : x < PW - 4; x += side * gap) {
-        art.crowd.push({ x: x + rng.int(-1, 1), yb, size, shirt: rng.pick(shirts), skin: rng.pick(skins), hair: rng.pick(hairs), ph: rng.float(0, 6.28), turn: -side, side });
-      }
-    }
-  }
-  art.crowd.sort((a, q) => a.yb - q.yb);
-  // Petals, for when they fall.
-  art.petals = Array.from({ length: 70 }, (_, i) => ({ x: rng.int(0, PW), sp: rng.float(10, 22), ph: rng.float(0, 6.28), c: i % 3 === 0 ? info.color || '#ffd070' : i % 3 === 1 ? '#fff4e0' : '#ff9ab0', d: rng.float(0, 3) }));
-  art.motes = Array.from({ length: 36 }, () => ({ w: rng.int(0, 2), k: rng.next(), ph: rng.float(0, 6.28) }));
-  return art;
-}
-
-// The officiant: robed, grey-haired.
+// The officiant: robed, bearded, the colours at the hem.
 const ROBE = { skin: '#e0b090', hair: '#c8c8c8', hairStyle: 'bald', shirt: '#e0dccc', pants: '#3a3a4a', shoes: '#2a1a10', outfit: 'robe_white', accent: '#c8a030', hat: null, beard: true, beardStyle: 'long', eyeColor: '#3a5a9a' };
 
-function drawHall(ctx, sc, art, lines) {
+function drawLeader(ctx, sc, art, lines) {
   const info = sc.info;
   const t = sc.t;
-  const c = bufOf('hall');
+  const c = bufOf('leader');
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  g.drawImage(art.bg, 0, 0);
-  const VX = PW / 2;
-  // The light through the windows: beams across the hall, dust in them.
-  for (const [i, wx] of [48, 128, 208].entries()) {
-    const fl = 0.08 + Math.sin(t * 0.7 + i) * 0.015;
-    g.globalAlpha = fl;
-    g.fillStyle = '#ffd8a0';
-    g.beginPath();
-    g.moveTo(wx - 10, 20);
-    g.lineTo(wx + 10, 20);
-    g.lineTo(wx + 44, PH);
-    g.lineTo(wx + 6, PH);
-    g.closePath();
-    g.fill();
-    g.globalAlpha = 1;
+  g.clearRect(0, 0, PW, PH);
+  let zoom = 1;
+  let fx = PW / 2;
+  let fy = PH / 2;
+  if (t < LEAD.CUT1) {
+    const walk = ease(clamp01((t - LEAD.WALK0) / (LEAD.WALK1 - LEAD.WALK0)));
+    drawSquare(g, art, { t, dusk: 0, walk, cheer: 0, look: info.look, fireworks: 0 });
+    // (Drawn slowly in toward the hall as you go.)
+    zoom = 1 + 0.07 * ease(clamp01(t / LEAD.CUT1));
+    fy = 74;
+  } else if (t < LEAD.CUT2) {
+    const crown = clamp01((t - LEAD.CROWN0) / (LEAD.CROWN1 - LEAD.CROWN0));
+    const cheer = clamp01((t - LEAD.CHEER) / 0.8);
+    drawDoorway(g, art, { t, crown, since: t - LEAD.CROWN1, risen: clamp01((t - LEAD.RISE) / 0.4), raise: t > LEAD.CHEER - 0.2, cheer }, sprite, info);
+    zoom = 1 + 0.05 * ease(clamp01((t - LEAD.CUT1) / (LEAD.CUT2 - LEAD.CUT1)));
+    fx = PW / 2 - 12;
+    fy = PH / 2 + 8;
+  } else {
+    const k = t - LEAD.CUT2;
+    drawSquare(g, art, { t, dusk: lerp(0.75, 1, clamp01(k / 3)), walk: 1, cheer: 1, look: info.look, fireworks: clamp01((k - 0.6) / 0.6) });
+    zoom = 1.1 - 0.08 * ease(clamp01(k / 5));
+    fy = lerp(74, 64, ease(clamp01(k / 5)));
   }
-  for (const m of art.motes) {
-    const wx = [48, 128, 208][m.w];
-    const k = (m.k + t * 0.03) % 1;
-    const y = 24 + k * 110;
-    const x = wx - 6 + (y - 20) * 0.28 + Math.sin(t + m.ph) * 3 + m.k * 14;
-    px(g, x, y, '#fff0c8', 0.5 * Math.sin(k * Math.PI));
-  }
-  // Banners of the realm (or the town) between the windows, swaying.
-  for (const [i, bx] of [88, 168, VX].entries()) {
-    const big = i === 2;
-    const w = big ? 18 : 14;
-    const top = big ? 2 : 4;
-    const len = big ? 28 : 42;
-    const sway = Math.sin(t * 1.1 + i) * 1.2;
-    g.fillStyle = '#c8a040';
-    g.fillRect(bx - w / 2 - 2, top - 1, w + 4, 2);
-    g.fillStyle = info.color;
-    g.beginPath();
-    g.moveTo(bx - w / 2, top);
-    g.lineTo(bx + w / 2, top);
-    g.lineTo(bx + w / 2 + sway, top + len);
-    g.lineTo(bx + sway, top + len - 6);
-    g.lineTo(bx - w / 2 + sway, top + len);
-    g.closePath();
-    g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.25)';
-    g.fillRect(bx + w / 2 - 3, top, 3, len - 4);
-    drawText(g, info.glyph, Math.round(bx - 3 + sway / 2), top + Math.round(len * 0.35), '#1a1420');
-  }
-  // Torches on the columns.
-  for (const [i, cx] of [88, 168].entries()) {
-    const fy = 52;
-    const f = Math.sin(t * 11 + i * 3) > 0 ? 1 : 0;
-    glow(g, cx, fy, 20 + f * 2, '#ffb060', 0.28);
-    g.fillStyle = '#4a3020';
-    g.fillRect(cx - 1, fy + 1, 3, 6);
-    g.fillStyle = f ? '#ffe070' : '#ffa040';
-    g.fillRect(cx - 1, fy - 2 - f, 3, 3);
-    g.fillStyle = '#ffffff';
-    g.fillRect(cx, fy - 1, 1, 1);
-  }
-  // The officiant on the dais, before the throne.
-  const cheer = t > LEAD.CHEER;
-  sprite(g, ROBE, 0, 0, VX, 70, 1);
-  // Behind the walker: the far rows of the crowd; the walker; the near.
-  const walk = clamp01((t - LEAD.WALK) / (LEAD.ARRIVE - LEAD.WALK));
-  const wy = lerp(PH + 30, 84, ease(walk));
-  const wscale = lerp(2.0, 1.05, ease(walk));
-  const crowdDraw = (q) => {
-    const jump = cheer ? Math.max(0, Math.sin(t * 7 + q.ph)) * 2 : 0;
-    drawPerson((x, y, col) => px(g, x, y, col), q.x, q.yb - jump, { size: q.size, face: 'back', turn: walk > 0 && walk < 1 ? q.turn : 0, pose: cheer ? 'wave' : 'stand', dir: -q.side, shirt: q.shirt, skin: q.skin, hair: q.hair, t: t + q.ph, lit: -1 });
-  };
-  for (const q of art.crowd) if (q.yb < wy) crowdDraw(q);
-  // You, up the carpet (from behind), then turned to the hall.
-  const turned = t > LEAD.TURN;
-  const frame = walk > 0 && walk < 1 ? (Math.floor(t * 6) % 2) + 1 : 0;
-  sprite(g, info.look, turned ? 0 : 2, frame, VX, wy, wscale);
-  // The crown (or the chain) coming down, and on.
-  const headY = wy - SHEET_H * wscale + 8 * wscale;
-  if (t > LEAD.CROWN0) {
-    const k = ease(clamp01((t - LEAD.CROWN0) / (LEAD.CROWN1 - LEAD.CROWN0)));
-    const cy = lerp(42, headY - 1, k);
-    if (info.crown) {
-      g.fillStyle = '#e8b030';
-      g.fillRect(VX - 4, cy, 9, 3);
-      for (const dx of [-4, 0, 4]) g.fillRect(VX + dx, cy - 2, 1, 2);
-      g.fillStyle = '#fff4b0';
-      g.fillRect(VX - 3, cy, 7, 1);
-      g.fillStyle = '#ff3050';
-      g.fillRect(VX, cy + 1, 1, 1);
-    } else if (t > LEAD.CROWN1 && turned) {
-      // A chain of office, gold about the neck.
-      const ny = headY + 7 * wscale;
-      g.fillStyle = '#e8b030';
-      for (let i = -4; i <= 4; i++) g.fillRect(VX + i, Math.round(ny + Math.abs(i) * -0.3 + 2), 1, 1);
-      g.fillStyle = '#fff4b0';
-      g.fillRect(VX, ny + 3, 1, 2);
-    } else if (!turned) {
-      // (Held up, before it goes on.)
-      g.fillStyle = '#e8b030';
-      for (let i = -4; i <= 4; i++) g.fillRect(VX + i, Math.round(cy + 4 - Math.abs(i) * 0.4), 1, 1);
-    }
-    // The moment it's on: a burst of light.
-    const since = t - LEAD.CROWN1;
-    if (since > 0 && since < 1.4) {
-      glow(g, VX, headY, 10 + since * 30, '#fff4c0', 0.7 * (1 - since / 1.4));
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2 + since;
-        const r = 4 + since * 26;
-        px(g, VX + Math.cos(a) * r, headY + Math.sin(a) * r * 0.7, i % 2 ? '#ffffff' : '#ffe070', 1 - since / 1.4);
-      }
-    }
-  }
-  for (const q of art.crowd) if (q.yb >= wy) crowdDraw(q);
-  // The petals.
-  if (cheer) {
-    for (const p of art.petals) {
-      const s = t - LEAD.CHEER - p.d;
-      if (s < 0) continue;
-      const y = (s * p.sp) % (PH + 10) - 6;
-      const x = p.x + Math.sin(s * 2 + p.ph) * 5;
-      px(g, x, y, p.c, 0.9);
-      if (Math.sin(s * 5 + p.ph) > 0) px(g, x + 1, y, p.c, 0.6);
-    }
-  }
-  // To the screen: drawn in on you at the end.
-  const fade = clamp01(t / 1.2) * (t > LEAD.BLACK - 1.5 ? clamp01((LEAD.BLACK - t) / 1.5) : 1);
-  const zoom = 1 + 0.35 * ease(clamp01((t - 13.5) / 5));
-  present(ctx, c, { alpha: fade, zoom, fx: VX, fy: lerp(PH / 2, 66, ease(clamp01((t - 13.5) / 5))) });
+  let fade = clamp01(t / 1.2) * (t > LEAD.BLACK - 1.5 ? clamp01((LEAD.BLACK - t) / 1.5) : 1);
+  for (const cu of [LEAD.CUT1, LEAD.CUT2]) if (Math.abs(t - cu) < 0.6) fade *= Math.abs(t - cu) / 0.6;
+  present(ctx, c, { alpha: fade, zoom, fx, fy });
   if (t < 6) {
     ctx.globalAlpha = fade * clamp01((6 - t) / 1.2);
     bigText(ctx, `~ ${(info.realm || info.place).toUpperCase()} ~`, 30, info.color);

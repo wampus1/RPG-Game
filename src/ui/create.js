@@ -436,6 +436,7 @@ export class CharacterWindow extends Window {
       return false;
     } else h.mutations.push(k);
     h.look.mut = h.mutations.slice();
+    if (h.mutations.includes('antennae')) h.look.hat = null;
     this.note = null;
     return true;
   }
