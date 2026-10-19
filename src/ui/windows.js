@@ -335,7 +335,7 @@ export class ContainerWindow extends Window {
     const h = slotTable(this, g, 1, 1, 9, this.slots, 0, this.slots.length, { quick: () => p.inv, onClick });
     g.text(2, 1 + h, 'Your inventory', C.dim);
     slotTable(this, g, 1, 2 + h, 9, p.inv, 0, INV_SIZE, { quick: () => this.slots, selected: p.selected });
-    g.text(2, this.h - 1, shelf ? ' Right-click: read · SHIFT+click: take ' : ' SHIFT+click to transfer ', C.faint);
+    g.text(2, this.h - 1, shelf ? ' RMB: read · SHIFT+click: take ' : ' SHIFT+click to transfer ', C.faint);
   }
   update(dt, game) {
     // Walking away closes the chest.
