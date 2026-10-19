@@ -940,6 +940,15 @@ export const STEPS = [
       void d;
       log.push('An outworlder\'s mutations each work their own way now (a blow foreseen, a light of your own, a second heart and more), and the three newer origins\' openings are painted anew.');
     },
+  },  {
+    to: '1.25.0',
+    data(d, log) {
+      // (Nothing in a world to change: a town's or a realm's record starts
+      // with its next sitting; officers' traits are read off them as
+      // they are.)
+      void d;
+      log.push('Governing: a record of every matter decided, notes as matters come and votes are called, rates set to the point, officers\' traits, and a war\'s progress at a glance. Letters and books are held up to read, in their writers\' own hands.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

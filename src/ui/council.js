@@ -806,18 +806,18 @@ export class CouncilWindow extends Window {
         const now = T.wage ?? [4, 5, 7][cur];
         if (this.wageDraft === null || this.wageDraft === undefined) this.wageDraft = now;
         const wd = this.wageDraft;
-        const ex = slider(this, g, x + 13, y, { v: wd, cur: now, min: WAGE.min, max: WAGE.max, step: 1, fmt: (q) => `¤${q}`, on: mine, w: 10, set: (q) => {
+        slider(this, g, x + 13, y, { v: wd, cur: now, min: WAGE.min, max: WAGE.max, step: 1, fmt: (q) => `¤${q}`, on: mine, w: 10, set: (q) => {
           this.wageDraft = Math.round(q);
         } });
+        y++;
         if (wd !== now) {
-          btn(ex + 1, y, ' Propose ', mine, () => {
+          btn(x + 1, y, ` Propose ¤${wd} a day `, mine, () => {
             this.proposeIt(L, 'wage', wd);
             this.wageDraft = null;
           });
+          g.text(x + 21, y++, `(now ¤${now})`, C.faint);
           this.budgetHover = { id: 'watch', k: wageLevel(wd), wage: wd };
-        }
-        y++;
-        g.text(x + 1, y++, `¤${now} a guard a day: ${B.about}`.slice(0, W - x - 3), C.faint);
+        } else g.text(x + 1, y++, `¤${now} a guard a day: ${B.about}`.slice(0, W - x - 3), C.faint);
         continue;
       }
       let bx = x + 13;
@@ -1215,7 +1215,7 @@ export class CouncilWindow extends Window {
       const O = OTRAITS[id];
       g.text(x, y, `${O.glyph} ${O.name}`, O.color);
       y++;
-      wrap(O.about, w - 2).slice(0, 2).forEach((l) => g.text(x + 2, y++, l, C.faint));
+      wrap(O.about, w - 2).slice(0, 3).forEach((l) => g.text(x + 2, y++, l, C.faint));
     }
     y++;
     const P = r.personality || {};

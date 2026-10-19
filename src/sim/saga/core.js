@@ -1602,7 +1602,8 @@ export class Saga {
     const note = th && th.vars.notes && th.vars.notes[+n];
     if (!note) return false;
     const pid = pidOf(this.game.player);
-    this.game.ui.openBook([note.title, ...note.lines]);
+    // (Round 125: held up to read, in its writer's own hand.)
+    this.game.ui.openBook([note.title, ...note.lines], { kind: note.kind || 'letter', from: note.from || null, key: `${th.m}:${th.id}` });
     this.game.audio?.play('page');
     if (!note.read || !note.read.includes(pid)) {
       (note.read ||= []).push(pid);

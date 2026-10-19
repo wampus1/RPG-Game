@@ -25,8 +25,10 @@ export function slider(win, g, x, y, o) {
   const c = o.cur === undefined || o.cur === null ? null : at(Math.max(min, Math.min(max, o.cur)));
   const hov = on && win.hovering(bx, y, w, 1);
   for (let i = 0; i < w; i++) {
-    const ch = i === k ? '●' : i === c ? '│' : i < k ? '━' : '─';
-    g.put(bx + i, y, ch, i === k ? (hov ? C.white : col) : i === c ? '#a0c8ff' : i < k ? col : '#4a4458', hov ? '#262030' : undefined);
+    // (The run up to the value lit, on a shaded ground: the font has no
+    // heavy rule.)
+    const ch = i === k ? '●' : i === c ? '│' : '─';
+    g.put(bx + i, y, ch, i === k ? (hov ? C.white : col) : i === c ? '#a0c8ff' : i < k ? col : '#4a4458', i < k ? '#3a2e1c' : hov ? '#262030' : undefined);
   }
   if (on) for (let i = 0; i < w; i++) win.hit(bx + i, y, 1, 1, () => o.set(snap(min + (i / (w - 1)) * (max - min))));
   btn(bx + w + 1, '►', on && v < max - 1e-9, () => o.set(snap(v + step)));

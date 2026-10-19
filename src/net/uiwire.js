@@ -5,6 +5,7 @@
 // screen shows them; what the player clicks and presses goes back.
 import { Window } from '../ui/window.js';
 import { Grid } from '../ui/ascii.js';
+import { DocumentWindow } from '../ui/document.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 
 // A grid of cells as text: its characters, and its colours by number in
@@ -94,6 +95,9 @@ export function uiFrame(ui, game, last, pixels = null) {
         (last.px ||= new Map()).set(w.netId, url);
       }
     }
+    // (Round 125) A letter or a page held up to read: what it says, for
+    // the player's own screen to draw (see ui/document.js).
+    if (w.doc) win.doc = w.doc;
     out.wins.push(win);
   }
   last.n = n;
@@ -188,12 +192,23 @@ export function applyFrame(ui, f) {
   for (const wf of f.wins) {
     keep.add(wf.id);
     let w = ui.windows.find((q) => q.remote && q.netId === wf.id);
+    // (Round 125) A page held up to read: drawn here, as it is at the host.
+    if (wf.doc) {
+      if (!w) {
+        w = new DocumentWindow(ui, wf.doc, { mirror: true });
+        w.remote = true;
+        w.netId = wf.id;
+        ui.windows.push(w);
+      }
+      continue;
+    }
     if (!w) {
       w = new RemoteWindow(ui, wf);
       ui.windows.push(w);
     } else w.set(wf);
   }
   // (Gone at the host: gone here, at once; the host already let it fade.)
+  for (const w of ui.windows) if (w.remote && !keep.has(w.netId) && w.onClose) w.onClose();
   ui.windows = ui.windows.filter((w) => !w.remote || keep.has(w.netId));
   ui.remoteTip = f.tip || null;
   ui.remoteStack = f.stack || null;

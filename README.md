@@ -9676,6 +9676,109 @@ opening. The character you made appears in each, as they look.
 - **Version 1.24.0.** Worlds from 1.23 load as before. An outworlder made
   in 1.23 keeps the mutations they chose, which now work as above.
 
+## Round 125: Governing, smoothed; letters held up to read
+
+### Fixes
+
+- **A leader's opening** no longer has the "sworn in" banner over it. It
+  waits until the opening is over.
+- **Townsfolk know who governs them.** Passing by or in conversation, they
+  speak to the head of their town (or the ruler of their realm) by title:
+  "Good morning, Mayor!", "Your Majesty!". They no longer greet you as a
+  visitor or a neighbour. Some small talk changes to match ("How do you
+  find governing us?").
+- **Your status** in the inventory and the journal shows what you lead
+  (for example "Queen of the Jarnby Kingdom" or "Mayor of Kaldhavn")
+  instead of "Citizen of...".
+- **The town hall's chests** are yours to open in a town you govern. They
+  aren't locked, and taking from them isn't theft. Coin you take still
+  comes out of the treasury: it goes in the minutes, and the merchants
+  and the poor think a little less of you for it.
+- **A vote being shown** ("SO DECREED", "CARRIED"...) no longer stops you
+  from changing pages. Clicking a page or pressing its number puts the
+  vote away; the result is kept in the record.
+
+### Governing
+
+- **Notes in the corner.** When a matter is tabled, a crisis comes up, a
+  vote is called, or a vote is carried or defeated, a short note appears
+  at the top right. Notes wait until any opening scene is over.
+- **The Record** (a new page in the council and crown windows) lists every
+  matter decided, newest first:
+  - whether it was carried, decreed, decided, left to the steward (or the
+    chancellor) by standing orders, defeated, vetoed or set aside;
+  - the votes for and against;
+  - filters for passed, failed, standing orders, set aside and crises;
+  - a tally at the top. Click an entry to see it in full; the wheel
+    scrolls.
+- **Rates set to the point.** The least tax and the tribute are sliders in
+  1% steps:
+  - least tax: anywhere from none to 15%;
+  - tribute: from 2% to 20%, or to the form of government's cap.
+
+  The town's tax is a slider too, and the watch's pay can be set to any
+  wage from ¤3 to ¤10 a guard a day. Click anywhere along a slider or use
+  its arrows, then propose or decree the new rate.
+- **Officers' traits.** Every townsperson has two or three of these:
+
+  | Trait | What it does |
+  | --- | --- |
+  | Diligent | Never forgets a matter left to them (steward). Gathers 5% more tax (treasurer). |
+  | Careless | Forgets the odd matter (steward). Gathers 5% less tax (treasurer). |
+  | Shrewd | Good with money: a treasurer gathers up to a fifth more tax. |
+  | Honest | Never skims, and no bribe moves them; offered one, they're likely to tell. |
+  | Grasping | Skims the tax as treasurer. On the council, a bribe sways them twice as far. |
+  | Stern | Raises fines after thefts (magistrate). The watch counts half a guard stronger (captain). |
+  | Merciful | Eases fines once the streets are calm (magistrate). The poor think better of you for naming them. |
+  | Brave | The watch counts a whole guard stronger again (captain). |
+  | Timid | The watch counts no stronger for them (captain). |
+  | Well liked | Their faction warms to you twice as much for naming them, and minds twice as much if you dismiss them. |
+  | Learned | Votes by what the town needs more than by their faction. Never sets fines too harsh (magistrate). |
+  | Ambitious | Wants your seat: votes against you more often on the council. |
+  | Steadfast | Votes with you more often on the council. |
+
+  Opposite traits never come together.
+- **Look before you appoint.** In the Offices page, candidates show how
+  well they'd suit the office (up to four stars) and their traits. Click
+  one to see their card: trade, age and faction; what they think of you;
+  each trait and what it does; their character. Then appoint them or go
+  back. Click a councillor to see their card too.
+- **The war at a glance.** The crown window has a War page, and the
+  council has one under its Charter page. It shows:
+  - the balance of the war (winning or losing) and how weary each side is;
+  - who fights on each side, with their strength;
+  - towns taken and lost, and your towns at the front;
+  - the next battle, and the last battles with their numbers and losses.
+
+  At peace, it shows your last war, or the realms most likely to come to
+  blows with yours. From the crown's War page you can sue for peace.
+- **Time racing by.** Sleeping or waiting runs time up to sixty times
+  faster:
+  - A crisis that needs you, or a vote that waits on you, now wakes you
+    (or stops the wait).
+  - A crisis that came up while the hours raced by gives you its full
+    hours from the moment you see it.
+  - Sittings caught up after a long absence are recorded on the days they
+    happened.
+
+### Letters and books, held up to read
+
+- **Reading a letter, a note, a map or a book** shows the page itself over
+  the darkened game. It tilts slightly as you move the mouse, with a sheen
+  of light sliding across it. Letters have folds and a wax seal, notes are
+  torn scraps, and books have a ruled margin.
+- **Every writer has their own hand.** Each writer is given one of eight
+  handwriting fonts, with their own size, slant and ink, and keeps it from
+  letter to letter. A signed letter is in its signer's hand. Books are in
+  an old printer's type.
+- **Click the page** (or press Space) for easier reading: the world behind
+  is blurred away, the page is held flat and still, and the words are in
+  plain print. Click again to go back to the handwriting. Esc, or a click
+  off the page, puts it down. A long page scrolls with the wheel.
+- **In someone else's world**, the page shows on your own screen.
+- **Version 1.25.0.** Worlds from 1.24 load as before. A town's or a
+  realm's record starts with its next sitting.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

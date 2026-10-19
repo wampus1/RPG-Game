@@ -11,7 +11,7 @@ import { startMdns, startDiscovery, MDNS_NAME, DISCOVERY_PORT } from './lan.mjs'
 import { MachineStore } from './store.mjs';
 import { LAN_PATH } from '../src/net/protocol.js';
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 const plainIp = (ip) => String(ip || '').replace(/^::ffff:/, '');
 
 // Listening on `port`, or (with `tries` > 1) the next free one after it,

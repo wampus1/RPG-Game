@@ -1,5 +1,6 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
+import { DocumentWindow } from './document.js';
 import { StoryDebugWindow } from './storydebug.js';
 import { rideLine } from '../game/rides.js';
 import { compareGear } from '../game/invtools.js';
@@ -1672,9 +1673,12 @@ export class UI {
     this.closeAll();
     this.open(new W.TextWindow(this, title, lines));
   }
-  openBook(lines) {
+  // (Round 125) A book's page, a letter, a note: held up to read (see
+  // document.js). `o`: { kind (book, letter, note, map), from (who wrote
+  // it: their hand) }.
+  openBook(lines, o = {}) {
     this.closeAll();
-    this.open(new W.TextWindow(this, lines[0], lines.slice(1), true));
+    this.open(new DocumentWindow(this, { title: lines[0], lines: lines.slice(1), kind: o.kind || 'book', from: o.from || null, key: o.key || null }));
   }
   openDeath(cause, below = null) {
     this.closeAll();
