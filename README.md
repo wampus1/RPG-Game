@@ -9784,6 +9784,110 @@ opening. The character you made appears in each, as they look.
 - **Version 1.25.0.** Worlds from 1.24 load as before. A town's or a
   realm's record starts with its next sitting.
 
+## Round 126: Books, written
+
+Every bookshelf now holds one of the world's own books, made from its
+history, places, wars, food and faiths. A book is several chapters long,
+with a page or more to each chapter, and you read it as an open book.
+
+### What there is to read
+
+- **A town's annals.** Who founded the town, when and how they came, the
+  first hard winters, and every year in its history (fires, floods,
+  sieges, plagues, oaths, omens, the old places nearby, and recent news).
+  Each event gets a paragraph that fits it: a fire's paragraph talks about
+  the fire. Then come the town's customs, its old story, and the town in
+  the year the book was written.
+- **A realm's history.** When its people came to the land, how the realm
+  was proclaimed, and its rulers one by one (what each was called and
+  why, what they did, how they died). Then what the realm values, its
+  faith, its towns, its wars, and the realm today.
+- **An account of a war.** Why it was fought and who ruled each side. Then
+  the opening, each battle and siege in turn (where, who won, how many
+  died), the peace, and what came of it.
+- **A traveller's road.** A journey on foot through four or five
+  neighbouring towns. The book gives the real direction and distance of
+  each leg, plus the weather, the people met, and in each town its inn,
+  dishes, faith, customs and the old places the locals warn about.
+- **A people's table.** What each dish is, how it's made, when it's eaten
+  and what it's served with. Also their drink, what the faithful won't
+  eat, feast days, and the neighbours' food.
+- **The old places.** A delver's notes on the barrows, mines, crypts and
+  caves around a town, with a few from towns further off. For each: its
+  story, what it's like inside, what lives there, how deep it goes, and
+  who has gone down.
+- **A bestiary of a land.** Each animal as it really is in the game: tame
+  or wild, harmless or not, out by day or by night, alone or in packs,
+  and what a hunter gets from it. Then the creatures that are only told
+  of.
+- **On the Kavorent.** Who they were and the spires (with each people's
+  name for them), the cores and the ancient arts (and which realms have
+  learned them), and the four ancient creatures in their places.
+- **The book of a faith.** Its god, holy day and feast, the virtue it
+  values most, its rules, how the faithful bury their dead, a parable and
+  a prayer.
+
+### How it's written
+
+- **One past for the whole world.** The past before the game starts is
+  generated once per world from its seed: when each people came to its
+  land, when each realm was proclaimed, every ruler since, the old wars
+  between neighbours (their battles, their peace treaties, and which towns
+  changed hands), and the hard winters and fevers that struck a whole
+  land. Every book uses this same past, so two books about the Cattle War
+  give the same war, years and kings. The past never contradicts the
+  present: a town given up in an old war belongs to the winner now.
+- **Books cite each other.** Prefaces refer to earlier books on the same
+  subject, and those books are in the library too (on some shelf, by the
+  same author).
+- **Books stop at their own year.** Most books were written years before
+  the game begins, and they tell nothing that happened after. A town's
+  history ends at its writer's year, and the ruler it names is the one
+  reigning then. Books written this year include this year's events, such
+  as current wars, old places that have been cleared, and recent news.
+- **Shelves hold local books.** A shelf in a town most often holds books
+  about that town, its realm or its land.
+
+### The Markov chains
+
+- **Two levels of chain.** For each kind of paragraph, a chain learns the
+  order of its moves (set the scene, tell what happened, describe it,
+  what came of it, the writer's view) from example paragraphs. Each move
+  then has its own word chain, learned from a hand-written library of
+  sentences. Each sentence is written several ways with small
+  variations.
+- **Long contexts.** The word chain looks back up to four words, and
+  never fewer than three. It keeps track of which source sentence, and
+  which word in it, it is following. It can switch to another sentence
+  only after a comma or a word like "and" or "which", and only once the
+  current clause is five words long. So a new sentence is one sentence's
+  clause finished by another's, never half a phrase from each.
+- **Blanks filled from the world.** A sentence can only contain a blank
+  (a town, year, ruler or dish) if the book has a fact to fill it with.
+  Some sentences must name a particular thing, such as the dish the
+  chapter is about. The second time a name comes up in a paragraph, it
+  may become "the town" or "the realm".
+- **No repetition.** No source sentence is used twice in a book, no
+  three-word phrase is repeated, and no sentence appears twice.
+- **Best of several tries.** Each sentence is chosen from several
+  generated versions. The chain prefers one or two clean joins and
+  sentences of a sensible length.
+
+### Reading a book
+
+- **An open book.** Both pages show side by side between the covers. The
+  first spread is the marbled inside cover and the title page (title,
+  author, the year it was written). After that, each chapter starts on a
+  new page with a heading and a drop cap. Paragraphs are justified, and
+  every page has a running head (the book's title on the left, the
+  chapter on the right) and a page number. The edge of the page stack
+  shows how much is left to read.
+- **Turning pages.** Use the arrow keys (also A/D, Space, Page Up and Page
+  Down), the mouse wheel, or click the left or right edge of the book.
+  The page lifts from the spine and turns over. Clicking the middle of
+  the book switches to larger plain print, as with letters; Tab does the
+  same. Esc puts the book down.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

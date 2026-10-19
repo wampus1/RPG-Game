@@ -13,6 +13,7 @@
 // test, with nothing to draw on, the window still holds what it says.
 import { Window } from './window.js';
 import { handFor, signerOf, loadHands, PRINT } from './hands.js';
+import { isBookDoc, paginate, paintPaper, paintEndpaper, paintRows, ornament } from './bookview.js';
 import { overlay, overlayCtx, OVER_W, OVER_H, OVER_SCALE } from '../render/overlay.js';
 import { drawText, textWidth } from '../render/font.js';
 import { COLS, ROWS } from '../config.js';
@@ -98,6 +99,11 @@ export class DocumentWindow extends Window {
     // papers.)
     this.hand = this.printed ? PRINT : handFor(this.doc.from || this.signer || this.doc.key || this.doc.title);
     this.easy = false;
+    // (Round 126) A book: held open, two pages at a time (see bookview.js).
+    this.bookMode = isBookDoc(this.doc);
+    this.spread = 0;
+    this.turn = null;
+    this.laid = null;
     this.tilt = { x: 0, y: 0, tx: 0, ty: 0 };
     this.scroll = 0;
     this.page = null;
@@ -126,7 +132,224 @@ export class DocumentWindow extends Window {
     this.easy = !this.easy;
     this.scroll = 0;
     this.dirty = true;
+    this.turn = null;
     this.ui.audio?.play('page');
+  }
+
+  // ------------------------------------------------------------ a book
+  // How many spreads the book has (two pages each: the inside of the cover
+  // and the title page first).
+  get spreads() {
+    return this.laid ? this.laid.leaves.length / 2 : 1;
+  }
+
+  // Turn to the next spread (or back), with the leaf turning over.
+  turnPage(dir) {
+    if (!this.bookMode) return false;
+    if (!this.laid && typeof document !== 'undefined') this.paint();
+    const to = this.spread + dir;
+    if (to < 0 || to >= this.spreads) return false;
+    // (Turned again before the last leaf's down: that one's down at once.)
+    this.turn = typeof document !== 'undefined' ? { from: this.spread, to, dir, t: 0 } : null;
+    this.spread = to;
+    this.dirty = true;
+    this.ui.audio?.play('page');
+    return true;
+  }
+
+  // The book set in type for the page it's on: its pages, and what's on
+  // each of the leaves in order (the endpapers, the title page, the text).
+  layBook(g) {
+    const easy = this.easy;
+    const key = easy ? 'easy' : 'print';
+    if (this.laid && this.laid.key === key) return this.laid;
+    const PW = Math.round(OVER_W * (easy ? 0.44 : 0.41));
+    const PH = Math.round(OVER_H * (easy ? 0.87 : 0.86));
+    const board = Math.round(PW * 0.035);
+    const size = OVER_W * (easy ? 0.0158 : 0.0166);
+    const font = (sz, style) => {
+      const it = style === 'sign' || style === 'sub' ? 'italic ' : '';
+      return easy ? `${style === 'head' ? 'bold ' : ''}${it}${sz.toFixed(1)}px ${PRINT_FONT}` : `${it}${sz.toFixed(1)}px '${PRINT.font}', Georgia, serif`;
+    };
+    const measure = (t, sz, style) => {
+      g.font = font(sz, style);
+      return g.measureText(t).width;
+    };
+    const pad = { top: PH * 0.095, bottom: PH * 0.095, outer: PW * 0.11, inner: PW * 0.095 };
+    const pages = paginate(this.doc.lines, { w: PW - pad.outer - pad.inner, h: PH - pad.top - pad.bottom, size, measure, lh: easy ? 1.42 : 1.3 });
+    const leaves = ['end', 'title', ...pages];
+    if (leaves.length % 2) leaves.push('blank');
+    leaves.push('blank', 'end');
+    const old = this.laid;
+    this.laid = { key, PW, PH, board, size, font, pad, pages, leaves, W: PW * 2 + board * 2, H: PH + board * 2, cache: new Map() };
+    // (Where the reader was, as near as the new setting allows.)
+    if (old) this.spread = Math.min(this.laid.leaves.length / 2 - 1, Math.round((this.spread / Math.max(1, old.leaves.length / 2 - 1)) * (this.laid.leaves.length / 2 - 1)));
+    return this.laid;
+  }
+
+  // One leaf of the book, drawn (and kept).
+  leafCanvas(i) {
+    const B = this.laid;
+    let c = B.cache.get(i);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = B.PW;
+    c.height = B.PH;
+    const g = c.getContext('2d');
+    const leaf = B.leaves[i];
+    const side = i % 2 ? 'right' : 'left';
+    const ink = this.easy ? '#1a1410' : PRINT.ink;
+    const tint = this.coverTint();
+    if (leaf === 'end') paintEndpaper(g, B.PW, B.PH, this.seed + i, tint);
+    else {
+      paintPaper(g, B.PW, B.PH, side, this.seed ^ (i * 7919), grainOf(), this.easy ? '#f6efdc' : '#f1e6cc');
+      const x = side === 'left' ? B.pad.outer : B.pad.inner;
+      const w = B.PW - B.pad.outer - B.pad.inner;
+      if (leaf === 'title') this.paintTitle(g, x, w, ink);
+      else if (leaf !== 'blank') {
+        const n = B.pages.indexOf(leaf) + 1;
+        // The running head: the book's title over the left page, the
+        // chapter over the right.
+        g.save();
+        g.fillStyle = ink;
+        g.globalAlpha = 0.55;
+        g.font = B.font(B.size * 0.72, 'text');
+        if ('letterSpacing' in g) g.letterSpacing = `${(B.size * 0.12).toFixed(1)}px`;
+        const head = (side === 'left' ? this.doc.title : leaf.chapter || this.doc.title).toUpperCase();
+        const hw = g.measureText(head).width;
+        if (hw < w) g.fillText(head, x + (w - hw) / 2, B.pad.top * 0.55);
+        if ('letterSpacing' in g) g.letterSpacing = '0px';
+        g.font = B.font(B.size * 0.82, 'text');
+        const num = String(n);
+        g.fillText(num, x + (w - g.measureText(num).width) / 2, B.PH - B.pad.bottom * 0.42);
+        g.restore();
+        paintRows(g, leaf, { x, y: B.pad.top, w, font: B.font, ink, size: B.size, capInk: this.easy ? '#5a1a10' : '#6a2014' });
+      }
+    }
+    B.cache.set(i, c);
+    return c;
+  }
+
+  // The title page: the title, an ornament, whose book it is, the year.
+  paintTitle(g, x, w, ink) {
+    const B = this.laid;
+    const ts = B.size * 2.05;
+    g.fillStyle = ink;
+    g.font = B.font(ts, 'head');
+    const words = String(this.doc.title || '').split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const wd of words) {
+      const next = line ? `${line} ${wd}` : wd;
+      if (line && g.measureText(next).width > w) {
+        lines.push(line);
+        line = wd;
+      } else line = next;
+    }
+    if (line) lines.push(line);
+    let y = B.PH * 0.26;
+    for (const l of lines) {
+      g.fillText(l, x + (w - g.measureText(l).width) / 2, y);
+      y += ts * 1.18;
+    }
+    ornament(g, x + w / 2, y + B.size * 0.8, B.size * 1.1, ink);
+    y += B.size * 3.4;
+    const by = this.doc.by;
+    if (by) {
+      g.font = B.font(B.size * 0.95, 'sign');
+      const t = 'written by';
+      g.fillText(t, x + (w - g.measureText(t).width) / 2, y);
+      y += B.size * 1.8;
+      g.font = B.font(B.size * 1.3, 'text');
+      g.fillText(by, x + (w - g.measureText(by).width) / 2, y);
+      y += B.size * 1.6;
+      const rest = String(this.doc.sign || '').replace(by, '').replace(/^,\s*/, '');
+      if (rest) {
+        g.font = B.font(B.size * 0.95, 'sign');
+        g.fillText(rest, x + (w - Math.min(w, g.measureText(rest).width)) / 2, y, w);
+      }
+    }
+    if (this.doc.year) {
+      g.font = B.font(B.size * 0.95, 'text');
+      const t = `In the year ${this.doc.year}`;
+      g.fillText(t, x + (w - g.measureText(t).width) / 2, B.PH * 0.86);
+    }
+  }
+
+  // The colour of its boards (the same for a book every time).
+  coverTint() {
+    const T = [[110, 40, 30], [40, 60, 90], [50, 80, 50], [90, 60, 30], [70, 40, 80], [30, 30, 30]];
+    return T[this.seed % T.length];
+  }
+
+  // A spread laid flat: the boards, the edges of the pages, the two pages,
+  // the gutter.
+  composeSpread(c, left, right) {
+    const B = this.laid;
+    c.width = B.W;
+    c.height = B.H;
+    const g = c.getContext('2d');
+    const [r, gg, b] = this.coverTint();
+    g.clearRect(0, 0, B.W, B.H);
+    // The boards, in leather.
+    const rr = B.board * 1.3;
+    g.fillStyle = `rgb(${r},${gg},${b})`;
+    g.beginPath();
+    g.moveTo(rr, 0);
+    g.lineTo(B.W - rr, 0);
+    g.quadraticCurveTo(B.W, 0, B.W, rr);
+    g.lineTo(B.W, B.H - rr);
+    g.quadraticCurveTo(B.W, B.H, B.W - rr, B.H);
+    g.lineTo(rr, B.H);
+    g.quadraticCurveTo(0, B.H, 0, B.H - rr);
+    g.lineTo(0, rr);
+    g.quadraticCurveTo(0, 0, rr, 0);
+    g.fill();
+    const lg = g.createLinearGradient(0, 0, 0, B.H);
+    lg.addColorStop(0, 'rgba(255,255,255,0.12)');
+    lg.addColorStop(1, 'rgba(0,0,0,0.3)');
+    g.fillStyle = lg;
+    g.fill();
+    // The edges of the pages: more on the side not yet read.
+    const total = B.leaves.length / 2;
+    const readFrac = this.spread / Math.max(1, total - 1);
+    const stack = (x, dir, n) => {
+      for (let k = 0; k < n; k++) {
+        g.fillStyle = k % 2 ? '#d8c8a0' : '#efe2c0';
+        g.fillRect(x + dir * k, B.board - 1 + k * 0.3, 1, B.PH + 2 - k * 0.6);
+      }
+    };
+    stack(B.board - 1, -1, Math.round(1 + readFrac * 5));
+    stack(B.board + B.PW * 2, 1, Math.round(1 + (1 - readFrac) * 5));
+    if (left) g.drawImage(left, B.board, B.board);
+    if (right) g.drawImage(right, B.board + B.PW, B.board);
+    // The gutter.
+    const mid = B.board + B.PW;
+    const gt = g.createLinearGradient(mid - 10, 0, mid + 10, 0);
+    gt.addColorStop(0, 'rgba(40,25,10,0)');
+    gt.addColorStop(0.5, 'rgba(40,25,10,0.45)');
+    gt.addColorStop(1, 'rgba(40,25,10,0)');
+    g.fillStyle = gt;
+    g.fillRect(mid - 10, B.board, 20, B.PH);
+  }
+
+  paintBook() {
+    const c = this.page || (this.page = document.createElement('canvas'));
+    const B = this.layBook(c.getContext('2d'));
+    const s = Math.min(this.spread, B.leaves.length / 2 - 1);
+    this.spread = s;
+    const T = this.turn;
+    // (While a leaf turns: the pages under it, the old and the new.)
+    if (T) {
+      const fwd = T.dir > 0;
+      const L = this.leafCanvas(fwd ? 2 * T.from : 2 * T.to);
+      const R = this.leafCanvas(fwd ? 2 * T.to + 1 : 2 * T.from + 1);
+      this.composeSpread(c, L, R);
+      T.front = this.leafCanvas(fwd ? 2 * T.from + 1 : 2 * T.from);
+      T.back = this.leafCanvas(fwd ? 2 * T.to : 2 * T.to + 1);
+    } else this.composeSpread(c, this.leafCanvas(2 * s), this.leafCanvas(2 * s + 1));
+    this.overflow = 0;
+    this.dirty = false;
   }
 
   // ------------------------------------------------------------ the page
@@ -134,6 +357,10 @@ export class DocumentWindow extends Window {
   // words (in the hand, or in print), its seal. Laid out again only when
   // something about it changes.
   paint() {
+    if (this.bookMode) {
+      this.paintBook();
+      return;
+    }
     const P = this.paper;
     const H = this.hand;
     const easy = this.easy;
@@ -293,13 +520,13 @@ export class DocumentWindow extends Window {
   }
 
   // Where a point of the page lands on the layer, tilted as it is.
-  project(u, v) {
+  project(u, v, lift0 = 0) {
     const c = this.page;
     const T = this.tilt;
-    const base = ((this.easy ? 0 : this.paper.tilt || 0) * Math.PI) / 180;
+    const base = ((this.easy || this.bookMode ? 0 : this.paper.tilt || 0) * Math.PI) / 180;
     let x = u - c.width / 2;
     let y = v - c.height / 2;
-    let z = 0;
+    let z = lift0;
     // (Round its middle: turned, then leaned left and right, then back.)
     [x, y] = [x * Math.cos(base) - y * Math.sin(base), x * Math.sin(base) + y * Math.cos(base)];
     const ay = (T.y * Math.PI) / 180;
@@ -325,8 +552,10 @@ export class DocumentWindow extends Window {
     const mx = m.x / ctx.canvas.width - 0.5;
     const my = m.y / ctx.canvas.height - 0.5;
     const T = this.tilt;
-    T.tx = this.easy ? 0 : -my * 15;
-    T.ty = this.easy ? 0 : mx * 22;
+    // (A book's heavier, and held in both hands: it leans less.)
+    const lean = this.bookMode ? 0.5 : 1;
+    T.tx = this.easy ? 0 : -my * 15 * lean;
+    T.ty = this.easy ? 0 : mx * 22 * lean;
     T.x += (T.tx - T.x) * 0.12;
     T.y += (T.ty - T.y) * 0.12;
     o.setTransform(1, 0, 0, 1, 0, 0);
@@ -371,7 +600,7 @@ export class DocumentWindow extends Window {
     o.fill();
     o.restore();
     // The page: flat, at once; leaning, a triangle at a time.
-    if (Math.abs(T.x) < 0.05 && Math.abs(T.y) < 0.05 && !(this.paper.tilt && !this.easy)) {
+    if (Math.abs(T.x) < 0.05 && Math.abs(T.y) < 0.05 && !(this.paper.tilt && !this.easy && !this.bookMode)) {
       const [x0, y0] = this.project(0, 0);
       const [x1, y1] = this.project(W, H);
       o.drawImage(c, x0, y0, x1 - x0, y1 - y0);
@@ -385,6 +614,8 @@ export class DocumentWindow extends Window {
         tri(o, c, a, e, d);
       }
     }
+    // A leaf turning over.
+    if (this.bookMode && this.turn) this.drawLeaf(o);
     // The light across it, sliding as it leans.
     o.save();
     o.beginPath();
@@ -401,8 +632,12 @@ export class DocumentWindow extends Window {
     o.fillStyle = sh;
     o.fillRect(0, 0, OVER_W, OVER_H);
     o.restore();
+    // (A book: arrows at its edges, to turn the page by.)
+    if (this.bookMode && !this.turn) this.drawArrows(o, m);
     // What to do, in the game's own letters.
-    const hint = `click the page: ${this.printed ? 'larger print' : 'read it in plain print'}  ·  Esc: put it down${this.overflow ? '  ·  wheel: read on' : ''}`;
+    const hint = this.bookMode
+      ? `◄ ► turn the page  ·  click: ${this.easy ? 'as printed' : 'larger print'}  ·  Esc: put it down  ·  ${this.spread + 1}/${this.spreads}`
+      : `click the page: ${this.printed ? 'larger print' : 'read it in plain print'}  ·  Esc: put it down${this.overflow ? '  ·  wheel: read on' : ''}`;
     o.save();
     o.scale(OVER_SCALE, OVER_SCALE);
     o.fillStyle = '#080604';
@@ -410,6 +645,86 @@ export class DocumentWindow extends Window {
     drawText(o, hint, Math.round((OVER_W / OVER_SCALE - textWidth(hint)) / 2), OVER_H / OVER_SCALE - 14, '#c8b890', '#000');
     o.restore();
     overlay.shown = true;
+  }
+
+  // The leaf as it turns: lifting off one page, standing up from the
+  // gutter, coming down on the other; front, then back.
+  drawLeaf(o) {
+    const B = this.laid;
+    const T = this.turn;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (T.start === undefined) T.start = now;
+    const t = Math.min(1, (now - T.start) / 430);
+    const e = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+    const th = Math.PI * (T.dir > 0 ? e : 1 - e);
+    const spine = B.board + B.PW;
+    const onRight = th < Math.PI / 2;
+    const img = onRight ? (T.dir > 0 ? T.front : T.back) : T.dir > 0 ? T.back : T.front;
+    const NX = 10;
+    const NY = 6;
+    const pts = [];
+    for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) {
+      const d = (i / NX) * B.PW;
+      const v = (j / NY) * B.PH;
+      // (A little curl in it as it stands up.)
+      const bend = Math.sin((Math.PI * d) / B.PW) * 14 * Math.sin(th);
+      const x = spine + d * Math.cos(th) - bend * 0.3 * Math.sign(Math.cos(th) || 1);
+      const z = d * Math.sin(th) * 0.92 + bend;
+      const [px, py] = this.project(x, B.board + v, z);
+      pts.push({ u: onRight ? d : B.PW - d, v, x: px, y: py });
+    }
+    const P = (i, j) => pts[j * (NX + 1) + i];
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+      const a = P(i, j);
+      const b = P(i + 1, j);
+      const d = P(i, j + 1);
+      const q = P(i + 1, j + 1);
+      tri(o, img, a, b, q);
+      tri(o, img, a, q, d);
+    }
+    // (Darker as it stands edge-on to the light.)
+    o.save();
+    o.fillStyle = `rgba(30,20,8,${(0.28 * Math.sin(th)).toFixed(3)})`;
+    o.beginPath();
+    [P(0, 0), P(NX, 0), P(NX, NY), P(0, NY)].forEach((q, k) => (k ? o.lineTo(q.x, q.y) : o.moveTo(q.x, q.y)));
+    o.closePath();
+    o.fill();
+    o.restore();
+    if (t >= 1) {
+      this.turn = null;
+      this.dirty = true;
+    }
+  }
+
+  // Where across the book a point of the view is (0 its left edge, 1 its
+  // right), or null off it.
+  across(vx, vy) {
+    if (!this.poly || !this.onPage(vx, vy)) return null;
+    const [p0, p1, p2, p3] = this.poly;
+    const x = vx * OVER_SCALE;
+    const l = (p0[0] + p3[0]) / 2;
+    const r = (p1[0] + p2[0]) / 2;
+    return (x - l) / Math.max(1, r - l);
+  }
+
+  drawArrows(o, m) {
+    const f = this.across(m.x, m.y);
+    const [p0, p1, p2, p3] = this.poly;
+    const cy = (p0[1] + p1[1] + p2[1] + p3[1]) / 4;
+    const arrow = (x, dir, hot) => {
+      o.save();
+      o.globalAlpha = hot ? 0.85 : 0.3;
+      o.fillStyle = hot ? '#3a2410' : '#6a5030';
+      o.beginPath();
+      o.moveTo(x + dir * 12, cy);
+      o.lineTo(x - dir * 4, cy - 14);
+      o.lineTo(x - dir * 4, cy + 14);
+      o.closePath();
+      o.fill();
+      o.restore();
+    };
+    if (this.spread < this.spreads - 1) arrow((p1[0] + p2[0]) / 2 - 26, 1, f !== null && f > 0.84);
+    if (this.spread > 0) arrow((p0[0] + p3[0]) / 2 + 26, -1, f !== null && f < 0.16);
   }
 
   // Is a point of the view on the page?
@@ -437,13 +752,21 @@ export class DocumentWindow extends Window {
   onClick(ck) {
     const m = this.ui.mouse || { x: 0, y: 0 };
     if (ck && ck.button === 2) this.putDown();
-    else if (this.onPage(m.x, m.y)) this.toggleEasy();
+    else if (this.bookMode && this.poly) {
+      // (A book: its outer edges turn the page; the rest of it, the print.)
+      const f = this.across(m.x, m.y);
+      if (f === null) this.putDown();
+      else if (f > 0.84) this.turnPage(1);
+      else if (f < 0.16) this.turnPage(-1);
+      else this.toggleEasy();
+    } else if (this.onPage(m.x, m.y)) this.toggleEasy();
     else this.putDown();
     return true;
   }
 
   onWheel(d) {
-    this.scrollBy(d > 0 ? 40 : -40);
+    if (this.bookMode) this.turnPage(d > 0 ? 1 : -1);
+    else this.scrollBy(d > 0 ? 40 : -40);
   }
 
   scrollBy(d) {
@@ -455,6 +778,12 @@ export class DocumentWindow extends Window {
   onKey(k) {
     if (k.code === 'Escape' || k.code === 'Enter' || k.code === 'KeyE') {
       this.putDown();
+      return true;
+    }
+    if (this.bookMode) {
+      if (['ArrowRight', 'KeyD', 'PageDown', 'Space'].includes(k.code)) this.turnPage(1);
+      else if (['ArrowLeft', 'KeyA', 'PageUp', 'Backspace'].includes(k.code)) this.turnPage(-1);
+      else if (k.code === 'Tab') this.toggleEasy();
       return true;
     }
     if (k.code === 'Space' || k.code === 'Tab') {

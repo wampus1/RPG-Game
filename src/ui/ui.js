@@ -1678,7 +1678,7 @@ export class UI {
   // it: their hand) }.
   openBook(lines, o = {}) {
     this.closeAll();
-    this.open(new DocumentWindow(this, { title: lines[0], lines: lines.slice(1), kind: o.kind || 'book', from: o.from || null, key: o.key || null }));
+    this.open(new DocumentWindow(this, { title: lines[0], lines: lines.slice(1), kind: o.kind || 'book', from: o.from || null, key: o.key || null, by: o.by || null, sign: o.sign || null, year: o.year || null }));
   }
   openDeath(cause, below = null) {
     this.closeAll();

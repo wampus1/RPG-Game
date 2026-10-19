@@ -20,7 +20,7 @@ export function yearOf(day) {
   return BASE_YEAR + Math.floor(Math.max(0, day) / YEAR_DAYS);
 }
 
-const FOUNDERS = {
+export const FOUNDERS = {
   vale: ['Aldo', 'Berta', 'Corin', 'Dela', 'Emrys', 'Fenna', 'Galt', 'Hesse', 'Ines', 'Jorn'],
   north: ['Asgrim', 'Brynja', 'Egil', 'Frida', 'Halvar', 'Ingrid', 'Ketil', 'Sigrun'],
   sun: ['Amun', 'Bastet', 'Farid', 'Hanan', 'Idris', 'Layla', 'Nabil', 'Samira'],
@@ -33,7 +33,7 @@ const FOUNDERS = {
 const EPITHETS = ['the Elder', 'the Founder', 'Oakheart', 'the Bold', 'Longstride', 'the Wise', 'Ironhand', 'the Wanderer', 'Hearthkeeper', 'of the Old Road'];
 // Each people's own: epithets, how founders came, what haunts the hills,
 // the places stories are told of, and the things that happen to them.
-const STYLE_EPITHETS = {
+export const STYLE_EPITHETS = {
   vale: ['the Ploughman', 'Goodwife', 'the Miller', 'Applecheek', 'the Shepherd'],
   north: ['Bloodaxe', 'the Far-Sailing', 'Wolfskin', 'the Unbowed', 'Ice-Beard'],
   sun: ['the Star-Reader', 'of the Seven Wells', 'the Caravaneer', 'the Patient', 'Gold-Hand'],
@@ -43,7 +43,7 @@ const STYLE_EPITHETS = {
   mist: ['the Lantern', 'Fog-Walker', 'the Quiet', 'Owl-Sight', 'Moss-Hand'],
   tide: ['Sharktooth', 'the Pearl-Diver', 'Net-Mender', 'Wave-Rider', 'the Storm-Watcher'],
 };
-const STYLE_CAME = {
+export const STYLE_CAME = {
   vale: ['over the hills with their sheep', 'up the river on a barge of seed corn', 'from the old kingdom after the war', 'looking for good black earth'],
   north: ['across the sea in three longships', 'over the ice in the hungry winter', 'following the whales down the coast', 'exiled from a jarl\'s hall'],
   sun: ['with a caravan of forty camels', 'following a star across the sands', 'from the drowned city on the coast', 'seeking a well that never dries'],
@@ -53,7 +53,7 @@ const STYLE_CAME = {
   mist: ['out of the fog one morning, nobody knows from where', 'following lantern-lights over the moor', 'from the drowned villages of the south shore', 'seeking the mushroom rings their grandmothers spoke of'],
   tide: ['on a raft of mangrove logs lashed with kelp', 'following the turtles to their landing beaches', 'when the reef villages sank', 'from Thessa, looking for warmer water'],
 };
-const STYLE_BEASTS = {
+export const STYLE_BEASTS = {
   vale: ['a great white stag', 'a black dog with eyes like lamps', 'a lady in grey', 'a headless rider'],
   north: ['a wolf as big as a horse', 'a draugr that walks the shore', 'a serpent in the deep water', 'a troll under the bridge'],
   sun: ['a djinn in the old well', 'a sand-wyrm', 'a veiled woman who asks for water', 'a lion with a man\'s face'],
@@ -63,7 +63,7 @@ const STYLE_BEASTS = {
   mist: ['the Hollow King and his grey court', 'a lantern that walks by itself', 'the drowned who call from the bog', 'an owl with a woman\'s voice'],
   tide: ['the shark who waits beyond the reef', 'a turtle as big as an island', 'the singing in the storm wall', 'a drowned ship that sails by night'],
 };
-const STYLE_PLACES = {
+export const STYLE_PLACES = {
   vale: ['the old well', 'the mill race', 'the crossroads', 'the churchyard yew'],
   north: ['the burial mound', 'the old longhouse', 'the sea cliffs', 'the standing stones'],
   sun: ['the dry well', 'the old caravanserai', 'the dunes', 'the star tower'],

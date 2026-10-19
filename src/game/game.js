@@ -126,6 +126,7 @@ import { rule } from '../mod/rules.js';
 import { biomeSpawn } from '../mod/biomes.js';
 import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
+import { bookAt } from './books/books.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
 const GEMS_COLOR = (k) => (ITEMS[k] && ITEMS[k].gem && GEMS[k] ? GEMS[k].color : '#ffffff');
@@ -5158,9 +5159,13 @@ export class Game {
         else this.ui.openSign(t.lines || t, t.title);
         break;
       }
-      case 'bookshelf':
-        this.ui.openBook(this.bookText(x, y, z));
+      case 'bookshelf': {
+        // (Round 126: one of the world's own books; see game/books.)
+        const b = bookAt(this, x, y, z);
+        if (b) this.ui.openBook([b.title, ...b.lines], { kind: 'book', by: b.by, sign: b.sign, year: b.year });
+        else this.ui.openBook(this.bookText(x, y, z));
         break;
+      }
       case 'grave':
         this.ui.openSign(this.sim.graveText(x, z), 'GRAVESTONE');
         break;

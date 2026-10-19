@@ -949,6 +949,14 @@ export const STEPS = [
       void d;
       log.push('Governing: a record of every matter decided, notes as matters come and votes are called, rates set to the point, officers\' traits, and a war\'s progress at a glance. Letters and books are held up to read, in their writers\' own hands.');
     },
+  },  {
+    to: '1.26.0',
+    data(d, log) {
+      // (Nothing in a world to change: the books are written from the world
+      // as it is, and the long past behind it from its seed.)
+      void d;
+      log.push('Books: every shelf holds one of the world\'s own books, many pages long, written from its history, its realms, its wars, its roads, its tables, its old places, its beasts and its faiths.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)
