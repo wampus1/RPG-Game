@@ -10060,6 +10060,113 @@ write and publish them.
   little faster with the wind behind it and slower against it.
 - Bamboo is thinner, rounder and bends a little. Tigers are tiger-sized.
 
+## Round 129: Festivals round the town, and their games
+
+### The day, spread round the town
+
+- **Places of their own.** A feast, a fete or a people's rite is no
+  longer one stage on the square. On the morning of the day, the builders
+  also put up:
+  - ale tables by the tavern door (casks, a trestle, benches);
+  - a blessing at the temple (an altar between candles, flowers);
+  - a row of stalls on a street off the square (or the town's own market
+    stalls, where there's no room);
+  - games on the green, near a road into town: two archery butts, a
+    festival board, hay bales.
+  Each place is on open ground in the town itself, clear of the doors and
+  the posters. Smaller towns get smaller ones. A village has ale tables
+  and a stall; a city has all four.
+- **A programme.** Stalls and games in the morning, the blessing, the
+  procession from the temple to the square, the feast, then the night at
+  the tavern. Each rite keeps its own day (the tide feast, the fair, the
+  lanterns, the vigil). The posters list it, each part is called out
+  round the town as it begins, the corner of the screen says what's on
+  now and next, and the little map flags each place (the one in use
+  blinks). Ask anyone "What's on for the festival?"
+- **The townsfolk over it.** People go where they'd want to be: the
+  devout and the old to the blessing, the thirsty to the ale tables, the
+  children to the green, the shopkeepers to mind the stalls. The host and
+  a few of the keenest walk the procession. Rain sends everyone indoors
+  (the tavern, the hall, the temple) until it stops.
+
+### The games
+
+Each is played on a screen of its own, painted the way the openings are.
+Have a go by asking anyone at the place it's held, or from the festival
+board on the green. The board lists the day, every contest, when it's
+on, and the best so far.
+
+- **Archery** (on the green). Aim with the pointer, hold to draw, let go
+  to loose; hold SHIFT to hold your breath. The wind's on the pennant,
+  and a short draw falls short. Six arrows at 20, 30 and 40 paces.
+- **The foot race** (from the green). Put your name down and be on the
+  line when it starts. Run past each mark (on the little map, with its
+  direction and distance in the corner) and back. The townsfolk who've
+  entered run the course with you. No horses.
+- **Wrestling** (on the green). A bout with the town's champion; throw
+  them and you're the new champion.
+- **The eating match** (at the ale tables). A and D in turn to eat. Go
+  too fast and you choke; SPACE for a gulp of ale. Thirty seconds,
+  against two of the town.
+- **The riddling** (at the ale tables). Five riddles, a candle burning
+  down for each.
+- **The dance** (on the square, at the feast). Steps come down four
+  lanes to a tune in the people's own scale and instruments, round their
+  maypole, bonfire or lantern tree.
+- **The cook-off** (on the square). Hold a dish and hand it in. Three
+  judges taste every dish at its time and hold up their cards. The
+  town's own dishes go down well; a dish the town's faith forbids does
+  not.
+- **Each people's own:**
+  - ringing the bell, for the vales, the fire peoples, the jungle and
+    the south;
+  - the log toss, for the north and the highlands;
+  - the raft race across the harbour, for the island and salt peoples;
+  - the lantern walk through the mist, for the mist peoples and the jade
+    court.
+  The far peoples play their nearest kin's.
+- **The townsfolk have a go too.** Their scores fit who they are: the
+  guards shoot straight, the scholars know their riddles, the young run
+  fastest. Each contest closes at its time. The top three are called out
+  round the town and written in the ledger. A player who places gets coin
+  (more in a bigger town), a rosette (gold, silver or bronze, naming the
+  contest, the town and the year) and the host's thanks. A winner also
+  gets renown.
+
+### Around the games
+
+- **Music.** Play an instrument by the square or the ale tables while
+  something's on: coins get tossed your way, and the host remembers it.
+- **Helping beforehand.** In the days before, the host takes six things
+  to eat, three mugs of ale, five flowers, or ¤20 toward it.
+- **The leader's speech.** Govern the town (or rule the realm) and be
+  there as the feast begins: ask the host to let you open it. Speak
+  grandly, plainly, or tell a joke. The factions (or the town's regard
+  for the crown) think the better of you, unless it falls flat.
+- **Mischief.** In the crush at a busy place, you can try to lift a
+  purse; if they feel it, it's theft before witnesses. The ale cask
+  gives you a mug on the house. Hold a potion when you use it and it
+  goes into the cask: the ale tables get rowdy, and the townsfolk who
+  have a go there after do worse. If anyone sees you, it's a crime.
+- **How it went.** When the day's done it's reckoned up from:
+  - the turnout and the places put up;
+  - the gifts and the music;
+  - the contests, and the players who had a go;
+  - the speech and the weather;
+  - any trouble.
+  The guests go home happier (or not). The ledger says whether it was
+  "the best in years" or "a damp squib", and the annals name the winners.
+  For a few days after, ask anyone "How was the festival?"
+
+### Multiplayer
+
+The host runs the contests. Each player's games are played on their own
+screen, with their own keys and sound. The result goes back to the host,
+which checks it against that player's go before it counts, and sends the
+standings back. Players who've had a go show up as rivals at each
+other's tables and boats. Everyone runs the same foot race. The leader's
+speech, music tips, gifts and mischief are each player's own.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
