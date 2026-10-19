@@ -677,9 +677,26 @@ export class War {
   // ------------------------------------------------------------ you, called up
   // The realm you're a citizen of, if any.
   playerCiv() {
+    // (Round 128: a ruler's own realm, citizen of it or not.)
+    const C = this.sim.crown && this.sim.crown.heldBy(this.sim.crown.pid());
+    if (C) {
+      const civ = this.sim.crown.civOf(C);
+      if (civ) return civ;
+    }
     const c = this.sim.citizen;
     const s = c ? this.ow.settlements[c.sid] : null;
     return s && s.civ ? s.civ : null;
+  }
+
+  // (Round 128) How you're called up: as the realm's ruler, as the head of
+  // one of its towns, or as one of its people.
+  roleIn(civ) {
+    const sim = this.sim;
+    if (sim.crown && sim.crown.isRuler(civ)) return 'ruler';
+    const T = sim.office && sim.office.heldBy(sim.office.pid());
+    const s = T ? this.ow.settlements[T.sid] : null;
+    if (s && s.civ && s.civ.id === civ.id) return 'mayor';
+    return 'citizen';
   }
 
   // Each player's own call-up to a battle (the host's kept where it always
@@ -734,12 +751,25 @@ export class War {
     const side = w.a.includes(me.id) ? 'a' : w.b.includes(me.id) ? 'b' : null;
     if (!side) return null;
     if (this.draftOf(plan)) return null;
-    const d = { side, civ: me.id, state: 'called', present: 0, hits: 0 };
+    const role = this.roleIn(me);
+    const d = { side, civ: me.id, state: 'called', present: 0, hits: 0, role };
     this.setDraft(plan, d);
     const foe = this.civ(w.lead[side === 'a' ? 'b' : 'a']);
-    const L = this.sim.layoutOf(this.sim.citizen.sid);
-    ledger(L, day, `${this.game.playerName} is called up to fight for the ${plain(me)} at ${plan.name}.`);
-    this.game.ui.msg(`Called to arms! As a citizen of the ${plain(me)} you must fight ${foe ? `the ${plain(foe)} ` : ''}at ${plan.name}, tomorrow morning (it's marked on your map). Stay away and you'll be named a deserter.`, '#ff9060');
+    const home = this.sim.citizen ? this.sim.citizen.sid : (this.realms.capitalOf(me) || {}).id;
+    const L = home !== undefined && home !== null ? this.sim.layoutOf(home) : null;
+    const against = foe ? `the ${plain(foe)} ` : '';
+    if (role === 'ruler') {
+      if (L) ledger(L, day, `${this.game.playerName} is to lead the host of the ${plain(me)} at ${plan.name}.`);
+      this.game.ui.msg(`To war! The host of the ${plain(me)} meets ${against}at ${plan.name} tomorrow morning, and your captains look for you at its head (it's marked on your map). A ruler who lets the army fight without them will not soon be forgiven.`, '#ff9060');
+    } else if (role === 'mayor') {
+      const T = this.sim.office.heldBy(this.sim.office.pid());
+      const ts = this.ow.settlements[T.sid];
+      if (L) ledger(L, day, `${this.game.playerName} is to lead the levy of ${ts.name} for the ${plain(me)} at ${plan.name}.`);
+      this.game.ui.msg(`Called to arms! The levy of ${ts.name} marches for the ${plain(me)} against ${against}at ${plan.name}, tomorrow morning, and its people expect you at their head (it's marked on your map). Stay away and you'll be named a deserter.`, '#ff9060');
+    } else {
+      if (L) ledger(L, day, `${this.game.playerName} is called up to fight for the ${plain(me)} at ${plan.name}.`);
+      this.game.ui.msg(`Called to arms! As a citizen of the ${plain(me)} you must fight ${against}at ${plan.name}, tomorrow morning (it's marked on your map). Stay away and you'll be named a deserter.`, '#ff9060');
+    }
     this.game.audio?.play('alarm');
     return d;
   }
@@ -759,6 +789,15 @@ export class War {
     const civ = this.civ(d.civ);
     if (!civ) return null;
     const day = Math.floor(this.sim.abs / DAY);
+    // (Round 128) A ruler can't be named a deserter by their own realm: but
+    // the army remembers who wasn't there.
+    if (d.role === 'ruler' && this.sim.crown && this.sim.crown.isRuler(civ)) {
+      const cap0 = this.realms.capitalOf(civ);
+      const CL0 = cap0 && this.game.world.layouts.get(cap0.id);
+      if (CL0 && CL0.econ) ledger(CL0, day, `${this.game.playerName} was not at ${plan.name}, and the host of the ${plain(civ)} fought without its ruler.`);
+      this.game.ui.msg(`You weren't at ${plan.name}. Your army fought without you, and the whole realm knows it.`, '#ff7060');
+      return true;
+    }
     this.deserters[civ.id] = { day, war: w.id, battle: plan.name };
     const J = this.sim.justice;
     for (const s of this.realms.members(civ)) J.commit(s.id, 'desertion', { known: true, quiet: true, silent: true, desc: `Deserting the ${plain(civ)} at ${plan.name}` });

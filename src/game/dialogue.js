@@ -202,6 +202,9 @@ function openingRaw(npc, game) {
   const name = game.playerName;
   if (npc.adventurer) {
     if (game.duel && game.duel.npc === npc) return 'Talk later. Fight now!';
+    // (Round 128) The one who governs here, met on the road.
+    const ld = leaderOf(game, s);
+    if (ld) return pick(rng, [ld.scope === 'town' ? `The ${ld.title} of ${s.name}? Well met, ${ld.address}.` : `The ${ld.title}, out on the road? Well met, ${ld.address}.`, `${up(ld.address)}. Didn't expect to meet you out among the likes of us.`, `Hail, ${ld.address}. Any work going for a sword like mine?`]);
     // A citizen is a local to them; someone who belongs nowhere, one of their own.
     return sim.citizen
       ? pick(rng, [`A local! Maybe you can tell me: is ${s.name}'s tavern any good?`, `Well met. ${s.name} treating you well?`, 'Hail. Don\'t mind me, just passing through.'])
@@ -1004,7 +1007,10 @@ function workTalk(npc, game) {
   } else if (rec.job === 'guard') {
     lines.push(`Long shifts, but somebody has to keep the peace.${hours}`);
     lines.push(e.recent.thefts + e.recent.violence ? 'There\'s been trouble lately; we\'re stretched thin.' : 'Quiet lately. Just how I like it.');
-    if (!car.isGuard(s.id)) lines.push('We could use more hands on the watch, if you\'re a citizen. See the mayor.');
+    if (!car.isGuard(s.id)) {
+      const ld = leaderOf(game, s);
+      lines.push(ld ? `We could use more hands on the watch, ${ld.address}, if you've the coin to pay for them.` : 'We could use more hands on the watch, if you\'re a citizen. See the mayor.');
+    }
     choices.push({ id: 'hire', label: 'Could I hire you as an escort?' });
   } else if (rec.job === 'mayor') {
     lines.push(`Balancing the books, mostly. The treasury holds ¤${Math.floor(e.treasury)}.`);
@@ -1264,6 +1270,11 @@ function petitionTalk(npc, game, arg) {
     sim.petition = { sid: s.id, law: id, enact, signers: [], refused: [], day: game.day };
     return { lines: [`Very well. Bring me a petition to ${enact ? 'pass' : 'repeal'} the ${LAWS[id].name.toLowerCase()} with at least ${needed(L)} names on it, and the council will consider it.`, '(Ask townsfolk to sign it.)'] };
   }
+  // (Round 128) The town's head changes its laws in council; the realm's
+  // ruler may simply decree them. Neither need petition anyone.
+  const ld = leaderOf(game, s);
+  if (ld && ld.scope === 'town') return { lines: [`You hold the council, ${ld.address}. The laws are yours to change there (N).`] };
+  if (ld) return { lines: [`You might simply decree it, ${ld.address}. But if you'd have the town ask for it first, bring me a petition, and the council will hear it.`], choices: LAW_IDS.filter((id) => lawFits(L.settlement, id)).map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })) };
   if (!sim.isCitizen(s.id) && sim.opinion(npc) < 20) return { lines: ['The laws of this town are a matter for its people. Become a citizen, or earn our trust, first.'] };
   return {
     lines: ['Which law do you have in mind?'],
@@ -2033,7 +2044,7 @@ function respondRaw(npc, game, id, arg) {
       const b = npc.nomad;
       if (!b) return { lines: ['...'] };
       if (arg === 'vouch') {
-        if (!sim.isCitizen(s.id)) return { lines: ['You don\'t live here, do you? No offence, but we\'ll ask someone who does.'] };
+        if (!sim.isCitizen(s.id) && !leaderOf(game, s)) return { lines: ['You don\'t live here, do you? No offence, but we\'ll ask someone who does.'] };
         const good = sim.areaMod(s.id) >= 0;
         if (!b.vouchedBy) {
           b.vouchedBy = true;
@@ -2655,7 +2666,7 @@ function causeTalk(npc, game, id, arg) {
   const L = npc.layout;
   const q = C0 && C0.of(npc.settlement.id);
   if (!q) return { lines: ['The vote? That\'s all done with now.'] };
-  if (!game.sim.isCitizen(npc.settlement.id)) return { lines: ['That\'s for the folk of this town to settle among ourselves.'] };
+  if (!game.sim.isCitizen(npc.settlement.id) && !leaderOf(game, npc.settlement)) return { lines: ['That\'s for the folk of this town to settle among ourselves.'] };
   const rec = npc.rec;
   const champ = (i) => L.npcs.find((r) => r.idx === q.champ[i]);
   if (id === 'cause_ask') {

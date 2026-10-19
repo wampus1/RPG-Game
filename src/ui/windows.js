@@ -8,7 +8,7 @@ import { starable, starGear } from '../world/quality.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
-import { openingLine, topicsFor, respond, TOPIC_CATS } from '../game/dialogue.js';
+import { openingLine, topicsFor, respond, TOPIC_CATS, leaderOf } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
 import { RelicAnvilWindow } from './relicanvil.js';
 import { AncientWindow } from './ancient.js';
@@ -1187,11 +1187,19 @@ export class HaltWindow extends Window {
     g.text(2, 1, `${this.guard.name}, ${this.guard.title}:`, C.cyan);
     const what = this.crimes.slice(-3).map((c) => lcFirst(describe(c)));
     const suspect = this.crimes.length && this.crimes.every((c) => c.suspected);
-    const lines = wrap(suspect
-      ? `"You were seen near ${what.length ? 'the scene of ' + what.join(', ') : 'trouble'}. You're coming with us to answer some questions. Come quietly."`
-      : `"You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. Come quietly to the ${this.guard.settlement.type === 'village' ? 'village' : 'town'} jail, or we do this the hard way."`, this.w - 4);
+    // (Round 128) Whoever governs here is arrested as such: with all due
+    // respect, and the law all the same.
+    const ld = leaderOf(game, this.guard.settlement);
+    const A = ld ? ld.address : null;
+    const lines = wrap(ld
+      ? suspect
+        ? `"Forgive me, ${A}. You were seen near ${what.length ? 'the scene of ' + what.join(', ') : 'trouble'}, and the law makes no exception, not even for the ${ld.title}. I must ask you to come and answer for it."`
+        : `"${A[0].toUpperCase() + A.slice(1)}... I'm sorry. You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. The law binds the ${ld.title} as it binds the rest of us. Will you come quietly?"`
+      : suspect
+        ? `"You were seen near ${what.length ? 'the scene of ' + what.join(', ') : 'trouble'}. You're coming with us to answer some questions. Come quietly."`
+        : `"You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. Come quietly to the ${this.guard.settlement.type === 'village' ? 'village' : 'town'} jail, or we do this the hard way."`, this.w - 4);
     lines.slice(0, 4).forEach((l, i) => g.text(2, 3 + i, l, C.white));
-    const opts = [['1', 'Come quietly (go to jail and face a hearing)', () => this.answer(game, true)], ['2', 'Resist! (the guards will fight to subdue you)', () => this.answer(game, false)]];
+    const opts = [['1', ld ? 'Submit to the law (go to jail and face a hearing)' : 'Come quietly (go to jail and face a hearing)', () => this.answer(game, true)], ['2', ld ? `Resist! (your own watch will fight to subdue you)` : 'Resist! (the guards will fight to subdue you)', () => this.answer(game, false)]];
     opts.forEach(([k, label, fn], i) => {
       const y = 8 + i;
       const hov = this.hovering(2, y, this.w - 4, 1);
@@ -1229,6 +1237,11 @@ export class TrialWindow extends Window {
     const v = this.v;
     g.box(0, 0, this.w, this.h, { bg: 'rgba(24,18,12,0.97)', double: true, fg: C.hi, title: `HEARING · ${v.town.toUpperCase()}` });
     g.text(2, 1, `Presiding: ${v.judgeTitle} ${v.judgeName}`, C.cyan);
+    // (Round 128) A hearing of the one who governs here: the court speaks
+    // to them as such, and the town will be talking of nothing else.
+    const ld = leaderOf(game, game.world.ow.settlements[v.sid]);
+    const A = ld ? ld.address : null;
+    if (ld) g.text(2, 2, `In the matter of the ${ld.title}, ${game.playerName}`.slice(0, this.w - 4), C.hi);
     g.text(2, 3, 'CHARGES', C.hi);
     let y = 4;
     if (!v.charges.length) g.text(3, y++, 'None.', C.dim);
@@ -1245,26 +1258,29 @@ export class TrialWindow extends Window {
     y++;
     const opts = [];
     if (!v.proven.length) {
-      g.text(2, y++, '"Nothing can be proven. You are free to go."', C.green);
+      g.text(2, y++, ld ? `"Nothing can be proven. The court begs your pardon, ${A}."` : '"Nothing can be proven. You are free to go."', C.green);
       opts.push(['1', 'Leave', 'free']);
     } else if (v.sentence === 'exile' || v.sentence === 'death') {
       g.text(2, y++, `Previous serious convictions here: ${v.prior}.`, C.orange);
-      const t = v.sentence === 'exile' ? `"You are a menace. You are BANISHED from ${v.town}, never to return."` : '"Your crimes are beyond forgiveness. The sentence is DEATH."';
+      const t = ld
+        ? v.sentence === 'exile' ? `"It gives this court no pleasure, ${A}. No one who rules may break the law so often and still rule here. You are BANISHED from ${v.town}."` : `"Crown or no crown, ${A}, your crimes are beyond forgiveness. The sentence is DEATH."`
+        : v.sentence === 'exile' ? `"You are a menace. You are BANISHED from ${v.town}, never to return."` : '"Your crimes are beyond forgiveness. The sentence is DEATH."';
       for (const l of wrap(t, this.w - 4)) g.text(2, y++, l, C.red);
       if (!v.pleaded) opts.push(['2', 'Plead for mercy', 'plead']);
       opts.unshift(['1', 'Accept your fate', 'accept']);
     } else {
+      if (ld) for (const l of wrap(`"The law is the same for the ${ld.title} as for the least of us, ${A}. The court sets a fine."`, this.w - 4)) g.text(2, y++, l, C.white);
       g.text(2, y, `Fine: ¤${v.fine}`, C.hi);
       if (v.fineScale !== 1) g.text(16, y, `(local fines ×${v.fineScale})`, C.faint);
       g.text(44, y++, `Your coins: ¤${v.coins}`, v.canPay ? C.green : C.red);
       if (!v.canPay) g.text(2, y++, `You can't pay: that's ${v.hours} hours in the cell.`, C.orange);
-      if (v.mercy === true) g.text(2, y++, '"Very well, I will show some mercy."', C.green);
-      else if (v.mercy === false) g.text(2, y++, '"Your pleas do not move me."', C.orange);
+      if (v.mercy === true) g.text(2, y++, ld ? `"Very well, ${A}. The court will show some mercy."` : '"Very well, I will show some mercy."', C.green);
+      else if (v.mercy === false) g.text(2, y++, ld ? `"Your rank does not move this court, ${A}."` : '"Your pleas do not move me."', C.orange);
       if (v.canPay) opts.push(['1', `Pay ¤${v.fine} and go free`, 'pay']);
       opts.push([String(opts.length + 1), `Serve ${v.hours} hours in the cell`, 'serve']);
-      if (!v.pleaded) opts.push([String(opts.length + 1), 'Plead for mercy', 'plead']);
+      if (!v.pleaded) opts.push([String(opts.length + 1), ld ? 'Ask the court for leniency' : 'Plead for mercy', 'plead']);
     }
-    if (v.citizen && v.proven.length) g.text(2, y++, 'Your citizenship will be revoked.', C.red);
+    if (v.citizen && v.proven.length) g.text(2, y++, ld && ld.scope === 'town' ? 'Your citizenship will be revoked, and your office with it.' : 'Your citizenship will be revoked.', C.red);
     if (v.weapons === 'returned' && v.sentence !== 'death') g.text(2, y++, 'Your weapons will be returned when you are released.', C.dim);
     else if (v.weapons === 'forfeit') g.text(2, y++, 'Your weapons are forfeit.', C.orange);
     if (v.stripped) g.text(2, y++, 'You are dismissed from the watch: your badge and kit are taken.', C.orange);

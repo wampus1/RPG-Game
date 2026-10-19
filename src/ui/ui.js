@@ -8,6 +8,7 @@ import { ChatWindow, drawChat } from './chat.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { dishLines, ingredientTypes } from '../world/dishes.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
+import { leaderOf } from '../game/dialogue.js';
 import { DungeonMapWindow } from './dungeonmap.js';
 import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
 import { relicReach } from '../game/relics.js';
@@ -968,6 +969,11 @@ export class UI {
       } else if (game.player.down) {
         status = 'KNOCKED OUT';
         col = C.orange;
+      } else if (s && leaderOf(game, s)) {
+        // (Round 128) Whoever governs here is that first, not a citizen.
+        const ld = leaderOf(game, s);
+        status = ld.scope === 'town' ? `${ld.title} of ${s.name}` : `${ld.title} · in your realm`;
+        col = C.hi;
       } else if (cz && s && cz.sid === s.id) {
         status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : cz.host !== null ? `Citizen · guest of the ${sim.hostName() || ''}s`.slice(0, 24) : 'Citizen';
         col = C.green;

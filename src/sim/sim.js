@@ -1778,8 +1778,10 @@ export class Sim {
   checkConduct(L, day) {
     const z = this.citizen;
     if (!z || z.sid !== L.settlement.id) return;
-    // (Not the town's own head: the town has other ways to be rid of you.)
+    // (Not the town's own head: the town has other ways to be rid of you;
+    // nor its realm's ruler, whom no mayor may turn out of a town.)
     if (this.office.isHolder(L.settlement.id)) return;
+    if (this.crown && L.settlement.civ && this.crown.isRuler(L.settlement.civ)) return;
     const m = mayorOf(L);
     if (!m) return;
     const op = this.opinion({ rec: m, settlement: L.settlement });

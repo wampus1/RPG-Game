@@ -25,6 +25,7 @@ import { settlementIcons, roadCellLinks } from './windows.js';
 export const ZOOMS = [1.4, 3, 4.5, 6, 9, 12, 24];
 const HOME_ZOOM = 5; // 12: the old map's scale
 const GLYPHS_FROM = 12; // close enough to draw the glyphs
+const TIER_FROM = 6; // (Round 128) close enough for an old place's tier to show
 const TILES_FROM = 6; // ...or condensed tiles of them
 
 // How a square is shown at a zoom (pixels a square): 'glyphs' close up
@@ -1316,6 +1317,9 @@ export class MapWindow extends Window {
         // (Round 120) The badge: its tier as a numeral, I, II or III, in
         // the tier's colour, small on the top corner of its icon (the
         // outer one, away from the next square), on a dark ground.
+        // (Round 128: only when the squares are big enough for it to sit in
+        // the corner; zoomed out, it'd cover the place's own mark.)
+        if (Math.min(bw, h) < 16) return;
         const u = Math.max(1, Math.round(Math.min(bw, h) / 10));
         const nw = (tier * 2 + 1) * u;
         const nh = 5 * u;
@@ -1328,7 +1332,9 @@ export class MapWindow extends Window {
         for (let i = 0; i < tier; i++) ctx.fillRect(nx + (1 + i * 2) * u, ny, u, nh);
         ctx.fillRect(nx, ny, nw, u);
         ctx.fillRect(nx, ny + nh - u, nw, u);
-      } else if (this.z >= 3) {
+      } else if (this.z >= TIER_FROM) {
+        // (Round 128: only once the map's zoomed in far enough for it to
+        // sit beside the place's mark, not over it.)
         const q = this.at(d.x, d.z);
         if (tier >= 3) {
           const k = (now * 0.8) % 1;
@@ -1339,9 +1345,9 @@ export class MapWindow extends Window {
           ctx.restore();
         }
         ctx.fillStyle = '#140e08';
-        ctx.fillRect(Math.round(q.x) + 2, Math.round(q.y) - 4, 3, 3);
+        ctx.fillRect(Math.round(q.x) + 4, Math.round(q.y) - 6, 3, 3);
         ctx.fillStyle = col;
-        ctx.fillRect(Math.round(q.x) + 2, Math.round(q.y) - 4, 2, 2);
+        ctx.fillRect(Math.round(q.x) + 4, Math.round(q.y) - 6, 2, 2);
       }
     };
     // Old places, found or heard of. (Grey once beaten.)

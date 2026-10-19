@@ -2703,7 +2703,9 @@ class Layout {
       const door = { x: cx + sx, z: cz + sz };
       const front = { x: cx + sx, z: cz + 2 * sz };
       const diag = { x: cx + 2 * sx, z: cz + sz };
-      const solid = [...cell, ...bars, door];
+      // (Round 128: the bars turn the corner there, beside the door, so the
+      // cell is closed all round to look at, not only to walk.)
+      const solid = [...cell, ...bars, door, diag];
       if (![...solid, diag].every((t) => isIn(t.x, t.z) && !occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z)))) continue;
       if (!isIn(front.x, front.z) || occ.has(key(front.x, front.z))) continue;
       for (const t of solid) occ.add(key(t.x, t.z));
@@ -2712,8 +2714,7 @@ class Layout {
         continue;
       }
       reserved.add(key(front.x, front.z));
-      reserved.add(key(diag.x, diag.z));
-      for (const t of bars) {
+      for (const t of [...bars, diag]) {
         this.put(t.x, Y0, t.z, B.iron_bars);
         this.put(t.x, Y0 + 1, t.z, B.iron_bars);
       }
@@ -2732,7 +2733,7 @@ class Layout {
       }
       // Everything a breakout could damage, for the guards to rebuild.
       const blocks = [];
-      for (const t of bars) blocks.push([t.x, Y0, t.z, B.iron_bars, 0], [t.x, Y0 + 1, t.z, B.iron_bars, 0]);
+      for (const t of [...bars, diag]) blocks.push([t.x, Y0, t.z, B.iron_bars, 0], [t.x, Y0 + 1, t.z, B.iron_bars, 0]);
       blocks.push([door.x, Y0, door.z, B.cell_door, 0], [door.x, Y0 + 1, door.z, B.cell_door_top, 0]);
       for (const t of cell) {
         for (const [dx, dz] of DIRS4) {

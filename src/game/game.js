@@ -208,6 +208,23 @@ export function reachClear(world, p, x, z) {
   return !blocked(0) || !blocked(0.3) || !blocked(-0.3);
 }
 
+// (Round 128) The tiles a standing wagon covers, kept with it while it
+// stands where it is.
+function wagonTiles(q) {
+  const a = typeof q.ang === 'number' ? q.ang : [0, -Math.PI / 2, Math.PI, Math.PI / 2][(q.face ?? 1) & 3];
+  const key = `${q.x},${q.z},${a.toFixed(2)},${q.horse ? 1 : 0}`;
+  if (q._tilesKey === key) return q._tiles;
+  const fx = Math.sin(a);
+  const fz = Math.cos(a);
+  const out = new Set();
+  for (let f = -2.0; f <= (q.horse ? 2.0 : 0.3); f += 0.25) {
+    for (const r of [-0.45, 0, 0.45]) out.add(`${Math.floor(q.x + 0.5 + f * fx + r * fz)},${Math.floor(q.z + 0.5 + f * fz - r * fx)}`);
+  }
+  q._tilesKey = key;
+  q._tiles = out;
+  return out;
+}
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
@@ -866,9 +883,29 @@ export class Game {
     }
     const big = this.bigAt(x, y, z, self);
     if (big) return big;
+    // (Round 128) A wagon or a coach standing still: its bed, and its horse
+    // out in front, are in the way (not to whoever's townsfolk: they step
+    // round the stand by habit).
+    if (self && self.kind !== 'npc') {
+      const wg = this.wagonAt(x, y, z, self);
+      if (wg) return wg;
+    }
     // Moving entities also reserve the tile they're leaving.
     if (self && self.kind === 'player') {
       for (const n of this.npcs) if (!n.dead && n.moving && n.fx === x && n.fz === z && Math.abs(n.fy - y) <= 1 && n.moveT < 0.5) return n;
+    }
+    return null;
+  }
+
+  // (Round 128) A standing wagon over a tile: the tiles its bed and its
+  // horse cover, turned the way it faces (see render/steeds.js: the bed
+  // runs back from its origin two and a bit, the horse two on ahead).
+  wagonAt(x, y, z, self = null) {
+    for (const q of this.props.values()) {
+      if (q.type !== 'wagon' || q.dead || q.moving || q.ride || Math.abs((q.y ?? y) - y) > 1) continue;
+      if (Math.abs(q.x - x) > 3 || Math.abs(q.z - z) > 3) continue;
+      if (self && (self.inWagon === q || (self.mount && self.mount.kind === 'wagon'))) continue;
+      if (wagonTiles(q).has(`${x},${z}`)) return q;
     }
     return null;
   }

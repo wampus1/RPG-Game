@@ -827,8 +827,14 @@ export class Society {
     const J = n.layout.jail;
     if (J && night !== !!n.sleeping) {
       n.sleeping = night;
-      if (night && J.bed) n.teleport(J.bed.x, J.y, J.bed.z);
-      else if (!night) n.teleport(J.stand.x, J.y, J.stand.z);
+      // (Round 128: laid on the cot as anyone abed is, not stood on it.)
+      if (night && J.bed) {
+        n.teleport(J.bed.x, J.y, J.bed.z);
+        n.bedTile = { x: J.bed.x, y: J.y, z: J.bed.z, jail: true };
+      } else if (!night) {
+        n.bedTile = null;
+        n.teleport(J.stand.x, J.y, J.stand.z);
+      }
     }
     n.cellT = (n.cellT || 0) + dt;
     if (!n.sleeping && n.cellT > 30 && n.rng.chance(0.004)) {

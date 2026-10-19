@@ -551,7 +551,52 @@ export class Justice {
     e.phase = 'enter';
     e.t = Math.min(e.t, 100);
     this.setCellDoor(L, true);
+    this.makeRoom(L);
     this.game.audio?.play('door');
+  }
+
+  // (Round 128) The town's one cell wanted for you: whoever of its own is
+  // in there doing time is let out early (their time counted served), and
+  // stood outside it, so you're never put in on top of them.
+  makeRoom(L) {
+    const J = L.jail;
+    if (!J) return 0;
+    const game = this.game;
+    let n0 = 0;
+    for (const r of L.npcs) {
+      const n = r.ent;
+      if (!n || n.dead || !['jailed', 'toCell'].includes(n.state)) continue;
+      const lf = r.life || {};
+      lf.held = false;
+      this.sim.society.release(L, r);
+      // (Out of the cell, onto open floor by its door: not on anyone.)
+      const spot = this.freeNear(L, J.front, [...J.cell, J.door]);
+      if (spot) n.teleport(spot.x, J.y, spot.z);
+      n.bedTile = null;
+      ledger(L, game.day, `${r.name.first} ${r.name.last} was let out of the cell early, to make room.`);
+      n0++;
+    }
+    return n0;
+  }
+
+  // An open tile near `from` (not one of `not`), for someone to stand on.
+  freeNear(L, from, not = []) {
+    const w = this.game.world;
+    const skip = new Set(not.map((t) => `${t.x},${t.z}`));
+    const y = L.jail.y;
+    for (let r = 0; r <= 4; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dz = -r; dz <= r; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const x = from.x + dx;
+          const z = from.z + dz;
+          if (skip.has(`${x},${z}`) || !w.canStand(x, y, z)) continue;
+          if (this.game.occupiedBySolid(x, y, z, null) || this.game.npcAt?.(x, y, z)) continue;
+          return { x, z };
+        }
+      }
+    }
+    return null;
   }
 
   // (Round 83) Out past the edge of town: the rope off, and back in the
@@ -603,6 +648,7 @@ export class Justice {
     if (!quick) game.advanceTime(how === 'knockout' ? 90 : 20);
     const jail = L.jail;
     if (jail) {
+      this.makeRoom(L);
       game.teleportPlayer(jail.stand.x, jail.y, jail.stand.z);
       this.setCellDoor(L, false);
     } else {

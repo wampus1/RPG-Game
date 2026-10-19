@@ -76,7 +76,7 @@ const makeCanvas = (w, h) => {
 // (Round 82) Iron bars, and the cell doors hung in them: drawn as a grille
 // (see Renderer.drawBars), not a box.
 let BAR_IDS = null;
-const barIds = () => (BAR_IDS ||= new Set([B.iron_bars, B.cell_door, B.cell_door_top]));
+const barIds = () => (BAR_IDS ||= new Set([B.iron_bars, B.cell_door, B.cell_door_top, B.cell_door_open]));
 
 // (Round 82) Where passengers sit in a wagon's bed, back from the bench.
 const BED_F = [-0.75, -1.25, -1.75];
@@ -2327,7 +2327,11 @@ export class Renderer {
     if (m && m.x >= D.x && m.x < D.x + S.img.width && m.y >= D.y && m.y < D.y + S.img.height) {
       // (Round 115: off the pixels it was made from, never read back off
       // the canvas each frame the mouse is over it.)
-      const a = S.px ? (S.px[(m.y - D.y) * S.w + (m.x - D.x)] >>> 24) : pixelsIn(S.img, m.x - D.x, m.y - D.y, 1, 1)[3];
+      // (Round 128: the pointer's whole pixel; it's rarely on a whole one,
+      // and a fractional index finds nothing at all.)
+      const ix = Math.floor(m.x - D.x);
+      const iy = Math.floor(m.y - D.y);
+      const a = S.px ? (S.px[iy * S.w + ix] >>> 24) : pixelsIn(S.img, ix, iy, 1, 1)[3];
       if (a > 120) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx + 8, feetY, S) };
     }
   }
@@ -2526,6 +2530,30 @@ export class Renderer {
       ctx.fillStyle = c;
       ctx.fillRect(sx + x0, sy + y0, w, h);
     };
+    // (Round 128) A cell door standing open: the gap in the bars, its hinge
+    // post at the side, and the door swung back against the wall, seen end
+    // on, its cross-bars one behind another.
+    if (id === B.cell_door_open) {
+      const hingeW = W || !E;
+      const hx = hingeW ? 0 : 13;
+      const back = N && !S;
+      if (back) {
+        f(hx + 1, 0, 2, 20, MID);
+        f(hx + 1, 0, 1, 20, LIT);
+        for (let r = 9; r < 19; r += 3) f(hx, r, 3, 1, DARK);
+      }
+      f(hx, 6, 3, 14, MID);
+      f(hx, 6, 1, 14, LIT);
+      f(hx + 2, 6, 1, 14, DARK);
+      if (!back) {
+        f(hx + 1, 10, 2, 18, MID);
+        f(hx + 1, 10, 1, 18, LIT);
+        for (let r = 13; r < 27; r += 3) f(hx, r, 3, 1, DARK);
+      }
+      f(hingeW ? 13 : 0, 6, 3, 14, MID);
+      f(hingeW ? 13 : 0, 6, 1, 14, LIT);
+      return;
+    }
     // Away up the screen, end on: a strip down the middle (its top, then
     // the bars one behind another).
     const endOn = (r0, r1) => {
