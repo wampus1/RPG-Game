@@ -28,19 +28,27 @@ export const DRY_AFTER = 300;
 export const TREMOR_RANGE = 22;
 const TREMOR_EVERY = 4;
 
+// Whose body this is: the one playing's, or (in a party) another player's,
+// kept on their seat while it isn't theirs to play (see party.js).
+function heroOf(game, p) {
+  if (!p || p === game.player) return game.hero;
+  const st = p.seat && p.seat.store;
+  return (st && st.g && st.g.hero) || null;
+}
+
 // Full daylight, outdoors (the third eye's glare).
 function inGlare(game, p) {
   const m = game.minute;
   if (m < 9 * 60 || m > 17 * 60) return false;
   if (game.dungeon && game.world.inInstance && game.world.inInstance(p.x)) return false;
-  const b = game.buildingAtPlayer ? game.buildingAtPlayer() : null;
+  const b = p === game.player && game.buildingAtPlayer ? game.buildingAtPlayer() : null;
   return !b;
 }
 
 // A blow landing on you (`amount`, after armour): what your mutations make
 // of it.
 export function mutIncoming(game, p, source, amount) {
-  const h = game.hero;
+  const h = heroOf(game, p);
   if (!h || amount <= 0) return amount;
   if (has(h, 'chitin')) amount = Math.max(1, amount - 1);
   if (has(h, 'third_eye') && source && source !== p && !game.dotHit) {
@@ -57,7 +65,7 @@ export function mutIncoming(game, p, source, amount) {
 
 // Your blow landing (`amount`, before the target's armour).
 export function mutOutgoing(game, p, amount) {
-  const h = game.hero;
+  const h = heroOf(game, p);
   if (!h || amount <= 0) return amount;
   let k = 1;
   if (has(h, 'dense')) k *= 1.2;
@@ -69,13 +77,13 @@ export function mutOutgoing(game, p, amount) {
 // A blow about to kill you: the second heart, once a day. Returns the
 // blow as it lands.
 export function mutLastBlow(game, p, amount) {
-  const h = game.hero;
+  const h = heroOf(game, p);
   if (!h || !has(h, 'twin_hearts') || p.hp - amount > 0) return amount;
   const m = (p.mut ||= {});
   if (m.heartDay === game.day) return amount;
   m.heartDay = game.day;
   const keep = Math.max(1, Math.ceil(p.maxHp / 3));
-  game.ui.msg('Your second heart kicks in: you stay on your feet.', '#ff90a8');
+  if (p === game.player) game.ui.msg('Your second heart kicks in: you stay on your feet.', '#ff90a8');
   game.renderer?.floatText?.(p.x, p.y + 2.4, p.z, 'second heart', '#ff90a8');
   game.audio?.play('heart');
   return Math.max(0, p.hp - keep);

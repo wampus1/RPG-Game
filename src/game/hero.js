@@ -236,9 +236,9 @@ export function normalizeHero(h) {
   if (out.origin === 'leader') out.lead = leadOf(out);
   out.mutations = mutationsOf(out);
   if (out.mutations.length) out.look.mut = out.mutations.slice();
+  else delete out.look.mut;
   // (Round 124: no hat over antennae.)
   if (out.mutations.includes('antennae')) out.look.hat = null;
-  else delete out.look.mut;
   if (!KITS[out.kit]) out.kit = 'wanderer';
   for (const s of STATS) out.stats[s.key] = Math.max(1, Math.min(STAT_MAX, out.stats[s.key] | 0));
   return out;

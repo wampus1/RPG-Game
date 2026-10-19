@@ -932,6 +932,14 @@ export const STEPS = [
       void d;
       log.push('Three new origins for new characters: a Leader (of a town, or a whole realm, governed as you choose), a Brigand (a pirate with a sloop of their own, at the Black Gulls\' haven), and an Outworlder (fallen from space in an escape pod, with mutations of your choosing).');
     },
+  },  {
+    to: '1.24.0',
+    data(d, log) {
+      // (Nothing in a world to change: an outworlder's mutations work
+      // their own way now, read off the character as they are.)
+      void d;
+      log.push('An outworlder\'s mutations each work their own way now (a blow foreseen, a light of your own, a second heart and more), and the three newer origins\' openings are painted anew.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

@@ -9611,6 +9611,71 @@ opening. The character you made appears in each, as they look.
 - **Version 1.23.0.** Worlds from 1.22 load as before. The new origins
   are for new characters.
 
+## Round 124: The new origins' openings, painted again; mutations of their own
+
+- **The three newer openings are repainted from scratch** in the style of
+  the game's first ones. Each is now three shots, with painted backdrops,
+  layered light, and things moving in each:
+  - **Leader.** First, the capital's square at the golden hour, seen
+    across from its far end:
+    - the great hall (a gilt-towered palace for a realm, a town hall for a
+      town), its belfry with the bell swinging, banners in the colours of
+      how it's governed;
+    - bunting strung across, and the watch at the foot of the stair;
+    - the square packed but for an aisle, heads turning as you walk up it,
+      and doves going up off the roofs.
+
+    Then the great doorway, close, with the lit hall going away behind
+    it. You kneel before the chancellor (or the priest, or the steward),
+    and the crown (or the chain of office) comes down. You rise, and the
+    crowd's hands go up below. Last, the square at dusk: the windows and
+    lanterns are lit and fireworks burst over the hall.
+  - **Brigand.** First, a moonlit sea, with a lighthouse sweeping on the
+    headland. A fat merchantman has her stern lanterns lit, and your sloop
+    comes up on her quarter under black canvas. The bow gun flashes and
+    smokes, a splash goes up across her bow, and her colours come down.
+    Then the cove at sunrise:
+    - the haven under its cliffs: the upturned-hull hall, patched tents,
+      the lookout, the fire, the black flag on its pole;
+    - two of the Brethren's ships at anchor;
+    - your sloop rounding up and dropping anchor, and the boat rowing you
+      in to the jetty while the brethren crowd down to it.
+
+    Last, the jetty close up: you walk up it, the brethren cheer and fire
+    pistols in the air, and the chief steps out to meet you.
+  - **Outworlder.** First, high over Thessa. The world is painted as a
+    globe: seas and lands, clouds, the storm-ring of the Wall, the night
+    side with the lights of towns, and blue air along its edge. Your
+    ribbed ship goes by, its drives burning. Then come alarms and fire
+    along her, and a blast that breaks her in two. Debris and pods fly
+    out, and yours tumbles toward the world as it starts to burn. Then
+    night over a lake in the hills: a green-violet fireball breaks up
+    across the sky and is mirrored in the water. It comes down beyond the
+    hills, the sky goes white, and birds go up off the woods. Last, the
+    crater:
+    - burnt stumps and fires on the rim, embers rising;
+    - the pod's seams glowing and cooling, steam and smoke going up;
+    - the hatch blows, you climb out and look about you, and the last of
+      your ship still falls far overhead.
+- **An outworlder's mutations each have their own gift and cost.** None
+  of them gives a trait that anyone born here can have:
+
+  | Mutation | Gift | Cost |
+  | --- | --- | --- |
+  | Third Eye | **Foresight:** once every 15 seconds, a blow aimed at you is seen coming and lands at half strength. | **Sun Glare:** outdoors in full daylight (9:00 to 17:00), your own blows land 15% softer. |
+  | Glowing Spots | **Lantern Skin:** your own light reaches 5 blocks at night and underground, even in the storm's black. | **Beacon:** at night, folk see you doing wrong from twice as far away. |
+  | Chitin Plates | **Carapace:** every blow you take is 1 lighter (never below 1). | **Stiff Joints:** a dodge roll costs half again as much stamina. |
+  | Gills | **Water-Breather:** you swim as fast as you walk, and heal 1 health every 4 seconds in water. | **Dry Skin:** after 5 minutes out of water your blows are 10% weaker, until you get wet again. |
+  | Antennae | **Tremor Sense:** every 4 seconds, a ring shows where each hostile creature within 22 blocks stands, through stone and earth. | **Ill-Fitting:** no helmet or hat goes on over them. |
+  | Dense Frame | **Heavy-World Muscle:** your blows are 20% harder, and you dig and chop 20% faster. | **Heavy Tread:** you move 8% slower. |
+  | Twin Hearts | **Second Heart:** once a day, a blow that would kill you leaves you on your feet with a third of your health. | **Hungry Hearts:** food heals you 1 less. |
+
+  In a party, each player's mutations count for them alone.
+- **Fixed:** an outworlder's mutations were sometimes missing from their
+  sprite.
+- **Version 1.24.0.** Worlds from 1.23 load as before. An outworlder made
+  in 1.23 keeps the mutations they chose, which now work as above.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

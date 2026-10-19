@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { stubRenderer, stubUI } from './helpers.mjs';
 import { Game } from '../src/game/game.js';
-import { ORIGINS, MUTATIONS, MUTATION_IDS, MUTATION_MAX, normalizeHero, randomHero, has, hpBonus, damageMult, opinionBonus, repGainMult, staminaBonus, leadOf } from '../src/game/hero.js';
+import { ORIGINS, MUTATIONS, MUTATION_IDS, MUTATION_MAX, normalizeHero, randomHero, opinionBonus, repGainMult, leadOf } from '../src/game/hero.js';
 import { shipsOf } from '../src/game/ships3d.js';
 import { piracyOf, isKnownPirate, pirateTo } from '../src/game/piracy.js';
 import { INFAMY } from '../src/game/origins.js';
@@ -24,16 +24,11 @@ const begin = (hero, seed = 12345) => new Game({ seed, renderer: stubRenderer(),
 test('three new origins; an outworlder\'s mutations, each a gift and a cost, three at most, worn on the body', () => {
   for (const k of ['leader', 'brigand', 'outworlder']) assert.ok(ORIGINS[k] && ORIGINS[k].name && ORIGINS[k].about.length <= 144, k);
   assert.equal(MUTATION_IDS.length, 7);
-  for (const k of MUTATION_IDS) assert.ok(MUTATIONS[k].gift && MUTATIONS[k].cost && MUTATIONS[k].grants, k);
+  for (const k of MUTATION_IDS) assert.ok(MUTATIONS[k].gift && MUTATIONS[k].cost, k);
   const h = normalizeHero({ origin: 'outworlder', mutations: ['chitin', 'glow', 'dense', 'gills'] });
   assert.equal(h.mutations.length, MUTATION_MAX);
   assert.deepEqual(h.look.mut, h.mutations);
-  // The gifts and the costs, where they count.
-  assert.ok(has(h, 'night_eyes') && has(h, 'notorious'), 'glowing spots');
-  assert.equal(hpBonus(h), hpBonus({ ...h, mutations: [] }) + 4, 'chitin: tough');
-  assert.ok(damageMult(h) > damageMult({ ...h, mutations: [] }), 'a dense frame: stronger');
-  const g = normalizeHero({ origin: 'outworlder', mutations: ['gills'] });
-  assert.equal(staminaBonus(g), staminaBonus({ ...g, mutations: [] }) - 20);
+  // (What each one does, in play: see round124.test.mjs.)
   // Not an outworlder: no mutations at all.
   const n = normalizeHero({ origin: 'crash', mutations: ['chitin'] });
   assert.equal(n.mutations.length, 0);

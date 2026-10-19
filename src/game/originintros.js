@@ -1,34 +1,32 @@
-// (Round 123) The openings of the three newer origins (see origins.js),
-// painted like the others (see intros.js and starfall.js): a backdrop
-// painted once, a pixel at a time, at half the screen's size, and what
-// moves drawn over it each frame; what's said along the bottom; and in
-// the dark at the end, what you're left with. The one being played as is
-// in each, as they look (their own sprite: an outworlder's mutations and
-// all).
+// (Round 123) The openings of the three newer origins (see origins.js):
+// who's told what, when, what's heard, and the shots cut between. (Round
+// 124) Painted like the others (see intros.js and starfall.js), each shot
+// a backdrop painted once a pixel at a time at half the screen's size and
+// what moves drawn over it each frame: see render/art_leader.js,
+// art_brigand.js and art_outworld.js. The one being played as is in each,
+// as they look (their own sprite: an outworlder's mutations and all).
 //
-// A leader: the great hall, full to the doors, evening light slanting in
-// through its windows; you walk the carpet to the dais between the
-// crowds, and the crown (or the chain of office) comes down; the hall
-// erupts, and the petals fall.
+// A leader: the square before the great hall at the golden hour, packed,
+// you walking up it; the great door, close, you kneeling, the crown (or
+// the chain of office) coming down; the square at dusk, fireworks.
 //
 // A brigand: an hour before dawn on a moonlit sea, your sloop running down
-// a fat merchantman; a shot across her bow, and she strikes her colours;
-// then the cove at sunrise, the brethren on the beach round their fire,
-// the black flag snapping on its pole, as you come home.
+// a fat merchantman, a shot across her bow, and she strikes her colours;
+// the cove at sunrise, the haven, the boat in to the jetty; the jetty,
+// close, the brethren cheering you home.
 //
-// An outworlder: high over a world you've never seen, your ship breaking
-// apart; a pod thrown clear and falling, a green-violet fire across the
-// night sky of Thessa; the crater, the hatch blown off, and you, climbing
-// out into the air of a strange world.
+// An outworlder: high over Thessa, your ship breaking apart, your pod
+// flung clear; night over a lake, the pod coming down beyond the hills;
+// the crater, the hatch blown, and you, climbing out into the air of a
+// strange world.
 import { VIEW_W, VIEW_H, CHAR_W } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { drawText } from '../render/font.js';
-import { drawPerson } from '../render/scenekit.js';
-import { Bmp, sky as skyBands, stars as paintStars, mountains, hills, palm, bush, pine, fbm, hash2, mixC, rgb as rgbOf } from '../render/brush.js';
 import { humanoidSheet, SHEET_H } from '../render/sprites.js';
 import { present, caption, bigText, darkWords } from './intros.js';
 import { paintLeader, drawSquare, drawDoorway } from '../render/art_leader.js';
 import { paintBrigand, drawChase, drawCove, drawJetty } from '../render/art_brigand.js';
+import { paintOutworld, drawOrbit, drawFall, drawCrater } from '../render/art_outworld.js';
 
 const PW = VIEW_W / 2;
 const PH = VIEW_H / 2;
@@ -64,24 +62,6 @@ function sprite(g, look, dir, frame, x, yb, scale = 1, alpha = 1) {
   g.globalAlpha = alpha;
   g.drawImage(sheet, frame * 16, dir * SHEET_H, 16, SHEET_H, Math.round(x - 8 * scale), Math.round(yb - SHEET_H * scale), Math.round(16 * scale), Math.round(SHEET_H * scale));
   g.restore();
-}
-
-// A soft round glow.
-function glow(g, x, y, r, col, a) {
-  if (a <= 0 || r <= 0) return;
-  const [cr, cg, cb] = rgbOf(col);
-  const gr = g.createRadialGradient(x, y, 0, x, y, r);
-  gr.addColorStop(0, `rgba(${cr},${cg},${cb},${a})`);
-  gr.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
-  g.fillStyle = gr;
-  g.fillRect(x - r, y - r, r * 2, r * 2);
-}
-
-function px(g, x, y, col, a = 1) {
-  g.globalAlpha = a;
-  g.fillStyle = col;
-  g.fillRect(Math.round(x), Math.round(y), 1, 1);
-  g.globalAlpha = 1;
 }
 
 // The bottom line, said by whoever's speaking now (`lines`: [t, who,
@@ -388,7 +368,9 @@ export function outworldInfo(game) {
   };
 }
 
-const OUT = { BLAST: 4.0, POD: 4.3, ENTRY: 8.0, CRASH: 12.6, CRATER: 14.6, OPEN: 15.8, CLIMB: 16.4, STAND: 18.0, BLACK: 22 };
+// The shots: high over Thessa, the ship breaking up (to ENTRY); night
+// over a lake, the pod coming down (to CRATER); the crater (to BLACK).
+const OUT = { ALARM: 2.4, BLAST: 4.0, POD: 4.3, ENTRY: 8.0, CRASH: 12.4, CRATER: 14.4, OPEN: 15.8, CLIMB: 16.4, STAND: 18.2, BLACK: 23 };
 
 export function outworldScene(game, info) {
   const words = [
@@ -400,18 +382,19 @@ export function outworldScene(game, info) {
   ];
   const lines = [
     [0.8, null, 'Far above a world you have never seen.'],
-    [2.4, 'Ship\'s voice', 'HULL BREACH. HULL BREACH. ALL HANDS TO THE PODS.'],
+    [OUT.ALARM, 'Ship\'s voice', 'HULL BREACH. HULL BREACH. ALL HANDS TO THE PODS.'],
     [OUT.POD + 0.4, null, 'Your ship comes apart around you. Your pod is flung clear.'],
     [OUT.ENTRY + 0.4, null, 'Night over Thessa. Something is falling that is not a star.'],
     [OUT.CRATER + 0.4, null, 'The pod lies hissing in a crater of its own making.'],
-    [OUT.CLIMB + 0.6, null, 'You haul yourself out into the air of a strange world.'],
+    [OUT.CLIMB + 0.4, null, 'You haul yourself out into the air of a strange world.'],
+    [OUT.STAND + 2.4, null, 'High overhead, the last of your ship is still falling.'],
   ];
   let art = null;
   return scene('outworld_intro', info, {
     dur: OUT.BLACK + words.length * LINE + 2, words,
     mood: (t) => (t < OUT.CRASH ? 'cs_spire' : 'cs_starfall_dark'),
     update(g) {
-      if (this.t > 2.4 && !this.alarm) {
+      if (this.t > OUT.ALARM && !this.alarm) {
         this.alarm = true;
         g.audio?.play('error');
       }
@@ -423,7 +406,6 @@ export function outworldScene(game, info) {
         this.crash = true;
         g.audio?.play('boom');
         g.audio?.play('crumble');
-        g.shake = 1.2;
       }
       if (this.t > OUT.OPEN && !this.open) {
         this.open = true;
@@ -431,291 +413,43 @@ export function outworldScene(game, info) {
       }
     },
     draw(ctx) {
-      if (!art) art = paintWorlds(info);
-      drawOutworld(ctx, this, art, lines);
+      if (!art) art = paintOutworld(info);
+      drawOut(ctx, this, art, lines);
     },
   });
 }
 
-function paintWorlds(info) {
-  const seed = info.seed;
-  // Space, a nebula across it, and the curve of the world below.
-  const S = new Bmp(PW, PH);
-  for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
-    const n = fbm(x * 0.02, y * 0.03, seed);
-    const m = fbm(x * 0.035 + 7, y * 0.02, seed + 1);
-    let c = [6, 4, 14];
-    if (n > 0.5) c = mixC(c, [80, 30, 110], (n - 0.5) * 1.6);
-    if (m > 0.55) c = mixC(c, [20, 90, 110], (m - 0.55) * 1.4);
-    S.set(x, y, c);
-  }
-  paintStars(S, PH, seed + 2, { band: false, n: 260 });
-  const PX = 128;
-  const PY = 330;
-  const PR = 236;
-  for (let y = 70; y < PH; y++) for (let x = 0; x < PW; x++) {
-    const d = Math.hypot(x - PX, y - PY);
-    if (d > PR + 4) continue;
-    if (d > PR) {
-      S.set(x, y, [120, 190, 255], 0.5 * (1 - (d - PR) / 4));
-      continue;
-    }
-    const land = fbm(x * 0.03, y * 0.06, seed + 3);
-    const cloudN = fbm(x * 0.05 + 3, y * 0.09, seed + 4);
-    let c = land > 0.55 ? mixC([60, 110, 50], [120, 100, 60], (land - 0.55) * 3) : mixC([20, 60, 130], [30, 90, 160], land);
-    if (cloudN > 0.6) c = mixC(c, [240, 244, 250], (cloudN - 0.6) * 2.5);
-    // (Lit from the left; night creeping in from the right.)
-    const lit = clamp01(1 - (x - 40) / 260);
-    c = mixC([4, 6, 18], c, 0.25 + lit * 0.75);
-    // (The air at the rim.)
-    c = mixC(c, [140, 200, 255], clamp01((d - (PR - 12)) / 12) * 0.5);
-    S.set(x, y, c);
-  }
-  // Thessa by night: hills, a far village's lights, the dark of the woods.
-  const N = new Bmp(PW, PH);
-  const HZ = 96;
-  skyBands(N, [[0, [6, 8, 22]], [50, [16, 24, 50]], [HZ, [36, 50, 76]]], 0, PW);
-  paintStars(N, HZ - 10, seed + 5, { band: true, n: 150 });
-  mountains(N, { seed: seed + 6, base: HZ, top: HZ - 34, peaks: 5, pal: [[14, 16, 30], [20, 24, 40], [28, 32, 52], [38, 44, 66], [50, 58, 84]], air: [40, 52, 80], airK: 0.45 });
-  hills(N, (x) => HZ - 2 + Math.sin(x * 0.03 + 1) * 4, PH, [[10, 14, 18], [14, 20, 22], [18, 26, 26], [24, 34, 30]], { seed: seed + 7, texture: 0.3 });
-  const dark = [[8, 14, 14], [12, 20, 18], [16, 26, 22], [22, 34, 28], [30, 44, 34]];
-  for (let x = -4; x < PW; x += 7) pine(N, x + (hash2(x, 1, seed) * 4 | 0), PH - 2 - (hash2(x, 2, seed) * 8 | 0), 18 + (hash2(x, 3, seed) * 14 | 0), dark, [[20, 16, 14], [30, 24, 20], [40, 30, 24]], seed + x);
-  for (let i = 0; i < 7; i++) N.set(40 + i * 3 + (i % 2), HZ + 9 - (i % 3), [255, 200, 110]);
-  // The crater, close: scorched earth, its rim, the trees behind.
-  const C = new Bmp(PW, PH);
-  skyBands(C, [[0, [6, 8, 20]], [70, [20, 28, 46]]], 0, PW);
-  paintStars(C, 60, seed + 8, { band: false, n: 90 });
-  for (let x = -6; x < PW; x += 9) pine(C, x, 74 + (hash2(x, 5, seed) * 6 | 0), 26 + (hash2(x, 6, seed) * 16 | 0), dark, [[20, 16, 14], [30, 24, 20], [40, 30, 24]], seed + x * 3);
-  for (let y = 70; y < PH; y++) for (let x = 0; x < PW; x++) {
-    const d = Math.hypot((x - 128) / 1.9, (y - 112) * 1.0);
-    const n = fbm(x * 0.08, y * 0.12, seed + 9);
-    let c = mixC([30, 34, 24], [44, 46, 30], n);
-    if (d < 40) c = mixC([22, 18, 18], [52, 40, 32], clamp01((d - 22) / 18) * 0.7 + n * 0.3);
-    if (d > 36 && d < 42) c = mixC(c, [72, 60, 46], 0.6);
-    C.set(x, y, c);
-  }
-  return { space: S.canvas(), night: N.canvas(), crater: C.canvas() };
-}
-
-// The pod, close: a capsule half buried, its seams glowing, its hatch.
-function pod(g, x, y, t, open) {
-  const pulse = 0.6 + 0.4 * Math.sin(t * 3);
-  g.save();
-  g.translate(x, y);
-  g.rotate(-0.18);
-  g.fillStyle = '#4a4458';
-  g.beginPath();
-  g.ellipse(0, 0, 30, 15, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#6a6480';
-  g.beginPath();
-  g.ellipse(-4, -5, 24, 8, 0, Math.PI, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#8a84a0';
-  g.fillRect(-18, -11, 20, 1);
-  // Its seams, glowing.
-  g.globalAlpha = pulse;
-  g.fillStyle = '#7af0d0';
-  for (const sx of [-16, -2, 12]) g.fillRect(sx, -12, 1, 22);
-  g.fillRect(-24, 2, 48, 1);
-  g.globalAlpha = 1;
-  // Burn marks.
-  g.fillStyle = 'rgba(10,6,4,0.55)';
-  g.beginPath();
-  g.ellipse(14, 4, 14, 8, 0.3, 0, Math.PI * 2);
-  g.fill();
-  // The hatch: shut; or blown up and back.
-  if (!open) {
-    g.fillStyle = '#5a5470';
-    g.beginPath();
-    g.ellipse(-4, -12, 9, 4, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#7af0d0';
-    g.globalAlpha = pulse;
-    g.fillRect(-5, -13, 3, 1);
-    g.globalAlpha = 1;
-  } else {
-    g.fillStyle = '#0a0812';
-    g.beginPath();
-    g.ellipse(-4, -12, 9, 4, 0, 0, Math.PI * 2);
-    g.fill();
-    glow(g, -4, -14, 12, '#7af0d0', 0.35 * pulse);
-    g.fillStyle = '#5a5470';
-    g.beginPath();
-    g.ellipse(-20, -22, 8, 3, -0.9, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.restore();
-}
-
-function drawOutworld(ctx, sc, art, lines) {
+function drawOut(ctx, sc, art, lines) {
   const info = sc.info;
   const t = sc.t;
-  const c = bufOf('out');
+  const c = bufOf('outworld');
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, PW, PH);
+  const since = (at) => (t >= at ? t - at : -1);
+  let zoom = 1;
+  let fx = PW / 2;
+  let fy = PH / 2;
   let shake = 0;
   if (t < OUT.ENTRY) {
-    g.drawImage(art.space, 0, 0);
-    // Your ship, drifting; burning; breaking apart.
-    const sx = 70 + t * 5;
-    const sy = 40 + Math.sin(t * 0.8) * 2;
-    if (t < OUT.BLAST) {
-      g.fillStyle = '#5a5070';
-      g.beginPath();
-      g.moveTo(sx - 26, sy + 2);
-      g.lineTo(sx - 8, sy - 7);
-      g.lineTo(sx + 22, sy - 3);
-      g.lineTo(sx + 30, sy + 1);
-      g.lineTo(sx + 18, sy + 6);
-      g.lineTo(sx - 18, sy + 7);
-      g.closePath();
-      g.fill();
-      g.fillStyle = '#8a80a8';
-      g.fillRect(Math.round(sx - 8), Math.round(sy - 5), 26, 1);
-      for (let i = 0; i < 5; i++) px(g, sx - 12 + i * 8, sy + 1, '#7af0d0', 0.6 + 0.4 * Math.sin(t * 6 + i));
-      glow(g, sx - 28, sy + 2, 8, '#a080ff', 0.7);
-      // Fire breaking out along her.
-      if (t > 2.2) for (let i = 0; i < 5; i++) {
-        const k = (t * 3 + i * 0.37) % 1;
-        glow(g, sx - 10 + i * 9 + Math.sin(i * 5) * 3, sy + Math.cos(i * 3) * 3, 3 + k * 4, i % 2 ? '#ffb060' : '#ffffff', 0.8 * (1 - k));
-      }
-    } else {
-      // The blast, and what's left of her flying apart.
-      const s = t - OUT.BLAST;
-      if (s < 0.4) {
-        g.fillStyle = `rgba(255,255,255,${0.9 * (1 - s / 0.4)})`;
-        g.fillRect(0, 0, PW, PH);
-      }
-      glow(g, sx, sy, 10 + s * 30, '#ffe0a0', Math.max(0, 0.9 - s * 0.3));
-      g.strokeStyle = `rgba(200,220,255,${Math.max(0, 0.8 - s * 0.35)})`;
-      g.lineWidth = 1;
-      g.beginPath();
-      g.arc(sx, sy, 6 + s * 40, 0, Math.PI * 2);
-      g.stroke();
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * Math.PI * 2 + i;
-        const r = 4 + s * (12 + (i % 5) * 6);
-        const fx = sx + Math.cos(a) * r;
-        const fy = sy + Math.sin(a) * r * 0.8;
-        g.save();
-        g.translate(fx, fy);
-        g.rotate(s * (i % 2 ? 2 : -3) + i);
-        g.fillStyle = i % 3 ? '#5a5070' : '#8a80a8';
-        g.fillRect(-2, -1, 4 + (i % 3), 2);
-        g.restore();
-        if (i % 3 === 0) px(g, fx, fy, '#ffb060', Math.max(0, 1 - s * 0.4));
-      }
-      shake = Math.max(0, 0.8 - s);
-    }
-    // The pod, flung clear, falling toward the world.
-    if (t > OUT.POD) {
-      const k = clamp01((t - OUT.POD) / (OUT.ENTRY - OUT.POD));
-      const ppx = lerp(sx + 4, 150, k);
-      const ppy = lerp(sy + 4, 128, k * k);
-      for (let i = 0; i < 14; i++) px(g, ppx - i * 1.4, ppy - i * 1.6 * (0.3 + k), i < 3 ? '#ffffff' : k > 0.7 ? '#a0ffd0' : '#c8b0ff', (1 - i / 14) * 0.8);
-      glow(g, ppx, ppy, 4 + k * 6, k > 0.7 ? '#7af0c0' : '#c0a0ff', 0.7);
-      g.fillStyle = '#e0e0f0';
-      g.fillRect(Math.round(ppx) - 1, Math.round(ppy) - 1, 2, 2);
-    }
+    drawOrbit(g, art, { t, alarm: clamp01((t - OUT.ALARM) / 1.2), blast: since(OUT.BLAST), pod: since(OUT.POD) });
+    shake = t > OUT.BLAST && t < OUT.BLAST + 0.8 ? 1 - (t - OUT.BLAST) / 0.8 : 0;
+    zoom = 1 + 0.08 * ease(clamp01((t - OUT.BLAST) / 3));
+    fx = lerp(PW / 2, 170, ease(clamp01((t - OUT.POD) / 3.5)));
+    fy = lerp(PH / 2, 92, ease(clamp01((t - OUT.POD) / 3.5)));
   } else if (t < OUT.CRATER) {
-    g.drawImage(art.night, 0, 0);
-    // A fire across the sky: green and violet, its tail long, sparks shed.
-    const k = clamp01((t - OUT.ENTRY) / (OUT.CRASH - OUT.ENTRY));
-    const e = k * k;
-    const fx = lerp(12, 186, e);
-    const fy = lerp(6, 100, e);
-    const pre = t < OUT.CRASH;
-    if (pre) {
-      // (Its light on the land.)
-      g.fillStyle = `rgba(120,255,200,${0.12 * k})`;
-      g.fillRect(0, 96, PW, PH);
-      for (let i = 0; i < 50; i++) {
-        const f = i / 50;
-        const x = fx - (fx - 12) * f * 0.35 * (0.4 + k) + Math.sin(i + t * 9) * f;
-        const y = fy - (fy - 6) * f * 0.35 * (0.4 + k);
-        px(g, x, y, f < 0.15 ? '#ffffff' : f < 0.45 ? '#a0ffd8' : '#b080ff', (1 - f) * 0.9);
-      }
-      glow(g, fx, fy, 6 + k * 12, '#9affd8', 0.8);
-      for (let i = 0; i < 6; i++) {
-        const s = (t * 1.5 + i / 6) % 1;
-        px(g, fx - s * 18 + Math.sin(i * 4) * 4 * s, fy - s * 12 + s * s * 10, i % 2 ? '#e0c0ff' : '#ffffff', 1 - s);
-      }
-      g.fillStyle = '#ffffff';
-      g.fillRect(Math.round(fx) - 1, Math.round(fy) - 1, 3, 3);
-    } else {
-      // The strike behind the near hills: the dome of light, the dust.
-      const s = t - OUT.CRASH;
-      if (s < 0.6) {
-        g.fillStyle = `rgba(220,255,240,${0.85 * (1 - s / 0.6)})`;
-        g.fillRect(0, 0, PW, PH);
-      }
-      g.globalAlpha = Math.max(0, 0.8 - s * 0.4);
-      g.strokeStyle = '#d0ffee';
-      g.beginPath();
-      g.ellipse(186, 100, 6 + s * 80, 3 + s * 40, 0, Math.PI, Math.PI * 2);
-      g.stroke();
-      g.globalAlpha = 1;
-      for (let i = 0; i < 10; i++) {
-        g.globalAlpha = Math.max(0, 0.4 - s * 0.15);
-        g.fillStyle = '#5a5a60';
-        g.beginPath();
-        g.arc(186 + Math.sin(i * 2.1) * 10 * (1 + s), 100 - s * 10 - i * 2, 3 + s * 4, 0, Math.PI * 2);
-        g.fill();
-      }
-      g.globalAlpha = 1;
-      // (Birds, startled up out of the woods.)
-      for (let i = 0; i < 6; i++) px(g, 150 + i * 9 + s * 20, 90 - s * 18 - (i % 3) * 3, '#0a0a10', Math.min(1, s * 3));
-      shake = Math.max(0, 1 - s / 1.4);
-    }
+    drawFall(g, art, { t: t - OUT.ENTRY, fall: clamp01((t - OUT.ENTRY) / (OUT.CRASH - OUT.ENTRY)), hit: since(OUT.CRASH) });
+    shake = t > OUT.CRASH && t < OUT.CRASH + 1.2 ? 1.2 - (t - OUT.CRASH) : 0;
   } else {
-    g.drawImage(art.crater, 0, 0);
-    const open = t > OUT.OPEN;
-    pod(g, 128, 106, t, open);
-    // Smoke, rising and drifting.
-    for (let i = 0; i < 10; i++) {
-      const k = ((t * 0.18 + i / 10) % 1);
-      g.globalAlpha = 0.25 * (1 - k);
-      g.fillStyle = '#8a8890';
-      g.beginPath();
-      g.arc(150 + Math.sin(k * 5 + i) * 6 + k * 14, 100 - k * 70, 3 + k * 9, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.globalAlpha = 1;
-    // Embers in the scorched earth.
-    for (let i = 0; i < 16; i++) px(g, 90 + ((i * 37) % 80), 110 + ((i * 13) % 26), Math.sin(t * 3 + i) > 0.3 ? '#ff8040' : '#7a2a10', 0.8);
-    // The hatch blown: a burst of steam.
-    if (open && t - OUT.OPEN < 1.6) {
-      const s = t - OUT.OPEN;
-      for (let i = 0; i < 8; i++) {
-        g.globalAlpha = Math.max(0, 0.5 - s * 0.3);
-        g.fillStyle = '#e8f0f0';
-        g.beginPath();
-        g.arc(124 + Math.sin(i * 1.3) * (4 + s * 10), 92 - s * 20 - i * 2, 2 + s * 5, 0, Math.PI * 2);
-        g.fill();
-      }
-      g.globalAlpha = 1;
-    }
-    // You, climbing out: rising out of the hatch, then standing, looking
-    // round at a world you've never seen.
-    if (t > OUT.CLIMB) {
-      const k = ease(clamp01((t - OUT.CLIMB) / (OUT.STAND - OUT.CLIMB)));
-      const hatchY = 95;
-      const yb = lerp(hatchY + 46, hatchY + 2, k);
-      glow(g, 124, yb - 30, 26, '#9affd8', 0.18);
-      g.save();
-      g.beginPath();
-      g.rect(0, 0, PW, hatchY + 2);
-      g.clip();
-      const look = t > OUT.STAND ? ((Math.floor((t - OUT.STAND) * 0.9) % 3) === 1 ? 1 : (Math.floor((t - OUT.STAND) * 0.9) % 3) === 2 ? 3 : 0) : 0;
-      sprite(g, info.look, look, 0, 124, yb, 1.6);
-      g.restore();
-    }
+    const k = t - OUT.CRATER;
+    drawCrater(g, art, { t: k, cool: clamp01(k / 8), open: since(OUT.OPEN), climb: clamp01((t - OUT.CLIMB) / 1.6), stand: since(OUT.STAND), look: info.look }, sprite);
+    shake = t > OUT.OPEN && t < OUT.OPEN + 0.3 ? 0.4 : 0;
+    zoom = 1.06 - 0.06 * ease(clamp01(k / 7));
+    fy = PH / 2 + 10;
   }
-  const cuts = [OUT.ENTRY, OUT.CRATER];
   let fade = clamp01(t / 1.2) * (t > OUT.BLACK - 1.5 ? clamp01((OUT.BLACK - t) / 1.5) : 1);
-  for (const cu of cuts) if (Math.abs(t - cu) < 0.7) fade *= Math.abs(t - cu) / 0.7;
-  present(ctx, c, { alpha: fade, shake });
+  for (const cu of [OUT.ENTRY, OUT.CRATER]) if (Math.abs(t - cu) < 0.6) fade *= Math.abs(t - cu) / 0.6;
+  present(ctx, c, { alpha: fade, zoom, fx, fy, shake });
   talk(ctx, sc, lines, OUT.BLACK, fade);
 }
 
