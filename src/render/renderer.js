@@ -12,7 +12,7 @@ import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
-import { humanoidSheet, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, WAGON_SEAT, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
+import { humanoidSheet, humanoidPose, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, WAGON_SEAT, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -741,6 +741,23 @@ export class Renderer {
     return (du !== 0 ? du * 0.13 : dv < 0 ? 0.05 : -0.05) * k;
   }
 
+  // (Round 128) The pose an idle moment puts someone in, if any, as they
+  // face: both arms up at the height of a stretch; one hand up while they
+  // talk (the side they gesture with, as you see them).
+  poseOf(ia, dir) {
+    if (ia.kind === 'stretch') {
+      const k = Math.min(1, ia.t / 0.4) * Math.min(1, Math.max(0, (ia.dur - ia.t) / 0.4));
+      return k > 0.45 ? 'stretch' : null;
+    }
+    if (ia.kind === 'gesture') {
+      const since = ia.t - (ia.hand ?? -9);
+      if (since < 0.08 || since > 0.62) return null;
+      if (dir === 1 || dir === 3) return 'waveR';
+      return (ia.side || 1) > 0 ? 'waveR' : 'waveL';
+    }
+    return null;
+  }
+
   // (Round 79) Hands: one raised a moment while they talk, both up over
   // their head for a stretch.
   drawIdleHands(ctx, e, ia, sx, top, dir) {
@@ -1180,7 +1197,12 @@ export class Renderer {
     // (Round 84) A storm's wind in the plants and the trees (see windSway).
     const wt = game.weather;
     this.blendFloors = !!game.dungeon;
-    this.swayAmp = wt && !game.dungeon && !this.noEnvFx ? Math.min(2.2, ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * (0.65 + 0.35 * (wt.gust || 0))) : 0;
+    // (Round 128: and a breeze in any weather out of doors, more in the
+    // rain or the snow: the grass and the flowers never stand quite still.)
+    const breeze = wt ? (wt.kind === 'rain' ? 0.9 : wt.kind === 'snow' ? 0.7 : wt.kind === 'fog' ? 0.25 : 0.55) * Math.min(1, 0.4 + (wt.level ?? 1) * 0.6) : 0;
+    this.swayAmp = wt && !game.dungeon && !this.noEnvFx ? Math.min(2.6, breeze + ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * (0.65 + 0.35 * (wt.gust || 0))) : 0;
+    // (The trees' leaves stir only once it's more than a breeze.)
+    this.leafAmp = this.swayAmp > 0.8 ? this.swayAmp : 0;
     this.swayLean = wt ? wt.gust || 0 : 0;
     const atlas = this.atlas;
     const camX = this.camX;
@@ -1433,7 +1455,7 @@ export class Renderer {
           const s = liquid ? tops[waterFrame] : tops[v % tops.length];
           const oy = liquid ? 3 : 0;
           // (Round 84: a tree's leaves rustling in a storm's wind.)
-          if (this.swayAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, 16, sx, sy, this.windSway(wx, wz + y, 0.8));
+          if (this.leafAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, 16, sx, sy, wx, y, wz);
           else ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
           if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
           if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
@@ -1458,7 +1480,7 @@ export class Renderer {
         if (showFront && !(liquid && fb.solid)) {
           const fronts = T.front[id * 4 + rot];
           const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
-          if (this.swayAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, LH, sx, sy + 16, this.windSway(wx, wz + y, 0.8));
+          if (this.leafAmp && LEAVES.has(id)) this.drawRustle(ctx, atl, s.x, s.y, 16, LH, sx, sy + 16, wx, y + 0.5, wz);
           else ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
           if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
         }
@@ -2993,13 +3015,17 @@ export class Renderer {
             ctx.rotate(lean);
             ctx.translate(-(sx + 8), -feetY);
           }
-          ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+          // (Round 128) A stretch, or a hand raised as they talk: their own
+          // figure with its arms so, not a hand painted on over it.
+          const pose = ia && !mount && e.look ? this.poseOf(ia, dir) : null;
+          if (pose) ctx.drawImage(humanoidPose(e.look, pose), 0, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+          else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
           if (lean) ctx.restore();
           // (Round 82) The broom only once what was in the hand's away, and
           // away again a moment before it's taken back out: see
           // NPC.sweeping.)
           if (ia && ia.kind === 'sweep' && !mount && ia.t > SWEEP_STOW && ia.t < ia.dur - SWEEP_STOW) this.drawBroom(ctx, sx, top, feetY, dir);
-          if (ia && (ia.kind === 'gesture' || ia.kind === 'stretch') && !mount) this.drawIdleHands(ctx, e, ia, sx, top, dir);
+          if (ia && (ia.kind === 'gesture' || ia.kind === 'stretch') && !mount && !e.look) this.drawIdleHands(ctx, e, ia, sx, top, dir);
         }
         if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
         // ...and now and then a mote of its light drifting off it.
@@ -4016,7 +4042,8 @@ export class Renderer {
   // from its root (drawn in bands, each over a little more than the one
   // under it).
   drawSwaying(ctx, atl, s, x, y, off) {
-    if (!off) {
+    // (Round 128: under half a pixel's bend, drawn as it stands.)
+    if (!off || Math.abs(off) < 0.5) {
       ctx.drawImage(atl, s.x, s.y, s.w, s.h, x, y, s.w, s.h);
       return;
     }
@@ -4028,16 +4055,35 @@ export class Renderer {
     }
   }
 
-  // (Round 84) A face of leaves, its leaves shifted `off` pixels across
-  // within it (wrapping round), its edges where they were: rustling.
-  drawRustle(ctx, atl, ax, ay, w, h, x, y, off) {
-    const o = ((Math.round(off) % w) + w) % w;
-    if (!o) {
-      ctx.drawImage(atl, ax, ay, w, h, x, y, w, h);
-      return;
+  // (Round 84; Round 128 redone) A face of leaves stirring in the wind:
+  // not the whole face slid to and fro, but its leaves in bands of a few
+  // rows each, every band on a gust of its own (the wind going through it
+  // from the side it comes from), and now and then a leaf turned up
+  // pale, catching the light.
+  drawRustle(ctx, atl, ax, ay, w, h, x, y, wx, wy, wz) {
+    const a = this.leafAmp || 0;
+    const t = this.time;
+    const ph = wx * 0.61 + wz * 0.37 + wy * 0.23;
+    const BAND = 4;
+    for (let r = 0; r < h; r += BAND) {
+      const bh = Math.min(BAND, h - r);
+      const wave = Math.sin(t * 4.6 + ph + r * 0.55) * 0.65 + Math.sin(t * 9.1 + ph * 1.9 - r * 0.8) * 0.35;
+      const off = Math.round((wave + 0.35 * this.swayLean) * a * 0.75);
+      const o = ((off % w) + w) % w;
+      if (!o) ctx.drawImage(atl, ax, ay + r, w, bh, x, y + r, w, bh);
+      else {
+        ctx.drawImage(atl, ax, ay + r, w - o, bh, x + o, y + r, w - o, bh);
+        ctx.drawImage(atl, ax + w - o, ay + r, o, bh, x, y + r, o, bh);
+      }
     }
-    ctx.drawImage(atl, ax, ay, w - o, h, x + o, y, w - o, h);
-    ctx.drawImage(atl, ax + w - o, ay, o, h, x, y, o, h);
+    // (A leaf flipped over by a gust: a pale fleck, gone again.)
+    const g = Math.sin(t * 2.3 + ph * 3.1);
+    if (g > 0.86 && a > 1) {
+      const fx = Math.floor((Math.sin(ph * 7.7) * 0.5 + 0.5) * (w - 2));
+      const fy = Math.floor((Math.cos(ph * 5.3) * 0.5 + 0.5) * (h - 2));
+      ctx.fillStyle = 'rgba(220,240,190,0.55)';
+      ctx.fillRect(x + fx, y + fy, 2, 1);
+    }
   }
 
   // (Round 84) How far a plant (or a tree's leaves) at (wx, wz) is blown
@@ -4047,7 +4093,8 @@ export class Renderer {
     if (!a) return 0;
     const t = this.time;
     const ph = wx * 0.61 + wz * 0.37;
-    return Math.round((Math.sin(t * 3.1 + ph) * 0.6 + Math.sin(t * 7.3 + ph * 1.7) * 0.25 + 0.5 * this.swayLean) * a * k);
+    // (Round 128: a breath of a bend kept, not rounded away to nothing.)
+    return (Math.sin(t * 3.1 + ph) * 0.6 + Math.sin(t * 7.3 + ph * 1.7) * 0.25 + 0.5 * this.swayLean) * a * k;
   }
 
   // Ash from the mountain on Kharos coming down after it's gone up: a

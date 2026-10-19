@@ -904,6 +904,9 @@ class Layout {
 
   sizesFor(type, rng = null) {
     if (type === 'townhall' && this.settlement.type === 'village') return [[8, 6], [7, 6]];
+    // (Round 128) A city's tavern (an empire's above all) for the crowds
+    // that fill it of an evening: half as big again, if there's the room.
+    if (type === 'tavern' && (this.settlement.type === 'city' || this.settlement.empire) && (this.world.ow.wg || 1) >= 9) return [[15, 9], [14, 9], [13, 9], [13, 8], ...SPECS.tavern.size];
     // (Round 73) Homes of more shapes in worlds made from 0.73 on: long
     // and narrow, deep, square, broad; tried in an order of their own.
     if (rng && HOUSE_SHAPES[type] && (this.world.ow.wg || 1) >= 4) return rng.shuffle([...SPECS[type].size, ...HOUSE_SHAPES[type]]);

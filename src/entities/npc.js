@@ -2894,13 +2894,19 @@ export class NPC extends Entity {
     // A guard on the move doesn't walk through people: they're told to
     // make way, and moved aside.
     if (this.rec.job === 'guard' && !this.visit) {
-      const other = this.game.npcAt(nx, ny, nz);
+      // (Round 128: never another of the watch, who'd only shove back, the
+      // two of them elbowing past each other down the street; nor anyone
+      // shoved aside a moment ago. They pass by.)
+      const other0 = this.game.npcAt(nx, ny, nz);
+      const now = performance.now() / 1000;
+      const other = other0 && other0.rec && other0.rec.job === 'guard' ? null : other0 && (other0.shovedAt || -9) > now - 4 ? null : other0;
       if (other && other !== this && this.game.shove(other, this, this.path[this.pathI + 1] ? { x: this.path[this.pathI + 1][0], z: this.path[this.pathI + 1][2] } : null)) {
         const urgent = this.state === 'escort' || this.state === 'fight' || this.state === 'alert';
         if ((this.shoveCd || 0) <= 0 && (urgent || this.rng.chance(0.3))) {
           this.shoveCd = 6;
           this.say(this.state === 'escort' ? this.rng.pick(['Make way! Prisoner coming through!', 'Stand aside!', 'Out of the way, there!']) : urgent ? this.rng.pick(['Make way!', 'Move!']) : this.rng.pick(['Pardon me.', 'Coming through.']), 2);
         }
+        other.shovedAt = now;
         if (this.rng.chance(0.3)) other.say(other.rng.pick(['Oi!', 'Sorry!', 'Watch it!', 'Oh! Excuse me.']), 1.6);
       }
     }

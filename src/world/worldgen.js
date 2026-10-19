@@ -60,7 +60,9 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // things in the country (see landforms.js, landmarks.js, features.js).
 // (Round 84: 8, the great continents parted into provinces: see
 // provinces.js.)
-export const WORLD_GEN = 8;
+// (Round 128: 9, a city's or an empire's tavern built big enough for its
+// crowd: see Layout.sizesFor.)
+export const WORLD_GEN = 9;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:

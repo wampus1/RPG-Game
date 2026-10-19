@@ -600,7 +600,7 @@ def('leaves_olive', { ...leaves([{ item: 'olives', chance: 0.12 }]), label: 'Oli
 def('leaves_cypress', { ...leaves(), label: 'Cypress Needles' });
 def('log_frostbirch', { tool: 'axe', hardness: 1.1, label: 'Frost Birch Log' });
 def('leaves_frost', { ...leaves([{ item: 'frost_crystal', chance: 0.04 }]), light: 2, label: 'Ice Leaves' });
-def('bamboo_stalk', { tool: 'axe', hardness: 0.6, drop: [{ item: 'bamboo_cane', min: 1, max: 2 }], label: 'Bamboo Stalk' });
+def('bamboo_stalk', { opaque: false, tool: 'axe', hardness: 0.6, drop: [{ item: 'bamboo_cane', min: 1, max: 2 }], label: 'Bamboo Stalk' });
 def('leaves_bamboo', { ...leaves(), label: 'Bamboo Leaves' });
 def('log_cherry', { tool: 'axe', hardness: 1.1, label: 'Cherry Log' });
 def('leaves_blossom', { ...leaves([{ item: 'cherries', chance: 0.06 }]), label: 'Cherry Blossom' });

@@ -225,6 +225,11 @@ function wagonTiles(q) {
   return out;
 }
 
+// (Round 128) Where a felled trunk goes on: up, sideways, and up on the
+// slant (the crooked acacia's bough, a leaning palm), corners too.
+const FELL_STEPS = [];
+for (let dy = 0; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dy || dz) FELL_STEPS.push([dx, dy, dz]);
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
@@ -4248,9 +4253,25 @@ export class Game {
 
   isTreeLog(x, y, z) {
     const w = this.world;
-    for (let yy = y; yy < Math.min(WORLD_Y, y + 8); yy++) {
-      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (LEAVES.has(w.getBlock(x + dx, yy, z + dz))) return true;
-      if (!LOGS.has(w.getBlock(x, yy, z)) && yy > y) break;
+    // Up the trunk, following it where it leans or forks sideways (an
+    // acacia's crooked bough): leaves near any of it, and it's a tree.
+    let cx = x;
+    let cz = z;
+    for (let yy = y; yy < Math.min(WORLD_Y, y + 9); yy++) {
+      if (yy > y && !LOGS.has(w.getBlock(cx, yy, cz))) {
+        let step = null;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+          if (LOGS.has(w.getBlock(cx + dx, yy, cz + dz))) { step = [dx, dz]; break; }
+        }
+        if (!step) {
+          // The crown sits on the top log, a step above or beside it.
+          for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (LEAVES.has(w.getBlock(cx + dx, yy, cz + dz))) return true;
+          break;
+        }
+        cx += step[0];
+        cz += step[1];
+      }
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (LEAVES.has(w.getBlock(cx + dx, yy, cz + dz))) return true;
     }
     return false;
   }
@@ -4269,7 +4290,7 @@ export class Game {
       if (!LOGS.has(w.getBlock(cx, cy, cz))) continue;
       if (cy < y) continue;
       logs.push([cx, cy, cz]);
-      for (const [dx, dy, dz] of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [1, 1, 0], [-1, 1, 0], [0, 1, 1], [0, 1, -1]]) q.push([cx + dx, cy + dy, cz + dz]);
+      for (const [dx, dy, dz] of FELL_STEPS) q.push([cx + dx, cy + dy, cz + dz]);
     }
     for (const [lx, ly, lz] of logs) {
       const id = w.getBlock(lx, ly, lz);

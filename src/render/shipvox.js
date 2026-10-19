@@ -920,9 +920,12 @@ function rigFor(S, T, D, low, time) {
   const beam = m.W;
   const set = S.sailSet ?? 0;
   const fill = S.fill ?? 0;
-  const bulgeK = 0.12 + Math.abs(fill) * 0.55;
+  // (Round 128: fuller in a strong wind, slacker in a light one; and the
+  // cloth's shiver quickened by a gale.)
+  const wk = Math.max(0.5, Math.min(1.8, S.windK || 1));
+  const bulgeK = (0.12 + Math.abs(fill) * 0.55) * (0.65 + 0.35 * wk);
   const bsign = fill >= 0 ? 1 : -1;
-  const flutter = (1 - Math.min(1, Math.abs(fill) * 1.6)) * 0.12;
+  const flutter = (1 - Math.min(1, Math.abs(fill) * 1.6)) * 0.12 * wk + Math.max(0, wk - 1.2) * 0.05;
   const brace = S.brace || 0;
   const boom = S.boom || 0;
   const emblemRGB = hexRGB(S.markColor || S.flag || '#a02020');
@@ -1396,6 +1399,14 @@ export function drawShip(r, game, S, aboard) {
     const z = Math.floor(vi / m.W) % m.L;
     const y = Math.floor(vi / (m.W * m.L));
     cellOutline(r, S, x, y, z, col, b && b.stair ? `rgba(255,236,150,${0.22 + pulse * 0.18})` : null);
+    // (Round 128) Where what's in hand would go: the cell beside, green.
+    const pv = c.ship.place;
+    if (pv !== undefined && pv >= 0) {
+      const px = pv % m.W;
+      const pz = Math.floor(pv / m.W) % m.L;
+      const py = Math.floor(pv / (m.W * m.L));
+      cellOutline(r, S, px, py, pz, `rgba(120,255,160,${pulse})`, `rgba(120,255,160,${0.12 + pulse * 0.1})`);
+    }
   }
 }
 

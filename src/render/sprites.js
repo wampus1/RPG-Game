@@ -69,6 +69,21 @@ export function humanoidSheet(look) {
   return c;
 }
 
+// (Round 128) Someone in a pose of their own (see drawHumanoid's `pose`):
+// 'stretch', 'waveL' or 'waveR', standing, one frame each way they can face.
+const poseCache = new Map();
+export function humanoidPose(look, pose) {
+  const key = `${pose}|${JSON.stringify(look)}`;
+  let c = poseCache.get(key);
+  if (c) return c;
+  const sheet = new Px(CHAR_W, SHEET_H * 4);
+  for (let d = 0; d < 4; d++) sheet.blit(drawHumanoid(look, d, 0, { pose }), 0, d * SHEET_H);
+  c = toCanvas(sheet);
+  if (poseCache.size > 400) poseCache.clear();
+  poseCache.set(key, c);
+  return c;
+}
+
 export function headSprite(look) {
   const full = drawHumanoid(look, 0, 0);
   const p = new Px(12, 10);

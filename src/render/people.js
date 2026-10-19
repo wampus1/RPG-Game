@@ -884,7 +884,56 @@ export function drawHumanoid(look, dir, frame, extra = null) {
     if (kind === 'round') S(sx0 + 1, sy0 + 2, hex('#e8d8a0'));
     if (kind !== 'iron') S(sx0 + 2, sy0 + 2, hex('#c8c8d4'));
   };
-  if (!side) {
+  // (Round 128) A pose of the arms (see humanoidPose): both up over the
+  // head for a stretch, or one hand raised as they talk.
+  const pose = extra && extra.pose ? extra.pose : null;
+  const raisedArm = (x, q, top0) => {
+    // (From the shoulder up past the ear: sleeve, then the hand at the top.)
+    const y0 = top0;
+    const len = torsoY + 1 - y0;
+    part = armMetal ? METAL : q;
+    R(x, y0 + 1, 1, len, armC);
+    if (!skel && !armMetal && armC !== skinC) as(FLAT, () => S(x, y0 + 1, dim(armC, 0.7)));
+    part = FLAT;
+    S(x, y0, x === 3 ? handC : dim(handC, 0.75));
+  };
+  if (!side && pose) {
+    const ah = torsoH - 1;
+    for (const [x, q] of [[3, ARM_L], [12, ARM_R]]) {
+      const up = pose === 'stretch' || (pose === 'waveL' ? x === 3 : pose === 'waveR' ? x === 12 : false);
+      if (up) raisedArm(x, q, pose === 'stretch' ? hy - 1 : hy + 3);
+      else {
+        part = armMetal ? METAL : q;
+        R(x, torsoY, 1, ah, armC);
+        if (!skel && !armMetal && armC !== skinC) as(FLAT, () => S(x, torsoY + ah - 1, dim(armC, 0.7)));
+        part = FLAT;
+        S(x, torsoY + ah, x === 3 ? handC : dim(handC, 0.5));
+      }
+    }
+  } else if (side && pose) {
+    // (Side on: the near arm up over the head, or raised before them.)
+    const ax = 7;
+    part = armMetal ? METAL : ARM_R;
+    if (pose === 'stretch') {
+      // (Up behind the head and out over it: the forearm and hand show
+      // above the hair.)
+      R(ax, hy - 3, 2, torsoY + 2 - (hy - 3), armC);
+      as(FLAT, () => {
+        S(ax + 1, hy - 3, dim(armC, 0.5));
+        R(ax, hy - 5, 2, 2, handC);
+        S(ax + 1, hy - 5, dim(handC, 0.6));
+      });
+    } else {
+      // (Raised before them, the hand open at the height of the chin: the
+      // face is to the low side of the square.)
+      R(5, torsoY + 1, 2, 2, armC);
+      R(3, torsoY - 1, 2, 3, armC);
+      as(FLAT, () => {
+        R(1, torsoY - 2, 2, 2, handC);
+        S(1, torsoY - 1, dim(handC, 0.6));
+      });
+    }
+  } else if (!side) {
     const swing = frame === 3 ? -2 : walk;
     const ah = torsoH - 1;
     for (const [x, q, up] of [[3, ARM_L, swing > 0], [12, ARM_R, swing < 0]]) {

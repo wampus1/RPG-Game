@@ -5,6 +5,7 @@
 import { SURFACE, GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { has as heroHas } from '../game/hero.js';
+import { windOf } from '../game/ships3d.js';
 
 // How deep into the storm round the islands a raft (or a swimmer) gets
 // before it's thrown back (see geography.js stormAt).
@@ -72,7 +73,12 @@ export function steer(p, dt, input) {
   // (The storm's seas: slow, heavy going, the deeper in the worse.)
   const S = p.game.stormSea;
   const heavy = S && S.depth > 0 ? 1 - Math.min(0.45, S.depth * 0.55) : 1;
-  if (fwd) r.v = Math.min(RAFT.max * sail * heavy, r.v + RAFT.accel * sail * heavy * dt);
+  // (Round 128) The wind: at your back it carries you on faster, in your
+  // teeth it holds you back, the harder the weather blows the more.
+  const W = windOf(p.game);
+  const hd = heading(r.ang);
+  const windy = 1 + Math.max(-0.22, Math.min(0.28, (hd.x * W.x + hd.z * W.z) * (W.k - 0.4) * 0.3));
+  if (fwd) r.v = Math.min(RAFT.max * sail * heavy * windy, r.v + RAFT.accel * sail * heavy * windy * dt);
   else if (backK) r.v = Math.max(-RAFT.back, r.v - RAFT.accel * 1.3 * dt);
   else r.v *= Math.max(0, 1 - RAFT.drag * dt);
   if (Math.abs(r.v) < 0.02 && !fwd && !backK) r.v = 0;

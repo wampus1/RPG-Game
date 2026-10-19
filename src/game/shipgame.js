@@ -745,6 +745,14 @@ export function shipCursor(game, c, r) {
   const p = game.player;
   c.ship = { s: S.id, vi: sp.vi, face: sp.face };
   c.inReach = Math.hypot(wx - p.x, wz - p.z) <= REACH + 1 && Math.abs(S.layerY(y) - p.y) <= 5;
+  // (Round 128) A block or a plank in hand: the gap of hers beside the
+  // face pointed at, where it'd go (outlined turned and skewed with her,
+  // as she lies: see render/shipvox.js).
+  const held = p.heldDef ? p.heldDef() : null;
+  if (held && held.kind === 'block') {
+    const hv = holeBeside(S, sp.vi, sp.face);
+    if (hv >= 0) c.ship.place = hv;
+  }
   c.block = null;
   c.place = null;
   c.x = undefined;

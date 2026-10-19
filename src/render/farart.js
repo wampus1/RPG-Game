@@ -546,11 +546,13 @@ export function farTop(name, v, rand, rot = 0) {
       return p;
     }
     case 'bamboo_stalk': {
-      // A cut cane from above: a green ring round a pale hollow.
-      p.ellipse(8, 8, 6, 6, '#4a8a36');
-      p.ellipse(8, 8, 5, 5, '#6ab04a');
-      p.ellipse(8, 8, 3, 3, '#e8e0b0');
-      p.ellipse(8, 8, 2, 2, '#c8b880');
+      // A cut cane from above: a green ring round a pale hollow (Round
+      // 128: thinner, as a cane is).
+      p.ellipse(8, 8, 4, 4, '#3a7428');
+      p.ellipse(7.5, 7.5, 3, 3, '#6ab04a');
+      p.ellipse(8, 8, 2, 2, '#e8e0b0');
+      p.set(8, 8, '#b0a070');
+      p.set(9, 8, '#c8b880');
       return p;
     }
     case 'leaves_lantern': return lanternLeaves(p, rand, v, 16);
@@ -679,16 +681,31 @@ export function farFront(name, v, rand) {
     }
     case 'bone_sand': return frontify(speckle(p, FAR_P.bone_sand, rand, 0.35), 0.88);
     case 'bamboo_stalk': {
-      // A cane's side: green, lit down its left, a node every few rows.
-      for (let x = 0; x < 16; x++) {
-        const u = Math.abs(x - 7.5) / 8;
-        if (u > 0.9) continue;
-        for (let y = 0; y < LH; y++) {
-          let c = x < 6 ? '#8ed064' : x < 11 ? '#6ab04a' : '#4a8a36';
-          if ((y + v * 3) % 8 === 0) c = '#c8d890';
-          else if ((y + v * 3) % 8 === 1) c = shade(hex(c), 0.8);
+      // (Round 128) A cane's side, round: thinner than the square it stands
+      // in, lit down one side and shadowed down the other, with a little
+      // bend to it (each cane its own) and a swelling at every node, the
+      // cane pinched in just under it.
+      const bend = ((v % 3) - 1) * 0.9;
+      for (let y = 0; y < LH; y++) {
+        const node = (y + v * 3) % 8;
+        const cx = 7.5 + bend * Math.sin((y / LH) * Math.PI);
+        const half = node === 0 ? 4.6 : node === 1 ? 3.4 : 3.9;
+        for (let x = 0; x < 16; x++) {
+          const t = (x + 0.5 - cx) / half;
+          if (Math.abs(t) > 1) continue;
+          // (Round: brightest a little left of the middle, dark to the edge.)
+          const lit = 1 - Math.abs(t + 0.35) * 0.9;
+          let c = lit > 0.75 ? '#a8e078' : lit > 0.45 ? '#7cc056' : lit > 0.15 ? '#5a9c40' : '#3a7428';
+          if (Math.abs(t) > 0.82) c = '#2c5a1e';
+          if (node === 0) c = Math.abs(t) > 0.82 ? '#4a6a2a' : lit > 0.45 ? '#d4e0a0' : '#a8b878';
+          else if (node === 1) c = shade(hex(c), 0.72);
           p.set(x, y, c);
         }
+      }
+      // (Now and then a leaf sprig off a node.)
+      if (v % 4 === 1) {
+        const y0 = (8 - ((v * 3) % 8)) % 8;
+        for (let i = 0; i < 4; i++) p.set(11 + i, y0 + 1 - (i >> 1), i < 2 ? '#5a9c40' : '#7cc056');
       }
       return p;
     }
@@ -1447,22 +1464,51 @@ function crane(f) {
     p.line(10, 9, 11 - f, 14, '#3a3a3a');
   });
 }
-// A tiger, gold and striped, low and heavy.
+// A tiger, gold and striped, low and heavy. (Round 128: drawn big, as
+// big as a pony, on a square half as wide again as most beasts'.)
 function tiger(f) {
-  return beast(f, (p) => {
-    const body = hex('#e08a2a');
-    p.rect(4, 7, 9, 4, body);
-    p.rect(1, 6, 4, 4, body);
-    p.hline(4, 12, 10, '#f4e8d0');
-    p.set(1, 8, '#f4e8d0');
-    p.set(2, 7, '#1a1420');
-    p.set(2, 5, body);
-    p.set(4, 5, body);
-    for (const x of [5, 7, 9, 11]) p.vline(x, 7, 9, '#2a1a14');
-    p.line(13, 8, 15, 5 + f, body);
-    p.set(15, 5 + f, '#2a1a14');
-    for (const [x, o] of [[5, f], [7, -f], [10, f], [12, -f]]) p.vline(x + o, 11, 14, shade(body, 0.75));
-  });
+  const p = new Px(24, 24);
+  const body = hex('#e08a2a');
+  const lite = hex('#f0a848');
+  const dark = shade(body, 0.72);
+  const belly = hex('#f4e8d0');
+  const stripe = hex('#22140e');
+  // Legs, far pair darker; walking, they swing.
+  for (const [x, o, far] of [[6, f, 1], [9, -f, 0], [16, f, 1], [19, -f, 0]]) {
+    p.rect(x + o, 16, 2, 6, far ? dark : body);
+    p.hline(x + o, x + o + 2, 21, far ? shade(body, 0.6) : belly);
+  }
+  // The long barrel of the body, its back lit, its belly pale.
+  p.rect(5, 10, 16, 7, body);
+  p.hline(6, 19, 10, lite);
+  p.hline(7, 18, 9, body);
+  p.hline(6, 19, 16, belly);
+  p.rect(18, 11, 3, 5, body);
+  // Stripes down the flank, a little bent.
+  for (const x of [8, 11, 14, 17]) {
+    p.vline(x, 9, 13, stripe);
+    p.set(x + 1, 14, stripe);
+  }
+  p.vline(20, 11, 13, stripe);
+  // The tail, up and curling, banded.
+  p.line(21, 12, 23, 9 + f, body);
+  p.line(23, 9 + f, 22, 5 + f, body);
+  p.set(22, 7 + f, stripe);
+  p.set(22, 5 + f, stripe);
+  // The great head, low and forward: ears, a white muzzle and cheeks.
+  p.rect(1, 8, 6, 6, body);
+  p.rect(0, 11, 3, 3, belly);
+  p.set(0, 11, hex('#3a2a20'));
+  p.set(1, 7, body);
+  p.set(5, 7, body);
+  p.set(1, 6, dark);
+  p.set(5, 6, dark);
+  p.set(2, 9, hex('#f0e060'));
+  p.set(3, 9, stripe);
+  p.vline(5, 8, 10, stripe);
+  p.set(4, 12, stripe);
+  p.set(2, 14, belly);
+  return p.outline(OUT);
 }
 // A coyote: lean, sandy, big-eared.
 function coyote(f) {
@@ -1684,7 +1730,7 @@ export const FAR_CREATURES = {
   reindeer: { frames: 2, draw: (f, v) => reindeer(f, v) },
   frost_wolf: { frames: 2, draw: (f) => frostWolf(f) },
   crane: { frames: 2, draw: (f) => crane(f) },
-  tiger: { frames: 2, draw: (f) => tiger(f) },
+  tiger: { frames: 2, size: 24, draw: (f) => tiger(f) },
   coyote: { frames: 2, draw: (f) => coyote(f) },
   rattlesnake: { frames: 2, draw: (f) => rattlesnake(f) },
   bone_crab: { frames: 2, draw: (f) => boneCrab(f) },

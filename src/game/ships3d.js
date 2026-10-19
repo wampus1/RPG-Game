@@ -250,6 +250,12 @@ export function windOf(game) {
   const w = game.weather;
   if (w && w.kind === 'rain') k += 0.12;
   if (w && w.storm) k += w.storm * 0.5;
+  // (Round 128) The weather's own wind: a gale filling every sail (gusting
+  // as it blows), and the still air of a fog leaving them hanging.
+  if (w && w.blow) k += w.blow * 0.55 * (0.75 + 0.5 * (w.gust || 0));
+  if (w && w.kind === 'fog') k -= 0.3 * Math.min(1, w.level ?? 1);
+  if (w && w.kind === 'snow') k += 0.06;
+  k = Math.max(0.3, k);
   return { ang, k, x: Math.sin(ang), z: Math.cos(ang) };
 }
 
@@ -375,6 +381,7 @@ function sail(game, S, W, dt) {
   // The yards and boom swing round with the sheet, to leeward.
   const [lwx, lwz] = S.dirLocal(W.x, W.z);
   S.windLocal = { x: lwx, z: lwz };
+  S.windK = Math.round(W.k * 20) / 20;
   const lee = lwx >= 0 ? 1 : -1;
   S.lee = lee;
   const braceGoal = lee * (1 - S.sheet) * 1.05;
