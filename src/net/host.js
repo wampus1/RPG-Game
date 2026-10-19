@@ -905,7 +905,7 @@ export class HostNet {
       first: sc.kind === 'starfall' ? sc.first : undefined,
       // (A painted opening: what's told in it, for their screen to paint.
       // See game/intros.js.)
-      info: sc.kind === 'home_intro' || sc.kind === 'wreck_intro' ? sc.info : undefined,
+      info: ['home_intro', 'wreck_intro', 'leader_intro', 'brigand_intro', 'outworld_intro'].includes(sc.kind) ? sc.info : undefined,
       // (Round 92) A place turned back: to what height, in what light, and
       // whether it's theirs or they're watching (and whose it is).
       tier: sc.kind === 'timeturn' ? sc.tier : undefined,

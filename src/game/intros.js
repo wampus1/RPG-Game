@@ -32,6 +32,7 @@ import { drawPerson, shade, mix, fillPoly, line } from '../render/scenekit.js';
 import { paintHome, drawTown, ROWS } from '../render/art_home.js';
 import { Bmp, sky as skyBands, rngOf, mixC, rgb as rgbOf } from '../render/brush.js';
 import { farTable } from '../world/farlands.js';
+import { originScene, originSceneFrom } from './originintros.js';
 
 // The pictures are painted at half size (each pixel two on the screen).
 const PW = VIEW_W / 2;
@@ -53,7 +54,7 @@ function makeCanvas(w, h) {
 // ------------------------------------------------------------ framing
 // The picture to the screen, twice the size (drawn in toward (fx, fy) by
 // `zoom`, and shaken by `shake`), the letterbox over it.
-function present(ctx, buf, { zoom = 1, fx = PW / 2, fy = PH / 2, shake = 0, alpha = 1 } = {}) {
+export function present(ctx, buf, { zoom = 1, fx = PW / 2, fy = PH / 2, shake = 0, alpha = 1 } = {}) {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#000';
@@ -78,7 +79,7 @@ function present(ctx, buf, { zoom = 1, fx = PW / 2, fy = PH / 2, shake = 0, alph
 // Words in the bottom bar (two lines at most), typed out as they come.
 // `parts`: [[text, colour], ...] run together (a speaker's name, then what
 // they say).
-function caption(ctx, parts, age, alpha = 1) {
+export function caption(ctx, parts, age, alpha = 1) {
   if (!parts || alpha <= 0) return;
   const whole = parts.map((p) => p[0]).join('');
   const lines = wrap(whole, 80).slice(0, 2);
@@ -112,7 +113,7 @@ function caption(ctx, parts, age, alpha = 1) {
 }
 
 // Text twice the size, centred.
-function bigText(ctx, text, y, color) {
+export function bigText(ctx, text, y, color) {
   const w = text.length * CHAR_W;
   const c = bigText.canvas || (bigText.canvas = makeCanvas(VIEW_W, 10));
   const g = c.getContext('2d');
@@ -126,7 +127,7 @@ function bigText(ctx, text, y, color) {
 
 // What's told in the dark at the end, a line at a time (`hi`: the one in
 // another colour).
-function darkWords(ctx, words, s, lineT, hi = -1) {
+export function darkWords(ctx, words, s, lineT, hi = -1) {
   let y = VIEW_H / 2 - words.length * 11;
   words.forEach((txt, i) => {
     const a = clamp01((s - i * lineT) / 1.0);
@@ -1228,6 +1229,10 @@ export function introScene(game) {
     return sc;
   }
   if (h.origin === 'native' && game.sim.citizen) return homeScene(game, homeInfo(game));
+  // (Round 123) A leader's, a brigand's, an outworlder's (see
+  // originintros.js).
+  const o = originScene(game);
+  if (o) return o;
   return wreckScene(game, wreckInfo(game));
 }
 
@@ -1236,5 +1241,5 @@ export function introScene(game) {
 export function introFrom(game, s) {
   if (s.kind === 'home_intro' && s.info) return homeScene(game, s.info);
   if (s.kind === 'wreck_intro' && s.info) return wreckScene(game, s.info);
-  return null;
+  return originSceneFrom(game, s);
 }

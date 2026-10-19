@@ -34,6 +34,7 @@ import { formOf, govOf, authority, shortTitle, rulerTitle, nameForm } from './re
 import { full, SESSION, nextSession } from './agenda.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { countItem, removeItem, addItem } from '../game/inventory.js';
+import { isOutworlder } from '../game/hero.js';
 
 const FAVOUR_MAX = 30;
 const MAX_OPEN = 4;
@@ -227,7 +228,7 @@ export class Crown {
     // (The chancellor: whoever ruled, or would have.)
     const ch = realms.ruler(civ);
     if (ch) ch.chancellor = civ.id;
-    const words = { secession: 'leads the free realm it has become', succession: 'has come to the throne', inheritance: 'has come to the throne, heir to the last ruler', election: 'has been chosen to lead it', usurpation: 'has seized the throne', granted: 'rules it now' }[how] || 'rules it now';
+    const words = { secession: 'leads the free realm it has become', succession: 'has come to the throne', inheritance: 'has come to the throne, heir to the last ruler', election: 'has been chosen to lead it', usurpation: 'has seized the throne', granted: 'rules it now', birthright: 'has come into their own: the realm is theirs to rule' }[how] || 'rules it now';
     realms.proclaim(civ, day, `${this.who(civ)} ${words}: the ${plain(civ)} answers to them now.`);
     this.office.asPid(pid, () => this.sim.addRenown?.(R.capital, 3, 'coming to the throne'));
     this.office.show(pid, 'crowned', { civ: civ.id, sid: R.capital, how, form: R.form });
@@ -1158,7 +1159,7 @@ export class Crown {
       return true;
     }
     if (formOf(civ) === 'council') {
-      const seats = this.office.realmSeats(civ).filter((T) => (T.lastOverall ?? 0) >= 50 && !this.heldBy(T.holder.pid));
+      const seats = this.office.realmSeats(civ).filter((T) => (T.lastOverall ?? 0) >= 50 && !this.heldBy(T.holder.pid) && !this.office.asPid(T.holder.pid, () => isOutworlder(this.game.hero)));
       if (seats.length && (hash4(civ.id, day, 0x5cc) % 100) < 60) {
         const T = seats.sort((a, b) => (b.lastOverall ?? 0) - (a.lastOverall ?? 0))[0];
         this.office.offer(T.holder.pid, capL, 'crown', `The council of the ${plain(civ)} would have you lead the realm as its speaker.`, 2, { civ: civ.id });
@@ -1178,7 +1179,8 @@ export class Crown {
       if (!T.holder || (T.highDays || 0) < 5) continue;
       const s = this.game.world.ow.settlements[T.sid];
       if (!s || s.civ !== civ || this.heldBy(T.holder.pid)) continue;
-      const known = this.office.asPid(T.holder.pid, () => (this.sim.renown.get(capL.settlement.id) || 0) >= 10 || (this.sim.renown.get(T.sid) || 0) >= 25);
+      // (Round 123: never one not of this world.)
+      const known = this.office.asPid(T.holder.pid, () => !isOutworlder(this.game.hero) && ((this.sim.renown.get(capL.settlement.id) || 0) >= 10 || (this.sim.renown.get(T.sid) || 0) >= 25));
       if (!known || (hash4(civ.id, day, 0x4e1) % 100) >= 20) continue;
       return this.office.offer(T.holder.pid, capL, 'heir', `${this.sim.realms.rulerName(civ)} has no heir, and would name you: you'd rule the ${plain(civ)} when they die.`, 3, { civ: civ.id });
     }
@@ -1220,7 +1222,7 @@ export class Crown {
     for (const p of R.council) {
       const r = this.sim.realms.recOf(p);
       if (!r || !alive(r)) continue;
-      const u = ((T.lastOverall ?? 50) - 55) / 40 + noise(r.idx, day, 0x5be) * 0.8;
+      const u = ((T.lastOverall ?? 50) - 55) / 40 + noise(r.idx, day, 0x5be) * 0.8 - (isOutworlder(this.game.hero) ? 0.5 : 0);
       if (u > 0) aye++;
       else nay++;
     }

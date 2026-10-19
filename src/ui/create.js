@@ -22,7 +22,10 @@ import {
   STATS, STAT_BASE, STAT_MAX, TRAITS, traitPicks, goodTraits, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
   DETAILS, HATS, PATTERNS, OUTFITS, pointsLeft, randomHero, heroName, hpBonus, COMMON_KIT,
   EYES, BEARD_STYLES, MARKS, NECKS, GLOVES, CAPES,
+  LEAD_SCOPES, LEAD_TOWN_STYLES, LEAD_REALM_STYLES, leadOf, MUTATIONS, MUTATION_IDS, MUTATION_MAX, mutationsOf, ALIEN_SKINS,
 } from '../game/hero.js';
+import { CHARTERS } from '../sim/charters.js';
+import { REALM_FORMS } from '../sim/realmforms.js';
 import { charGenOf, tabsOf, defaultPicks, chosenEffects, cleanPicks } from '../mod/chargen.js';
 import { assetPixels } from '../mod/format.js';
 
@@ -111,6 +114,7 @@ export class CharacterWindow extends Window {
     this.sel = 0;
     this.scroll = 0;
     this.rows = this.makeRows();
+    this.syncTabs();
   }
 
   // The mods that change the screen (the Workshop's preview changes them as
@@ -118,14 +122,23 @@ export class CharacterWindow extends Window {
   setMods(mods) {
     this.mods = mods || [];
     this.cg = charGenOf(this.mods);
-    const t = tabsOf(this.cg);
-    this.tabs = t.length ? t : [{ id: 'basics', game: 'basics', name: 'BASICS', order: 0 }];
+    this.syncTabs();
     if (this.hero) {
       this.fresh(this.hero);
       this.rows = this.makeRows();
       this.tab = Math.min(this.tab, this.tabs.length - 1);
       this.sel = Math.min(this.sel, Math.max(0, this.tabRows.length - 1));
     }
+  }
+
+  // The tabs: the game's and the mods', and (Round 123) an outworlder's
+  // mutations.
+  syncTabs() {
+    const t = tabsOf(this.cg);
+    const list = t.length ? t : [{ id: 'basics', game: 'basics', name: 'BASICS', order: 0 }];
+    if (this.hero && this.hero.origin === 'outworlder') list.push({ id: 'mutations', game: 'mutations', name: 'MUTATIONS', order: 99 });
+    this.tabs = list;
+    if (this.tab !== undefined) this.tab = Math.min(this.tab, this.tabs.length - 1);
   }
 
   // A character as the mods allow: their choices to begin with, and none of
@@ -161,6 +174,12 @@ export class CharacterWindow extends Window {
     if (!o) return;
     h.modOrigin = o.mod || null;
     h.origin = o.mod ? o.as : o.game;
+    // (Round 123) A leader's choices; an outworlder's own skin and
+    // mutations (and the tab for them).
+    if (h.origin === 'leader') h.lead = leadOf(h);
+    if (h.origin !== 'outworlder' && ALIEN_SKINS.includes(h.look.skin)) h.look.skin = SKINS[4];
+    h.look.mut = mutationsOf(h);
+    if (h === this.hero) this.syncTabs();
   }
 
   kits() {
@@ -195,8 +214,10 @@ export class CharacterWindow extends Window {
       { tab: 'basics', id: 'name', label: 'Name', type: 'name', about: 'Type to change your name. ←/→ picks another.' },
       { tab: 'basics', id: 'nameStyle', label: 'Names from', type: 'cycle', show: () => (h().nameStyle ? CULTURES[h().nameStyle].label : 'anywhere'), set: (d) => { h().nameStyle = cycle([null, ...Object.keys(CULTURES)], h().nameStyle ?? null, d); }, about: 'Which people\'s names ←/→ on your name picks from.' },
       { tab: 'basics', id: 'origin', label: 'Origin', type: 'cycle', show: () => this.originNow().name, set: (d) => { this.setOrigin(cycleOf(this.origins(), this.originNow(), d)); }, about: () => this.originNow().about, art: () => this.originNow().art },
+      { tab: 'basics', id: 'leadScope', label: 'You lead', type: 'cycle', show: () => (leadOf(h()).scope === 'realm' ? 'a whole realm' : 'a single town'), set: (d) => { const L = leadOf(h()); h().lead = { scope: cycle(LEAD_SCOPES, L.scope, d), style: null }; h().lead = leadOf(h()); }, about: () => (leadOf(h()).scope === 'realm' ? 'You rule a realm from its capital: its matters, decrees, towns and neighbours (N: the crown). You govern the capital itself too.' : 'You govern one town on Thessa from its hall: its council, taxes, laws and people (N: the council).') },
+      { tab: 'basics', id: 'leadStyle', label: 'Governed as', type: 'cycle', show: () => { const L = leadOf(h()); return L.scope === 'realm' ? REALM_FORMS[L.style].name : CHARTERS[L.style].name; }, set: (d) => { const L = leadOf(h()); h().lead = { scope: L.scope, style: cycle(L.scope === 'realm' ? LEAD_REALM_STYLES : LEAD_TOWN_STYLES, L.style, d) }; }, about: () => { const L = leadOf(h()); const F = L.scope === 'realm' ? REALM_FORMS[L.style] : CHARTERS[L.style]; return F.rules.join(' '); } },
       { tab: 'basics', id: 'kit', label: 'Starting gear', type: 'cycle', show: () => this.kitNow().name, set: (d) => { this.setKit(cycleOf(this.kits(), this.kitNow(), d)); }, about: () => this.kitText(), art: () => this.kitNow().art },
-      { tab: 'looks', id: 'skin', label: 'Skin', type: 'swatch', ...look('skin', SKINS) },
+      { tab: 'looks', id: 'skin', label: 'Skin', type: 'swatch', get: () => h().look.skin, set: (d) => { h().look.skin = cycle(h().origin === 'outworlder' ? [...SKINS, ...ALIEN_SKINS] : SKINS, h().look.skin, d); }, about: () => (h().origin === 'outworlder' ? 'Outworlders come in colours no one born here does.' : '') },
       { tab: 'looks', id: 'eyeColor', label: 'Eyes', type: 'swatch', ...look('eyeColor', EYES), name: (c) => EYE_NAMES[c] || c },
       { tab: 'looks', id: 'hair', label: 'Hair colour', type: 'swatch', ...look('hair', HAIRS) },
       { tab: 'looks', id: 'hairStyle', label: 'Hair style', type: 'cycle', ...pickOf('hairStyle', HAIR_STYLES) },
@@ -215,6 +236,8 @@ export class CharacterWindow extends Window {
       { tab: 'looks', id: 'accent', label: 'Accent', type: 'swatch', ...look('accent', CLOTHES), about: 'The colour of trims, sashes and some hats.' },
       { tab: 'looks', id: 'stoop', label: 'Stance', type: 'cycle', show: () => (h().look.stoop ? 'stooped' : 'upright'), set: () => { h().look.stoop = !h().look.stoop; } },
     ].filter((r) => r.id === 'name' || !cg.hideRows.has(r.id));
+    // (Round 123) An outworlder's mutations.
+    for (const k of MUTATION_IDS) rows.push({ tab: 'mutations', id: `mut:${k}`, label: MUTATIONS[k].name, type: 'mutation', key: k, about: `+ ${MUTATIONS[k].gift} - ${MUTATIONS[k].cost}` });
     for (const s of STATS) rows.push({ tab: 'stats', id: `stat:${s.key}`, label: s.name, type: 'stat', key: s.key, about: s.about });
     // (The good ones first, then the flaws: the game's, then the mods'.)
     const keys = Object.keys(TRAITS).filter((k) => !cg.hideRows.has(`trait:${k}`));
@@ -361,6 +384,11 @@ export class CharacterWindow extends Window {
         this.ui.audio?.play('error');
         return;
       }
+    } else if (row.type === 'mutation') {
+      if (!this.mutate(row.key)) {
+        this.ui.audio?.play('error');
+        return;
+      }
     } else if (row.type === 'text') return;
     else if (row.set) row.set(d);
     h.look.hatColor = h.look.accent;
@@ -393,6 +421,21 @@ export class CharacterWindow extends Window {
       return false;
     }
     list.push(row.key);
+    this.note = null;
+    return true;
+  }
+
+  // (Round 123) A mutation on or off (no more than MUTATION_MAX).
+  mutate(k) {
+    const h = this.hero;
+    h.mutations = mutationsOf(h);
+    const i = h.mutations.indexOf(k);
+    if (i >= 0) h.mutations.splice(i, 1);
+    else if (h.mutations.length >= MUTATION_MAX) {
+      this.note = `You can have ${MUTATION_MAX} mutations. Take one off first.`;
+      return false;
+    } else h.mutations.push(k);
+    h.look.mut = h.mutations.slice();
     this.note = null;
     return true;
   }
@@ -464,8 +507,13 @@ export class CharacterWindow extends Window {
     const full = this.tabs.map((t, i) => ` ${i < 9 ? `${i + 1} ` : ''}${t.name} `);
     let labels = full;
     if (full.reduce((a, l) => a + l.length + 1, -1) > 51) {
-      const each = Math.max(3, Math.floor((51 - (n - 1)) / n) - 2);
-      labels = this.tabs.map((t) => ` ${t.name.slice(0, each)} `);
+      // (Their numbers dropped first; only then shortened.)
+      const plain = this.tabs.map((t) => ` ${t.name} `);
+      if (plain.reduce((a, l) => a + l.length + 1, -1) <= 51) labels = plain;
+      else {
+        const each = Math.max(3, Math.floor((51 - (n - 1)) / n) - 2);
+        labels = this.tabs.map((t) => ` ${t.name.slice(0, each)} `);
+      }
     }
     let tx = 2;
     this.tabs.forEach((t, i) => {
@@ -532,6 +580,15 @@ export class CharacterWindow extends Window {
         cyc(R('origin'), y);
         wrap(this.originNow().about, 48).slice(0, 3).forEach((l, i) => g.text(4, y + 1 + i, l, C.faint));
         y += 5;
+      }
+      // (Round 123) A leader: what they lead, and how it's governed.
+      if (h.origin === 'leader' && !h.modOrigin) {
+        for (const id of ['leadScope', 'leadStyle']) if (R(id)) cyc(R(id), y++);
+        y++;
+      } else if (h.origin === 'outworlder' && !h.modOrigin) {
+        const n = mutationsOf(h).length;
+        g.text(4, y, `Mutations: ${n ? mutationsOf(h).map((k) => MUTATIONS[k].name).join(', ') : 'none yet'} (the MUTATIONS tab)`.slice(0, 49), n ? '#a0e8c0' : C.faint);
+        y += 2;
       }
       if (R('kit')) {
         cyc(R('kit'), y);
@@ -630,7 +687,8 @@ export class CharacterWindow extends Window {
         g.text(3, yA, cur.label, cur.flaw ? C.orange : C.cyan);
         wrap(typeof cur.about === 'function' ? cur.about() : cur.about || '', 48).slice(0, 2).forEach((l, i) => g.text(3, yA + 1 + i, l, C.dim));
       }
-    } else this.drawModTab(g, t, rows, rowAt, cyc);
+    } else if (tab === 'mutations') this.drawMutations(g, rows, rowAt);
+    else this.drawModTab(g, t, rows, rowAt, cyc);
 
     // The preview, and what the line you're on does.
     const px = 56;
@@ -659,6 +717,30 @@ export class CharacterWindow extends Window {
     btn(28, 'Begin', () => this.begin(), C.hi);
     btn(30, 'Randomise', () => this.randomise());
     btn(32, 'Back', () => this.close());
+  }
+
+  // (Round 123) An outworlder's mutations: each its gift and its cost; up
+  // to MUTATION_MAX of them.
+  drawMutations(g, rows, rowAt) {
+    const h = this.hero;
+    const on = mutationsOf(h);
+    g.text(3, 6, `Mutations: ${on.length}/${MUTATION_MAX}`, on.length < MUTATION_MAX ? C.hi : C.fg);
+    g.text(22, 6, 'Each changes how you look.', C.faint);
+    rows.forEach((r, j) => {
+      const y = 8 + j * 3;
+      const { sel, i } = rowAt(r, 2, y, 50);
+      const has = on.includes(r.key);
+      g.text(3, y, has ? '[x]' : '[ ]', has ? '#a0e8c0' : C.faint);
+      g.text(7, y, r.label, sel ? C.white : has ? '#a0e8c0' : C.fg);
+      g.text(5, y + 1, `+ ${MUTATIONS[r.key].gift}`.slice(0, 47), '#80c070');
+      g.text(5, y + 2, `- ${MUTATIONS[r.key].cost}`.slice(0, 47), '#d08060');
+      this.hit(2, y, 50, 3, () => {
+        this.sel = i;
+        this.change(r, 1);
+      });
+      void j;
+    });
+    if (this.note) wrap(this.note, 48).slice(0, 2).forEach((l, k) => g.text(3, this.h - 3 + k, l, C.orange));
   }
 
   // A list's scroll kept on the line you're on, when you move with the
@@ -786,7 +868,14 @@ export class CharacterWindow extends Window {
     // their rows.)
     const h = this.hero;
     const any = (L) => L[Math.floor(Math.random() * L.length)];
-    if (this.cg.origins.length) this.setOrigin(any(this.origins()));
+    if (this.cg.origins.length || Math.random() < 0.5) this.setOrigin(any(this.origins()));
+    // (Round 123) An outworlder: a mutation or two; a leader: what they lead.
+    if (h.origin === 'outworlder') {
+      h.mutations = [...MUTATION_IDS].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * MUTATION_MAX));
+      if (Math.random() < 0.6) h.look.skin = any(ALIEN_SKINS);
+    }
+    if (h.origin === 'leader') h.lead = { scope: any(LEAD_SCOPES), style: null };
+    this.setOrigin(this.originNow());
     if (this.cg.kits.length) this.setKit(any(this.kits()));
     const P = h.modPicks;
     for (const r of [...this.cg.tabs.flatMap((t) => t.rows), ...Object.values(this.cg.extra).flat()]) {
@@ -847,6 +936,7 @@ export class CharacterWindow extends Window {
       this.sel = (this.sel + 1) % n;
       this.follow = true;
     } else if (k.code === 'PageDown' || k.code === 'PageUp') this.onWheel(k.code === 'PageDown' ? 5 : -5);
+    else if (k.code === 'Space' && row && row.type === 'mutation') this.change(row, 1);
     else if (k.code === 'ArrowLeft' && row) this.change(row, -1);
     else if (k.code === 'ArrowRight' && row) this.change(row, 1);
     else if (row && row.type === 'name') {

@@ -75,7 +75,43 @@ export const ORIGINS = {
   crash: { name: 'Crash Landing', about: 'Your ship broke up on the rocks. You wake on a beach with what washed ashore, and nobody on the island knows you.' },
   native: { name: 'Island Native', about: 'You were born and raised in one of the island\'s towns. You start at home with your family, and the whole town knows you.' },
   star: { name: 'Fallen Star', about: 'You fell from the night sky and landed in a crater near a village on Thessa. You have one glowing wing. Some people are wary of you. Your wing lets you dodge roll without stamina: a second roll right after the first, or a roll when you have no stamina left. It then fades and grows back over 20 seconds.' },
+  // (Round 123.)
+  leader: { name: 'Leader', about: 'You begin in power: at the head of a town, or ruling a whole realm, governed the way you choose. It is yours from the first morning.' },
+  brigand: { name: 'Brigand', about: 'A Black Gull pirate, at their haven with a sloop and a hand or two. The brethren count you one of theirs; the realms nearby want you hanged.' },
+  outworlder: { name: 'Outworlder', about: 'Your escape pod fell burning out of the sky. Take mutations (each a gift and a cost). Folk trust you slowly, and let you lead them slower still.' },
 };
+
+// (Round 123) A leader's beginning: a single town (governed under one of
+// its charters: see sim/charters.js) or a whole realm (under one of the
+// forms of government: see sim/realmforms.js).
+export const LEAD_SCOPES = ['town', 'realm'];
+export const LEAD_TOWN_STYLES = ['council', 'assembly', 'guild', 'autocracy', 'lordship', 'commune', 'theocracy'];
+export const LEAD_REALM_STYLES = ['monarchy', 'republic', 'elder', 'theocracy', 'league'];
+export function leadOf(h) {
+  const L = (h && h.lead) || {};
+  const scope = LEAD_SCOPES.includes(L.scope) ? L.scope : 'town';
+  const list = scope === 'realm' ? LEAD_REALM_STYLES : LEAD_TOWN_STYLES;
+  return { scope, style: list.includes(L.style) ? L.style : list[0] };
+}
+
+// (Round 123) An outworlder's mutations: each changes how they look, and
+// gives a gift (a trait, or a stat) and a cost (a flaw, or a stat). Up to
+// MUTATION_MAX of them.
+export const MUTATION_MAX = 3;
+export const MUTATIONS = {
+  third_eye: { name: 'Third Eye', gift: 'Duelist: a longer parry window, more critical hits.', cost: 'Unsettling: everyone starts with an opinion of you 6 points lower.', grants: ['duelist'], opinion: -6 },
+  glow: { name: 'Glowing Spots', gift: 'Night Eyes: your light reaches 6 blocks at night and underground.', cost: 'Notorious: people notice your crimes from further away.', grants: ['night_eyes', 'notorious'] },
+  chitin: { name: 'Chitin Plates', gift: 'Tough: +4 health.', cost: '-1 agility.', grants: ['tough'], stats: { agi: -1 } },
+  gills: { name: 'Gills', gift: 'Strong Swimmer: water doesn\'t slow you down.', cost: 'Your skin dries: -2 stamina.', grants: ['swimmer'], stamina: -20 },
+  antennae: { name: 'Antennae', gift: 'Tracker: more meat and hide, and bandit camps spotted from far off.', cost: 'Seasick: the sea\'s rolling overwhelms them; rafts go slower.', grants: ['tracker', 'seasick'] },
+  dense: { name: 'Dense Frame', gift: '+1 strength: you were made under a heavier sky.', cost: 'Poor Swimmer: you sink like a stone.', grants: ['poor_swimmer'], stats: { str: 1 } },
+  twin_hearts: { name: 'Twin Hearts', gift: 'Tireless: +3 stamina, and it comes back 40% faster.', cost: 'Squeamish: raw meat and fish don\'t heal you at all.', grants: ['tireless', 'squeamish'] },
+};
+export const MUTATION_IDS = Object.keys(MUTATIONS);
+export const mutationsOf = (h) => (h && h.origin === 'outworlder' && Array.isArray(h.mutations) ? h.mutations.filter((k) => MUTATIONS[k]).slice(0, MUTATION_MAX) : []);
+export const isOutworlder = (h) => !!h && h.origin === 'outworlder';
+// (Skin no one born here has: an outworlder's own.)
+export const ALIEN_SKINS = ['#9ab8d8', '#7ac8b0', '#b0a0e0', '#88d070', '#d8a0c8', '#c8c8a0', '#6a8ab8', '#a0e0e0'];
 // (A fallen star's wing: how long it takes to come back once spent.)
 export const WING_BACK = 20;
 
@@ -153,7 +189,9 @@ export function randomHero(seed) {
   const face = rng.pick(FACES);
   const h = {
     name: nm.first,
-    origin: rng.pick(Object.keys(ORIGINS)),
+    // (The first three: a random one of the newer origins is the character
+    // screen's to give; see create.js.)
+    origin: rng.pick(['crash', 'native', 'star']),
     kit: rng.pick(Object.keys(KITS)),
     look: {
       skin: rng.pick(SKINS), hair: rng.pick(HAIRS), hairStyle: rng.pick(HAIR_STYLES), shirt: rng.pick(CLOTHES), pants: rng.pick(PANTS),
@@ -193,17 +231,25 @@ export function normalizeHero(h) {
   out.traits = [...all.filter((k) => !TRAITS[k].flaw).slice(0, TRAIT_PICKS + flaws.length), ...flaws, ...granted];
   out.specialties = [];
   if (!ORIGINS[out.origin]) out.origin = 'crash';
+  // (Round 123) A leader's beginning, an outworlder's mutations (worn on
+  // their look too, for the sprite: see render/people.js).
+  if (out.origin === 'leader') out.lead = leadOf(out);
+  out.mutations = mutationsOf(out);
+  if (out.mutations.length) out.look.mut = out.mutations.slice();
+  else delete out.look.mut;
   if (!KITS[out.kit]) out.kit = 'wanderer';
   for (const s of STATS) out.stats[s.key] = Math.max(1, Math.min(STAT_MAX, out.stats[s.key] | 0));
   return out;
 }
 
 // ------------------------------------------------------------------ effects
-export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k));
+export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k) || mutationsOf(h).some((m) => MUTATIONS[m].grants.includes(k)));
+// (Round 123: what mutations add to a stat.)
+const mutStat = (h, k) => mutationsOf(h).reduce((n, m) => n + ((MUTATIONS[m].stats && MUTATIONS[m].stats[k]) || 0), 0);
 // Your abilities, with whatever your clothes, set gems and potions add
 // (kept up to date by the game in h.bonus).
 // (Round 63: and whatever a mod's character screen gave, in h.modStats.)
-const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0) + ((h && h.modStats && h.modStats[k]) || 0);
+const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0) + ((h && h.modStats && h.modStats[k]) || 0) + mutStat(h, k);
 
 export function damageMult(h) {
   return 1 + 0.1 * (stat(h, 'str') - STAT_BASE);
@@ -225,16 +271,18 @@ export function priceMult(h) {
   return (1 - 0.03 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'haggler') ? 0.92 : 1);
 }
 export function repGainMult(h) {
-  return (1 + 0.12 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'silver_tongue') ? 1.25 : 1);
+  // (Round 123: an outworlder is slow to be warmed to.)
+  return (1 + 0.12 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'silver_tongue') ? 1.25 : 1) * (isOutworlder(h) ? 0.6 : 1);
 }
 // Breath for blocking, rolling and swinging.
 // (In tenths of a point. Light on your feet, you've a little more breath:
 // four tenths for every point of agility above the base.)
 export function staminaBonus(h) {
-  return (has(h, 'tireless') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE);
+  return (has(h, 'tireless') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE) + mutationsOf(h).reduce((n, m) => n + (MUTATIONS[m].stamina || 0), 0);
 }
 export function opinionBonus(h) {
   // Well dressed (or charming for a few hours), people warm to you at once.
   const dress = h && h.bonus ? Math.max(0, h.bonus.cha || 0) * 2 : 0;
-  return (has(h, 'honest_face') ? 8 : 0) + dress;
+  // (Round 123: an outworlder, a stranger to every face; a third eye.)
+  return (has(h, 'honest_face') ? 8 : 0) + dress + (isOutworlder(h) ? -10 : 0) + mutationsOf(h).reduce((n, m) => n + (MUTATIONS[m].opinion || 0), 0);
 }

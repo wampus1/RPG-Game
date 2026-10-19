@@ -24,6 +24,10 @@ export const FEATS = [
   { id: 'castaway', name: 'Washed Ashore', about: 'Live through the wreck of your ship (begin as a castaway).', title: 'Castaway', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'crash' },
   { id: 'native', name: 'Born and Raised', about: 'Begin at home, born on the islands.', title: 'Local', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'native' },
   { id: 'star', name: 'Fallen', about: 'Fall to the islands as a star.', title: 'Star-Born', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'star' },
+  // (Round 123.)
+  { id: 'born_to_lead', name: 'Born to Lead', about: 'Begin at the head of a town or a realm.', title: 'Sovereign', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'leader' },
+  { id: 'brigand', name: 'Under the Black', about: 'Begin as a pirate of the Black Gull Brethren.', title: 'Corsair', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'brigand' },
+  { id: 'outworlder', name: 'Not From Around Here', about: 'Crash-land on this world from somewhere else entirely.', title: 'Outworlder', test: (g) => inWorld(g) && g.hero && g.hero.origin === 'outworlder' },
   { id: 'builder', name: 'Brick by Brick', about: 'Place 200 blocks.', title: 'Builder', test: (g) => n(g, 'placed') >= 200 },
   { id: 'miner', name: 'Deep Pockets', about: 'Mine or dig 500 blocks.', title: 'Miner', test: (g) => n(g, 'mined') >= 500 },
   { id: 'hunter', name: 'The Hunt', about: 'Defeat 25 creatures or foes.', title: 'Hunter', test: (g) => n(g, 'kills') >= 25 },

@@ -9536,6 +9536,81 @@ realm can be governed in five ways.
 - **Version 1.22.0.** Worlds from 1.21 load as before. No realm has a
   player on its throne yet.
 
+## Round 123: Three new origins
+
+Three new ways to begin a story, each with its own painted, animated
+opening. The character you made appears in each, as they look.
+
+- **Leader.** You begin already in power. On the character screen, choose
+  what you lead and how it's governed:
+  - **a single town** on Thessa, under any of its charters (mayor and
+    council, town moot, guild charter, protectorate, lordship, commune, or
+    temple rule if the town has a temple and a priest; otherwise mayor and
+    council). Its old mayor stays on as your steward;
+  - **a whole realm**, ruled from its capital (which you govern too), as a
+    monarchy, republic, clan moot, holy realm or merchant league.
+
+  The opening is your investiture in a great hall full to the doors. You
+  walk the carpet between the crowds, and the crown (or the chain of
+  office) comes down. Then the hall erupts and the petals fall. A monarch
+  then chooses whether to be styled King, Queen or Monarch.
+- **Brigand.** You begin as a pirate sworn to the Black Gull Brethren:
+  - **The haven.** You're ashore at their haven by their cove: tents
+    round a fire, stores of plunder, the guild's war banner and a post of
+    WANTED notices. The brethren who live there are the chief, the
+    quartermaster (who signs another hand onto your ship for ¤25), the
+    gunner (powder and shot for ¤20) and two old salts. All count you one
+    of their own.
+  - **Your sloop.** She rides at anchor off the beach with one or two
+    hands aboard. Guild ships never fire on you.
+  - **Your bad name.** The two realms nearest the cove know you: their
+    townsfolk think 25 points worse of you, and their warships come for
+    you on sight.
+  - **You get** a sabre and a spyglass.
+
+  The opening: an hour before dawn on a moonlit sea, your sloop runs down
+  a fat merchantman and fires a shot across her bow, and she strikes her
+  colours. Then sunrise at the cove: the brethren cheering on the beach,
+  the black flag snapping, and you coming ashore.
+- **Outworlder.** You are not of this world. Your escape pod crashes
+  burning into the wilds of Thessa, far from any town, and you crawl out
+  of the crater.
+  - **A MUTATIONS tab** on the character screen lets you take up to three
+    mutations. Each one changes how you look, and gives a gift and a cost:
+
+    | Mutation | Gift | Cost |
+    | --- | --- | --- |
+    | Third Eye | Duelist | everyone's opinion of you starts 6 lower |
+    | Glowing Spots | Night Eyes | Notorious |
+    | Chitin Plates | Tough (+4 health) | -1 agility |
+    | Gills | Strong Swimmer | -2 stamina |
+    | Antennae | Tracker | Seasick |
+    | Dense Frame | +1 strength | Poor Swimmer |
+    | Twin Hearts | Tireless | Squeamish |
+
+  - **Skin colours** no one born here has are open to outworlders.
+  - **Relations come harder.** Everyone's opinion of you starts 10 lower,
+    and you gain reputation 40% more slowly.
+  - **Leading comes harder still:**
+    - a town wants you as a citizen 9 days (not 3) before you can stand
+      for office, and the fee is doubled;
+    - voters lean against you;
+    - no realm appoints you, and a town in trouble calls on you to lead it
+      only once it has come to love you;
+    - no monarch names you heir, no council offers you its speakership,
+      and a council you sit on is harder to win as speaker.
+
+  The opening: high over the world, your ship breaks apart and your pod is
+  flung clear. It falls as a green-violet fire across the night sky of
+  Thessa and strikes the hills. Then the crater: the hatch blows open and
+  you climb out.
+- **The Randomise button** on the character screen sometimes picks a new
+  origin.
+- **Achievements** for each new origin: Born to Lead, Under the Black, Not
+  From Around Here.
+- **Version 1.23.0.** Worlds from 1.22 load as before. The new origins
+  are for new characters.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

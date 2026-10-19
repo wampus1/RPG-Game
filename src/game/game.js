@@ -118,6 +118,7 @@ import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult
 import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
+import { originSpot, originSetup, originIntroduce, isNewOrigin } from './origins.js';
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
 import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain, modSwung, modBlockedBlow } from '../mod/hooks.js';
 import { rule } from '../mod/rules.js';
@@ -341,6 +342,8 @@ export class Game {
       const coast = this.hero && this.hero.origin === 'crash' && !ps ? this.coastSpot() : null;
       // (A fallen star: a crater out in the hills by a village.)
       const star = this.hero && this.hero.origin === 'star' ? starSpot(this, 0) : null;
+      // (Round 123) A leader, a brigand, an outworlder: see origins.js.
+      const orig = this.hero && !home && !ps && isNewOrigin(this.hero) ? originSpot(this, this.hero, 0) : null;
       if (ps && star) {
         star.x = ps.x;
         star.z = ps.z;
@@ -357,6 +360,10 @@ export class Game {
       if (ps) {
         sx = ps.x;
         sz = ps.z;
+      }
+      if (orig) {
+        sx = orig.x;
+        sz = orig.z;
       }
       if (star) {
         sx = star.x;
@@ -391,6 +398,7 @@ export class Game {
         this.player.hp = this.player.maxHp;
         this.player.spawn = { x: spot.x, y: spot.y, z: spot.z };
         if (coast) this.wreckage(spot);
+        if (orig) originSetup(this, orig);
         // (Home in a town where arms are banned: yours stays put away.)
         if (L && !coast && lawOn(L, 'armsBan')) this.stowArms();
       } else {
@@ -702,6 +710,7 @@ export class Game {
   introduce() {
     const h = this.hero;
     const c = this.sim.citizen;
+    if (originIntroduce(this)) return;
     if (h.origin === 'star') return this.introduceStar(this.starAt ? this.starAt.village : null);
     if (h.origin === 'native' && c) {
       const L = this.sim.layoutOf(c.sid);
@@ -2623,6 +2632,7 @@ export class Game {
     // found as them, below.) Each sees their own opening first.
     let star = null;
     let coast = null;
+    let orig = null;
     // (Round 63) Where the mods have new characters begin (see startOf).
     const ps = !saved && hero && hero.origin !== 'native' && !this.dungeon ? startOf(this, hero) : null;
     if (!saved && hero && hero.origin === 'star') {
@@ -2641,6 +2651,15 @@ export class Game {
     } else if (ps) {
       this.loadAround(ps.x, ps.z, true);
       at = this.findFreeSpot(ps.x, ps.z, GROUND);
+    } else if (!saved && hero && isNewOrigin(hero) && !this.dungeon) {
+      // (Round 123) A leader, a brigand, an outworlder (see origins.js).
+      let salt = 0;
+      for (const ch of String(profile.id)) salt = (salt * 31 + ch.charCodeAt(0)) >>> 0;
+      orig = originSpot(this, normalizeHero(hero), salt);
+      if (orig) {
+        this.loadAround(orig.x, orig.z, true);
+        at = this.findFreeSpot(orig.x, orig.z, GROUND);
+      }
     } else if (!saved && hero && hero.origin === 'crash' && !this.dungeon) {
       coast = this.coastSpot();
       if (coast) {
@@ -2678,6 +2697,7 @@ export class Game {
       // (Born here: their family's house, in their home town.)
       if (!saved && this.hero && this.hero.origin === 'native' && !this.dungeon) this.homeNewcomer();
       if (coast) this.wreckage(at);
+      if (orig) originSetup(this, orig);
       // (The country about them, on their own map.)
       this.world.ow.markExplored(p.x, p.z, 2);
       if (p.awakeSince === undefined) p.awakeSince = this.day * DAY_MINUTES + this.minute;

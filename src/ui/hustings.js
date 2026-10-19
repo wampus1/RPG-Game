@@ -417,7 +417,7 @@ export class CountWindow extends Window {
 
 // ------------------------------------------------------------ banners
 const BANNER = {
-  oath: (d, L) => ({ title: 'SWORN IN', head: `${d.title} of ${L.settlement.name}`, color: CHARTERS[d.charter].color, lines: [{ election: 'Elected by the town.', appointment: 'Appointed by the realm.', acclaim: 'Acclaimed by its people.', coup: 'The hall is yours. The town will remember how.', founding: 'Its founder.' }[d.how] || '', `${L.settlement.name} is governed as ${CHARTERS[d.charter].short}.`, 'Your steward keeps the hall; the council sits every morning at ten.', 'Press N to open your council.'] }),
+  oath: (d, L) => ({ title: 'SWORN IN', head: `${d.title} of ${L.settlement.name}`, color: CHARTERS[d.charter].color, lines: [{ election: 'Elected by the town.', appointment: 'Appointed by the realm.', acclaim: 'Acclaimed by its people.', coup: 'The hall is yours. The town will remember how.', founding: 'Its founder.', birthright: 'Yours by birthright.' }[d.how] || '', `${L.settlement.name} is governed as ${CHARTERS[d.charter].short}.`, 'Your steward keeps the hall; the council sits every morning at ten.', 'Press N to open your council.'] }),
   charter: (d, L) => ({ title: 'A NEW CHARTER', head: `${L.settlement.name}: ${CHARTERS[d.charter].name}`, color: CHARTERS[d.charter].color, lines: CHARTERS[d.charter].rules }),
   fallen: (d, L) => ({ title: 'OUT OF OFFICE', head: `No longer ${d.title} of ${L.settlement.name}`, color: '#a08080', lines: [`${d.why[0].toUpperCase()}${d.why.slice(1)}.`, `You served ${d.days} day${d.days === 1 ? '' : 's'}.`] }),
   free: (d, L) => ({ title: 'A FREE STATE', head: d.civ, color: '#80e0c0', lines: [`${L.settlement.name} has broken away${d.from ? ` from the ${d.from.replace(/^The /, '')}` : ''}.`, 'You lead a realm of your own now: its decrees, its towns, its neighbours (N: the crown).', 'Other towns may yet swear themselves to it.'] }),
@@ -435,7 +435,7 @@ const BANNER = {
     const civ = game.world.ow.civs[d.civ];
     const R = game.sim.realms.realm(civ);
     const F = REALM_FORMS[R.form] || REALM_FORMS.monarchy;
-    const how = { secession: 'Your town has broken away: the free realm is yours to lead.', succession: 'The throne has passed to you.', inheritance: 'The old ruler is dead, and you were their heir.', election: 'The realm has chosen you.', usurpation: 'You have seized the throne. The realm will remember how.' }[d.how] || '';
+    const how = { secession: 'Your town has broken away: the free realm is yours to lead.', succession: 'The throne has passed to you.', inheritance: 'The old ruler is dead, and you were their heir.', election: 'The realm has chosen you.', usurpation: 'You have seized the throne. The realm will remember how.', birthright: 'It was always to be yours.' }[d.how] || '';
     const grand = game.sim.realms.members(civ).length >= 5;
     const styles = F.styles ? [...F.styles, ...(grand ? F.grand || [] : [])] : null;
     return {

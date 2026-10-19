@@ -1555,6 +1555,117 @@ export function drawHumanoid(look, dir, frame, extra = null) {
     part = FLAT;
     for (let i = 0; i < torsoH; i++) S(side ? tx + 1 + (i >> 1) : tx + tw - 1 - i, torsoY + i, hex('#5a3a1e'));
   }
+  // (Round 123) An outworlder's mutations, worn on the body: a third eye,
+  // glowing spots, chitin at the shoulders, gills and fins, antennae, a
+  // heavy brow and broad shoulders, twin hearts glowing through the chest.
+  const muts = Array.isArray(look.mut) ? look.mut : null;
+  if (muts && muts.length && !skel) {
+    const has = (k) => muts.includes(k);
+    const C = (c) => hex(c);
+    if (has('dense')) {
+      part = CLOTH;
+      if (!side) {
+        R(tx - 1, torsoY, 1, torsoH - 2, shirtC);
+        R(tx + tw, torsoY, 1, torsoH - 2, shirtC);
+      } else R(tx - 1, torsoY, 1, torsoH - 3, shirtC);
+      part = FLAT;
+      if (front) R(hx + 1, hy + 3, 6, 1, dim(skinC, 0.9));
+      else if (side) R(hx, hy + 3, 3, 1, dim(skinC, 0.9));
+    }
+    if (has('chitin')) {
+      const pl = C('#4a3a6a');
+      const hi = C('#9a88c8');
+      part = METAL;
+      if (!side) {
+        R(tx - 1, torsoY - 1, 3, 2, pl);
+        R(tx + tw - 2, torsoY - 1, 3, 2, pl);
+        as(FLAT, () => {
+          S(tx - 1, torsoY - 1, hi);
+          S(tx + tw - 2, torsoY - 1, hi);
+        });
+      } else {
+        R(tx + 1, torsoY - 1, 4, 2, pl);
+        as(FLAT, () => S(tx + 1, torsoY - 1, hi));
+      }
+      // (A ridge of it over the crown.)
+      if (!hat) {
+        R(side ? hx + 3 : hx + 3, hy - 1, 2, 1, pl);
+        as(FLAT, () => S(hx + 3, hy - 1, hi));
+      }
+    }
+    if (has('gills')) {
+      const fin = C('#4aa8a0');
+      part = FLAT;
+      if (front || back) {
+        for (const y of [hy + 2, hy + 3, hy + 4]) {
+          S(hx - 1, y, y === hy + 2 ? lit(fin, 1.2) : fin);
+          S(hx + 8, y, y === hy + 2 ? lit(fin, 1.2) : fin);
+        }
+        if (front) {
+          S(hx, hy + 5, dim(skinC, 0.8));
+          S(hx + 7, hy + 5, dim(skinC, 0.8));
+        }
+      } else {
+        for (const y of [hy + 2, hy + 3, hy + 4]) S(hx + 7, y, fin);
+        S(hx + 3, hy + 5, dim(skinC, 0.8));
+        S(hx + 4, hy + 6, dim(skinC, 0.8));
+      }
+    }
+    if (has('third_eye') && !back) {
+      part = FLAT;
+      const ey = hex(look.eyeColor || '#1e1a28');
+      if (front) {
+        S(hx + 3, hy + 2, C('#f4f0ff'));
+        S(hx + 4, hy + 2, C('#c040ff'));
+        S(hx + 3, hy + 1, dim(skinC, 0.7));
+        S(hx + 4, hy + 1, dim(skinC, 0.7));
+      } else {
+        S(hx + 1, hy + 2, C('#c040ff'));
+        S(hx + 2, hy + 2, ey);
+      }
+    }
+    if (has('glow')) {
+      const g = C('#7af0ff');
+      part = FLAT;
+      if (front) {
+        S(hx + 1, hy + 6, g);
+        S(hx + 6, hy + 6, g);
+        S(tx + 1, torsoY + 1, g);
+        S(tx + tw - 2, torsoY + 3, g);
+        S(tx + 2, torsoY + 4, lit(g, 1.2));
+      } else if (side) {
+        S(hx + 1, hy + 6, g);
+        S(tx + 2, torsoY + 2, g);
+        S(tx + 4, torsoY + 4, g);
+      } else {
+        S(hx + 2, hy + headH - 2, g);
+        S(hx + 5, hy + headH - 1, g);
+        S(tx + 2, torsoY + 2, g);
+        S(tx + tw - 3, torsoY + 4, g);
+      }
+    }
+    if (has('twin_hearts') && front) {
+      part = FLAT;
+      S(cx - 2, torsoY + 2, C('#ff6080'));
+      S(cx + 1, torsoY + 2, C('#ff6080'));
+      S(cx - 2, torsoY + 3, C('#b03050'));
+      S(cx + 1, torsoY + 3, C('#b03050'));
+    }
+    if (has('antennae')) {
+      const st = dim(skinC, 0.7);
+      const tip = C('#ffd070');
+      part = FLAT;
+      const xs = side ? [hx + 3] : [hx + 2, hx + 5];
+      const top0 = hat ? hy - 3 : hy - 1;
+      for (const x of xs) {
+        const lean = side ? -1 : x < hx + 4 ? -1 : 1;
+        S(x, top0, st);
+        S(x, top0 - 1, st);
+        S(x + lean, top0 - 2, st);
+        S(x + lean, top0 - 3, tip);
+      }
+    }
+  }
   // (Round 66) Gear of a mod's own laid over: its art for the way they
   // face (front, side, back), moving with the body as it steps (the legs'
   // and feet's staying with the ground).

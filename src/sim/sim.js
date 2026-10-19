@@ -538,6 +538,13 @@ export class Sim {
     // A fallen star, wing and all: some folk are wary of you (see
     // starfall.js).
     if (isStar(this.game.hero) && starWary(rec, sid)) v -= 12;
+    // (Round 123) A brigand's name, known in the realms nearest their cove
+    // (see game/origins.js).
+    const inf = this.game.hero && this.game.hero.infamy;
+    if (inf) {
+      const civ = this.game.world.ow.settlements[sid]?.civ;
+      if (civ && inf[civ.id]) v += inf[civ.id];
+    }
     // Children don't hear what other towns' mayors write about you.
     if (rec.age === 'child') v += this.diplomacy.penalty(sid);
     const c = this.citizen;

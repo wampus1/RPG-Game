@@ -33,6 +33,7 @@ import { retrain } from '../entities/npcgen.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { pidOf, playerOf } from './saga/refs.js';
 import { countItem, removeItem, addItem } from '../game/inventory.js';
+import { isOutworlder } from '../game/hero.js';
 
 export const FEE = { village: 20, town: 40, city: 80 };
 export const CITIZEN_DAYS = 3; // a citizen this long before standing
@@ -229,7 +230,11 @@ export class Office {
     if (this.heldBy(pid)) return { ok: false, why: `You already govern ${this.sim.layoutOf(this.heldBy(pid).sid).settlement.name}. One town at a time.` };
     if (!sim.isCitizen(s.id)) return { ok: false, why: `Only a citizen of ${s.name} can stand.` };
     const days = this.game.day - (sim.citizen.since ?? this.game.day);
-    if (days < CITIZEN_DAYS) return { ok: false, why: `You've been a citizen only ${days} day${days === 1 ? '' : 's'}; the town wants ${CITIZEN_DAYS} at least.` };
+    // (Round 123) An outworlder: the town wants to know them a good deal
+    // longer first, and asks twice the fee.
+    const alien = isOutworlder(this.game.hero);
+    const need = alien ? CITIZEN_DAYS * 3 : CITIZEN_DAYS;
+    if (days < need) return { ok: false, why: `You've been a citizen only ${days} day${days === 1 ? '' : 's'}; the town wants ${need} at least${alien ? ' from someone not of this world' : ''}.` };
     if (this.game.isWanted(s.id) || sim.justice.pendingIn(s.id).length) return { ok: false, why: 'Not with charges against you.' };
     if (sim.justice.notoriety(s.id) >= 3) return { ok: false, why: 'Your record here is too long: nobody would vote for you.' };
     const q = sim.causes.of(s.id);
@@ -238,13 +243,13 @@ export class Office {
       const ch = CHARTERS[T.charter];
       if (!ch.term) return { ok: false, why: `${s.name} has no elections under ${ch.short}.` };
       if (T.filed && T.filed.pid !== pid) return { ok: false, why: `${T.filed.name} has already filed to stand at the next election.` };
-      return { ok: true, fee, against: T.holder.name, filing: true, when: T.holder.termEnd };
+      return { ok: true, fee: alien ? fee * 2 : fee, against: T.holder.name, filing: true, when: T.holder.termEnd };
     }
     if (T && T.lostDay !== undefined && T.lostBy === pid && this.game.day - T.lostDay < 10) return { ok: false, why: 'You lost here not long ago. Give the town time.' };
     const m = mayorOf(L);
     if (!m) return { ok: false, why: 'The town is choosing a new mayor already.' };
     if (adults(L).length < 4) return { ok: false, why: 'There are too few people here to hold an election.' };
-    return { ok: true, fee, against: full(m) };
+    return { ok: true, fee: alien ? fee * 2 : fee, against: full(m) };
   }
 
   // Stand: against the town's mayor (the town votes in a few days), or, in
@@ -287,6 +292,8 @@ export class Office {
         return 0.35 + near * 1.2 + (c.sitting ? 0.15 - hard : 0) + (factionOf(x) === f ? 0.15 : 0);
       }
       let v = (this.opinionOf(c.pid, L, r) - 15) / 100 * 1.2;
+      // (Round 123) Not of this world: folk hesitate to put one in charge.
+      if (this.asPid(c.pid, () => isOutworlder(this.game.hero))) v -= 0.35;
       const pl = (q.pledges && q.pledges[c.pid]) || [];
       v += Math.min(2, pl.filter((k) => k.f === f).length) * 0.25;
       if (c.sitting && T && T.lastApproval) v += ((T.lastApproval[f] ?? 50) - 50) / 60 - hard;
@@ -402,13 +409,13 @@ export class Office {
     T.defyLevel = 0;
     // (A town gives a new head a little goodwill to start with, the more
     // so for those it chose itself; a usurper, none.)
-    const warm = { election: 5, acclaim: 8, founding: 8, appointment: 2 }[how] || 0;
+    const warm = { election: 5, acclaim: 8, founding: 8, appointment: 2, birthright: 6 }[how] || 0;
     T.favour = how === 'coup' ? { elders: -15, clergy: -10, merchants: -5 } : Object.fromEntries(FACTION_IDS.map((f) => [f, warm]));
     for (const k of o.pledges || []) if (FACTIONS[k.f]) T.favour[k.f] += 3;
     // The old mayor steps aside (or, where they weren't voted out or
     // thrown out, stays on as your steward); a steward keeps the hall.
     const old = L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.migrated && !r.steward);
-    if (old && ['appointment', 'acclaim', 'founding'].includes(how)) {
+    if (old && ['appointment', 'acclaim', 'founding', 'birthright'].includes(how)) {
       old.stewardWas = old.stewardWas || 'noble';
       old.steward = true;
       T.offices.steward = old.idx;
@@ -425,7 +432,7 @@ export class Office {
       const p = this.game.player;
       if (!countItem(p.inv, 'chain_of_office')) addItem(p.inv, 'chain_of_office', 1);
     });
-    const how2 = { election: ', elected by the town', appointment: `, appointed by ${s.civ ? authority(s.civ) : 'the realm'}`, acclaim: ', acclaimed by its people', coup: ', having seized the town hall', founding: ', its founder' }[how] || '';
+    const how2 = { election: ', elected by the town', appointment: `, appointed by ${s.civ ? authority(s.civ) : 'the realm'}`, acclaim: ', acclaimed by its people', coup: ', having seized the town hall', founding: ', its founder', birthright: ', as was always meant' }[how] || '';
     ledger(L, day, `${name} is now ${headTitle(T.charter, s, T.holder && T.holder.style)} of ${s.name}${how2}.`);
     this.asPid(pid, () => this.sim.addRenown?.(s.id, 2, 'taking up the town\'s office'));
     this.sim.saga?.emit('office_won', { pid, sid: s.id, how });
@@ -1900,7 +1907,7 @@ export class Office {
       for (const pid of free) {
         const ok = this.asPid(pid, () => {
           const home = this.sim.citizen && this.game.world.ow.settlements[this.sim.citizen.sid];
-          if (!home || home.civ !== s.civ || this.game.isWanted(s.id)) return false;
+          if (!home || home.civ !== s.civ || this.game.isWanted(s.id) || isOutworlder(this.game.hero)) return false;
           return this.sim.goodStanding(home.id) || (this.sim.renown.get(home.id) || 0) >= 10;
         });
         if (ok && rng.chance(0.6)) return this.offer(pid, L, 'appointment', `${cap(authority(s.civ))} has written to you: ${s.name} is without a head, and the realm would have you govern it.`);
@@ -1913,6 +1920,8 @@ export class Office {
         const ok = this.asPid(pid, () => {
           const here = this.game.currentSettlement;
           if (!here || here.id !== s.id || this.game.isWanted(s.id)) return false;
+          // (An outworlder only by a town that's come to love them.)
+          if (isOutworlder(this.game.hero)) return (this.sim.renown.get(s.id) || 0) >= 40;
           return !!this.sim.renownTitle(s.id);
         });
         if (ok) {

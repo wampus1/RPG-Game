@@ -2294,7 +2294,7 @@ export class SaveDetailsWindow extends Window {
     };
     if (m.world) row('World', m.world, C.hi);
     row(m.world ? 'Your hero' : 'Hero', m.name || 'Wanderer', C.white);
-    if (m.origin) row('From', { native: 'born on the islands', crash: 'shipwrecked', star: 'fallen from the sky' }[m.origin] || m.origin);
+    if (m.origin) row('From', { native: 'born on the islands', crash: 'shipwrecked', star: 'fallen from the sky', leader: 'born to lead', brigand: 'a brigand of the Black Gulls', outworlder: 'from another world' }[m.origin] || m.origin);
     row('When', `Day ${m.day}, ${timeText(m.minute)}`);
     row('Where', cap(String(m.place || '?')));
     if (m.world) row('Players', `${m.players || 1} have played here`);

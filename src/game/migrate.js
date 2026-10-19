@@ -924,6 +924,15 @@ export const STEPS = [
       log.push('You can rule a realm: break your town away, be named heir, be chosen speaker, or seize the throne, and govern it from the crown window (N) as a monarchy, republic, clan moot, holy realm or merchant league.');
     },
   },
+  {
+    to: '1.23.0',
+    data(d, log) {
+      // (Nothing in a world to change: three new origins for new
+      // characters.)
+      void d;
+      log.push('Three new origins for new characters: a Leader (of a town, or a whole realm, governed as you choose), a Brigand (a pirate with a sloop of their own, at the Black Gulls\' haven), and an Outworlder (fallen from space in an escape pod, with mutations of your choosing).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
