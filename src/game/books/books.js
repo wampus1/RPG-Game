@@ -52,7 +52,8 @@ function writerOf(rng, style, where, faith) {
   const name = `${n.first} ${n.last}`;
   const at = where || 'the road';
   const what = rng.pick([
-    `of ${at}`, `of ${at}`, `${faith ? faith.clergy : 'priest'} of ${faith ? faith.god : 'the old gods'}, at ${at}`,
+    // (A lantern-bearer of the Lantern-Bearer is a lantern-bearer at the temple.)
+    `of ${at}`, `of ${at}`, faith && faith.god.toLowerCase().includes(faith.clergy) ? `${faith.clergy} at the temple of ${at}` : `${faith ? faith.clergy : 'priest'} of ${faith ? faith.god : 'the old gods'}, at ${at}`,
     `clerk to the council of ${at}`, `schoolmaster of ${at}`, `once of ${at}`, `scholar, of ${at}`,
   ]);
   return { name, first: n.first, sign: `${name}, ${what}` };
@@ -211,7 +212,7 @@ export function plural(w) {
 }
 
 // What a hunter takes, as it's said: "feathers", but "raw meat".
-const dropWord = (d) => (/meat|leather|string|gel|dust|sulfur|sulphur|salt|wool|silk|mushroom|ash|resin|moss|coal|gold coin|ink/.test(d) ? d : plural(d));
+const dropWord = (d) => (/meat|leather|string|gel|dust|sulfur|sulphur|salt|wool|silk|mushroom|ash|resin|moss|coal|ink|glass/.test(d) ? d : plural(d));
 
 const sentence = (s) => tidy(/[.!?]$/.test(s) ? s : `${s}.`);
 

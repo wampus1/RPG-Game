@@ -75,7 +75,7 @@ export const POOLS = {
   ],
   'preface.sources': [
     'I have (read|drawn on) every (book|book and roll) (on|about) {subject} (I could|that I could) (find|lay hands on), and (spoken with|asked) (anyone|those) who (knew|remembered) more.',
-    'Where (the books|the old books) (disagree|tell it differently), I have (given|set down) what (seems|seemed) to me (likeliest|the likeliest), and (said|noted) where (others|they) (differ|disagree).',
+    'Where (the books|the old books) (disagree|tell it differently), I have (given|set down) what (seems|seemed) to me (likeliest|the likeliest), and (said|noted) where others differ.',
     'I have (drawn on|read|used) the (temple rolls|tax books|old rolls|council minutes) of {histtown}, and (listened to|spoken with) the (oldest folk|elders) (who|that) (still remember|remember) (more than|what) the rolls (forget|do not say).',
     'Where the (rolls|records) (are silent|say nothing), I have (written down|given) only what (the old folk|the townsfolk) (tell|say), and (said so|marked it as such).',
     'The (oldest|earliest) (rolls|records) of {histtown} (are|were) (kept|written) by the {clergy} of {god}, (in a hand|and in a hand) (that is|) (hard|not easy) to read.',

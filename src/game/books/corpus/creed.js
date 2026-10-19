@@ -128,7 +128,7 @@ export const POOLS = {
     '(My advice|The wise traveller\'s way) (is|has always been) to (walk|go) (round|past) it, giving it (room|plenty of room).',
   ],
   'beast.advice.hostile': [
-    '(Keep|Carry) (a blade|a good blade) (at|to) hand, and never (turn|run) (your back on it|from it).',
+    '(Keep|Carry) (a blade|a good blade) (at|to) hand, and never (turn your back on it|run from it).',
     '(Travel|Go) (in company|with friends) (where|when) they are (about|abroad), and (keep|stay) (to|on) the road.',
   ],
   'haunt.told': [
