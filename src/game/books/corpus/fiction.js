@@ -549,6 +549,40 @@ export const FICTION = {
   'pre.irony.romance': [
     'It would be {later} years before a grandchild of the {last} family danced with someone from {town2} at {feast}, and {mentor}, by then very old, would stand up in the hall and tell this story at last.',
   ],
+  // ============================================================ (in a writer's own voice)
+  'quest.open@plain': [
+    '{hero} {last} lived in {home}. {He} was {trade}. {He} was {flaw}. Nothing had ever happened to {him}, and {he} did not expect it to.',
+  ],
+  'quest.open@pious': [
+    'The {clergies} of {home} say that {god} chooses the least likely of us for the hardest roads, and if that is so, {god} could hardly have chosen less likely than {hero} {last}, {trade}, who was {flaw}.',
+  ],
+  'mystery.open@scholar': [
+    'The facts, so far as they were ever established, are these. On the morning of {feast} the body of {mentor}, a veteran of {war} and a churchwarden of {god}, was recovered from the mill-race below {home}. It was found by {hero} {last}, {trade}, who was to spend the following weeks proving that it had not been an accident.',
+  ],
+  'mystery.open@storyteller': [
+    'Now, everybody in {home} will tell you they knew old {mentor} would come to a bad end, and everybody in {home} is a liar. Nobody expected it, least of all {hero} {last}, {trade}, who found {mhim} face down in the mill-race on the morning of {feast} and dropped a whole basket of eggs.',
+  ],
+  'romance.open@lyrical': [
+    'Between {home} and {town2} the river runs slow and brown, under willows, and on summer evenings the bells of both towns can be heard across it at once, a little out of time with each other, like two people who will not walk in step.',
+  ],
+  'romance.open@plain': [
+    'The {last} family of {home} did not speak to anyone from {town2}. Nobody remembered why. {hero} {last} had never questioned it, until {feast} in {year}.',
+  ],
+  'quest.home2.mdead@pious': [
+    'They came home to {home} on the eve of the first frost, and went first of all to the temple of {god}, before they had eaten or washed, to give thanks; and the {clergy} said the prayers for the dead over an empty bier, for {mentor}, who lay far under the ground at {place}.',
+  ],
+  'seq.end@lyrical': [
+    'And so it ended, as such things end, not with a shout but with a long road home in the rain, and a light in a window, and someone at the door who had been waiting, and did not ask, and put the kettle on.',
+  ],
+  'seq.end@plain': [
+    'It was over. {hero} went home. {He} did not go looking for trouble again.',
+  ],
+  'pre.open@pious': [
+    'In the year that {war} began, {mentor} was seventeen, and knelt in the temple of {god} the night before the muster and asked to be made brave. {MHe} did not know then that {god} answers such prayers, but seldom in the way they are meant.',
+  ],
+  'mystery.close@storyteller': [
+    'They buried {mentor} in the temple yard, and more people came than ever spoke to {mhim} alive, which is the way of it. {hero} stood at the back with {friend}. "{MHe} would have hated this," {friend} whispered. "All these people." "{MHe} would have counted them," said {hero}, "and sent them each a bill."',
+  ],
 };
 
 // The chapters of each kind of story: [title, [beats]]. A beat's pool is
