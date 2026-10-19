@@ -9775,6 +9775,11 @@ opening. The character you made appears in each, as they look.
   is blurred away, the page is held flat and still, and the words are in
   plain print. Click again to go back to the handwriting. Esc, or a click
   off the page, puts it down. A long page scrolls with the wheel.
+- **On the screen, through its CRT.** The page is drawn on a layer of
+  its own, twice as fine as the game's 512×288 each way (fine enough for
+  handwriting, still a little pixelated on a big screen). It goes through
+  the screen's CRT effect with the rest of the frame: its curve,
+  scanlines, colour fringes and glow.
 - **In someone else's world**, the page shows on your own screen.
 - **Version 1.25.0.** Worlds from 1.24 load as before. A town's or a
   realm's record starts with its next sitting.

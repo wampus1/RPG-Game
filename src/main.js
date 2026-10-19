@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H, REGION_W, REGION_D } from './config.js';
 import { migrateSave } from './game/migrate.js';
 import { CRT } from './render/crt.js';
+import { overlay } from './render/overlay.js';
 import { Renderer, cleanCtx } from './render/renderer.js';
 import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
@@ -1721,6 +1722,10 @@ function step(now) {
   // (The camera drawn back: the world goes to the screen on its own, finer.)
   crt.world = game ? renderer.layer || null : null;
   crt.worldV = renderer.layerV || 0;
+  // (Round 125) The finer layer over the frame, if anything was drawn on
+  // it this frame (a letter held up to read: see render/overlay.js).
+  crt.over = overlay.shown ? overlay.canvas : null;
+  overlay.shown = false;
   crt.present(now / 1000);
   perf.crt = (perf.crt || 0) * 0.95 + (performance.now() - t4) * 0.05;
 }

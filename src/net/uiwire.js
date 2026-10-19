@@ -191,25 +191,26 @@ export function applyFrame(ui, f) {
   const keep = new Set();
   for (const wf of f.wins) {
     keep.add(wf.id);
-    let w = ui.windows.find((q) => q.remote && q.netId === wf.id);
-    // (Round 125) A page held up to read: drawn here, as it is at the host.
+    // (Round 125) A page held up to read: this screen's own window, drawn
+    // and read here (put down, it's put down at the host too).
     if (wf.doc) {
-      if (!w) {
-        w = new DocumentWindow(ui, wf.doc, { mirror: true });
-        w.remote = true;
-        w.netId = wf.id;
-        ui.windows.push(w);
+      // (One put down here is waiting on the host to put it down too.)
+      if (!ui.windows.some((q) => q.mirrorOf === wf.id) && !(ui.putDown && ui.putDown.has(wf.id))) {
+        const d = new DocumentWindow(ui, wf.doc, { mirror: true });
+        d.mirrorOf = wf.id;
+        ui.windows.push(d);
       }
       continue;
     }
+    let w = ui.windows.find((q) => q.remote && q.netId === wf.id);
     if (!w) {
       w = new RemoteWindow(ui, wf);
       ui.windows.push(w);
     } else w.set(wf);
   }
   // (Gone at the host: gone here, at once; the host already let it fade.)
-  for (const w of ui.windows) if (w.remote && !keep.has(w.netId) && w.onClose) w.onClose();
-  ui.windows = ui.windows.filter((w) => !w.remote || keep.has(w.netId));
+  ui.windows = ui.windows.filter((w) => (w.mirrorOf ? keep.has(w.mirrorOf) || w.state === 'closing' : !w.remote || keep.has(w.netId)));
+  if (ui.putDown) for (const id of [...ui.putDown]) if (!keep.has(id)) ui.putDown.delete(id);
   ui.remoteTip = f.tip || null;
   ui.remoteStack = f.stack || null;
   if (f.fade !== undefined) ui.fade = Math.max(ui.fade || 0, f.fade);

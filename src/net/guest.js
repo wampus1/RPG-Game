@@ -594,6 +594,12 @@ export class GuestNet {
     const blocked = remoteModal || !!local || !game.player || game.player.dead || !!game.sleep;
     if (!blocked && game.player) game.updateCursor(input);
     else game.cursor = null;
+    // (Round 125) Keys a window of this screen's own passes on to the host:
+    // a page put down here, put down there.
+    if (ui.forward && ui.forward.length) {
+      fwd.pressed.push(...ui.forward);
+      ui.forward = [];
+    }
     this.sendInput(input, fwd, !!local);
     // The time, between words.
     game.minute += dt * GAME_MINUTES_PER_SECOND * (game.sleepFast > 1 ? game.sleepFast : 1);

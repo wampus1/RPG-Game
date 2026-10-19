@@ -25,6 +25,9 @@ uniform sampler2D uWSharp;
 uniform sampler2D uWSoft;
 uniform float uLayered;
 uniform float uWLod;
+uniform sampler2D uOver;
+uniform sampler2D uOverSoft;
+uniform float uHasOver;
 uniform vec2 uSrc;
 uniform vec2 uOut;
 uniform float uTime;
@@ -42,15 +45,27 @@ vec2 curve(vec2 uv) {
 
 // The frame: one picture, or (the camera drawn back) the world, drawn
 // finer than the view, under the view's own layer (the UI, premultiplied).
-vec3 at(vec2 uv) {
+// (Round 125) And over all of it, the finer layer, when there is one (a
+// letter held up to read: see overlay.js), premultiplied.
+vec3 base(vec2 uv) {
   vec4 t = texture(uSharp, uv);
   if (uLayered < 0.5) return t.rgb;
   return texture(uWSharp, uv).rgb * (1.0 - t.a) + t.rgb;
 }
+vec3 at(vec2 uv) {
+  vec3 c = base(uv);
+  if (uHasOver < 0.5) return c;
+  vec4 o = texture(uOver, uv);
+  return c * (1.0 - o.a) + o.rgb;
+}
 vec3 soft(vec2 uv, float lod) {
   vec4 t = textureLod(uSoft, uv, lod);
-  if (uLayered < 0.5) return t.rgb;
-  return textureLod(uWSoft, uv, lod + uWLod).rgb * (1.0 - t.a) + t.rgb;
+  vec3 c = uLayered < 0.5 ? t.rgb : textureLod(uWSoft, uv, lod + uWLod).rgb * (1.0 - t.a) + t.rgb;
+  if (uHasOver < 0.5) return c;
+  // (Paper is bright: in the glow it counts for less, or it would wash
+  // the ink off it.)
+  vec4 o = textureLod(uOverSoft, uv, lod + 1.0);
+  return c * (1.0 - o.a) + o.rgb * 0.55;
 }
 
 void main() {
@@ -170,8 +185,13 @@ export class CRT {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     gl.generateMipmap(gl.TEXTURE_2D);
+    // (Round 125) The finer layer over the frame (see overlay.js).
+    this.otex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.otex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    gl.generateMipmap(gl.TEXTURE_2D);
     this.u = {};
-    for (const n of ['uSharp', 'uSoft', 'uWSharp', 'uWSoft', 'uLayered', 'uWLod', 'uSrc', 'uOut', 'uTime', 'uCurve', 'uGlow']) this.u[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uSharp', 'uSoft', 'uWSharp', 'uWSoft', 'uLayered', 'uWLod', 'uOver', 'uOverSoft', 'uHasOver', 'uSrc', 'uOut', 'uTime', 'uCurve', 'uGlow']) this.u[n] = gl.getUniformLocation(prog, n);
   }
 
   // Map a point on the output canvas (CSS px) to source pixel coordinates,
@@ -220,6 +240,18 @@ export class CRT {
     }
   }
 
+  // (Round 125) The finer layer on the page itself, over the frame's
+  // canvas, with the effect off.
+  directOver(over) {
+    if (over === this.shownOver) return;
+    if (this.shownOver) this.shownOver.remove();
+    this.shownOver = over;
+    if (over) {
+      over.classList.add('direct', 'over');
+      this.stage().appendChild(over);
+    }
+  }
+
   // What the screen's canvas sits in on the page (made the first time).
   stage() {
     let st = this.out.parentElement;
@@ -238,9 +270,11 @@ export class CRT {
     const world = this.world || null;
     if (!this.gl || !this.enabled) {
       this.direct(true, world);
+      this.directOver(this.over || null);
       return;
     }
     this.direct(false);
+    this.directOver(null);
     const gl = this.gl;
     // (The glow is drawn from the frame's blurred levels: made only when
     // there's a glow to draw. Without, the sharp look's all there is.)
@@ -271,12 +305,28 @@ export class CRT {
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.wtex);
     gl.bindSampler(3, glow && this.sentMips ? this.soft : this.sharp);
+    // (Round 125) The finer layer, when there's one this frame: its pixels
+    // kept square (nearest), its blurred levels for the glow.
+    const over = this.over || null;
+    if (over) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.otex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, over);
+      if (glow) gl.generateMipmap(gl.TEXTURE_2D);
+      gl.bindSampler(4, this.sharp);
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, this.otex);
+      gl.bindSampler(5, glow ? this.soft : this.sharp);
+    }
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.uniform1i(this.u.uSharp, 0);
     gl.uniform1i(this.u.uSoft, 1);
     gl.uniform1i(this.u.uWSharp, 2);
     gl.uniform1i(this.u.uWSoft, 3);
     gl.uniform1f(this.u.uLayered, world ? 1 : 0);
+    gl.uniform1i(this.u.uOver, 4);
+    gl.uniform1i(this.u.uOverSoft, 5);
+    gl.uniform1f(this.u.uHasOver, over ? 1 : 0);
     gl.uniform1f(this.u.uWLod, world ? Math.log2(world.width / VIEW_W) : 0);
     gl.uniform2f(this.u.uSrc, VIEW_W, VIEW_H);
     gl.uniform2f(this.u.uOut, this.out.width, this.out.height);
