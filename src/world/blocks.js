@@ -1680,3 +1680,7 @@ def('gl_roots', { ...sprite, tall: true, solid: false, rotatable: true, hardness
 def('gl_grit', { ...sprite, solid: false, rotatable: true, hardness: 0.1, drop: null, label: 'Fallen Grit' });
 def('gl_lamp', { ...sprite, solid: true, rotatable: true, hardness: 0.3, light: 8, drop: [{ item: 'clay', min: 0, max: 1 }], label: 'A Clay Lamp' });
 def('gl_bones', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: [{ item: 'bone', min: 1, max: 2 }], label: 'The Swallowed\'s Bones' });
+// (Round 129) The festival green: a straw butt to shoot at, on its stand;
+// the board the winners' names go up on (see sim/festival.js).
+def('archery_butt', { ...sprite, tall: true, solid: true, interact: 'fest', tool: 'axe', hardness: 0.6, drop: null, label: 'Archery Butt' });
+def('fest_board', { ...sprite, tall: true, solid: true, interact: 'fest', tool: 'axe', hardness: 0.6, drop: null, label: 'Festival Board' });

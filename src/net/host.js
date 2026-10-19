@@ -866,6 +866,8 @@ export class HostNet {
       // neither.
       if (sim.office) hud = hud.concat(sim.office.hudLines());
       if (sim.crown) hud = hud.concat(sim.crown.hudLines());
+      // (Round 129) A festival's programme, where they are.
+      if (sim.events && sim.events.hudLines) hud = hud.concat(sim.events.hudLines());
     } catch {
       hud = [];
     }
@@ -893,6 +895,7 @@ export class HostNet {
       storm: game.stormSea ? enc(game.stormSea, 2) : null,
       charging: game.charging ? enc(game.charging, 2) : null,
       books: booksHeld(p),
+      fm: sim.events && sim.events.festMarks ? sim.events.festMarks() : [],
     };
   }
 

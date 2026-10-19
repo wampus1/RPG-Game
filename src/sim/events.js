@@ -18,6 +18,9 @@ import { GROUND } from '../config.js';
 import { hash4, clamp } from '../util/rng.js';
 import { festivalName, religionOf } from './culture.js';
 import { farTable } from '../world/farlands.js';
+import { festive, placeVenues, programme, plannedVenues, planGuests, posterLines, openOf, closeOf, wetNow, SLOT_WORDS, VENUES, hudLines as festHud, marks as festMarks } from './festival.js';
+import { asSeat } from '../game/party.js';
+import { pidOf, seatOfPid } from './saga/refs.js';
 
 export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
 
@@ -391,6 +394,20 @@ export class Events {
       id, kind, day: d, s: start, e: start + (extra.len ?? LENGTH[kind]), state: 'announced',
       posters: [], crier: null, site: null, blocks: [], stage: null, strike: null, guests: null, came: 0, ...extra,
     };
+    // (Round 129) A festival's day, as the posters will promise it: what's
+    // on where, round the town (made good once it's put up).
+    if (festive(ev)) {
+      // (Tried out where it'd all go, so the posters promise only what there's
+      // room for; put up for real on the day.)
+      let ids = plannedVenues(L, ev);
+      try {
+        const site = this.findSite(L, ev.kind === 'rite' ? `rite:${ev.rite}` : ev.kind);
+        ids = placeVenues(this, L, { ...ev, site }, styleOf(L.settlement), 0).venues.map((v) => v.id);
+      } catch {
+        // (As planned, then.)
+      }
+      ev.prog = programme(L, ev, ids);
+    }
     this.list(L).push(ev);
     return ev;
   }
@@ -466,6 +483,8 @@ export class Events {
       }
     }
     if ((ev.state === 'building' || ev.state === 'ready' || ev.state === 'on') && ev.guests && now < ev.e - 30) this.gather(L, ev, now);
+    // (Round 129) Rain sends a festival indoors; dry, it comes out again.
+    if (ev.prog && (ev.state === 'ready' || ev.state === 'on' || ev.state === 'building')) ev.wet = wetNow(this.game);
     if (ev.state === 'ready' && now >= ev.s) {
       ev.state = 'on';
       if (active) this.game.ui.msg(`${cap(this.title(L, ev))} has begun by the square.`, '#ffd0e8');
@@ -643,13 +662,16 @@ export class Events {
         ],
       };
     }
+    const prog = ev.prog && ev.prog.length > 1 ? ['', `Day ${ev.day}:`, ...posterLines(ev)] : null;
     if (ev.kind === 'rite') {
       const R = RITES[ev.rite];
-      return { title: 'POSTER', lines: [...R.poster(s, R.name(s)), when, '', `By the council of ${s.name}.`] };
+      return { title: 'POSTER', lines: [...R.poster(s, R.name(s)), ...(prog || [when]), '', `By the council of ${s.name}.`] };
     }
     if (ev.kind === 'fete') {
-      return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', `round ${round}.`, '', when, '', `By order of the council of ${s.name}.`] };
+      return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', `round ${round}.`, ...(prog || ['', when]), '', `By order of the council of ${s.name}.`] };
     }
+    // (Round 129) The day's programme, round the town.
+    if (ev.prog && ev.prog.length > 1) return { title: 'POSTER', lines: [`${festivalName(s).toUpperCase()}!`, `(in honour of ${religionOf(s).god})`, `The council of ${s.name} invites all.`, `Day ${ev.day}:`, ...posterLines(ev), '', 'Free food for everyone!'] };
     return { title: 'POSTER', lines: [`${festivalName(s).toUpperCase()}!`, `(in honour of ${religionOf(s).god})`, `The council of ${s.name} invites all`, 'to eat, drink and dance', `round ${round}.`, '', when, '', 'Free food for everyone!'] };
   }
 
@@ -718,13 +740,22 @@ export class Events {
       // Lower things first, so the posts stand before the bunting goes up.
       stage.sort((a, b) => a[1] - b[1]);
     }
+    // (Round 129) And a festival's other places round the town: the ale
+    // tables, the blessing, the stalls, the green (see festival.js).
+    if (festive(ev)) {
+      const { venues, ops } = placeVenues(this, L, ev, look, palette);
+      ev.venues = venues;
+      ev.prog = programme(L, ev);
+      stage.push(...ops);
+    }
     // ...then round town.
     const decor = this.decorFor(L, ev, palette, stage);
     ev.blocks = [...stage, ...decor];
     ev.decorN = decor.length;
     if (!ev.blocks.length) return;
     const what = site ? this.what(site.key, look) : null;
-    const label = `putting up ${what ? `${what} by the square${decor.length ? ', and more all round town,' : ''}` : 'bunting and banners round town'} for ${this.title(L, ev)}`;
+    const more = (ev.venues || []).map((v) => VENUES[v.id].name.replace(/^the blessing at /, 'an altar at ').replace(/^the games on /, 'butts on ').replace(/^the ale tables/, 'ale tables'));
+    const label = `putting up ${what ? `${what} by the square${more.length ? `, ${more.join(', ')}` : ''}${decor.length ? ', and more all round town,' : ''}` : 'bunting and banners round town'} for ${this.title(L, ev)}`;
     const pz = L.plaza;
     const bounds = site ? { x0: site.x0, z0: site.z0, x1: site.x1, z1: site.z1 } : { x0: pz.x0, z0: pz.z0, x1: pz.x1, z1: pz.z1 };
     // (Builders put it up piece by piece, here or while you're away.)
@@ -1031,6 +1062,8 @@ export class Events {
     }
     ev.guests = guests;
     ev.invited = people.length;
+    // (Round 129) Where each of them is the rest of the day (see festival.js).
+    if (ev.prog && ev.venues) planGuests(this, L, ev);
   }
 
   // The couple and whoever's leading it are there early; the rest drift in
@@ -1061,7 +1094,15 @@ export class Events {
       g.set = true;
       const s = Math.max(g.leave, now - 60);
       const target = g.x !== null ? { x: g.x, z: g.z } : { x: L.plaza.cx + ((g.idx % 5) - 2), z: L.plaza.cz + 2 + (g.idx % 3) };
-      setOverride(r, s, ev.e, 'event', { ev: ev.id, kind: ev.kind, role: g.role, target, face: g.face, seat: g.role === 'seat', place: 'square' });
+      // (Round 129) Their whole day, the stalls in the morning to the
+      // tavern at night (see festival.js planGuests).
+      const end = g.segs ? Math.max(ev.e, g.until || ev.e) : ev.e;
+      setOverride(r, s, end, 'event', { ev: ev.id, kind: ev.kind, role: g.role, target, face: g.face, seat: g.role === 'seat', place: 'square', segs: g.segs || null });
+      // (Fed at the stalls and the tables, the whole day long.)
+      if (g.segs) {
+        r.fed = 1;
+        r.hungry = 0;
+      }
       if (r.ent && !r.ent.dead && s <= this.sim.abs) r.ent.activity = null;
     }
   }
@@ -1098,12 +1139,20 @@ export class Events {
       L.econ.lastFeast = ev.day;
       ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `${cap(this.title(L, ev))} by the square drew ${came} people.`);
     }
-    // You came along: they won't forget it.
-    if (ev.playerCame) {
-      const sid = L.settlement.id;
-      const thank = ev.couple ? ev.couple.map((i) => L.npcs[i]) : ev.host !== null && ev.host !== undefined ? [L.npcs[ev.host]] : [];
+    // You came along: they won't forget it. (Round 129: each of you who
+    // did, in their own standing with the town.)
+    const sid = L.settlement.id;
+    const thank = ev.couple ? ev.couple.map((i) => L.npcs[i]) : ev.host !== null && ev.host !== undefined ? [L.npcs[ev.host]] : [];
+    const thankAll = () => {
       for (const r of thank) if (r && alive(r)) this.bump(sid, r, ev.couple ? 4 : 2);
       for (const g of (ev.guests || []).slice(0, 12)) if (g.set) this.bump(sid, L.npcs[g.idx], 1);
+    };
+    const pids = Object.keys(ev.cameBy || {});
+    if (!pids.length && ev.playerCame) thankAll();
+    for (const pid of pids) {
+      const seat = seatOfPid(this.game, pid);
+      if (seat) asSeat(this.game, seat, thankAll);
+      else if (pid === 'host') thankAll();
     }
   }
 
@@ -1161,16 +1210,79 @@ export class Events {
   // ------------------------------------------------------------ in town
   // (Called often in a town you're in.) Did you come along?
   update() {
-    const p = this.game.player;
-    for (const { layout: L } of this.game.active.values()) {
+    const game = this.game;
+    const now = this.sim.abs;
+    for (const { layout: L } of game.active.values()) {
       for (const ev of L.econ.events || []) {
-        if (ev.state !== 'on' || ev.playerCame || p.dead) continue;
-        const s = ev.site || { x0: L.plaza.cx - 2, z0: L.plaza.cz - 2, x1: L.plaza.cx + 2, z1: L.plaza.cz + 2 };
-        if (p.x >= s.x0 - 3 && p.x <= s.x1 + 3 && p.z >= s.z0 - 3 && p.z <= s.z1 + 3) {
-          ev.playerCame = true;
-          this.game.ui.msg(ev.couple ? 'You join the wedding guests.' : 'You join the celebration.', '#ffd0e8');
+        // (Round 129) A festival's day goes on round the town: each part
+        // of it called out as it begins, to everyone in the town.
+        if (ev.prog && ev.state !== 'off' && ev.state !== 'done' && ev.state !== 'announced' && ev.state !== 'posting' && ev.state !== 'posted') this.callOut(L, ev, now);
+        const open = ev.prog ? now >= openOf(ev) && now < closeOf(ev) && (ev.state === 'ready' || ev.state === 'on' || ev.state === 'over' || ev.state === 'building') : ev.state === 'on';
+        if (!open) continue;
+        const rects = [ev.site || { x0: L.plaza.cx - 2, z0: L.plaza.cz - 2, x1: L.plaza.cx + 2, z1: L.plaza.cz + 2 }, ...(ev.venues || [])];
+        for (const p of game.everyone()) {
+          if (!p || p.dead) continue;
+          const pid = pidOf(p);
+          ev.cameBy ||= {};
+          if (ev.cameBy[pid]) continue;
+          if (!rects.some((s) => p.x >= s.x0 - 3 && p.x <= s.x1 + 3 && p.z >= s.z0 - 3 && p.z <= s.z1 + 3)) continue;
+          ev.cameBy[pid] = true;
+          if (pid === 'host') ev.playerCame = true;
+          game.asPlayer(p, () => game.ui.msg(ev.couple ? 'You join the wedding guests.' : 'You join the celebration.', '#ffd0e8'));
         }
       }
+    }
+  }
+
+  // (Round 129) A festival's parts, as each begins: said to whoever's in
+  // the town (and by whoever's leading it, if they're near), and the
+  // rain's sending it indoors, or not.
+  callOut(L, ev, now) {
+    ev.called ||= [];
+    for (let i = 0; i < ev.prog.length; i++) {
+      const q = ev.prog[i];
+      if (ev.called.includes(i) || now < q.from || now >= q.to) continue;
+      ev.called.push(i);
+      // (Long past by the time anyone's here: not said.)
+      if (now - q.from > 20) continue;
+      const where = q.venues.map((v) => (v === 'stage' ? 'the square' : VENUES[v].name)).join(', ');
+      const text = q.k === 'fair' ? `${cap(this.title(L, ev))}: ${SLOT_WORDS.fair} are open (${where}).`
+        : q.k === 'blessing' ? `The blessing has begun at ${where.replace(/^the blessing at /, '')}.`
+          : q.k === 'procession' ? 'The procession sets out from the temple for the square.'
+            : q.k === 'night' ? 'The feast\'s over, but the night goes on at the tavern.'
+              : null;
+      if (text) this.tellTown(L, text, '#ffd0e8');
+    }
+    const wet = !!ev.wet;
+    if (ev.wasWet !== undefined && wet !== ev.wasWet && now >= openOf(ev) && now < closeOf(ev)) this.tellTown(L, wet ? 'Rain! The festival goes indoors: the tavern, the hall, the temple.' : 'The rain\'s stopped: the festival comes out again.', wet ? '#a0c8ff' : '#ffd0e8');
+    ev.wasWet = wet;
+  }
+
+  // (Round 129) The festival in the town you're in: what's on, for the
+  // corner of the screen; and its places, for the little map.
+  townHere() {
+    const s = this.game.currentSettlement;
+    const a = s && this.game.active.get(s.id);
+    return a ? a.layout : null;
+  }
+
+  hudLines() {
+    const L = this.townHere();
+    return L ? festHud(this, L, this.sim.abs) : [];
+  }
+
+  festMarks() {
+    const L = this.townHere();
+    return L ? festMarks(L, this.sim.abs) : [];
+  }
+
+  // Said to everyone in the town (each on their own screen).
+  tellTown(L, text, color) {
+    const game = this.game;
+    const b = L.bounds;
+    for (const p of game.everyone()) {
+      if (!p || p.dead || p.x < b.x0 - 4 || p.x > b.x1 + 4 || p.z < b.z0 - 4 || p.z > b.z1 + 4) continue;
+      game.asPlayer(p, () => game.ui.msg(text, color));
     }
   }
 

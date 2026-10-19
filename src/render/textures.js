@@ -1768,6 +1768,65 @@ const SPRITES = {
     }
     return p.outline(OUT);
   },
+  // (Round 129) A straw butt for the archers on the green: a fat round boss
+  // of bound straw on a wooden easel, its face painted in rings (white,
+  // black, blue, red, gold at the heart), a few arrows already in it.
+  archery_butt() {
+    const p = spr(TALL_H);
+    const wood = P.planks_dark;
+    // The easel: two legs splayed, one behind.
+    p.line(3, 39, 6, 16, wood[0]);
+    p.line(4, 39, 7, 16, wood[1]);
+    p.line(12, 39, 9, 16, wood[0]);
+    p.line(11, 39, 8, 16, wood[1]);
+    p.line(8, 38, 8, 22, wood[2]);
+    // The straw boss, its binding showing round the edge.
+    p.ellipse(7.5, 19, 7, 7, '#c8a040');
+    p.ellipse(7.5, 19, 6.4, 6.4, '#d8b450');
+    for (let a = 0; a < 12; a++) {
+      const t = (a / 12) * Math.PI * 2;
+      p.set(Math.round(7.5 + Math.cos(t) * 6.6), Math.round(19 + Math.sin(t) * 6.6), '#a07a28');
+    }
+    // The painted face.
+    const rings = [['#f4f0e4', 5.6], ['#2a2a30', 4.6], ['#3a6ac8', 3.6], ['#d03a2a', 2.5], ['#f8d040', 1.4]];
+    for (const [c, r] of rings) p.ellipse(7.5, 19, r, r, c);
+    p.set(7, 18, '#fff8c0');
+    // Arrows stuck in it: shafts and fletchings.
+    for (const [x, y, dx] of [[4, 16, -1], [10, 22, 1]]) {
+      p.line(x, y, x + dx * 3, y - 3, '#8a6a40');
+      p.set(x + dx * 3, y - 3, '#e8e0d0');
+      p.set(x + dx * 4, y - 3, '#c83a32');
+    }
+    return p.outline(OUT);
+  },
+  // (Round 129) The festival's board: a painted sign on two posts with the
+  // day's contests chalked up and a winner's rosette pinned to it.
+  fest_board() {
+    const p = spr(TALL_H);
+    p.rect(2, 14, 2, 26, P.planks_dark[0]);
+    p.rect(12, 14, 2, 26, P.planks_dark[0]);
+    p.rect(1, 12, 14, 15, '#2e3a2a');
+    p.rect(1, 12, 14, 1, P.planks[2]);
+    p.rect(1, 26, 14, 1, P.planks[0]);
+    p.vline(1, 12, 26, P.planks[1]);
+    p.vline(14, 12, 26, P.planks[1]);
+    // Chalked lines.
+    for (const [y, w] of [[15, 8], [18, 6], [21, 9], [24, 5]]) p.hline(4, 3 + w, y, '#d8d8c8');
+    // A rosette, its tails hanging.
+    p.ellipse(12, 15, 2, 2, '#3a6ac8');
+    p.set(12, 15, '#f8d040');
+    p.set(11, 18, '#3a6ac8');
+    p.set(13, 18, '#3a6ac8');
+    p.set(11, 17, '#3a6ac8');
+    p.set(13, 17, '#3a6ac8');
+    // A pennant along the top.
+    for (let x = 1; x <= 14; x += 3) {
+      p.set(x, 10, ['#d03a2a', '#f8d040', '#3a6ac8', '#3c9a48', '#d03a2a'][(x / 3) | 0]);
+      p.set(x + 1, 11, ['#d03a2a', '#f8d040', '#3a6ac8', '#3c9a48', '#d03a2a'][(x / 3) | 0]);
+    }
+    p.hline(0, 15, 10, P.planks_dark[1]);
+    return p.outline(OUT);
+  },
   cell_door_open() {
     // The barred door swung against the wall.
     const p = spr();

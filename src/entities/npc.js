@@ -2,6 +2,7 @@
 // simulation gives them: mourning, hunting for food, building, trials,
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
+import { segNow, shelterFor, outdoors, chatterAt, dayOf as festDayOf } from '../sim/festival.js';
 import { npcChair } from '../game/chairs.js';
 import { idleTick } from './idleanims.js';
 import { Entity } from './entity.js';
@@ -446,6 +447,34 @@ export class NPC extends Entity {
       case 'alarm':
         return target(e.target, { tag: 'alarm', near: 2 });
       case 'event': {
+        // (Round 129) A festival's day: where they are in it now, the stalls
+        // or the ale tables or the procession (see sim/festival.js).
+        if (e.segs) {
+          const ev = this.game.sim.events.get(L, e.ev);
+          const seg = segNow(e.segs, this.game.sim.abs);
+          if (seg && !seg.main) {
+            this.evSeg = seg;
+            if (ev && ev.wet && outdoors(seg.v)) {
+              const sh = shelterFor(L, seg.v || 'stage', rec.idx);
+              if (sh) return { x: sh.x, y: GROUND, z: sh.z, face: rng.int(0, 3), tag: 'event', wanderIn: L.buildings[sh.building] };
+            }
+            if (seg.walk) {
+              const i = Math.min(this.walkI || 0, seg.walk.length - 1);
+              const wp = seg.walk[i];
+              return { x: wp.x, y: GROUND, z: wp.z, near: 1, tag: 'event', walk: true };
+            }
+            if (seg.x !== null && seg.x !== undefined) {
+              if (seg.seat) this.spot = { x: seg.x, y: GROUND, z: seg.z, face: seg.face, tags: ['event'], seat: true };
+              return { x: seg.x, y: GROUND, z: seg.z, face: seg.face, tag: 'event' };
+            }
+            return plazaTile();
+          }
+          this.evSeg = seg;
+          if (ev && ev.wet && seg && seg.main) {
+            const sh = shelterFor(L, 'stage', rec.idx);
+            if (sh) return { x: sh.x, y: GROUND, z: sh.z, face: rng.int(0, 3), tag: 'event', wanderIn: L.buildings[sh.building] };
+          }
+        }
         // A wedding or a feast: their own place there (a seat on a bench, a
         // spot by the tables, or a place in the ring round the maypole).
         const t = e.target;
@@ -551,6 +580,14 @@ export class NPC extends Entity {
         if (this.visit && this.visit.guest) {
           const sim = this.game.sim;
           const ev = sim.events.upcoming(L).find((q) => q.site && (q.state === 'on' || q.state === 'ready' || q.state === 'building') && sim.abs >= q.s - 60);
+          // (Round 129) Come for a festival, in the morning: one of its
+          // places round the town.
+          const fd = !ev ? festDayOf(L, sim.abs) : null;
+          const fs = fd && fd.venues && fd.venues.length ? fd.venues[hash4(this.rec.idx, fd.id, 0x71) % fd.venues.length] : null;
+          if (fs) {
+            const k = hash4(this.rec.idx, fd.id, 0x9f) % 1000;
+            return { x: fs.x0 - 1 + (k % (fs.x1 - fs.x0 + 3)), y: GROUND, z: (k >> 4) % 2 ? fs.z0 - 1 : fs.z1 + 1, near: 2, tag: 'event', face: 2 };
+          }
           if (ev) {
             const st = ev.site;
             const k = hash4(this.rec.idx, ev.id, 0x9e) % 1000;
@@ -2667,8 +2704,41 @@ export class NPC extends Entity {
     const ev = events.get(this.layout, act.ev);
     if (!ev) return;
     const t = game.day * 1440 + game.minute - ev.s;
+    // (Round 129) On to the next part of their festival day when its time
+    // comes (or the rain sends them in, or out again); the procession
+    // walked a stop at a time.
+    if (act.segs) {
+      const seg = segNow(act.segs, game.sim.abs);
+      const wet = !!ev.wet;
+      if (seg !== this.evSeg || wet !== !!this.evWet) {
+        this.evWet = wet;
+        if (seg !== this.evSeg) this.walkI = 0;
+        this.goal = this.pickGoal(this.activity.entry);
+        this.atGoal = false;
+        this.path = null;
+        return;
+      }
+      if (seg && seg.walk && this.atGoal && !wet) {
+        if ((this.walkI || 0) < seg.walk.length - 1) {
+          this.walkI = (this.walkI || 0) + 1;
+          this.goal = this.pickGoal(this.activity.entry);
+          this.atGoal = false;
+          this.path = null;
+          if (seg.role === 'lead' && this.distTo(game.player) < 18) this.say(this.rng.pick(['This way, all!', 'To the square!', 'Follow on!']), 2.4, '#ffe8f0');
+        }
+        return;
+      }
+      if (seg && !seg.main) {
+        if (this.goal && this.goal.face !== undefined && !this.sitting && this.rng.chance(dt * 0.3)) this.dir = this.goal.face;
+        if (this.lineCd > 0 || this.distTo(game.player) > 16) return;
+        this.lineCd = this.rng.float(14, 32);
+        const lines = chatterAt(seg, this.rec.age === 'child');
+        if (lines && lines.length && this.rng.chance(0.5)) this.say(this.rng.pick(lines), 2.6);
+        return;
+      }
+    }
     if (act.role === 'lead') events.ceremony(this.layout, ev, t, this);
-    if (act.role === 'dance' && t >= 0 && ev.state === 'on') {
+    if (act.role === 'dance' && t >= 0 && ev.state === 'on' && !ev.wet) {
       this.danceT = (this.danceT ?? this.rng.float(0.3, 1.2)) - dt;
       if (this.danceT <= 0) {
         this.danceT = this.rng.float(0.8, 1.5);

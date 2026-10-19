@@ -990,7 +990,7 @@ export class UI {
       }
       // (Round 121) The town you govern: its matters, a crisis.
       // (Round 122) And the realm you rule.
-      const offLines = sim.office && !game.remote ? [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : [])] : [];
+      const offLines = sim.office && !game.remote ? [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : []), ...(sim.events && sim.events.hudLines ? sim.events.hudLines() : [])] : [];
       for (const l of offLines) {
         g.fill(0, y, 25, 1, ' ', C.fg, l.blink && Math.floor(this.time * 3) % 2 ? 'rgba(120,20,20,0.85)' : 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
@@ -1532,6 +1532,26 @@ export class UI {
     const p = game && game.player;
     const r = game && game.renderer;
     if (!p || !r) return;
+    // (Round 129) A festival's places round the town: a little flag each in
+    // its colour, the one where things are happening now blinking.
+    const fm = game.remote ? game.remote.festMarks || [] : game.sim && game.sim.events && game.sim.events.festMarks ? game.sim.events.festMarks() : [];
+    for (const m of fm) {
+      let [u, v] = r.toView ? r.toView(m.x - p.x, m.z - p.z) : [m.x - p.x, m.z - p.z];
+      const inside = Math.abs(u) < 40 && Math.abs(v) < 18;
+      if (!inside) {
+        const k = Math.min(40 / Math.max(1e-6, Math.abs(u)), 18 / Math.max(1e-6, Math.abs(v)));
+        u *= k;
+        v *= k;
+      }
+      const px = x + 42 + Math.round(u);
+      const py = y + 20 + Math.round(v);
+      if (m.now && !blink && inside) continue;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(px - 1, py - 4, 4, 5);
+      ctx.fillStyle = m.c;
+      ctx.fillRect(px, py - 3, 2, 2);
+      ctx.fillRect(px, py - 1, 1, 2);
+    }
     for (const m of mates) {
       if (!m.here) continue;
       let [u, v] = r.toView ? r.toView(m.x - p.x, m.z - p.z) : [m.x - p.x, m.z - p.z];

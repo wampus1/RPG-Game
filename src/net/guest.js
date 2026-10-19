@@ -478,6 +478,8 @@ export class GuestNet {
     if (o.qm) this.qms = new Map(o.qm);
     // (Round 128) The books you carry, as the host's library has them.
     if (o.books) for (const [id, b] of Object.entries(o.books)) BOOKS.set(id, b);
+    // (Round 129) A festival's places, for the little map.
+    this.festMarks = o.fm || [];
     this.scene(o.scene);
   }
 

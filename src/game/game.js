@@ -128,6 +128,7 @@ import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
 import { bookAt, bookById } from './books/books.js';
 import { openShelf, tookFromShelf, putOnShelf, libraryTick } from './library.js';
+import { dayOf as festDayOf, posterLines as festPosterLines } from '../sim/festival.js';
 import { loreOf } from './books/lore.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -5250,6 +5251,15 @@ export class Game {
       case 'grave':
         this.ui.openSign(this.sim.graveText(x, z), 'GRAVESTONE');
         break;
+      case 'fest': {
+        // (Round 129) The festival's board, and the butts on the green.
+        const s = this.world.ow.settlementAt(x, z);
+        const L = s && this.world.getLayout(s);
+        const ev = L ? festDayOf(L, this.sim.abs) || (L.econ.events || []).find((q) => q.prog && q.state !== 'done' && q.state !== 'off') : null;
+        if (!ev) this.ui.openSign(['Nothing chalked up here yet.', 'Come back on a feast day.'], 'FESTIVAL BOARD');
+        else this.ui.openSign([`${this.sim.events.title(L, ev).toUpperCase()}`, '', ...festPosterLines(ev)], 'FESTIVAL BOARD');
+        break;
+      }
       case 'portal': {
         // A portal: where it can take you (see ui/portal.js).
         const s = this.world.ow.settlementAt(x, z);

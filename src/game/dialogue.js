@@ -24,6 +24,7 @@ import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { duesIn, payDues } from './library.js';
+import { segNow, segLine, festive, posterLines as festPosterLines, slotAt as festSlotAt, closeOf as festClose, SLOT_WORDS as FEST_SLOT_WORDS } from '../sim/festival.js';
 import { rainedRecently, weatherWord } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
 import { smallTalk } from './markov.js';
@@ -516,6 +517,8 @@ function topicsRaw(npc, game) {
   if (rec.job === 'guard' && !npc.hired && !npc.visit && rec.age === 'adult' && rep >= 30 && !sim.office.isHolder(s.id) && (sim.isCitizen(s.id) || rep >= 50)) add('sound', '(Quietly) This town needs a firmer hand...');
   // A researcher or a scholar: what they're working on, and the tree of
   // learning it's part of.
+  // (Round 129) A festival today or soon: what's on, and where.
+  if (s && rec.age !== 'child' && festSoon(game, npc.layout)) add('festprog', 'What\'s on for the festival?');
   // (Round 128) The books you took down from the library's shelves: bought,
   // to take away (see library.js).
   if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) {
@@ -1988,6 +1991,17 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
     case 'research': return researchTalk(npc, game);
+    case 'festprog': {
+      const ev = festSoon(game, npc.layout);
+      if (!ev) return { lines: ['Nothing\'s on that I know of.'] };
+      const now = game.sim.abs;
+      const cur = festSlotAt(ev, now);
+      const lines = [ev.day === game.day ? `Today's ${game.sim.events.title(npc.layout, ev)}!` : `${cap1(game.sim.events.title(npc.layout, ev))} is on day ${ev.day}.`];
+      lines.push(...festPosterLines(ev).slice(0, 6));
+      if (cur) lines.push(`Right now it's ${FEST_SLOT_WORDS[cur.k]}.`);
+      if (ev.wet) lines.push('Mind, with this rain it\'s all gone indoors.');
+      return { lines: lines.slice(0, 8) };
+    }
     case 'libpay': {
       const due = duesIn(game, s.id);
       if (!due.n) return { lines: ['You\'ve nothing of ours with you. Read what you like, while you\'re here.'] };
@@ -2486,6 +2500,14 @@ function eventLine(npc, game, act) {
   const ev = game.sim.events.get(L, act.ev);
   const town = L.settlement.name;
   if (!ev) return 'Just enjoying the day.';
+  // (Round 129) Where they are in a festival's day.
+  if (act.segs) {
+    const seg = segNow(act.segs, game.sim.abs);
+    if (seg && !seg.main) {
+      const l = segLine(seg, npc.rng, town);
+      if (l) return l;
+    }
+  }
   if (ev.kind === 'wedding') {
     const [a, b] = ev.couple.map((i) => L.npcs[i].name.first);
     if (act.role === 'couple') return 'I\'m getting married! Can you believe it?';
@@ -2728,3 +2750,11 @@ function causeTalk(npc, game, id, arg) {
   }
   return { lines: ['...'] };
 }
+
+// (Round 129) A festival in a town, today (and not over) or within two days.
+function festSoon(game, L) {
+  if (!L || !L.econ) return null;
+  const now = game.sim.abs;
+  return (L.econ.events || []).find((ev) => festive(ev) && ev.prog && ev.state !== 'off' && ev.state !== 'done' && ev.day >= game.day && ev.day <= game.day + 2 && now < festClose(ev)) || null;
+}
+const cap1 = (t) => t.charAt(0).toUpperCase() + t.slice(1);
