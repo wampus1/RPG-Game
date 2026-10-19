@@ -9,6 +9,7 @@ import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
 import { empireQuarterSteps } from './empire.js';
 import { farTable } from './farlands.js';
+import { HAVEN_BUILDINGS, HAVEN_TYPE_NAMES, havenMats, GUILD_FLAGS } from './havenkit.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
 const Y0 = GROUND; // first layer above the floor
@@ -460,6 +461,13 @@ class Layout {
       road = F.road[k];
       plaza = F.plaza[k];
     }
+    // (Round 130) A haven's ways are boardwalks of salvage, its square
+    // trodden sand and shingle.
+    if (s.haven) {
+      road = B.planks_drift;
+      plaza = B.gravel;
+      return { road, plaza, cold, hot, bridge: B.planks_drift };
+    }
     if ((cond === 'poor' || cond === 'abandoned') && s.style !== 'mist' && s.style !== 'tide') {
       road = B.path;
       if (plaza === B.stone_bricks) plaza = B.cobblestone;
@@ -479,6 +487,8 @@ class Layout {
     const civic = SPECS[type]?.civic;
     const { cold, hot } = this.mats;
     let style = s.style;
+    // (Round 130) A pirates' haven: salvage and sailcloth.
+    if (s.haven) return havenMats(type, rng);
     // (A far people builds its own way, whatever the weather.)
     const far = FAR_BUILD[style];
     if (far) {
@@ -1020,6 +1030,8 @@ class Layout {
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
     else this.nameShop(bld);
     if (type === 'townhall' && this.settlement.type === 'village') bld.name = 'Village Hall';
+    // (Round 130) A haven's: the rum house, the guild hall, the fence's.
+    if (this.settlement.haven) this.havenName(bld, rng);
     this.buildings.push(bld);
     return bld;
   }
@@ -1064,12 +1076,20 @@ class Layout {
       for (const t of rng.shuffle(['temple', 'shop', 'smithy', 'bakery', 'workshop', 'guardhouse'].filter((t) => need.has(t))).slice(0, need.has('herbalist') ? 1 : 2)) keep.add(t);
       civicOrder = civicOrder.filter((t) => keep.has(t));
     }
+    // (Round 130) A pirates' haven: its guild hall, its rum house, the
+    // fence's, a stockade for the captives (always), the gunsmith, the
+    // sawbones and the plunder store.
+    if (s.haven && s.condition !== 'abandoned') {
+      need.set('stockade', 1);
+      need.set('townhall', 1);
+      civicOrder = ['townhall', 'tavern', 'shop', 'stockade', 'smithy', 'herbalist', 'warehouse'].filter((t) => need.has(t));
+    }
     let cands = this.frontage();
     const nearCands = byPlaza([...cands]);
     // Essential civic buildings claim the plaza first; the rest are placed
     // after houses so everyone gets a home.
     // (And each island people's own trade: it's what the place is known for.)
-    const essential = new Set(['townhall', 'temple', 'tavern', 'shop', 'guardhouse', ...TRADE_BUILDINGS]);
+    const essential = new Set(['townhall', 'temple', 'tavern', 'shop', 'guardhouse', ...TRADE_BUILDINGS, ...(s.haven ? ['stockade', 'smithy'] : [])]);
     const late = [];
     for (const t of civicOrder) {
       for (let i = 0; i < (need.get(t) || 0); i++) {
@@ -1973,6 +1993,15 @@ class Layout {
   }
 
   // A shop's own name (from its own seed: the town's layout doesn't change).
+  // (Round 130) What the brethren call a place of theirs.
+  havenName(b, rng) {
+    const list = HAVEN_BUILDINGS[b.type];
+    const taken = new Set(this.buildings.map((q) => q.name));
+    if (b.type === 'townhall') b.name = 'Guild Hall';
+    else if (list && !b.residential) b.name = list.find((n) => !taken.has(n) && rng.chance(0.5)) || list.find((n) => !taken.has(n)) || list[0];
+    else if (HAVEN_TYPE_NAMES[b.type]) b.name = HAVEN_TYPE_NAMES[b.type];
+  }
+
   nameShop(b) {
     const list = SHOP_NAMES[b.type];
     if (!list) return;
@@ -4151,7 +4180,8 @@ class Layout {
     // heartfire (cold in a deserted town), the Mirefolk's Old Glowcap, the
     // Stiltfolk's conch fountain (its water drawn like a well's).
     // (Round 68) The far peoples' own: see render/farpieces.js.
-    const piece = { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain, ...FAR_PIECE_BLOCKS }[s.style];
+    // (Round 130: a pirates' haven, its guild's black flag on a mast.)
+    const piece = s.haven ? B[GUILD_FLAGS[s.haven.guild] || GUILD_FLAGS[0]] : { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain, ...FAR_PIECE_BLOCKS }[s.style];
     const room = [];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) room.push([p.cx + dx, p.cz + dz]);
     if (piece && room.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) {
@@ -4323,6 +4353,128 @@ class Layout {
     // Signs at the settlement's road entrances.
     for (const pt of this.entrances) this.entranceSign(pt);
     if (s.type === 'city') this.finishCityWalls();
+    if (s.haven && !ruined) this.havenDecor(this.rng.fork('haven'));
+  }
+
+  // (Round 130) A pirates' haven's own: a fire on the square with the pot
+  // on it, the bills the realms have put out on the brethren, a gun or two
+  // run out at the sea, plunder piled by the store, the stocks by the guild
+  // hall and the Articles nailed up by its door, a gallows down by the
+  // water, a lookout's mast, and torches on posts along the boardwalks.
+  havenDecor(rng) {
+    const p = this.plaza;
+    const b = this.bounds;
+    const free = (x, z) => this.maskAt(x, z) === M.PLAZA && !this.isLane(x, z) && !this.at(x, Y0, z) && Math.max(Math.abs(x - p.cx), Math.abs(z - p.cz)) > 3
+      && !DIRS4.some(([ax, az]) => this.maskAt(x + ax, z + az) === M.ROAD);
+    const onSquare = [];
+    for (let z = p.z0; z <= p.z1; z++) for (let x = p.x0; x <= p.x1; x++) if (free(x, z)) onSquare.push({ x, z });
+    rng.shuffle(onSquare);
+    const take = (ok = () => true) => {
+      const i = onSquare.findIndex((q) => free(q.x, q.z) && ok(q));
+      return i < 0 ? null : onSquare.splice(i, 1)[0];
+    };
+    const set = (q, id, meta = 0) => {
+      this.put(q.x, Y0, q.z, id, meta);
+      this.setMask(q.x, q.z, M.DECOR);
+    };
+    // The fire, and the brethren about it.
+    const fire = take();
+    if (fire) {
+      set(fire, B.campfire, META_STATE);
+      for (const [dx, dz] of DIRS4) {
+        const x = fire.x + dx;
+        const z = fire.z + dz;
+        if (this.maskAt(x, z) === M.PLAZA) this.addSpot(x, z, dirOf(-dx, -dz), ['gossip', 'social', 'drink', 'music', 'smoke']);
+      }
+    }
+    const bills = take();
+    if (bills) {
+      set(bills, B.haven_wanted);
+      this.signs.push({ x: bills.x, y: Y0, z: bills.z, kind: 'wanted' });
+    }
+    // Guns run out toward the water (the side of the square nearest it).
+    const sea = this.seaSide();
+    for (let k = 0; k < 2; k++) {
+      const q = take((t) => !sea || (sea.dx ? Math.sign(t.x - p.cx) === sea.dx : Math.sign(t.z - p.cz) === sea.dz));
+      if (q) set(q, B.shore_gun, sea ? dirOf(sea.dx, sea.dz) : 0);
+    }
+    // By the doors of the rum house, the store and the guild hall.
+    const by = (type) => this.buildings.find((q) => q.type === type);
+    const beside = (bld) => {
+      if (!bld || !bld.outside) return [];
+      const o = bld.outside;
+      const out = [];
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        const x = o.x + dx;
+        const z = o.z + dz;
+        const m = this.maskAt(x, z);
+        if ((m === M.FREE || m === M.YARD) && this.inside(x, z, 1) && !this.at(x, Y0, z) && !(x === bld.door.x && z === bld.door.z)) out.push({ x, z });
+      }
+      return out;
+    };
+    const tav = beside(by('tavern'));
+    for (const q of tav.slice(0, 2)) set(q, B.barrel);
+    const store = beside(by('warehouse'));
+    if (store[0]) set(store[0], B.plunder_heap);
+    if (store[1]) set(store[1], B.crate_open);
+    const hall = by('townhall');
+    const hb = beside(hall);
+    if (hb[0]) {
+      set(hb[0], B.articles_board);
+      this.signs.push({ x: hb[0].x, y: Y0, z: hb[0].z, kind: 'articles' });
+    }
+    if (hb[1]) set(hb[1], B.stocks);
+    // The gallows, down by the water (or at the edge of town).
+    const shore = [];
+    for (let z = b.z0 + 2; z <= b.z1 - 2; z++) {
+      for (let x = b.x0 + 2; x <= b.x1 - 2; x++) {
+        if (this.maskAt(x, z) !== M.FREE || this.at(x, Y0, z)) continue;
+        if (DIRS4.some(([dx, dz]) => this.maskAt(x + dx, z + dz) === M.WATER) && DIRS4.every(([dx, dz]) => this.maskAt(x + dx, z + dz) !== M.ROAD)) shore.push({ x, z });
+      }
+    }
+    const gal = shore.length ? rng.pick(shore) : this.findFreeNear(Math.round((b.x0 + b.x1) / 2), b.z0 + 3, 6, rng);
+    if (gal) {
+      this.put(gal.x, Y0, gal.z, B.gallows);
+      this.setMask(gal.x, gal.z, M.DECOR);
+      this.havenGallows = { x: gal.x, z: gal.z };
+    }
+    // The lookout: a mast with a crow's nest, a torch at the top.
+    const look = shore.filter((q) => !gal || Math.abs(q.x - gal.x) + Math.abs(q.z - gal.z) > 8);
+    const lk = look.length ? rng.pick(look) : this.findFreeNear(b.x0 + 4, b.z0 + 4, 5, rng);
+    if (lk) {
+      for (let y = Y0; y < Y0 + 3; y++) this.put(lk.x, y, lk.z, B.log_mangrove);
+      this.put(lk.x, Y0 + 3, lk.z, B.torch, META_STATE);
+      this.setMask(lk.x, lk.z, M.DECOR);
+      this.havenLookout = { x: lk.x, z: lk.z };
+    }
+    // Torches on posts along the boardwalks.
+    for (let z = b.z0 + 1; z < b.z1; z++) {
+      for (let x = b.x0 + 1; x < b.x1; x++) {
+        const m = this.maskAt(x, z);
+        if (m !== M.YARD && m !== M.FREE) continue;
+        if (!DIRS4.some(([dx, dz]) => this.maskAt(x + dx, z + dz) === M.ROAD) || this.roadEndAhead(x, z)) continue;
+        if ((hash4(x, z, this.settlement.seed) % 9) !== 0 || this.lamps.some((l) => Math.abs(l.x - x) + Math.abs(l.z - z) < 7)) continue;
+        this.put(x, Y0, z, B.log_mangrove);
+        this.put(x, Y0 + 1, z, B.torch, META_STATE);
+        this.setMask(x, z, M.DECOR);
+        this.lamps.push({ x, z });
+      }
+    }
+  }
+
+  // Which way the sea lies from the square (a unit step), or null.
+  seaSide() {
+    const p = this.plaza;
+    let best = null;
+    for (const [dx, dz] of DIRS4) {
+      for (let k = 2; k < 30; k++) {
+        if (this.maskAt(p.cx + dx * k, p.cz + dz * k) === M.WATER) {
+          if (!best || k < best.k) best = { dx, dz, k };
+          break;
+        }
+      }
+    }
+    return best;
   }
 
   tree(x, z, type, rng) {

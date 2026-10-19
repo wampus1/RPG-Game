@@ -10,6 +10,7 @@ import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
 import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES, FAR_ANIM } from './farart.js';
 import { shipTop, shipFront, SHIP_SPRITES, SHIP_ANIM } from './shipart.js';
 import { LOOKED, LOOKS, lookSprite, awningTop, awningFront } from './lookart.js';
+import { havenTop, havenFront, HAVEN_SPRITES, HAVEN_ANIM } from './havenart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -316,6 +317,8 @@ export function cubeTop(name, v, rand, rot) {
   if (ft) return ft;
   const st = shipTop(name, v, rand);
   if (st) return st;
+  const ht = havenTop(name, v, rand, rot);
+  if (ht) return ht;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -612,6 +615,8 @@ function cubeFront(name, v, rand, rot) {
   if (ff) return ff;
   const sf = shipFront(name, v, rand);
   if (sf) return sf;
+  const hf = havenFront(name, v, rand);
+  if (hf) return hf;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -2371,15 +2376,15 @@ function crackOverlay(stage) {
 }
 
 // --- build --------------------------------------------------------------------
-const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', ...FAR_ROT_TOP]);
+const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', 'sail_roof', ...FAR_ROT_TOP]);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM, ...SHIP_ANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM, ...SHIP_ANIM, ...HAVEN_ANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
-  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES, SHIP_SPRITES);
+  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES, SHIP_SPRITES, HAVEN_SPRITES);
   for (const b of BLOCKS) buildBlock(b, TEX);
   // Round 36: the islands' crafts (see CRAFTS): the same furniture made
   // again in each people's own wood and fittings.

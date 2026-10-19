@@ -15,6 +15,7 @@
 // At its end, what's sought can be bought back, talked out of whoever has
 // it, or (where they won't be talked round) taken.
 import { motif, R, nameOf } from '../core.js';
+import { isHaven } from '../../havenref.js';
 import { pick, laidTowns, town, townName, adults, persuade, purse, townMid, layoutOf } from './lib.js';
 import { removeItem } from '../../../game/inventory.js';
 import { REGION_W, REGION_D } from '../../../config.js';
@@ -32,7 +33,7 @@ const KINDS = {
 // While the storm stands, the last leg is a port this side of it.
 export function planTrail(S, s0, rng) {
   const ow = S.game.world.ow;
-  const live = ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && s !== s0);
+  const live = ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && s !== s0 && !isHaven(s));
   const d = (a, b) => Math.hypot(a.cx - b.cx, a.cz - b.cz);
   const legs = [];
   const same = live.filter((s) => s.island === s0.island && !s.far).sort((a, b) => d(a, s0) - d(b, s0)).slice(0, 4);

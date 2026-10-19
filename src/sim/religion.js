@@ -8,6 +8,7 @@
 // cause for a holy war. The devout go on pilgrimage to the holy city of
 // their faith (its capital, or the oldest temple of the folk ways).
 import { alive, ledger } from './econ.js';
+import { isHaven } from './havenref.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { religionOf, realmFaith, TABOOS } from './culture.js';
 
@@ -40,7 +41,7 @@ export class Religion {
   }
 
   daily(day, rng) {
-    const towns = [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned');
+    const towns = [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned' && !isHaven(L.settlement));
     // Along the roads: a town takes in a little of the faith of the towns
     // its merchants trade with.
     for (const road of this.sim.diplomacy.roads) {
@@ -154,7 +155,7 @@ export class Religion {
     const mine = realmFaith(civ);
     const caps = R.members(civ);
     if (!mine || !caps.length) return null;
-    const near = [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned' && this.keyOf(L.settlement) !== mine.key
+    const near = [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned' && !isHaven(L.settlement) && this.keyOf(L.settlement) !== mine.key
       && caps.some((c) => Math.hypot(c.cx - L.settlement.cx, c.cz - L.settlement.cz) <= 9));
     const T = near.length ? rng.pick(near) : null;
     if (!T) return null;

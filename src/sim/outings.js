@@ -9,6 +9,7 @@
 // of a town is away at once, and the mayor and those the town can't do
 // without rarely go. A citizen the one planning it likes is asked along.
 import { alive, ledger, DAY, setOverride, notableNews, hearNews } from './econ.js';
+import { isHaven } from './havenref.js';
 import { deserted, relocate } from './civic.js';
 import { RNG, hash4 } from '../util/rng.js';
 
@@ -79,7 +80,7 @@ export class Outings {
     if (deserted(s) || s.condition === 'abandoned' || !s.civ) return null;
     if (this.list.some((t) => t.sid === s.id)) return null;
     const ow = this.game.world.ow;
-    const near = ow.settlements.filter((o) => o !== s && o.civ === s.civ && !deserted(o) && o.condition !== 'abandoned' && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
+    const near = ow.settlements.filter((o) => o !== s && o.civ === s.civ && !deserted(o) && o.condition !== 'abandoned' && isHaven(o) === isHaven(s) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
     if (!near.length) return null;
     const doOf = (o) => {
       const OL = this.game.world.layouts.get(o.id);

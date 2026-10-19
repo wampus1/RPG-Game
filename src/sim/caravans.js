@@ -5,6 +5,7 @@
 // town they make camp outside it (tents, wagons, the horses tied to a
 // hitching post) and stay a day or two to trade before moving on.
 import { alive, ledger, DAY, st, price, kitchenOf, glutFactor, invAdd } from './econ.js';
+import { isHaven } from './havenref.js';
 import { deserted } from './civic.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { ITEMS } from '../world/items.js';
@@ -112,7 +113,7 @@ export class Caravans {
   // (The Dagoni Islands' towns, while the storm stands round them.)
   places() {
     const ow = this.game.world.ow;
-    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && (ow.wallDown || !isFar(s)));
+    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && !isHaven(s) && (ow.wallDown || !isFar(s)));
   }
 
   create(rng) {

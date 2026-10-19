@@ -6,6 +6,7 @@ import { personName, familyName } from '../world/names.js';
 import { ITEMS } from '../world/items.js';
 import { tradeOfStyle } from '../sim/isletrades.js';
 import { farTable, EMPIRE } from '../world/farlands.js';
+import { HAVEN_TITLES, HAVEN_STYLES, havenLook, havenPlan } from '../world/havenkit.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
@@ -67,6 +68,10 @@ export const HOBBIES = {
 const MERCHANT_TITLES = [null, 'Peddler', 'Trader', 'Master Merchant'];
 
 export function jobTitle(rec, s) {
+  // (Round 130) In a pirates' haven: the brethren's own names for things.
+  if (rec.havenRank === 'chief') return 'Pirate Chief';
+  if (rec.havenRank === 'captain') return 'Pirate Captain';
+  if (s && s.haven && !s.haven.razed && !rec.visitor && HAVEN_TITLES[rec.job]) return HAVEN_TITLES[rec.job];
   // (Round 121) Keeping the hall for a town's governor (see office.js).
   if (rec.job === 'mayor' && rec.steward) return 'Steward';
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
@@ -96,6 +101,8 @@ export function planPopulation(s, rng) {
   // A village just being founded: nobody yet (the settlers come with
   // their own records), nothing built but its square.
   if (s.founding) return { households: [], jobs: [], target: 0 };
+  // (Round 130) A pirates' haven: its own sort (see world/havenkit.js).
+  if (s.haven && s.condition !== 'abandoned') return havenPlan(s, rng);
   if (s.condition === 'abandoned') {
     // Empty homes (for ruins) but nobody lives there any more.
     const households = [];
@@ -727,9 +734,12 @@ export function generateNPCs(layout, plan, seed) {
     const house = freeHouses.find((b) => b.beds.length >= h.members.length && !b.household);
     if (!house) continue;
     house.household = h;
-    const fam = familyName(rng, style);
+    // (Round 130: in a haven, each household from its own shore.)
+    const hstyle = s.haven ? HAVEN_STYLES[rng.int(0, HAVEN_STYLES.length - 1)] : style;
+    const fam = familyName(rng, hstyle);
     house.family = fam;
     house.homeName = house.type === 'palace' ? 'The Imperial Palace' : house.type === 'manor' ? `${fam} Manor` : house.type === 'house_s' ? `${fam} Cottage` : `The ${fam} House`;
+    if (s.haven) house.homeName = `${fam}'s ${house.type === 'house_s' ? 'Shack' : house.type === 'house_m' ? 'Shanty' : 'Bunkhouse'}`;
     const members = [];
     for (const m of h.members) {
       const idx = npcs.length;
@@ -751,7 +761,7 @@ export function generateNPCs(layout, plan, seed) {
         id: `${s.id}:${idx}`,
         idx,
         sid: s.id,
-        name: personName(rng, style, fam),
+        name: personName(rng, hstyle, fam),
         age: m.age,
         job,
         home: house.id,
@@ -770,7 +780,11 @@ export function generateNPCs(layout, plan, seed) {
       };
       npc.hobbies = pickHobbies(rng, p, civ, avail, m.age);
       npc.equipment = equipmentFor(rng, job, npc.hobbies, s.condition, m.age);
-      npc.look = withShield(makeLook(rng, style, m.age, job, civ), npc.equipment.shield);
+      npc.look = withShield(makeLook(rng, hstyle, m.age, job, civ), npc.equipment.shield);
+      if (s.haven) {
+        npc.look = havenLook(npc.look, rng, s.haven.guild, job, m.age);
+        npc.shore = hstyle;
+      }
       npc.maxHp = job === 'guard' ? GUARD_HP : m.age === 'child' ? 6 : m.age === 'elder' ? 8 : 12;
       npc.hp = npc.maxHp;
       npc.work = layout.assignWork(npc, rng);

@@ -7,6 +7,7 @@
 // jewelled gear, and they're hard to beat in a fight: see npc.js and
 // game.js for how they dodge, turn arrows aside and use their stones.
 import { alive, ledger, DAY, st, price, kitchenOf, invCount, glutFactor, MEAL_ITEMS, setOverride } from './econ.js';
+import { isHaven } from './havenref.js';
 import { deserted } from './civic.js';
 import { makeAdventurer } from '../entities/npcgen.js';
 import { ITEMS, offhandable } from '../world/items.js';
@@ -49,7 +50,7 @@ export class Adventurers {
   // the storm stands round them).
   places() {
     const ow = this.game.world.ow;
-    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && (ow.wallDown || !isFar(s)));
+    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && !isHaven(s) && (ow.wallDown || !isFar(s)));
   }
 
   create(rng, at = null) {

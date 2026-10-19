@@ -24,6 +24,7 @@
 // shared world, other players who are citizens can sit on your council and
 // vote, and stand against you when the term is up.
 import { alive, ledger, mayorOf, kitchenOf, DAY } from './econ.js';
+import { isHaven } from './havenref.js';
 import { LAWS, LAW_IDS, lawFits, lawOn, byDecree, stance } from './laws.js';
 import { FACTIONS, FACTION_IDS, BUDGET, BUDGET_USUAL, approvals, members, factionOf, preview } from './factions.js';
 import { CHARTERS, CHARTER_IDS, defaultCharter, headTitle, charterFits } from './charters.js';
@@ -262,6 +263,8 @@ export class Office {
     const pid = this.pid();
     const T = this.of(s.id);
     const fee = FEE[s.type] || 40;
+    // (Round 130) A pirates' haven goes by the Articles, not by ballots.
+    if (isHaven(s)) return { ok: false, why: 'Here the Articles rule, and the captains choose: no ballots in a pirates\' haven.' };
     if (this.isHolder(s.id, pid)) return { ok: false, why: 'You already hold the office here.' };
     if (this.heldBy(pid)) return { ok: false, why: `You already govern ${this.sim.layoutOf(this.heldBy(pid).sid).settlement.name}. One town at a time.` };
     if (!sim.isCitizen(s.id)) return { ok: false, why: `Only a citizen of ${s.name} can stand.` };
@@ -2026,6 +2029,7 @@ export class Office {
     const s = L.settlement;
     const T = this.of(s.id);
     if (T && T.holder) return;
+    if (isHaven(s)) return;
     if (this.offers.some((o) => o.sid === s.id && o.until > this.sim.abs)) return;
     const players = this.game.seats ? this.game.seats.map((q) => (q.host ? 'host' : String(q.id))) : ['host'];
     const free = players.filter((pid) => !this.heldBy(pid));
@@ -2146,6 +2150,7 @@ export class Office {
     const P = this.plotStrength(L);
     const T = this.town(L);
     if (this.isHolder(s.id)) return { ok: false, why: 'It\'s yours already.' };
+    if (isHaven(s)) return { ok: false, why: 'The brethren follow their chief, not whoever holds the hall.' };
     const odds = clamp(P.share * 1.3 - (T.plotNoticed || 0) * 0.15, 0, 0.95);
     const ok = P.of > 0 && (hash4(s.id, day, 0x5e12) % 1000) / 1000 < odds;
     T.plot = null;
@@ -2164,6 +2169,7 @@ export class Office {
   // once they're there (see founding.js).
   canLead(L) {
     const s = L.settlement;
+    if (isHaven(s)) return { ok: false, why: 'The brethren don\'t go off to farm.' };
     if (!this.sim.isCitizen(s.id)) return { ok: false, why: `Only a citizen of ${s.name} can lead its settlers.` };
     if (this.heldBy(this.pid())) return { ok: false, why: 'Not while you govern a town.' };
     if (this.sim.founding.parties.some((p) => !p.done)) return { ok: false, why: 'Settlers are already on the road somewhere.' };

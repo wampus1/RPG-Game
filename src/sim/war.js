@@ -472,6 +472,13 @@ export class War {
     }
     if (out.result === 'called off' || !TL || !FL) return out;
     if (FL.econ && out.loot) FL.econ.treasury += out.loot;
+    // (Round 130) Marines sent against a pirates' haven: see havens.js.
+    if (raid.haven !== undefined) {
+      this.sim.havens?.expeditionEnd(raid, out, day);
+      out.day = day;
+      raid.out = out;
+      return out;
+    }
     const e = TL.econ;
     e.recent.raids = (e.recent.raids || 0) + 1;
     e.recent.violence = (e.recent.violence || 0) + 1;
@@ -1800,7 +1807,7 @@ export class War {
     // (Woken by the shouting, if you're asleep in town; and no more
     // waiting about while they're here.)
     g.disturb?.('Shouts and running feet: you stop waiting.');
-    g.ui.msg(sea ? `Raiders of the ${plain(this.civ(raid.civ))} are coming ashore by raft at ${TL.settlement.name}!` : `Raiders of the ${plain(this.civ(raid.civ))} are attacking ${TL.settlement.name}!`, '#ff7060');
+    g.ui.msg(raid.haven !== undefined ? `Marines of the ${plain(this.civ(raid.civ))} are rowing ashore at ${TL.settlement.name} with torches, to burn it out!` : sea ? `Raiders of the ${plain(this.civ(raid.civ))} are coming ashore by raft at ${TL.settlement.name}!` : `Raiders of the ${plain(this.civ(raid.civ))} are attacking ${TL.settlement.name}!`, '#ff7060');
     g.audio?.play('alarm');
     // The watch rides out.
     const riders = [];
@@ -2477,7 +2484,9 @@ export class War {
     const L = this.game.world.layouts.get(p.sid);
     const days = Math.max(1, day - p.day);
     const how2 = { exchanged: 'exchanged for prisoners of ours', ransomed: 'ransomed', released: 'set free', escaped: 'escaped', peace: 'freed at the peace', worked: 'set free, having worked off their captivity' }[how] || how;
-    if (L && L.econ) ledger(L, day, `${p.name} is home after ${days} day${days > 1 ? 's' : ''} as a prisoner in ${at ? at.name : 'the enemy\'s cells'} (${how2}).`);
+    if (L && L.econ) ledger(L, day, `${p.name} is home after ${days} day${days > 1 ? 's' : ''} as a prisoner in ${at ? at.name : 'the enemy\'s cells'}${p.pirate !== undefined ? ', the pirates\' haven' : ''} (${how2}).`);
+    // (Round 130: home from a pirates' haven, they tell where it is.)
+    if (p.pirate !== undefined) this.sim.havens?.released(p, how, day);
     return r;
   }
 
@@ -2520,6 +2529,9 @@ export class War {
     const C = this.ow.civs;
     const groups = new Map();
     for (const p of this.prisoners) {
+      // (Round 130: the pirates' captives are ransomed by the pirates' own
+      // reckoning: see havens.js.)
+      if (p.pirate !== undefined) continue;
       const k = `${p.by}>${p.civ}`;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(p);

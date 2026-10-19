@@ -328,7 +328,7 @@ export class Politics {
   fealty(day, rng) {
     const ow = this.ow;
     for (const s of ow.settlements) {
-      if (s.civ || deserted(s) || s.condition === 'abandoned') continue;
+      if (s.civ || deserted(s) || s.condition === 'abandoned' || s.haven) continue;
       const c = ow.cell(s.cx, s.cz);
       const around = DIRS.map(([dx, dz]) => ow.cell(s.cx + dx, s.cz + dz)).filter((o) => o && o.civ !== null && o.civ !== undefined);
       if (around.length < 3 || !c) continue;

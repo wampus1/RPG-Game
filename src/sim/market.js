@@ -10,6 +10,7 @@
 // tailor's, herbs an herbalist's (if there's the stone and timber, and
 // the coin, to build it).
 import { ledger, alive } from './econ.js';
+import { isHaven } from './havenref.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS } from '../world/items.js';
 
@@ -101,7 +102,7 @@ export class Market {
   }
 
   towns() {
-    return [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned');
+    return [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned' && !isHaven(L.settlement));
   }
 
   daily(day, rng) {

@@ -83,6 +83,20 @@ function leaderSpot(game, hero, salt) {
 function brigandSpot(game) {
   const cove = covesOf(game)[0];
   if (!cove) return null;
+  // (Round 130) The guild's real haven ashore (see sim/havens.js): on its
+  // jetty, or its square.
+  const H = game.sim.havens;
+  const hv = H && H.standing(cove.guild ?? 0).find((q) => q.origin === 'old');
+  const hs = hv && H.settlement(hv);
+  if (hs) {
+    const L = game.world.getLayout(hs);
+    const dock = L && L.spots.find((q) => q.tags.includes('dock'));
+    const at = dock || (L && L.plaza ? { x: L.plaza.cx + 2, z: L.plaza.cz + 1 } : H.centre(hv));
+    const sx = cove.x - at.x;
+    const sz = cove.z - at.z;
+    const sd = Math.hypot(sx, sz) || 1;
+    return { kind: 'brigand', x: at.x, z: at.z, dx: -sx / sd, dz: -sz / sd, haven: hv.id, cove: { name: hv.name, guild: cove.guild ?? 0, x: cove.x, z: cove.z, land: cove.land } };
+  }
   const ow = game.world.ow;
   const land = (ow.lands || []).find((q) => q.name === cove.land);
   const cx = land ? (land.x0 + land.x1) / 2 : cove.shore.x;
@@ -216,6 +230,23 @@ function brigandSetup(game, spot) {
   // A sabre and a spyglass: a pirate's.
   p.give('sabre', 1);
   p.give('spyglass', 1);
+  // (Round 130) Sworn to the brethren, a hand with a name already; their
+  // havens known to you (see sim/havens.js, sim/brethren.js).
+  const B = game.sim.brethren;
+  const H = game.sim.havens;
+  if (B) {
+    B.joined(pidOf(p), cove.guild, p);
+    B.deed(pidOf(p), 'paid', 10);
+  }
+  if (H) {
+    for (const hv of H.standing(cove.guild)) H.learn(hv, pidOf(p), hv.id === spot.haven ? 'seen' : 'heard', 'the brethren');
+    // (Home: no card to come upon it by.)
+    const hv = spot.haven !== undefined ? H.get(spot.haven) : null;
+    if (hv) {
+      game.world.ow.pin?.(cove.x, cove.z, `${cove.name} (the brethren's anchorage)`, '×');
+      return spot;
+    }
+  }
   // The haven, and the brethren living there.
   const S = game.sim.saga;
   if (S && !S.live().some((t) => t.m === 'pirate_haven' && t.vars.guild === cove.guild)) {

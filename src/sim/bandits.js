@@ -53,7 +53,7 @@ export class Bandits {
     this.started = true;
     if (this.bands.length) return;
     const rng = new RNG(hash4(this.game.seed, 0xba4d));
-    const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned');
+    const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && !s.haven);
     for (let i = 0, made = 0; i < 8 && made < 2 && towns.length; i++) {
       const s = rng.pick(towns);
       const band = this.form(s, rng, this.game.day);
@@ -163,7 +163,7 @@ export class Bandits {
     // (Not with someone in their cage, nor from behind a wall they built:
     // see sim/saga.)
     if (this.seen(band) || band.holding || (band.outpost || 0) >= 2) return false;
-    const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && band.camp && Math.hypot(s.cx - band.camp.x / 64, s.cz - band.camp.z / 36) < 14);
+    const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && !s.haven && band.camp && Math.hypot(s.cx - band.camp.x / 64, s.cz - band.camp.z / 36) < 14);
     const s = towns.length ? rng.pick(towns) : this.game.world.ow.settlements[band.near];
     this.strikeCamp(band);
     if (!this.placeCamp(band, s, rng)) return false;
@@ -238,7 +238,7 @@ export class Bandits {
     }
     // Some of the world's outcasts take to the hills on their own.
     if (this.live().length < 3 && rng.chance(this.live().length < 2 ? 0.3 : 0.12)) {
-      const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned');
+      const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && !s.haven);
       if (towns.length) {
         const s = rng.pick(towns);
         const band = this.form(s, rng, day);
@@ -250,7 +250,7 @@ export class Bandits {
   // Towns near the camp.
   nearTowns(band, max = 12) {
     if (!band.camp) return [];
-    return this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && Math.hypot(s.cx - band.camp.x / 64, s.cz - band.camp.z / 36) < max)
+    return this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && !s.haven && Math.hypot(s.cx - band.camp.x / 64, s.cz - band.camp.z / 36) < max)
       .map((s) => this.game.world.layouts.get(s.id)).filter((L) => L && L.econ);
   }
 

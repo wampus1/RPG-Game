@@ -5,6 +5,9 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, INST_X0,
 } from '../config.js';
 import { World } from '../world/world.js';
+import { HavenCardWindow, HavenCouncilWindow, TreasureMapWindow } from '../ui/havenwin.js';
+import { havenInteract } from './havenplay.js';
+import { captiveSay } from './haventalk.js';
 import { tickFieldsOff } from '../entities/fields.js';
 import { updateWorks } from '../entities/bosskit.js';
 import { updateEvolved, evoHurt, isEvolved, rise } from '../entities/evolved.js';
@@ -363,6 +366,9 @@ export class Game {
       // or at home in the town they grew up in.
       this.hero = hero ? normalizeHero(hero) : null;
       if (this.hero) this.playerName = this.hero.name;
+      // (Round 130) The pirates' havens, on the map before anything's laid
+      // out round you (see sim/havens.js).
+      if (!remote) this.sim.havens.ensure();
       const home = this.hero && this.hero.origin === 'native' ? this.pickHometown() : null;
       // (Round 63) Where the mods have new characters begin: a place their
       // choices on the character screen name, or the world map's spot (but
@@ -1658,12 +1664,13 @@ export class Game {
   // They take a few seconds to square up (counting it down) before they
   // come at you, unless you swing first.
   startDuel(npc, wager, o = {}) {
-    this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null };
+    this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null, challenge: o.challenge ?? null };
     npc.duelReady = 3;
     npc.face(this.player.x, this.player.z);
     npc.say(npc.rng.pick(o.fest ? ['Into the ring, then!', 'Nobody throws me.', 'Let\'s see you try!'] : ['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 1.4, '#ffe070');
     // (Round 129: the champion of the green, for the festival's wrestling.)
-    if (o.fest) this.ui.msg(`Wrestling ${npc.name}, the champion of the green: the first down to a quarter of their strength is thrown.`, '#ffe070');
+    if (o.challenge !== undefined && o.challenge !== null) this.ui.msg(`A challenge under the Articles: you and ${npc.name}, chief of the brethren, steel on the beach. The first down to a quarter of their strength yields the chair.`, '#ffe070');
+    else if (o.fest) this.ui.msg(`Wrestling ${npc.name}, the champion of the green: the first down to a quarter of their strength is thrown.`, '#ffe070');
     else this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
     this.audio?.play('draw', npc);
   }
@@ -1681,6 +1688,8 @@ export class Game {
     this.duel = null;
     if (!d) return;
     if (d.fest) festBoutDone(this, d, result);
+    // (Round 130) A challenge for the chief's chair (see sim/brethren.js).
+    if (d.challenge !== null && d.challenge !== undefined) this.sim.brethren?.challengeDone(d.challenge, sagaPid(this.player), result === 'won');
     const n = d.npc;
     const p = this.player;
     if (!n.dead) n.calmDown(true);
@@ -2911,6 +2920,45 @@ export class Game {
     return guildMates(this);
   }
 
+  // (Round 130) A guild hall's council (see ui/havenwin.js): for `p`, on
+  // their own screen. (`extra.vote`: a vote just called, to show.)
+  openHavenCouncil(h, p = this.player, extra = {}) {
+    const B = this.sim.brethren;
+    if (!B || !h) return;
+    const open = () => {
+      const data = { i: h.guild, hid: h.id, view: B.view(h.guild, sagaPid(p)), vote: extra.vote && extra.vote.ok ? { votes: extra.vote.votes, carried: extra.vote.carried, n: 1 } : null };
+      this.ui.open(new HavenCouncilWindow(this.ui, data));
+    };
+    this.asPlayer(p, open);
+  }
+
+  // Something asked of a guild's council by `pid` (see HavenCouncilWindow):
+  // what came of it, { text, vote }.
+  havenAct(pid, i, msg) {
+    const B = this.sim.brethren;
+    if (!B || !msg) return null;
+    if (msg.a === 'decide') return { text: B.decide(i, msg.mid, msg.k, pid) || 'That\'s been settled already.' };
+    if (msg.a === 'chief') return { text: B.chiefAct(i, pid, msg.act, msg.arg) };
+    if (msg.a === 'vote') {
+      const r = B.callVote(i, pid);
+      return r.ok ? { text: r.carried ? 'The captains have chosen you: chief!' : 'The vote went against you.', vote: { votes: r.votes, carried: r.carried } } : { text: r.why };
+    }
+    return null;
+  }
+
+  // (Round 130) A treasure map, unrolled (see ui/havenwin.js).
+  openTreasureMap(t) {
+    const info = this.sim.havens?.mapInfo(t.n) || { x: t.x, z: t.z, n: t.n, who: null, hint: 'Where the land meets the sea.', dug: false };
+    this.ui.open(new TreasureMapWindow(this.ui, info));
+  }
+
+  // (Round 130) A pirates' haven come upon: its card, down over the top of
+  // the screen (on the finder's own: see sim/havens.js).
+  showHavenCard(h, s) {
+    if (!this.ui || !this.ui.open || !h) return;
+    this.ui.open(new HavenCardWindow(this.ui, { name: h.name, guild: h.guild, seed: (h.sid * 7919 + 13) >>> 0, hour: (this.minute || 0) / 60, razed: !!h.razed }));
+  }
+
   // Every player in the world (the host's own first).
   everyone() {
     return partyPlayers(this);
@@ -3912,6 +3960,11 @@ export class Game {
       this.audio?.play('etch');
       return true;
     }
+    // (Round 130) A treasure map: unrolled.
+    if (d.tmap) {
+      this.openTreasureMap(d.tmap);
+      return true;
+    }
     if (d.key === 'spyglass') return toggleSpyglass(this);
     if (d.key === 'scroll') {
       if (!(p.recipes || []).length) {
@@ -4197,6 +4250,8 @@ export class Game {
       this.checkCropTheft(x, z, id, drops);
       // (Round 53: a dish that answers a block broken: see dishacts.js.)
       dishTrigger(this, this.player, 'break', { at: { x, y, z } });
+      // (Round 130) Dug where a captain's treasure map's X is: the chest.
+      if (b.tool === 'shovel') this.sim.havens?.dig(x, y, z, this.player);
     }
   }
 
@@ -5323,6 +5378,10 @@ export class Game {
         else this.openFestBoard(L, ev);
         break;
       }
+      case 'haven': case 'havenbills': case 'articles': case 'seachest':
+        // (Round 130) A pirates' haven's own (see havenplay.js).
+        havenInteract(this, b.interact, x, y, z);
+        break;
       case 'cask': {
         // (Round 129) The festival's ale cask: a mug, or something tipped in.
         const s = this.world.ow.settlementAt(x, z);
@@ -6562,6 +6621,15 @@ export class Game {
     // (Round 53: a dish that answers a word with someone: see dishacts.js.)
     dishTrigger(this, this.player, 'talk', { target: npc });
     // People in the middle of something urgent don't stop to chat.
+    // (Round 130) A captive in a pirates' stockade: who they are.
+    if (npc.state === 'captive') {
+      const said = captiveSay(npc, this);
+      if (said) {
+        npc.say(said, 4);
+        this.ui.msg(said, '#e8d8b0');
+        return;
+      }
+    }
     const busy = { crime: null, arresting: 'Not now! I\'m after someone.', arrested: npc.rng.pick(['Help me!', 'It wasn\'t me!']), toCell: null, jailed: npc.rng.pick(['Come to gawk?', 'Got a file in a loaf of bread?', 'I didn\'t do it.']), flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!', captive: npc.rng.pick(['Come to gloat?', 'Get me out of here...', 'Tell my family I\'m alive.', 'When are they trading us back?']), down: null }[npc.state];
     if (busy !== undefined) {
       if (busy) npc.say(busy, 2);

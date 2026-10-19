@@ -40,7 +40,7 @@ export class Founding {
   // ------------------------------------------------------------ daily
   daily(day, rng) {
     for (const p of this.parties) if (!p.done) this.advance(p, day);
-    if (this.made.length >= MAX_FOUNDED || day - this.lastFounded < 15 || this.parties.some((p) => !p.done) || !rng.chance(0.06)) return null;
+    if (this.made.filter((m) => !m.haven).length >= MAX_FOUNDED || day - this.lastFounded < 15 || this.parties.some((p) => !p.done) || !rng.chance(0.06)) return null;
     // A town bursting at the seams (more people than beds, and plenty of them).
     const towns = [...this.game.world.layouts.values()].filter((L) => L.econ && !L.settlement.deserted && L.settlement.condition !== 'abandoned' && !L.settlement.founding);
     const crowded = towns.filter((L) => {
@@ -166,8 +166,9 @@ export class Founding {
   }
 
   describe(s) {
-    const { id, type, name, style, cx, cz, cw, cd, biome, condition, bounds, river, coast, lake, seed, founding } = s;
-    return { id, type, name, style, cx, cz, cw, cd, biome, condition, bounds, river, coast, lake, seed, founding, civ: s.civ ? s.civ.id : null };
+    const { id, type, name, style, cx, cz, cw, cd, biome, condition, bounds, river, coast, lake, seed, founding, haven, island } = s;
+    // (Round 130: a pirates' haven too: see havens.js.)
+    return { id, type, name, style, cx, cz, cw, cd, biome, condition, bounds, river, coast, lake, seed, founding, civ: s.civ ? s.civ.id : null, ...(haven ? { haven: { ...haven } } : {}), island };
   }
 
   // ------------------------------------------------------------ the stages

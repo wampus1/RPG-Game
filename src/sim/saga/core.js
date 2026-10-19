@@ -27,6 +27,7 @@
 // and as many at once as like), and the first to see it done ends it for
 // everyone.
 import { DAY, ledger, hearNews, alive as recAlive } from '../econ.js';
+import { isHaven } from '../havenref.js';
 import { RNG, hash4, hashString, clamp } from '../../util/rng.js';
 import { asSeat } from '../../game/party.js';
 import { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, seatOfPid, playerOf, playerName, townMid, directions, poss } from './refs.js';
@@ -977,7 +978,7 @@ export class Saga {
     let near = null;
     let bd = Infinity;
     for (const s of ow.settlements) {
-      if (s.deserted) continue;
+      if (s.deserted || isHaven(s)) continue;
       const m = townMid(s);
       const d = Math.hypot(m.x - at.x, m.z - at.z);
       if (d < bd) {
@@ -1326,7 +1327,7 @@ export class Saga {
         const s = ow.settlements[sid];
         if (!s) continue;
         for (const o of ow.settlements) {
-          if (o === s || t.known[o.id] !== undefined || o.deserted) continue;
+          if (o === s || t.known[o.id] !== undefined || o.deserted || isHaven(o)) continue;
           const d = Math.hypot(o.cx - s.cx, o.cz - s.cz);
           if (d > WORD_REACH || !rng.chance(0.35 * (1 - d / (WORD_REACH + 1)))) continue;
           t.known[o.id] = this.now + rng.int(0, 600);
@@ -1677,7 +1678,7 @@ export class Saga {
     const s = this.game.world.ow.settlements[sid];
     if (spread && s) {
       for (const o of this.game.world.ow.settlements) {
-        if (o === s || o.deserted || Math.hypot(o.cx - s.cx, o.cz - s.cz) > 7) continue;
+        if (o === s || o.deserted || isHaven(o) || Math.hypot(o.cx - s.cx, o.cz - s.cz) > 7) continue;
         k.towns[o.id] = (k.towns[o.id] || 0) + Math.round(n / 2);
       }
     }

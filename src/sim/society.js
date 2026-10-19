@@ -15,6 +15,7 @@
 // shopkeepers who can't stand each other. And people move: for work, for
 // love, for a better mayor than the one they've got.
 import { alive, ledger, setOverride, DAY, st } from './econ.js';
+import { isHaven } from './havenref.js';
 import { B } from '../world/blocks.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { retrain, workplaceTypeFor } from '../entities/npcgen.js';
@@ -299,7 +300,7 @@ export class Society {
   // Somewhere else to go, not too far.
   elsewhere(L, rng) {
     const s = L.settlement;
-    const list = this.game.world.ow.settlements.filter((o) => o !== s && !o.deserted && o.condition !== 'abandoned' && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 14);
+    const list = this.game.world.ow.settlements.filter((o) => o !== s && !o.deserted && o.condition !== 'abandoned' && !isHaven(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 14);
     return list.length ? rng.pick(list) : null;
   }
 
@@ -391,7 +392,7 @@ export class Society {
     // A young one leaves to seek their fortune.
     if (rng.chance(0.03)) {
       const who = adults.find((r) => r.partner === null && !(r.children || []).length && (r.personality?.bravery ?? 0) > 0.55 && ['laborer', 'farmer', 'fisher', 'beggar'].includes(r.job) && !(r.life && r.life.fortune));
-      const far = who && this.game.world.ow.settlements.filter((o) => o !== L.settlement && !o.deserted && o.condition !== 'abandoned' && Math.hypot(o.cx - L.settlement.cx, o.cz - L.settlement.cz) >= 5 && Math.hypot(o.cx - L.settlement.cx, o.cz - L.settlement.cz) < 14);
+      const far = who && this.game.world.ow.settlements.filter((o) => o !== L.settlement && !o.deserted && o.condition !== 'abandoned' && !isHaven(o) && Math.hypot(o.cx - L.settlement.cx, o.cz - L.settlement.cz) >= 5 && Math.hypot(o.cx - L.settlement.cx, o.cz - L.settlement.cz) < 14);
       if (who && far.length) {
         const T = this.sim.layoutOf(rng.pick(far).id);
         const moved = this.sim.sendPeople(L, [who], T, 'to seek their fortune');
@@ -468,7 +469,7 @@ export class Society {
     if (!rng.chance(0.05)) return;
     const s = L.settlement;
     const people = residents(L);
-    const near = this.game.world.ow.settlements.filter((o) => o !== s && !o.deserted && o.condition !== 'abandoned' && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 10)
+    const near = this.game.world.ow.settlements.filter((o) => o !== s && !o.deserted && o.condition !== 'abandoned' && !isHaven(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 10)
       .map((o) => this.sim.layoutOf(o.id)).filter((T) => T && T.econ);
     if (!near.length) return;
     const mood = (T) => {

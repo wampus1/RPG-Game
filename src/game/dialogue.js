@@ -4,6 +4,8 @@
 // jobs, professions, escorts, citizenship, the law...). Lines refer to
 // other people by name, never by gendered pronouns.
 import { storyCallback } from '../sim/saga/memory.js';
+import { isHaven } from '../sim/havenref.js';
+import { havenHello, havenTopics, havenRespond } from './haventalk.js';
 import { isPlanKey, planOf, quote, commission } from './plans.js';
 import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
@@ -194,6 +196,9 @@ function openingRaw(npc, game) {
     if (M && M.hello && a) return M.hello(th, a, npc, sagaPid(game), S) || '...';
     return npc.saga.hello || '...';
   }
+  // (Round 130) A pirates' haven's people: their own word for you.
+  const hh = havenHello(npc, game);
+  if (hh) return hh;
   const rec = npc.rec;
   const s = npc.settlement;
   const rng = npc.rng;
@@ -474,13 +479,15 @@ function topicsRaw(npc, game) {
   if (mine) add('favor_check', mine.kind === 'deliver' ? `About your letter for ${mine.toName}...` : 'About your request...');
   // What the stories have them ask of you, or want to hear (see sim/saga).
   out.push(...sagaTopics(npc, game));
+  // (Round 130) In a pirates' haven, and about one (see haventalk.js).
+  out.push(...havenTopics(npc, game));
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
   // (Round 54) The tavern's room to let: see sim/inns.js.
   if (rep > -40 && !npc.hired && innFor(npc)) {
     const stay = stayAt(npc.layout, innFor(npc), sim.abs);
     add('inn_room', stay && stay.pid === sagaPidOf(game.player) ? 'About my room...' : 'Have you a room for the night?');
   }
-  if (rec.job === 'mayor') {
+  if (rec.job === 'mayor' && !isHaven(s)) {
     const dip = sim.diplomacy;
     const mine = dip.forPlayer(s.id);
     if (mine.length && countItem(game.player.inv, 'dispatch')) add('dispatch', `I bring a letter from ${dip.town(mine[0].from).name}.`);
@@ -805,7 +812,7 @@ function adventurerTalk(npc, game, id, arg) {
       adv.swapped = true;
       sim.changeRep(npc, 8);
       // A place they've been, now on your map.
-      const far = ow.settlements.filter((o) => o.id !== s.id && !ow.explored[o.cz * MAP_W + o.cx]);
+      const far = ow.settlements.filter((o) => o.id !== s.id && !ow.explored[o.cz * MAP_W + o.cx] && !isHaven(o));
       const o = far.length ? far[rng.int(0, far.length - 1)] : null;
       if (o) ow.markExplored(Math.floor((o.cx + 0.5) * 64), Math.floor((o.cz + 0.5) * 36), 1);
       return { lines: [pick(rng, ['Ha! You got lost in a fog on a bridge? That\'s nothing...', 'Your turn. Mine starts with a bear and ends with a very angry miller.']),
@@ -857,6 +864,8 @@ export function askMenu(npc, game) {
   if (rec.age !== 'child') out.push({ id: 'customs', label: 'Your faith and customs' });
   if (!npc.visit && !rec.visitor) out.push({ id: 'history', label: `The history of ${s.name}` });
   if (rec.age !== 'child') out.push({ id: 'oldplaces', label: 'Old places round here' });
+  // (Round 130) The pirates hereabouts (see sim/havens.js).
+  if (rec.age !== 'child' && game.sim.havens && (s.coast || s.haven || ['fisher', 'innkeeper', 'barkeep', 'guard', 'merchant'].includes(rec.job))) out.push({ id: 'pirates', label: s.haven ? 'Other havens of the brethren' : 'Pirates hereabouts?' });
   out.push({ id: 'geo', label: 'The islands and the world' });
   if (rec.age !== 'child' && game.sim.bandits && (game.sim.bandits.bountiesIn(npc.layout).length || game.sim.bandits.nearBands(npc.layout).length)) out.push({ id: 'bandits', label: 'Bandits about?' });
   if (!npc.visit && rec.age !== 'child' && s.civ) out.push({ id: 'realm', label: rec.ruler === s.civ.id ? 'Your reign' : `The ${s.civ.name.replace(/^The /, '')} and its ruler` });
@@ -1197,6 +1206,18 @@ function oldPlacesTalk(npc, game) {
   sim.dungeons.mark(q.d, `${q.d.name.charAt(0).toUpperCase()}${q.d.name.slice(1)} is marked on your map.`);
   const warn = q.d.cleared ? ' Someone beat it, they say.' : q.d.type === 'kavorent' ? ' Don\'t go near it.' : '';
   return { lines: [q.line + warn] };
+}
+
+// (Round 130) Asked about the pirates: a haven they've heard of, or only
+// talk (see sim/havens.js). Once a day each.
+function piratesTalk(npc, game) {
+  const sim = game.sim;
+  const told = (sim.toldPirates ||= new Map());
+  const k = `${npc.settlement.id}:${npc.rec.idx}`;
+  if (told.get(k) === game.day) return { lines: [pick(npc.rng, ['I\'ve said all I mean to about that.', 'Not so loud. I\'ve told you what I know.'])] };
+  told.set(k, game.day);
+  const q = sim.havens.rumour(npc.layout, npc.rec, sagaPidOf(game.player), npc.rng);
+  return { lines: [q.line] };
 }
 
 // Talking to the mayor about the professions the town licenses.
@@ -1765,6 +1786,10 @@ export function respond(npc, game, id, arg) {
 
 function respondRaw(npc, game, id, arg) {
   if (isSagaTopic(id)) return sagaRespond(npc, game, id, arg);
+  if (id.startsWith('hv_')) {
+    const hv = havenRespond(npc, game, id, arg);
+    if (hv) return hv;
+  }
   const rec = npc.rec;
   const L = npc.layout;
   const s = npc.settlement;
@@ -2088,6 +2113,7 @@ function respondRaw(npc, game, id, arg) {
     case 'ancient_view': return { lines: ['Come, see. The scholars have drawn it out already.'], open: 'ancient' };
     case 'give_plans': return arg === 'yes' ? plansTalk(npc, game) : confirmGift(npc, game, 'old_blueprint');
     case 'oldplaces': return oldPlacesTalk(npc, game);
+    case 'pirates': return piratesTalk(npc, game);
     case 'geo': return geoTalk(npc, game, arg);
     case 'bandits': return { lines: game.sim.bandits.talk(npc.layout, rng), back: 'I\'ll keep my eyes open.' };
     case 'bounty': {
@@ -2467,7 +2493,7 @@ function news(npc, game) {
     if (byName(r.from)) about.set(line, byName(r.from));
   }
   // Rumours about the wider world mark the place on your map.
-  const others = game.world.ow.settlements.filter((o) => o.id !== s.id && !deserted(o));
+  const others = game.world.ow.settlements.filter((o) => o.id !== s.id && !deserted(o) && !isHaven(o));
   if (others.length) {
     const o = others.sort((a, b) => Math.hypot(a.cx - s.cx, a.cz - s.cz) - Math.hypot(b.cx - s.cx, b.cz - s.cz))[(npc.newsI || 0) % Math.min(3, others.length)];
     const dx = o.cx - s.cx;
@@ -2651,7 +2677,7 @@ export function talkContext(game, s) {
   if (s && ow) {
     let bd = Infinity;
     for (const q of ow.settlements) {
-      if (q === s || q.deserted || q.condition === 'abandoned') continue;
+      if (q === s || q.deserted || q.condition === 'abandoned' || isHaven(q)) continue;
       const d = Math.hypot(q.cx - s.cx, q.cz - s.cz);
       if (d < bd) {
         bd = d;

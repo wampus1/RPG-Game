@@ -1112,6 +1112,44 @@ function simpleIcon(key) {
       p.line(11, 8, 13, 12, '#c8a064');
       p.ellipse(13, 13, 1, 1, '#d8b478');
       break;
+    // (Round 130) The brethren's: a squat dark bottle of rum, corked; grog
+    // in a tin cup; a slab of hardtack, docked with holes; a treasure map,
+    // rolled, its X showing.
+    case 'rum':
+      p.rect(5, 6, 6, 8, '#3a2a1a');
+      p.rect(6, 3, 4, 3, '#2e2014');
+      p.rect(6, 2, 4, 1, '#c8a060');
+      p.vline(6, 7, 12, '#6a4a2a');
+      p.rect(6, 9, 4, 3, '#e8dcb8');
+      p.hline(7, 8, 10, '#8a1a1a');
+      break;
+    case 'grog':
+      p.rect(4, 7, 8, 7, '#8a8a92');
+      p.vline(5, 7, 13, '#b8b8c0');
+      p.rect(12, 9, 2, 3, '#6a6a72');
+      p.rect(5, 7, 6, 1, '#8a5a2a');
+      p.set(7, 6, '#c8a070');
+      break;
+    case 'hardtack':
+      p.rect(3, 5, 10, 8, '#d8c08a');
+      p.hline(3, 12, 5, '#e8d4a4');
+      p.hline(3, 12, 12, '#a88c58');
+      for (const [x, y] of [[5, 7], [8, 7], [11, 7], [5, 10], [8, 10], [11, 10]]) p.set(x, y, '#8a6a3a');
+      break;
+    case 'treasure_map':
+      p.rect(2, 4, 12, 9, '#e0cc9a');
+      p.vline(2, 4, 12, '#a88c58');
+      p.vline(13, 4, 12, '#a88c58');
+      p.rect(1, 3, 2, 11, '#c8b07a');
+      p.rect(13, 3, 2, 11, '#c8b07a');
+      p.line(4, 10, 9, 6, '#8a6a3a');
+      p.set(10, 7, '#c82020');
+      p.set(11, 6, '#c82020');
+      p.set(10, 6, '#c82020');
+      p.set(11, 7, '#c82020');
+      p.set(5, 6, '#3a6ac8');
+      p.set(6, 7, '#3a6ac8');
+      break;
     case 'ale':
     case 'empty_mug':
       // A wooden tankard, a head of foam on a full one.
@@ -2189,6 +2227,12 @@ export function itemIcon(key) {
   // dishart.js).
   if (it && it.dish) {
     c = dishIcon(it, itemIcon);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 130) A treasure map: the map's own picture.
+  if (it && it.tmap) {
+    c = itemIcon('treasure_map');
     iconCache.set(key, c);
     return c;
   }

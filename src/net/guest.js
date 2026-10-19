@@ -314,6 +314,16 @@ export class GuestNet {
       const camps = pl.camps || [];
       B.knownCamps = () => camps;
     }
+    // (Round 130) The pirates' havens, and which of them we know of: their
+    // settlements marked as havens here (see sim/havenref.js).
+    const ow = this.game.world.ow;
+    this.game.havenKnown ||= {};
+    for (const [sid, guild, known, razed] of pl.hv || []) {
+      const s = ow.settlements[sid];
+      if (!s) continue;
+      s.haven = { id: s.haven ? s.haven.id : 0, guild, ...(razed ? { razed: true } : {}) };
+      this.game.havenKnown[sid] = known || false;
+    }
   }
 
   // Everyone, in their lists.

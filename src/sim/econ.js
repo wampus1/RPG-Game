@@ -44,11 +44,20 @@ export const STOCK = {
   pearldiver: ['pearl', 'pearl_necklace', 'crab_meat', 'harpoon', 'fish'],
 };
 
+// (Round 130) What a haven's fence sells: no questions asked.
+export const HAVEN_STOCK = ['cannonball', 'sabre', 'dagger', 'spyglass', 'rum', 'grog', 'hardtack', 'lockpick', 'torch', 'lantern', 'cloth', 'string', 'pipe', 'dice', 'iron_shovel', 'gem', 'old_coin'];
+
 // What a trader keeps in stock here: herbalists brew potions only where
 // the realm knows alchemy (herbs and salves otherwise), smiths forge steel
 // only where it knows steelworking.
 export function stockFor(L, t) {
   let list = STOCK[t] || [];
+  // (Round 130) A pirates' haven: the fence's black market, the rum
+  // house's rum and grog and hardtack, the gunsmith's shot.
+  const hv = L && L.settlement && L.settlement.haven && !L.settlement.haven.razed;
+  if (hv && t === 'general') return HAVEN_STOCK;
+  if (hv && (t === 'inn' || t === 'cook')) list = ['rum', 'grog', 'hardtack', ...list];
+  if (hv && t === 'smith') list = ['cannonball', ...list];
   // The kitchens and ovens of each people make its own dishes, and nothing
   // its faith forbids.
   const s = L && L.settlement;

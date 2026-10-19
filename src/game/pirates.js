@@ -212,6 +212,11 @@ function coveTick(game, P, cove) {
     game.world.ow.pin(cove.x, cove.z, `${cove.name} (pirates)`, '×');
     game.ui.msg(`Off the shore of ${cove.land}, black sails at anchor: ${cove.name}, a nest of ${G.name}. (Marked on your map.)`, '#ff9070');
   }
+  // (Round 130) Black sails at anchor, and smoke ashore behind them: the
+  // haven's there, somewhere (see sim/havens.js).
+  const H = game.sim.havens;
+  const hv = H && H.standing(i).find((h) => h.cove);
+  if (hv) for (const q of game.everyone ? game.everyone() : [game.player]) if (q && !q.dead && Math.hypot(q.x - cove.x, q.z - cove.z) < 360) H.learn(hv, pidOf(q), 'heard', 'the black sails off the shore');
   if (nearAny(game, cove.x, cove.z, 170)) {
     const here = pirates(game).filter((S) => S.cove && (S.coveIdx ?? 0) === i);
     // (Round 85: beaten once, they're back while they've someone's kin
@@ -417,6 +422,17 @@ function fightTick(game, dt) {
       }) : who.give('coin', n);
       if (S.cove) coveState(state(game), S.coveIdx ?? 0).done = true;
       game.sim.saga?.emit('pirates_beaten', { ship: S.id, name: S.name, cove: !!S.cove, pid: pidOf(who) });
+      // (Round 130) A rival guild's ship beaten: merit with your own; and
+      // her captain's chart, now and then, to a haven of theirs.
+      const B = game.sim.brethren;
+      const mine = B && B.standingOf(pidOf(who));
+      if (mine && mine.i !== (S.guild ?? 0)) B.deed(pidOf(who), 'rival');
+      const H = game.sim.havens;
+      const hv = H && H.standing(S.guild ?? 0).find((h) => !H.knows(h.sid, pidOf(who)));
+      if (hv && Math.random() < 0.5) {
+        H.learn(hv, pidOf(who), 'heard', `${S.name}'s captain's chart`);
+        game.asPlayer ? game.asPlayer(who, () => game.ui.msg(`In her captain's cabin, a stained chart: the way to ${hv.name}.`, '#ffe070')) : null;
+      }
     }
     // (Hers now: kept with the world, no longer one of theirs.)
     if (who) Object.assign(S, { owner: ownerId(game, who), transient: false, pirate: false, wasPirate: true, flag: '#e0c040', emblem: 'stripe' });
@@ -452,7 +468,11 @@ export function isPirate(c) {
 // (Away from you: a voyage taken, now and then. See shipfleets.end.)
 export function takenAtSea(game, v, rng) {
   const P = state(game);
-  if (!coveOf(game) || rng.chance(0.96)) return false;
+  // (Round 130: the likelier the more of the brethren's ships are out;
+  // never off a realm paying them: see sim/brethren.js.)
+  const B = game.sim && game.sim.brethren;
+  const odds = B ? B.seaOdds(v) : 0.04;
+  if (!coveOf(game) || !rng.chance(odds)) return false;
   P.taken++;
   return true;
 }

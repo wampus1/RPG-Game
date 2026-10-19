@@ -2,6 +2,7 @@
 // fight, and putting words together (from lines written out by hand: no
 // guessing at sentences).
 import { R, nameOf, NameOf, resolve, isAlive, whereOf, townMid, directions, pidOf, playerOf, playerName } from '../refs.js';
+import { isHaven } from '../../havenref.js';
 import { alive, DAY } from '../../econ.js';
 import { GROUND, REGION_W, REGION_D } from '../../../config.js';
 import { BIOMES } from '../../../world/biomes.js';
@@ -50,7 +51,7 @@ export function townsNear(S, x, z, max = 10) {
 
 // The towns that have been laid out (and so have people with names).
 export function laidTowns(S) {
-  return [...S.game.world.layouts.values()].filter((L) => L.econ && L.settlement && !L.settlement.deserted);
+  return [...S.game.world.layouts.values()].filter((L) => L.econ && L.settlement && !L.settlement.deserted && !isHaven(L.settlement));
 }
 
 // A town's own people, about and grown.

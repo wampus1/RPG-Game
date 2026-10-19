@@ -90,9 +90,11 @@ test('a brigand: sworn to the Black Gulls, a sloop and a hand or two, the haven 
   assert.equal(mine.length, 1);
   assert.ok(mine[0].crewRecs.length >= 1 && mine[0].crewRecs.length <= 2);
   assert.ok(Math.hypot(mine[0].x - p.x, mine[0].z - p.z) < 100, 'off the beach');
-  const th = game.sim.saga.live().find((t) => t.m === 'pirate_haven');
-  assert.ok(th && th.actors.length === 5, 'the brethren of the haven');
-  assert.ok(th.actors.some((a) => a.role === 'quartermaster') && th.actors.some((a) => a.role === 'chief'));
+  // (Round 130: the guild's real haven ashore, its people living there.)
+  const hs = game.world.ow.settlementAt(p.x, p.z) || game.world.ow.settlements[game.sim.havens.list[0].sid];
+  assert.ok(hs && hs.haven && hs.haven.guild === 0, 'the brethren\'s haven');
+  const HL = game.world.getLayout(hs);
+  assert.ok(HL.npcs.some((q) => q.job === 'mayor') && HL.npcs.filter((q) => q.job === 'guard').length >= 2, 'its quartermaster and its corsairs');
   assert.equal(game.scene.kind, 'brigand_intro');
   assert.equal(game.scene.info.ship, mine[0].name);
   // A town of a realm that knows your name thinks the worse of you.

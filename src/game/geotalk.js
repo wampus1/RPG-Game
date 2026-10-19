@@ -5,6 +5,7 @@
 // Kharos, and where the coast or the nearest lake is. Children know a
 // little, and say so.
 import { REGION_W, REGION_D } from '../config.js';
+import { isHaven } from '../sim/havenref.js';
 import { DAGONI } from '../world/geography.js';
 import { hash4, RNG } from '../util/rng.js';
 import { revealTown } from './dialogue.js';
@@ -155,7 +156,7 @@ function farTalk(npc, game, arg) {
     return { ...more, lines };
   }
   if (arg === 'towns' || arg.startsWith('town:')) {
-    const others = ow.settlements.filter((q) => q !== s && q.condition !== 'abandoned' && !q.deserted && !cutOff(ow, s, q));
+    const others = ow.settlements.filter((q) => q !== s && q.condition !== 'abandoned' && !q.deserted && !isHaven(q) && !cutOff(ow, s, q));
     const dist = (q) => Math.hypot((q.bounds.x0 + q.bounds.x1) / 2 - npc.x, (q.bounds.z0 + q.bounds.z1) / 2 - npc.z);
     if (arg === 'towns') {
       const near = others.filter((q) => q.island === here).sort((a, b) => dist(a) - dist(b)).slice(0, 8);
@@ -245,7 +246,7 @@ export function geoTalk(npc, game, arg) {
     const views = VIEWS[folk][key];
     // The nearest coast of that island from here, and the nearest port on it.
     const shore = nearestCell(ow, npc.x, npc.z, (c) => c.biome === 'beach', key);
-    const port = ow.settlements.filter((q) => q.island === key && q.coast && q.condition !== 'abandoned').sort((a, b) => Math.hypot(a.cx * REGION_W - npc.x, a.cz * REGION_D - npc.z) - Math.hypot(b.cx * REGION_W - npc.x, b.cz * REGION_D - npc.z))[0];
+    const port = ow.settlements.filter((q) => q.island === key && q.coast && q.condition !== 'abandoned' && !isHaven(q)).sort((a, b) => Math.hypot(a.cx * REGION_W - npc.x, a.cz * REGION_D - npc.z) - Math.hypot(b.cx * REGION_W - npc.x, b.cz * REGION_D - npc.z))[0];
     const myShore = nearestCell(ow, npc.x, npc.z, (c) => c.biome === 'beach', here);
     const lines = [`${ISLE_LINE(L)}.`, views[rng.int(0, views.length - 1)]];
     lines.push(`It lies ${dir} of here, over the water. You'll want a raft: anyone can knock one together from planks and string.`);

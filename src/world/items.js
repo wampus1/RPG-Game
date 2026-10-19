@@ -20,7 +20,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('prize~') ? derivePrize(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('prize~') ? derivePrize(k) : k.startsWith('tmap~') ? deriveTmap(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -169,6 +169,17 @@ function deriveBook(k) {
 // <the town, in hex>" (see game/festplay.js). Kept, shown off, or sold.
 const PRIZE_NAMES = { archery: 'Archery', race: 'Foot Race', wrestling: 'Wrestling', eating: 'Eating Match', riddles: 'Riddling', dance: 'Dance', cookoff: 'Cook-off', logtoss: 'Log Toss', hammer: 'Hammer', raft: 'Raft Race', lantern: 'Lantern Walk' };
 const PLACE_NAMES = ['', 'First', 'Second', 'Third'];
+// (Round 130) A dead captain's treasure map: "tmap~<x>~<z>~<n>", the spot
+// and the hoard's number (see sim/havens.js). Read it: the coast drawn
+// round the spot, an X where to dig.
+function deriveTmap(k) {
+  const [, x, z, n] = String(k).split('~');
+  return {
+    key: k, kind: 'misc', stack: 1, value: 25, tmap: { x: +x || 0, z: +z || 0, n: +n || 0 }, icon: 'treasure_map', name: 'Treasure Map', noSell: false,
+    about: 'A captain\'s treasure map: a stretch of coast drawn in brown ink, a dotted way, and an X. Right-click it to read it; dig at the X with a shovel.',
+  };
+}
+
 function derivePrize(k) {
   const [, kind, place, year, h] = String(k).split('~');
   const n = Math.max(1, Math.min(3, +place || 1));
@@ -360,6 +371,13 @@ food('raw_meat', 1, 3, 'Raw Meat');
 food('cooked_meat', 6, 7, 'Roast Meat');
 // Poured at the tavern (and left as an empty mug on the table after).
 food('ale', 2, 4, 'Mug of Ale');
+// (Round 130) The brethren's fare (see world/havenkit.js): rum, grog (rum
+// cut with water, the cheaper), and hardtack, the ship's biscuit that keeps
+// forever and breaks teeth.
+food('rum', 3, 7, 'Bottle of Rum', { about: 'Dark rum out of the islands, in a squat bottle. The brethren\'s own.' });
+food('grog', 2, 3, 'Mug of Grog', { about: 'Rum cut with water and a squeeze of lime: what the brethren drink when the rum runs short.' });
+food('hardtack', 2, 2, 'Hardtack', { about: 'Ship\'s biscuit: flour, water and salt, baked hard as a plank. Keeps forever. Soak it first.' });
+item('treasure_map', { name: 'Treasure Map', kind: 'misc', stack: 1, value: 20, about: 'A treasure map, blank: a copy, or a forgery.' });
 item('empty_mug', { name: 'Empty Mug', kind: 'misc', stack: 16, value: 0 });
 food('fish', 1, 3, 'Raw Fish');
 food('cooked_fish', 5, 6, 'Grilled Fish');

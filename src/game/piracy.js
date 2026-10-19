@@ -114,6 +114,8 @@ export function piracyAct(game, p, S, from = null) {
   if (was < PIRATE_AT && r.n >= PIRATE_AT && r.guild === null) tell(game, p, `You're known for a pirate now. The pirate coves will let you sail in without a shot fired, and you can swear yourself to a guild there (F on one of their captains).`, '#ffd080');
   crewReact(game, p, from);
   hiredReact(game, p);
+  // (Round 130) A prize, for the brethren's book (see sim/brethren.js).
+  game.sim?.brethren?.deed(pidOf(p), 'prize');
 }
 
 // A sailor's nature, from their name: a rogue goes along with it; an
@@ -222,7 +224,11 @@ export function pledge(game, p, guild, G) {
   const was = r.guild;
   r.guild = guild;
   tell(game, p, `You swear yourself to ${G ? G.name : 'the brotherhood'}${was !== null && was !== guild ? ', forsaking your old one' : ''}. Their ships will never fire on you; other guilds' still may.`, '#ffd080');
-  game.audio?.play('fanfare');
+  game.audio?.play('fanfare');  // (Round 130) Sworn: told where the guild's havens are (see
+  // sim/havens.js), and on its rolls as a hand (see sim/brethren.js).
+  const H = game.sim && game.sim.havens;
+  if (H) for (const h of H.standing(guild)) H.learn(h, pidOf(p), 'heard', 'the brethren');
+  game.sim?.brethren?.joined(pidOf(p), guild, p);
 }
 
 // Each second or so: realms' ships that know you (warships coming about to

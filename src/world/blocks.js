@@ -1684,3 +1684,23 @@ def('gl_bones', { ...sprite, solid: true, rotatable: true, hardness: 0.5, drop: 
 // the board the winners' names go up on (see sim/festival.js).
 def('archery_butt', { ...sprite, tall: true, solid: true, interact: 'fest', tool: 'axe', hardness: 0.6, drop: null, label: 'Archery Butt' });
 def('fest_board', { ...sprite, tall: true, solid: true, interact: 'fest', tool: 'axe', hardness: 0.6, drop: null, label: 'Festival Board' });
+// (Round 130) A pirates' haven (see world/havenkit.js and sim/havens.js):
+// roofs of old sails, patched and tarred; each guild's black flag on its
+// mast on the square, snapping in the wind; the bills the realms have put
+// out on the brethren; a ship's gun run out at the sea; the plunder piled
+// by the store; the Articles nailed up by the guild hall's door (read
+// them: the guild's council, for those who sit on it); the stocks; the
+// gallows down by the water.
+def('sail_roof', { hardness: 0.4, rotatable: true, tool: 'axe', drop: 'cloth', label: 'Patched Sailcloth' });
+def('jolly_gull', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Black Gull Brethren\'s Flag' });
+def('jolly_hand', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Red Hand Company\'s Flag' });
+def('jolly_tide', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Free Tide\'s Flag' });
+def('haven_wanted', { ...sprite, tall: true, solid: true, interact: 'havenbills', hardness: Infinity, drop: null, label: 'Wanted Bills' });
+def('shore_gun', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 4, drop: null, label: 'A Gun Run Out' });
+def('plunder_heap', { ...sprite, solid: true, tool: 'axe', hardness: 1, drop: null, label: 'Plunder' });
+def('articles_board', { ...sprite, tall: true, solid: true, interact: 'articles', hardness: Infinity, drop: null, label: 'The Articles' });
+def('stocks', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'The Stocks' });
+def('gallows', { ...sprite, tall: true, solid: true, tool: 'axe', hardness: 3, drop: 'planks', label: 'Gallows' });
+// (Round 130) A sea chest, dug up where a captain buried it (see
+// game/havenplay.js): open it for what's inside.
+def('sea_chest', { ...sprite, solid: true, interact: 'seachest', tool: 'axe', hardness: Infinity, drop: null, label: 'A Sea Chest' });

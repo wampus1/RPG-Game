@@ -1,5 +1,7 @@
 // All UI windows. Each draws itself into a character grid every frame.
 import { actionKeyName, ACTIONS, keyOf, keyName, bind, resetKeybinds } from '../game/keybinds.js';
+import { knowsHaven } from '../sim/havenref.js';
+import { GUILD_NAMES } from '../world/havenkit.js';
 import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
@@ -1841,6 +1843,8 @@ export function settlementIcons(game) {
   const size = (s) => (s.empire ? [3, 3] : ICON_SIZE[s.type] || [1, 1]);
   const list = [...ow.settlements].sort((a, b) => size(b)[0] * size(b)[1] - size(a)[0] * size(a)[1]);
   for (const s of list) {
+    // (Round 130) A pirates' haven nobody here has found or heard of.
+    if (s.haven && !knowsHaven(game, s)) continue;
     const [w, h] = size(s);
     reach = reachedCells(s);
     spill = !!s.baseType && s.baseType !== s.type;
@@ -1876,7 +1880,7 @@ export function settlementIcons(game) {
       for (let dx = 0; dx < cw; dx++) {
         let glyph;
         let shade = 0.35;
-        if (cw === 1 && ch === 1) glyph = s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
+        if (cw === 1 && ch === 1) glyph = s.haven ? (s.haven.razed ? ' †' : ' ☠') : s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
         else if (ch === 1) {
           // (A city squeezed onto one row still reads as a city.)
           glyph = s.type === 'city' ? (dx === 0 ? '╠▓' : '▓╣') : dx === 0 ? '[■' : '■]';
@@ -1940,16 +1944,18 @@ export class BannerWindow extends Window {
     // Only one banner at a time.
     ui.windows = ui.windows.filter((w) => w.kind !== 'banner');
     const sub = `${s.empire && s.condition !== 'abandoned' && !s.deserted ? 'Imperial capital' : cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.deserted ? 'deserted ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
-    const w = Math.max(s.name.length + 8, sub.length + 4);
+    // (Round 130) A pirates' haven: whose it is.
+    const hsub = s.haven ? (s.haven.razed ? 'A pirates\' haven, burned out' : `Pirates' haven · ${cap(GUILD_NAMES[s.haven.guild] || 'the brethren')}`) : null;
+    const w = Math.max(s.name.length + 8, (hsub || sub).length + 4);
     super(ui, w, 4, { kind: 'banner', modal: false, y: 5 });
     this.s = s;
-    this.sub = sub;
+    this.sub = hsub || sub;
     this.t = 3.2;
   }
   draw(g) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, 'rgba(10,8,16,0.7)');
     g.center(1, `~ ${this.s.name.toUpperCase()} ~`, C.hi);
-    g.center(2, this.sub, this.s.civ ? this.s.civ.color.hex : C.dim);
+    g.center(2, this.sub, this.s.haven ? '#e07060' : this.s.civ ? this.s.civ.color.hex : C.dim);
   }
   update(dt) {
     this.t -= dt;

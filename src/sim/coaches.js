@@ -8,6 +8,7 @@
 // the ferry lies off the end of the pier (see Game.syncStanding). Either,
 // clicked, says where it goes (see ui/travel.js).
 import { REGION_W, REGION_D, MAP_W } from '../config.js';
+import { isHaven } from './havenref.js';
 import { seaRoute, seaOff } from '../game/shipfleets.js';
 import { hash4, hashString } from '../util/rng.js';
 
@@ -52,7 +53,7 @@ export function coachLinks(game, from) {
   const c0 = centre(from);
   const out = [];
   for (const s of ow.settlements) {
-    if (s === from || !open(s) || !hasCoaches(s) || landOf(ow, s) !== land) continue;
+    if (s === from || !open(s) || isHaven(s) || !hasCoaches(s) || landOf(ow, s) !== land) continue;
     const road = (dip.roads || []).some((r) => r.done && ((r.a === from.id && r.b === s.id) || (r.a === s.id && r.b === from.id)));
     const c1 = centre(s);
     const dist = Math.hypot(c1.x - c0.x, c1.z - c0.z);

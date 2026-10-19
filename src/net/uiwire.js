@@ -7,6 +7,7 @@ import { Window } from '../ui/window.js';
 import { Grid } from '../ui/ascii.js';
 import { DocumentWindow } from '../ui/document.js';
 import { FestWindow } from '../ui/festwin.js';
+import { HAVEN_WINDOWS } from '../ui/havenwin.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 
 // A grid of cells as text: its characters, and its colours by number in
@@ -88,7 +89,7 @@ export function uiFrame(ui, game, last, pixels = null) {
       (last.grids ||= new Map()).set(w.netId, grid);
     }
     // (Pictures a window draws itself, a lock or a map: as an image.)
-    if (w.drawPixels && pixels && !w.fest) {
+    if (w.drawPixels && pixels && !w.fest && !w.mir) {
       const url = pixels(w);
       const was = last.px && last.px.get(w.netId);
       if (url && url !== was) {
@@ -119,9 +120,22 @@ export function uiFrame(ui, game, last, pixels = null) {
         last.fests.set(w.netId, j);
       }
     }
+    // (Round 130) A window that draws itself on the player's own screen
+    // (a haven's card, its council, a treasure map): what it shows, sent
+    // when it changes (see ui/havenwin.js).
+    if (w.mir) {
+      const j = JSON.stringify(w.mir);
+      last.mirs ||= new Map();
+      if (last.mirs.get(w.netId) === j) win.mird = 1;
+      else {
+        win.mir = w.mir;
+        last.mirs.set(w.netId, j);
+      }
+    }
     out.wins.push(win);
   }
   last.n = n;
+  if (last.mirs) for (const id of [...last.mirs.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.mirs.delete(id);
   if (last.fests) for (const id of [...last.fests.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.fests.delete(id);
   if (last.grids) for (const id of [...last.grids.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.grids.delete(id);
   if (last.docs) for (const id of [...last.docs]) if (!ui.windows.some((w) => w.netId === id)) last.docs.delete(id);
@@ -233,6 +247,17 @@ export function applyFrame(ui, f) {
         d.mirrorOf = wf.id;
         ui.windows.push(d);
       } else if (m && wf.fest && wf.fest.reply) m.fest.reply = wf.fest.reply;
+      continue;
+    }
+    // (Round 130) One of a haven's windows: drawn here, on this screen.
+    if (wf.mir || wf.mird) {
+      const m = ui.windows.find((q) => q.mirrorOf === wf.id);
+      const C = wf.mir && HAVEN_WINDOWS[wf.mir.k];
+      if (!m && C && !(ui.putDown && ui.putDown.has(wf.id))) {
+        const d = new C(ui, wf.mir.d, { mirror: true });
+        d.mirrorOf = wf.id;
+        ui.windows.push(d);
+      } else if (m && wf.mir && m.remirror) m.remirror(wf.mir.d);
       continue;
     }
     let w = ui.windows.find((q) => q.remote && q.netId === wf.id);

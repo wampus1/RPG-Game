@@ -7,6 +7,7 @@
 // pier, the merchants walking out along it to go aboard, the ship putting
 // out and sailing off, and coming home again.
 import { alive, ledger, DAY, packGoods, notableNews, setOverride } from './econ.js';
+import { isHaven } from './havenref.js';
 import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { SURFACE, GROUND } from '../config.js';
@@ -399,7 +400,7 @@ export class Ships {
     }
     const ow = this.game.world.ow;
     const feel = (o) => (s.civ && o.civ && s.civ !== o.civ ? sim.realms.standing(s.civ, o.civ) : null);
-    const ports = ow.settlements.filter((o) => o.id !== s.id && !deserted(o) && o.condition !== 'abandoned' && this.wet(o) && feel(o) !== 'hostile' && !sim.war.unsafe(o)
+    const ports = ow.settlements.filter((o) => o.id !== s.id && !deserted(o) && o.condition !== 'abandoned' && !isHaven(o) && this.wet(o) && feel(o) !== 'hostile' && !sim.war.unsafe(o)
       && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 30);
     if (!ports.length) {
       P.next = day + 3;

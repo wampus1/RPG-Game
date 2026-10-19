@@ -530,7 +530,9 @@ function end(game, F, v, now, how) {
   // (Round 78) Taken by pirates on the way, now and then (see pirates.js).
   if ((v.kind === 'trade' || v.kind === 'cargo' || v.kind === 'settlers') && !S && takenAtSea(game, v, rng)) {
     const cove = coveOf(game);
-    if (FL && FL.econ) ledger(FL, day, `Pirates${cove ? ` out of ${cove.name}` : ''} took the ${v.name} at sea, bound for ${to ? to.name : 'abroad'}: her cargo gone, her crew put adrift.`);
+    // (Round 130: whose, and the plunder into their chest: see sim/brethren.js.)
+    const who = sim.brethren ? sim.brethren.prizeTaken(v, FL, rng, day) : null;
+    if (FL && FL.econ) ledger(FL, day, who ? `${who.ship}, a pirate of ${sim.brethren.name(who.guild)} under ${who.captain}, took the ${v.name} at sea, bound for ${to ? to.name : 'abroad'}: her cargo gone, her crew put adrift.` : `Pirates${cove ? ` out of ${cove.name}` : ''} took the ${v.name} at sea, bound for ${to ? to.name : 'abroad'}: her cargo gone, her crew put adrift.`);
     if (from) sim.saga?.emit('ship_taken', { sid: from.id, ship: v.name, cove: cove ? cove.name : null, to: to ? to.name : null });
     return;
   }

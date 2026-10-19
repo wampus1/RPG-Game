@@ -323,7 +323,7 @@ const KIND_WORDS = { battle: 'Battle', ceded: 'A New Allegiance', proclaimed: 'T
 GENRES.annals = {
   weight: 1.4,
   copies: 2,
-  subjects: (lore) => lore.ow.settlements.map((s) => lore.town(s)).filter((T) => T && T.hist).map((T) => ({ id: `t${T.id}`, town: T.id, realm: T.realm ? T.realm.id : null, land: T.island, T })),
+  subjects: (lore) => lore.ow.settlements.filter((s) => !s.haven).map((s) => lore.town(s)).filter((T) => T && T.hist).map((T) => ({ id: `t${T.id}`, town: T.id, realm: T.realm ? T.realm.id : null, land: T.island, T })),
   title: (rng, subj) => rng.pick([`The Annals of ${subj.T.name}`, `A History of ${subj.T.name}`, `${subj.T.name}: A Chronicle`, `The Book of ${subj.T.name}`, `Of ${subj.T.name} and Its People`, `The Story of ${subj.T.name}`]),
   style: (subj) => subj.T.style,
   topic: (subj) => subj.T.name,

@@ -2,6 +2,7 @@
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
 import { Causes } from './causes.js';
+import { isHaven } from './havenref.js';
 import { Office } from './office.js';
 import { Crown } from './crown.js';
 import { asSeat } from '../game/party.js';
@@ -52,6 +53,8 @@ import { History } from './history.js';
 import { Society } from './society.js';
 import { Bandits } from './bandits.js';
 import { Founding } from './founding.js';
+import { Havens } from './havens.js';
+import { Brethren } from './brethren.js';
 import { Hardship } from './hardship.js';
 import { Religion } from './religion.js';
 import { Market } from './market.js';
@@ -186,6 +189,9 @@ export class Sim {
     this.society = new Society(game, this);
     this.bandits = new Bandits(game, this);
     this.founding = new Founding(game, this);
+    // (Round 130) The pirates' havens.
+    this.havens = new Havens(game, this);
+    this.brethren = new Brethren(game, this);
     this.hardship = new Hardship(game, this);
     this.religion = new Religion(game, this);
     this.market = new Market(game, this);
@@ -392,6 +398,7 @@ export class Sim {
       this.society.tick(0.5);
       this.bandits.update(0.5);
       this.founding.update();
+      this.havens.update(0.5);
       this.religion.update();
       this.market.update();
       this.office.update();
@@ -2255,7 +2262,7 @@ export class Sim {
       // (From near by, or now and then by raft from a port of another of
       // the islands, to a port of this one.)
       const reach = (o) => !cutOff(ow, s, o) && (o.island && s.island && o.island !== s.island ? s.coast && o.coast && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 45 : Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
-      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && reach(o) && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && !isHaven(o) && !isHaven(s) && reach(o) && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
       if (!from) return;
       const goods = {};
       const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
@@ -2485,6 +2492,8 @@ export class Sim {
       outings: this.outings.serialize(),
       bandits: this.bandits.serialize(),
       founding: this.founding.serialize(),
+      havens: this.havens.serialize(),
+      brethren: this.brethren.serialize(),
       religion: this.religion.serialize(),
       market: this.market.serialize(),
       volcano: this.volcano.serialize(),
@@ -2573,6 +2582,8 @@ export class Sim {
     if (!data) return;
     // (Villages founded since the world began go back on the map first.)
     this.founding.load(data.founding);
+    this.havens.load(data.havens);
+    this.brethren.load(data.brethren);
     this.religion.load(data.religion);
     this.saved = new Map((data.settlements || []).map((s) => [s.sid, s]));
     this.migrate = data.migrate || [];
