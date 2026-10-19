@@ -2254,6 +2254,48 @@ export function itemIcon(key) {
     iconCache.set(key, c);
     return c;
   }
+  // (Round 129) A festival's rosette: gold, silver or bronze, its ribbons
+  // in the contest's colour.
+  if (it && it.prize) {
+    c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const g = c.getContext('2d');
+    const P = it.prize.place;
+    const [rim, mid, hi] = P === 1 ? ['#a87808', '#f0c030', '#fff0a0'] : P === 2 ? ['#70788a', '#c8d0dc', '#ffffff'] : ['#7a4018', '#c07838', '#f0b080'];
+    const RIB = { archery: '#3060c0', race: '#30a050', wrestling: '#c03030', eating: '#d08020', riddles: '#7040b0', dance: '#e04890', cookoff: '#c06020' };
+    const rib = RIB[it.prize.kind] || '#3060c0';
+    g.fillStyle = rib;
+    g.fillRect(5, 9, 3, 6);
+    g.fillRect(9, 9, 3, 6);
+    g.fillStyle = '#000000';
+    g.globalAlpha = 0.35;
+    g.fillRect(7, 9, 1, 6);
+    g.fillRect(11, 9, 1, 6);
+    g.globalAlpha = 1;
+    // (The ribbons' cut ends.)
+    g.clearRect(6, 14, 1, 1);
+    g.clearRect(10, 14, 1, 1);
+    // The ruffle round it.
+    for (let a = 0; a < 12; a++) {
+      const t = (a / 12) * Math.PI * 2;
+      g.fillStyle = a % 2 ? rib : rim;
+      g.fillRect(Math.round(8 + Math.cos(t) * 5.5) - 1, Math.round(6 + Math.sin(t) * 5.5) - 1, 2, 2);
+    }
+    g.fillStyle = rim;
+    g.beginPath();
+    g.arc(8, 6, 4.2, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = mid;
+    g.beginPath();
+    g.arc(8, 6, 3.2, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = hi;
+    g.fillRect(6, 4, 2, 1);
+    g.fillRect(6, 5, 1, 1);
+    iconCache.set(key, c);
+    return c;
+  }
   // (Round 52) A story's letter, note or map: the paper it's on.
   if (it && it.kind === 'note') {
     c = itemIcon(it.icon || 'letter');

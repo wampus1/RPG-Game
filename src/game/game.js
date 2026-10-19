@@ -129,6 +129,8 @@ import { MODS } from '../mod/registry.js';
 import { bookAt, bookById } from './books/books.js';
 import { openShelf, tookFromShelf, putOnShelf, libraryTick } from './library.js';
 import { dayOf as festDayOf, posterLines as festPosterLines } from '../sim/festival.js';
+import { FestWindow, FestBoardWindow } from '../ui/festwin.js';
+import { enter as festEnter, result as festResultOf, boardRows as festBoardRows, boutDone as festBoutDone, raceFrame as festRaceFrame, music as festMusic } from './festplay.js';
 import { loreOf } from './books/lore.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -1655,12 +1657,14 @@ export class Game {
   // strength loses, and pays the wager. No crime in it, for either of you.
   // They take a few seconds to square up (counting it down) before they
   // come at you, unless you swing first.
-  startDuel(npc, wager) {
-    this.duel = { npc, wager, start: this.sim.abs };
+  startDuel(npc, wager, o = {}) {
+    this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null };
     npc.duelReady = 3;
     npc.face(this.player.x, this.player.z);
-    npc.say(npc.rng.pick(['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 1.4, '#ffe070');
-    this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
+    npc.say(npc.rng.pick(o.fest ? ['Into the ring, then!', 'Nobody throws me.', 'Let\'s see you try!'] : ['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 1.4, '#ffe070');
+    // (Round 129: the champion of the green, for the festival's wrestling.)
+    if (o.fest) this.ui.msg(`Wrestling ${npc.name}, the champion of the green: the first down to a quarter of their strength is thrown.`, '#ffe070');
+    else this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
     this.audio?.play('draw', npc);
   }
 
@@ -1676,6 +1680,7 @@ export class Game {
     const d = this.duel;
     this.duel = null;
     if (!d) return;
+    if (d.fest) festBoutDone(this, d, result);
     const n = d.npc;
     const p = this.player;
     if (!n.dead) n.calmDown(true);
@@ -2178,6 +2183,8 @@ export class Game {
       libraryTick(this, dt);
     });
     if (!atSea) libraryTick(this, dt);
+    // (Round 129) The festival's foot race: runners past each mark.
+    if (!atSea) festRaceFrame(this, dt);
     this.respawnT = (this.respawnT || 0) - dt;
     if (this.respawnT <= 0) {
       this.respawnT = 2;
@@ -3816,6 +3823,62 @@ export class Game {
 
   // (Round 127) A book of the library, opened to read; `bump`: how much
   // the more it's read for it. (Round 128: off a shelf, too.)
+  // ------------------------------------------------------------ festivals
+  // (Round 129) A festival's game, opened in your windows (see
+  // ui/festwin.js; in someone else's world it's played on your own screen).
+  openFest(cfg) {
+    const b = this.ui.find && this.ui.find('festboard');
+    if (b) this.ui.close(b);
+    this.ui.open(new FestWindow(this.ui, cfg));
+  }
+
+  // The festival a game was for.
+  festOf(cfg) {
+    const L = cfg && this.sim.layoutOf(cfg.sid);
+    const ev = L && (L.econ.events || []).find((q) => q.id === cfg.ev);
+    return ev ? { L, ev } : null;
+  }
+
+  // How you did, from the window (checked: see festplay.result).
+  festResult(cfg, msg) {
+    const f = this.festOf(cfg);
+    if (!f || !msg || msg.k !== cfg.kind) return null;
+    return festResultOf(this, f.L, f.ev, cfg.kind, msg);
+  }
+
+  // Another go.
+  festAgain(cfg) {
+    const f = this.festOf(cfg);
+    if (!f) return;
+    const said = festEnter(this, f.L, f.ev, cfg.kind);
+    if (said) this.ui.msg(said, '#ffe8a0');
+  }
+
+  // Having a go (from the board, or a word with someone).
+  festEnter(L, ev, k) {
+    const said = festEnter(this, L, ev, k);
+    if (said) this.ui.msg(said, '#ffe8a0');
+    return said;
+  }
+
+  // The festival's board: the day, and the contests (kept up to date).
+  openFestBoard(L, ev) {
+    const info = (game) => {
+      const g = game || this;
+      return { title: g.sim.events.title(L, ev), prog: festPosterLines(ev), rows: festBoardRows(L, ev, g.sim.abs, sagaPid(g.player)) };
+    };
+    this.ui.open(new FestBoardWindow(this.ui, info, (k, game) => {
+      const g = game || this;
+      const said = festEnter(g, L, ev, k);
+      if (said) g.ui.msg(said, '#ffe8a0');
+    }));
+  }
+
+  // Playing for the crowd (see InstrumentWindow).
+  festMusic(p) {
+    festMusic(this, p);
+  }
+
   readBook(id, bump = 0.2) {
     const b = bookById(loreOf(this), id);
     if (b) {
@@ -5257,7 +5320,7 @@ export class Game {
         const L = s && this.world.getLayout(s);
         const ev = L ? festDayOf(L, this.sim.abs) || (L.econ.events || []).find((q) => q.prog && q.state !== 'done' && q.state !== 'off') : null;
         if (!ev) this.ui.openSign(['Nothing chalked up here yet.', 'Come back on a feast day.'], 'FESTIVAL BOARD');
-        else this.ui.openSign([`${this.sim.events.title(L, ev).toUpperCase()}`, '', ...festPosterLines(ev)], 'FESTIVAL BOARD');
+        else this.openFestBoard(L, ev);
         break;
       }
       case 'portal': {

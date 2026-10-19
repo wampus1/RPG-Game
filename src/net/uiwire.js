@@ -6,6 +6,7 @@
 import { Window } from '../ui/window.js';
 import { Grid } from '../ui/ascii.js';
 import { DocumentWindow } from '../ui/document.js';
+import { FestWindow } from '../ui/festwin.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 
 // A grid of cells as text: its characters, and its colours by number in
@@ -87,7 +88,7 @@ export function uiFrame(ui, game, last, pixels = null) {
       (last.grids ||= new Map()).set(w.netId, grid);
     }
     // (Pictures a window draws itself, a lock or a map: as an image.)
-    if (w.drawPixels && pixels) {
+    if (w.drawPixels && pixels && !w.fest) {
       const url = pixels(w);
       const was = last.px && last.px.get(w.netId);
       if (url && url !== was) {
@@ -107,9 +108,21 @@ export function uiFrame(ui, game, last, pixels = null) {
         last.docs.add(w.netId);
       }
     }
+    // (Round 129) A festival's game: what's to be played, for the player's
+    // own screen to play it (sent again when the standings come back).
+    if (w.fest) {
+      const j = JSON.stringify(w.fest);
+      last.fests ||= new Map();
+      if (last.fests.get(w.netId) === j) win.festd = 1;
+      else {
+        win.fest = w.fest;
+        last.fests.set(w.netId, j);
+      }
+    }
     out.wins.push(win);
   }
   last.n = n;
+  if (last.fests) for (const id of [...last.fests.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.fests.delete(id);
   if (last.grids) for (const id of [...last.grids.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.grids.delete(id);
   if (last.docs) for (const id of [...last.docs]) if (!ui.windows.some((w) => w.netId === id)) last.docs.delete(id);
   out.tip = ui.tooltip || null;
@@ -212,6 +225,16 @@ export function applyFrame(ui, f) {
       }
       continue;
     }
+    // (Round 129) A festival's game: played here, on this screen.
+    if (wf.fest || wf.festd) {
+      const m = ui.windows.find((q) => q.mirrorOf === wf.id);
+      if (!m && wf.fest && !(ui.putDown && ui.putDown.has(wf.id))) {
+        const d = new FestWindow(ui, wf.fest, { mirror: true });
+        d.mirrorOf = wf.id;
+        ui.windows.push(d);
+      } else if (m && wf.fest && wf.fest.reply) m.fest.reply = wf.fest.reply;
+      continue;
+    }
     let w = ui.windows.find((q) => q.remote && q.netId === wf.id);
     if (!w) {
       w = new RemoteWindow(ui, wf);
@@ -219,7 +242,12 @@ export function applyFrame(ui, f) {
     } else w.set(wf);
   }
   // (Gone at the host: gone here, at once; the host already let it fade.)
-  ui.windows = ui.windows.filter((w) => (w.mirrorOf ? keep.has(w.mirrorOf) || w.state === 'closing' : !w.remote || keep.has(w.netId)));
+  ui.windows = ui.windows.filter((w) => {
+    const stay = w.mirrorOf ? keep.has(w.mirrorOf) || w.state === 'closing' : !w.remote || keep.has(w.netId);
+    // (A game the host's put away: its tune stopped here too.)
+    if (!stay && w.cleanup) w.cleanup();
+    return stay;
+  });
   if (ui.putDown) for (const id of [...ui.putDown]) if (!keep.has(id)) ui.putDown.delete(id);
   ui.remoteTip = f.tip || null;
   ui.remoteStack = f.stack || null;

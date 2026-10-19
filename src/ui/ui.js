@@ -1545,6 +1545,17 @@ export class UI {
       }
       const px = x + 42 + Math.round(u);
       const py = y + 20 + Math.round(v);
+      // (Round 129) The race's next mark: a ring, always shown.
+      if (m.cp) {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(px - 3, py - 3, 7, 7);
+        ctx.fillStyle = blink ? '#ffffff' : m.c;
+        ctx.fillRect(px - 2, py - 2, 5, 1);
+        ctx.fillRect(px - 2, py + 2, 5, 1);
+        ctx.fillRect(px - 2, py - 1, 1, 3);
+        ctx.fillRect(px + 2, py - 1, 1, 3);
+        continue;
+      }
       if (m.now && !blink && inside) continue;
       ctx.fillStyle = '#000000';
       ctx.fillRect(px - 1, py - 4, 4, 5);

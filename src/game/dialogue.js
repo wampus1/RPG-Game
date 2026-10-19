@@ -24,6 +24,7 @@ import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { duesIn, payDues } from './library.js';
+import { openNow as contestsOpen, CONTESTS, nearVenue as nearFestVenue, helpable as festHelpable, GIFTS as FEST_GIFTS, giftsHeld as festGiftsHeld, give as festGive, helped as festHelped } from './festplay.js';
 import { segNow, segLine, festive, posterLines as festPosterLines, slotAt as festSlotAt, closeOf as festClose, SLOT_WORDS as FEST_SLOT_WORDS } from '../sim/festival.js';
 import { rainedRecently, weatherWord } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
@@ -519,6 +520,26 @@ function topicsRaw(npc, game) {
   // learning it's part of.
   // (Round 129) A festival today or soon: what's on, and where.
   if (s && rec.age !== 'child' && festSoon(game, npc.layout)) add('festprog', 'What\'s on for the festival?');
+  // (Round 129) Its contests, with whoever's at the place they're held;
+  // and, a day or two before, helping the host get it ready.
+  const fev = s && festSoon(game, npc.layout);
+  if (fev && !npc.hired) {
+    const now = sim.abs;
+    const fpid = sagaPidOf(game.player);
+    let n = 0;
+    for (const c of fev.contests ? contestsOpen(fev, now) : []) {
+      if (n >= 3) break;
+      const C = CONTESTS[c.k];
+      const here = nearFestVenue(fev, c.v, npc.x, npc.z, 5) || (c.k === 'race' && rec.idx === fev.host);
+      if (!here) continue;
+      if (C.play === 'bout' && rec.idx !== c.champ) continue;
+      if (C.play === 'race' ? c.runners && c.runners[fpid] : (c.tries[fpid] || 0) >= C.tries) continue;
+      const label = { archery: 'Can I have a go at the archery?', race: 'Put my name down for the foot race.', wrestling: 'I\'ll wrestle you, champion!', eating: 'Can I join the eating match?', riddles: 'Ask me your riddles!', dance: 'Can I join the dance?', cookoff: 'I\'d like to put a dish in the cook-off. (the one in your hand)' }[c.k];
+      out.push({ id: 'festgo', arg: c.k, label });
+      n++;
+    }
+    if (rec.idx === fev.host && festHelpable(fev, now)) add('festhelp', festHelped(fev, fpid) ? 'Can I help with anything else for the festival?' : 'Can I help get the festival ready?');
+  }
   // (Round 128) The books you took down from the library's shelves: bought,
   // to take away (see library.js).
   if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) {
@@ -2001,6 +2022,26 @@ function respondRaw(npc, game, id, arg) {
       if (cur) lines.push(`Right now it's ${FEST_SLOT_WORDS[cur.k]}.`);
       if (ev.wet) lines.push('Mind, with this rain it\'s all gone indoors.');
       return { lines: lines.slice(0, 8) };
+    }
+    case 'festgo': {
+      const ev = festSoon(game, npc.layout);
+      if (!ev) return { lines: ['There\'s nothing on today.'] };
+      const said = game.festEnter(npc.layout, ev, arg);
+      if (said) return { lines: [said] };
+      return { lines: [pick(rng, ['Off you go, then!', 'Good luck to you!', 'Let\'s see what you\'ve got!'])], close: true };
+    }
+    case 'festhelp': {
+      const ev = festSoon(game, npc.layout);
+      if (!ev || !festHelpable(ev, game.sim.abs)) return { lines: ['It\'s all in hand now, thank you.'] };
+      if (arg) {
+        if (!festGive(game, npc.layout, ev, arg)) return { lines: ['You\'ve not got that with you.'] };
+        const thanks = { food: 'That\'ll go on the tables. Thank you!', ale: 'Ha! The ale tables will thank you for it.', flowers: 'Lovely! They\'ll go in the garlands.', coin: 'Every coin helps. Thank you kindly.' }[arg];
+        return { lines: [thanks, 'Everyone will hear who helped.'] };
+      }
+      const held = festGiftsHeld(game.player);
+      const choices = Object.entries(FEST_GIFTS).filter(([g, G]) => held[g] >= G.n).map(([g, G]) => ({ id: 'festhelp', arg: g, label: `Here: ${G.label}.` }));
+      choices.push({ id: 'bye', label: 'I\'ll see what I can find.' });
+      return { lines: [`Would you? We could do with food for the tables, ale, flowers for the garlands, or a little coin.`, choices.length > 1 ? 'What can you spare?' : '(You\'ve nothing to give just now: six things to eat, three mugs of ale, five flowers, or ¤20.)'], choices };
     }
     case 'libpay': {
       const due = duesIn(game, s.id);

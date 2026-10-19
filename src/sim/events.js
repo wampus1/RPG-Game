@@ -21,6 +21,7 @@ import { farTable } from '../world/farlands.js';
 import { festive, placeVenues, programme, plannedVenues, planGuests, posterLines, openOf, closeOf, wetNow, SLOT_WORDS, VENUES, hudLines as festHud, marks as festMarks } from './festival.js';
 import { asSeat } from '../game/party.js';
 import { pidOf, seatOfPid } from './saga/refs.js';
+import { contestsFor, tick as contestTick, closeAll as closeContests, raceState, openNow as contestsOpen, CONTESTS, nearVenue, npcFinished } from '../game/festplay.js';
 
 export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
 
@@ -492,6 +493,9 @@ export class Events {
     if (ev.state === 'on' && ev.kind === 'wedding' && !ev.wed && now >= ev.s + 30) this.wed(L, ev);
     if (ev.state === 'on' && now >= ev.e) this.end(L, ev);
     if (ev.state === 'over') this.tidy(L, ev, now, active);
+    // (Round 129) The day done: its contests closed (for a town nobody was
+    // in, with the townsfolk's own goes).
+    if (ev.contests && now >= closeOf(ev)) closeContests(this, L, ev);
   }
 
   // ------------------------------------------------------------ posters
@@ -1063,7 +1067,15 @@ export class Events {
     ev.guests = guests;
     ev.invited = people.length;
     // (Round 129) Where each of them is the rest of the day (see festival.js).
-    if (ev.prog && ev.venues) planGuests(this, L, ev);
+    if (ev.prog && ev.venues) {
+      planGuests(this, L, ev);
+      // (Round 129) The day's contests, and who of the town will have a go.
+      try {
+        contestsFor(this, L, ev);
+      } catch (e) {
+        void e;
+      }
+    }
   }
 
   // The couple and whoever's leading it are there early; the rest drift in
@@ -1217,6 +1229,7 @@ export class Events {
         // (Round 129) A festival's day goes on round the town: each part
         // of it called out as it begins, to everyone in the town.
         if (ev.prog && ev.state !== 'off' && ev.state !== 'done' && ev.state !== 'announced' && ev.state !== 'posting' && ev.state !== 'posted') this.callOut(L, ev, now);
+        if (ev.contests && ev.state !== 'off') contestTick(this, L, ev, now);
         const open = ev.prog ? now >= openOf(ev) && now < closeOf(ev) && (ev.state === 'ready' || ev.state === 'on' || ev.state === 'over' || ev.state === 'building') : ev.state === 'on';
         if (!open) continue;
         const rects = [ev.site || { x0: L.plaza.cx - 2, z0: L.plaza.cz - 2, x1: L.plaza.cx + 2, z1: L.plaza.cz + 2 }, ...(ev.venues || [])];
@@ -1268,12 +1281,46 @@ export class Events {
 
   hudLines() {
     const L = this.townHere();
-    return L ? festHud(this, L, this.sim.abs) : [];
+    if (!L) return [];
+    const now = this.sim.abs;
+    const out = festHud(this, L, now);
+    const p = this.game.player;
+    const pid = pidOf(p);
+    for (const ev of L.econ.events || []) {
+      if (!ev.contests) continue;
+      // (Round 129) Your race: the next mark, how far, the time.
+      const r = raceState(L, ev, pid, now);
+      if (r && r.wait) out.push({ text: `  RACE AT ${hodStr(r.at % DAY)}: TO THE LINE`, color: '#ffe070' });
+      else if (r && p) {
+        const dx = r.mark.x - p.x;
+        const dz = r.mark.z - p.z;
+        out.push({ text: `  RACE ${r.clock.toFixed(1)}s · ${r.home ? 'HOME' : `MARK ${r.i}/${r.n - 1}`} ${compass(dx, dz)} ${Math.round(Math.hypot(dx, dz))}`, color: '#ffe070' });
+      }
+      // A contest open where you're standing.
+      if (p) {
+        const here = contestsOpen(ev, now).filter((c) => CONTESTS[c.k].play !== 'race' && nearVenue(ev, c.v, p.x, p.z, 4) && (c.tries[pid] || 0) < CONTESTS[c.k].tries);
+        if (here.length) out.push({ text: `  ${here.map((c) => CONTESTS[c.k].short).join(', ')} HERE (ASK)`, color: '#a8f0a0' });
+      }
+    }
+    return out;
   }
 
   festMarks() {
     const L = this.townHere();
-    return L ? festMarks(L, this.sim.abs) : [];
+    if (!L) return [];
+    const out = festMarks(L, this.sim.abs);
+    const pid = pidOf(this.game.player);
+    for (const ev of L.econ.events || []) {
+      const r = ev.contests ? raceState(L, ev, pid, this.sim.abs) : null;
+      if (r) out.push({ x: r.wait ? r.line.x : r.mark.x, z: r.wait ? r.line.z : r.mark.z, c: '#ffe070', now: true, cp: true });
+    }
+    return out;
+  }
+
+  // (Round 129) A townsperson home from the race.
+  raceHome(L, evId, idx) {
+    const ev = this.get(L, evId);
+    if (ev) npcFinished(L, ev, idx);
   }
 
   // Said to everyone in the town (each on their own screen).
@@ -1411,4 +1458,10 @@ export function marry(L, a, b) {
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// Which way something is, as a compass has it (north up the map).
+function compass(dx, dz) {
+  const a = Math.atan2(dz, dx);
+  return ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'][((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 }

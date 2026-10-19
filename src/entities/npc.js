@@ -454,14 +454,14 @@ export class NPC extends Entity {
           const seg = segNow(e.segs, this.game.sim.abs);
           if (seg && !seg.main) {
             this.evSeg = seg;
-            if (ev && ev.wet && outdoors(seg.v)) {
+            if (ev && ev.wet && outdoors(seg.v) && !seg.race) {
               const sh = shelterFor(L, seg.v || 'stage', rec.idx);
               if (sh) return { x: sh.x, y: GROUND, z: sh.z, face: rng.int(0, 3), tag: 'event', wanderIn: L.buildings[sh.building] };
             }
             if (seg.walk) {
               const i = Math.min(this.walkI || 0, seg.walk.length - 1);
               const wp = seg.walk[i];
-              return { x: wp.x, y: GROUND, z: wp.z, near: 1, tag: 'event', walk: true };
+              return { x: wp.x, y: GROUND, z: wp.z, near: 1, tag: 'event', walk: true, race: !!seg.race, pace: seg.pace || 1 };
             }
             if (seg.x !== null && seg.x !== undefined) {
               if (seg.seat) this.spot = { x: seg.x, y: GROUND, z: seg.z, face: seg.face, tags: ['event'], seat: true };
@@ -2022,6 +2022,22 @@ export class NPC extends Entity {
       this.atGoalBehaviour(dt);
       return;
     }
+    // (Round 129) On the way somewhere at a festival when the next part of
+    // the day begins (the race's off, say): there instead.
+    if (act.entry && act.entry.act === 'event' && act.entry.segs) {
+      this.segCheckT = (this.segCheckT ?? 0) - dt;
+      if (this.segCheckT <= 0) {
+        this.segCheckT = 0.5;
+        const seg = segNow(act.entry.segs, game.sim.abs);
+        if (seg !== this.evSeg) {
+          this.walkI = 0;
+          this.goal = this.pickGoal(act.entry);
+          this.path = null;
+          this.atGoal = false;
+          if (!this.goal) return;
+        }
+      }
+    }
     if (this.followPath(this.goal, this.goal.near || 0)) {
       this.atGoal = true;
       this.idleT = this.rng.float(6, 20);
@@ -2718,7 +2734,17 @@ export class NPC extends Entity {
         this.path = null;
         return;
       }
-      if (seg && seg.walk && this.atGoal && !wet) {
+      // (Round 129) A runner in the foot race: no stopping for rain, and
+      // home past the last mark.
+      if (seg && seg.walk && this.atGoal && (!wet || seg.race)) {
+        if (seg.race && (this.walkI || 0) >= seg.walk.length - 1) {
+          if (this.raceDone !== ev.id) {
+            this.raceDone = ev.id;
+            events.raceHome(this.layout, ev.id, this.rec.idx);
+            if (this.distTo(game.player) < 20) this.say(this.rng.pick(['Phew!', 'Made it!', 'My legs...', 'Ha! Home!']), 2.4, '#ffe8a0');
+          }
+          return;
+        }
         if ((this.walkI || 0) < seg.walk.length - 1) {
           this.walkI = (this.walkI || 0) + 1;
           this.goal = this.pickGoal(this.activity.entry);
@@ -3040,7 +3066,7 @@ export class NPC extends Entity {
     const nowS = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
     if (foeRun && nowS < (this.fleeNextAt || 0)) return false;
     this.face(nx, nz);
-    const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
+    const pace = this.goal && this.goal.race && this.state !== 'fight' && this.state !== 'flee' ? this.goal.pace : this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
     // (Round 55) Running away (from a fight, to safety, an outlaw breaking
     // off): 15% slower than it was.
     const wb = this.warband;

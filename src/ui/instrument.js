@@ -75,6 +75,8 @@ export class InstrumentWindow extends Window {
     this.lit[i] = 0.18;
     this.notes++;
     p.doAction?.(0.12);
+    // (Round 129) At a festival, for the crowd: tips and thanks.
+    g.festMusic?.(p);
     // A note floating up off you; now and then someone near says so.
     g.renderer.floatText(p.x + (Math.random() - 0.5) * 0.6, p.y + 2.2, p.z, this.I.drums ? '♦' : '♪', NOTE_COLS[i % NOTE_COLS.length]);
     if (this.notes % 14 === 0) {

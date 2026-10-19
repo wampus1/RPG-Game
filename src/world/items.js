@@ -20,7 +20,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('prize~') ? derivePrize(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -162,6 +162,22 @@ function deriveBook(k) {
       if (!b) return 'Read it [F/RMB].';
       return `${b.title}${b.novel ? ', a novel' : ''}, by ${b.by} (${b.year}). ${fameWord(b.pop || 0)} Read it [F/RMB].`;
     },
+  };
+}
+
+// (Round 129) A festival's prize rosette: "prize~<contest>~<place>~<year>~
+// <the town, in hex>" (see game/festplay.js). Kept, shown off, or sold.
+const PRIZE_NAMES = { archery: 'Archery', race: 'Foot Race', wrestling: 'Wrestling', eating: 'Eating Match', riddles: 'Riddling', dance: 'Dance', cookoff: 'Cook-off', logtoss: 'Log Toss', hammer: 'Hammer', raft: 'Raft Race', lantern: 'Lantern Walk' };
+const PLACE_NAMES = ['', 'First', 'Second', 'Third'];
+function derivePrize(k) {
+  const [, kind, place, year, h] = String(k).split('~');
+  const n = Math.max(1, Math.min(3, +place || 1));
+  const town = fromHex(h || '') || 'a town';
+  return {
+    key: k, kind: 'misc', stack: 1, prize: { kind, place: n, year: +year || 0, town }, icon: 'rosette',
+    name: `${PLACE_NAMES[n]}: ${PRIZE_NAMES[kind] || 'Festival'} Rosette`,
+    value: [0, 12, 7, 4][n],
+    about: `${PLACE_NAMES[n]} place in the ${(PRIZE_NAMES[kind] || 'festival').toLowerCase()} at the festival in ${town}, in the year ${year}. A ribbon rosette to pin on, and something to tell of.`,
   };
 }
 
