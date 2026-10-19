@@ -35,14 +35,15 @@ import { authority, formOf } from '../sim/realms.js';
 import { seatOfPid } from '../sim/saga/refs.js';
 import { seatPart } from '../game/party.js';
 
+// (Round 122: six pages; the realm and your ambitions are views of the
+// charter's, the standing orders a view of the officers'.)
 const TABS = [
-  { id: 'sitting', label: 'Sitting' },
-  { id: 'treasury', label: 'Treasury' },
+  { id: 'sitting', label: 'Matters' },
+  { id: 'treasury', label: 'Money' },
   { id: 'laws', label: 'Laws' },
   { id: 'people', label: 'People' },
-  { id: 'officers', label: 'Officers' },
+  { id: 'officers', label: 'Offices' },
   { id: 'charter', label: 'Charter' },
-  { id: 'realm', label: 'Realm' },
 ];
 const W = 84;
 const H = 34;
@@ -69,6 +70,26 @@ function bar(g, x, y, w, v, col, back = '#2a2432') {
     else if (k === 1) g.put(x + i, y, '▌', col, back);
     else g.put(x + i, y, ' ', col, back);
   }
+}
+
+// (Round 122) Who a choice moves, in words: the few it moves most, each
+// with an arrow. Returns where it ended.
+export function whoMoves(g, x, y, by, maxW = 30, names = (f) => FACTIONS[f].short || FACTIONS[f].name) {
+  const list = Object.entries(by).filter(([, d]) => Math.abs(d) >= 1).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3);
+  let cx = x;
+  if (!list.length) {
+    g.text(cx, y, 'no one minds', C.faint);
+    return cx + 12;
+  }
+  for (const [f, d] of list) {
+    const w = `${names(f)}${d >= 4 ? (d > 0 ? '▲▲' : '▼▼') : d > 0 ? '▲' : '▼'}`;
+    if (cx + w.length - x > maxW) break;
+    const col = FACTIONS[f] ? FACTIONS[f].color : C.fg;
+    g.text(cx, y, names(f), col);
+    g.text(cx + names(f).length, y, w.slice(names(f).length), d > 0 ? '#80e070' : '#ff7060');
+    cx += w.length + 1;
+  }
+  return cx;
 }
 
 // A row of the factions' glyphs, each coloured by how a choice moves them
@@ -157,41 +178,52 @@ export class CouncilWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: BG, double: true, fg: ch.color, title: `${ch.glyph} THE COUNCIL OF ${s.name.toUpperCase()} ${ch.glyph}`, titleFg: ch.color });
     this.header(g, L, T);
     this.tabs(g, T);
-    const fn = { sitting: this.drawSitting, treasury: this.drawTreasury, laws: this.drawLaws, people: this.drawPeople, officers: this.drawOfficers, charter: this.drawCharter, realm: this.drawRealm }[this.tab];
+    // (The realm page of old: the charter's realm view now.)
+    if (this.tab === 'realm') {
+      this.tab = 'charter';
+      this.view = 'realm';
+    }
+    const fn = { sitting: this.drawSitting, treasury: this.drawTreasury, laws: this.drawLaws, people: this.drawPeople, officers: this.drawOfficers, charter: this.drawCharter }[this.tab];
     fn.call(this, g, L, T);
     // A word on what just happened.
     if (this.flash && this.flash.t < 4) {
       const text = ` ${this.flash.text} `.slice(0, W - 4);
       g.text(Math.floor((W - text.length) / 2), H - 2, text, this.flash.color, 'rgba(20,16,28,0.95)');
-    } else g.text(2, H - 2, this.mine() ? '1-7: pages   ↑↓: choose   Enter: decide   Esc: close' : '1-7: pages   You sit on this council: you vote when it asks you.   Esc: close', C.faint);
+    } else g.text(2, H - 2, this.mine() ? '1-6: pages   ↑↓: choose   Enter: decide   Esc: close' : '1-6: pages   You sit on this council: you vote when it asks you.   Esc: close', C.faint);
   }
 
   header(g, L, T) {
     const s = L.settlement;
     const h = T.holder;
-    const day = this.game.day;
-    const title = headTitle(T.charter, s);
-    const term = h.termEnd ? `term to day ${h.termEnd} (${Math.max(0, h.termEnd - day)}d)` : h.how === 'appointment' ? `at the realm's pleasure` : 'no fixed term';
+    const title = headTitle(T.charter, s, h && h.style);
     const e = L.econ;
+    g.text(2, 1, `${title} ${h.name}`.slice(0, 30), C.hi);
     const tr = `¤${Math.floor(e.treasury)} · taxes ${pc(e.tax)}`;
-    const head = `${title} ${h.name}`.slice(0, 26);
-    g.text(2, 1, head, C.hi);
-    g.text(3 + head.length, 1, `· ${CHARTERS[T.charter].name} · ${term}`.slice(0, W - 7 - head.length - tr.length), C.dim);
-    g.text(W - 2 - tr.length, 1, tr, '#e8d8a0');
-    // The town's mood, at a glance.
+    // (Ruling the realm too: the crown's window, a click away.)
+    const civ = s.civ;
+    const crown = this.game.sim.crown;
+    let rx = W - 2;
+    if (civ && crown && crown.isRuler(civ, this.office.pid())) {
+      const lb = ' ★ The crown ';
+      rx -= lb.length;
+      const hov = this.hovering(rx, 1, lb.length, 1);
+      g.text(rx, 1, lb, hov ? '#1a1420' : '#ffd070', hov ? '#ffd070' : '#2a2236');
+      this.hit(rx, 1, lb.length, 1, () => this.ui.openCrown?.(this.game, civ));
+      rx -= 2;
+    }
+    g.text(rx - tr.length, 1, tr, '#e8d8a0');
+    // The town's mood, at a glance; when the council next sits.
     const v = T.lastOverall ?? 50;
     const prev = T.hist.length > 1 ? T.hist[T.hist.length - 2].overall : v;
     g.text(2, 2, 'Approval', C.dim);
-    bar(g, 11, 2, 24, v, approvalColor(v));
-    g.text(36, 2, `${v}`, approvalColor(v));
-    if (v !== prev) g.text(39, 2, v > prev ? `▲${v - prev}` : `▼${prev - v}`, v > prev ? '#a8e070' : '#ffa050');
+    bar(g, 11, 2, 20, v, approvalColor(v));
+    g.text(32, 2, `${v}`, approvalColor(v));
+    if (v !== prev) g.text(35, 2, v > prev ? `▲${v - prev}` : `▼${prev - v}`, v > prev ? '#a8e070' : '#ffa050');
     const abs = this.game.sim.abs;
     const next = (Math.floor(abs / 1440) + (abs % 1440 < 600 ? 0 : 1)) * 1440 + 600;
     const left = next - abs;
-    const nx = `sits at 10:00, in ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
+    const nx = `${this.office.inHall(L) ? 'in the hall' : 'by letter'} · sits in ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
     g.text(W - 2 - nx.length, 2, nx, C.faint);
-    if (this.office.inHall(L)) g.text(45, 2, '⌂ in the hall', '#a0e8a0');
-    else g.text(45, 2, '» by letter', C.faint);
   }
 
   tabs(g, T) {
@@ -226,44 +258,38 @@ export class CouncilWindow extends Window {
   drawSitting(g, L, T) {
     const items = this.items(T);
     if (this.sel === null || !items.some((q) => q.id === this.sel)) this.sel = items.length ? items[0].id : null;
-    // The matters, on the left.
-    g.text(2, BODY, 'Before the council', C.dim);
-    let y = BODY + 1;
+    // The matters, on the left: a line each, and what's become of it.
+    let y = BODY;
     const abs = this.game.sim.abs;
-    for (const it of items.slice(0, 6)) {
+    for (const it of items.slice(0, 8)) {
       const on = it.id === this.sel;
-      const hov = this.hovering(1, y, 30, 3);
+      const hov = this.hovering(1, y, 30, 2);
       const bg = on ? (it.crisis ? '#401820' : '#2c2438') : hov ? '#221c2a' : undefined;
-      g.fill(1, y, 30, 3, ' ', C.fg, bg);
+      g.fill(1, y, 30, 2, ' ', C.fg, bg);
       const st = this.stateChip(it, abs);
       g.text(2, y, st.glyph, st.color);
-      const lines = wrap(it.title, 26);
-      g.text(4, y, lines[0].slice(0, 26), on ? C.white : it.crisis ? '#ffb0a0' : C.fg);
-      if (lines[1]) g.text(4, y + 1, (lines[1] + (lines[2] ? '…' : '')).slice(0, 26), on ? C.white : C.fg);
-      g.text(4, y + (lines[1] ? 2 : 1), st.text.slice(0, 26), st.color);
+      const t = it.title.length > 27 ? `${it.title.slice(0, 26)}…` : it.title;
+      g.text(4, y, t, on ? C.white : it.crisis ? '#ffb0a0' : C.fg);
       if (it.crisis && it.state === 'open') {
         // Time running out, as a fuse.
         const span = Math.max(1, it.until - it.day * 1440 - 600);
         const left = Math.max(0, it.until - abs) / span;
-        for (let i = 0; i < 28; i++) g.put(2 + i, y + 2, i / 28 < left ? '▪' : '·', i / 28 < left ? (Math.floor(this.t * 4) % 2 && i === Math.floor(left * 28) - 1 ? '#ffff80' : '#ff7050') : '#4a3038');
-      }
-      this.hit(1, y, 30, 3, () => {
+        for (let i = 0; i < 26; i++) g.put(4 + i, y + 1, i / 26 < left ? '▪' : '·', i / 26 < left ? (Math.floor(this.t * 4) % 2 && i === Math.floor(left * 26) - 1 ? '#ffff80' : '#ff7050') : '#4a3038');
+      } else g.text(4, y + 1, st.text.slice(0, 26), st.color === C.dim ? C.faint : st.color);
+      this.hit(1, y, 30, 2, () => {
         this.sel = it.id;
         this.ui.audio?.play('select');
       });
-      y += 3;
+      y += 2;
     }
     if (!items.length) {
-      g.text(3, y + 1, 'Nothing before the council.', C.faint);
-      wrap('The day\'s matters are tabled each morning at ten. Propose your own from the other pages.', 27).forEach((l, i) => g.text(3, y + 3 + i, l, C.faint));
+      g.text(3, y + 1, 'Nothing before the council.', C.dim);
+      wrap('New matters come each morning at ten. Propose your own from the other pages.', 27).forEach((l, i) => g.text(3, y + 3 + i, l, C.faint));
+      // What was decided lately, while there's room.
+      const my = y + 7;
+      g.text(3, my, 'Lately', C.faint);
+      T.minutes.slice(-8).reverse().forEach((m, i) => g.text(3, my + 1 + i, `${m.title.replace(/\?$/, '')}: ${m.what}`.slice(0, 27), C.faint));
     }
-    // Lately decided.
-    const my = Math.max(y + 1, BODY + 20);
-    g.text(2, my, 'Lately', C.dim);
-    T.minutes.slice(-Math.min(6, H - 4 - my)).reverse().forEach((m, i) => {
-      const t = `${m.day} ${m.title.replace(/\?$/, '')}: ${m.what}`;
-      g.text(2, my + 1 + i, t.slice(0, 29), /voted down|set aside|vetoed/.test(m.what) ? '#a08070' : '#90a888');
-    });
     for (let j = BODY; j < H - 3; j++) g.put(31, j, '│', '#3a3040');
     const it = items.find((q) => q.id === this.sel);
     if (it) this.drawMatter(g, L, T, it);
@@ -298,7 +324,6 @@ export class CouncilWindow extends Window {
     }
     y++;
     const mine = this.mine();
-    const counts = T.counts;
     const open = it.state === 'open';
     it.opts.forEach((opt, k) => {
       if (y > CHAMBER_Y - 3) return;
@@ -312,10 +337,10 @@ export class CouncilWindow extends Window {
       g.text(x + 3, y, lab, struck ? '#806858' : opt.off ? C.faint : chosen ? '#a0f0b0' : C.white);
       if (struck) for (let i = 0; i < lab.length; i++) g.put(x + 3 + i, y, lab[i] === ' ' ? '─' : lab[i], '#806858');
       const ef = this.effects(L, T, it, k);
-      const nf = FACTION_IDS.filter((f) => !counts || counts[f]).length;
-      if (!opt.off) factionDeltas(g, W - 3 - nf * 3, y + 1, ef.by, counts);
       const line = opt.off ? `not possible: ${opt.off}` : struck ? 'voted down by the council' : (ef.lines[0] && ef.lines[0].text) || (opt.trivial ? 'no vote needed' : '');
-      g.text(x + 3, y + 1, line.slice(0, w - 5 - nf * 3), opt.off || struck ? C.faint : '#c8b890');
+      g.text(x + 3, y + 1, line.slice(0, w - 13), opt.off || struck ? C.faint : '#c8b890');
+      // Who it moves, after its name, where there's room.
+      if (!opt.off && !struck && lab.length < w - 20) whoMoves(g, x + 5 + lab.length, y, ef.by, w - 7 - lab.length - 8);
       if (ef.overall && !opt.off) {
         const tt = `town ${sign(ef.overall)}`;
         g.text(W - 3 - tt.length, y, tt, ef.overall > 0 ? '#a8e070' : '#ffa050');
@@ -327,7 +352,7 @@ export class CouncilWindow extends Window {
     this.chamberArea = { x, y: CHAMBER_Y, w, h: CHAMBER_H };
     const ch = CHARTERS[T.charter];
     const how = ch.vote === 'decree' ? 'You decide by decree.' : ch.vote === 'assembly' ? 'Every grown townsperson votes.' : ch.vote === 'factions' ? 'Each faction has one voice.' : ch.vote === 'guild' ? 'The guild masters vote, by the weight of their purses.' : ch.vote === 'temple' ? 'The temple\'s council votes; the priest may veto.' : 'The council votes; you decide a tie.';
-    g.text(x, H - 3, (it.crisis ? 'A crisis is yours alone to decide, there and then.' : this.office.inHall(L) || ch.vote === 'decree' ? how : `${how} Away, your word goes by letter.`).slice(0, w), C.faint);
+    g.text(x, H - 3, (it.crisis ? 'A crisis is yours alone to decide, there and then.' : this.office.inHall(L) || ch.vote === 'decree' ? how : `${how}`.length > w - 12 ? how : `${how} (By letter.)`).slice(0, w), C.faint);
     if (it.vote && it.vote.ballots && it.vote.ballots.length && !it.crisis) {
       const t = `last vote: ${it.vote.aye} for, ${it.vote.nay} against (${it.vote.state})`;
       g.text(W - 2 - t.length, CHAMBER_Y - 1, t, it.vote.state === 'carried' ? '#80e070' : '#ffa050');
@@ -843,61 +868,64 @@ export class CouncilWindow extends Window {
   // ------------------------------------------------------------ 3 laws
   drawLaws(g, L, T) {
     const s = L.settlement;
-    const M = members(L);
-    const stances = factionStances(L, M, this.game.day);
     const ids = LAW_IDS.filter((id) => lawFits(s, id, true) || lawOn(L, id));
     if (!this.lawSel || !ids.includes(this.lawSel)) this.lawSel = ids[0];
     let y = BODY;
     g.text(2, y, 'Law', C.dim);
-    g.text(26, y, 'For', C.dim);
-    g.text(40, y, FACTION_IDS.filter((f) => M[f].length).map((f) => `${FACTIONS[f].glyph}  `).join(' '), C.dim);
+    g.text(27, y, 'The town for it', C.dim);
     y++;
     for (const id of ids) {
-      if (y >= H - 10) break;
+      if (y >= H - 4) break;
       const law = LAWS[id];
       const on = lawOn(L, id);
       const dec = byDecree(L, id);
       const sel = this.lawSel === id;
-      const hov = this.hovering(1, y, W - 2, 1);
-      g.fill(1, y, W - 2, 1, ' ', C.fg, sel ? '#2c2438' : hov ? '#221c2a' : undefined);
+      const hov = this.hovering(1, y, 46, 1);
+      g.fill(1, y, 46, 1, ' ', C.fg, sel ? '#2c2438' : hov ? '#221c2a' : undefined);
       g.text(2, y, dec ? '♜' : on ? '■' : '□', dec ? '#ff9070' : on ? '#80e070' : C.faint);
-      g.text(4, y, `${law.name}${law.draft ? ' ✎' : ''}`.slice(0, 21), on ? C.white : C.fg);
+      g.text(4, y, `${law.name}${law.draft ? ' ✎' : ''}`.slice(0, 22), on ? C.white : C.fg);
       const share = forChange(L, id, true);
-      bar(g, 26, y, 10, share * 100, share >= 0.5 ? '#a8e070' : '#ffa050');
-      g.text(37, y, `${Math.round(share * 100)}`.padStart(2), C.dim);
-      let fx = 40;
-      for (const f of FACTION_IDS) {
-        if (!M[f].length) continue;
-        const v = stances[f][id] || 0;
-        g.put(fx, y, v > 0.08 ? '▲' : v < -0.08 ? '▼' : '·', v > 0.3 ? '#80f080' : v > 0.08 ? '#5a8a48' : v < -0.3 ? '#ff6050' : v < -0.08 ? '#8a4a38' : C.faint);
-        fx += 4;
-      }
-      this.hit(1, y, W - 2, 1, () => {
+      bar(g, 27, y, 12, share * 100, share >= 0.5 ? '#80b860' : '#b07850');
+      g.text(40, y, `${Math.round(share * 100)}%`.padStart(4), C.dim);
+      this.hit(1, y, 46, 1, () => {
         this.lawSel = id;
         this.ui.audio?.play('select');
       });
       y++;
     }
+    g.text(2, H - 3, '■ in force   □ not   ♜ the realm\'s decree   ✎ only a governor can draft it', C.faint);
+    for (let j = BODY; j < H - 3; j++) g.put(48, j, '│', '#3a3040');
     // The one looked at.
     const id = this.lawSel;
     if (!id) return;
     const law = LAWS[id];
     const on = lawOn(L, id);
     const dec = byDecree(L, id);
-    y = H - 9;
-    for (let i = 1; i < W - 1; i++) g.put(i, y - 1, '─', '#3a3040');
-    g.text(2, y, `${law.name}${on ? ' (in force)' : ''}${dec ? ' (by the realm\'s decree)' : ''}${law.draft ? ' · drafted: only a governor can put it forward' : ''}`, C.hi);
-    wrap(law.desc, W - 30).forEach((l, i) => g.text(2, y + 1 + i, l, C.fg));
+    const x = 50;
+    let ry = BODY;
+    g.text(x, ry++, law.name, C.hi);
+    g.text(x, ry++, dec ? 'In force by the realm\'s decree.' : on ? 'In force.' : 'Not in force.', dec ? '#ff9070' : on ? '#80e070' : C.dim);
+    ry++;
+    for (const l of wrap(law.desc, W - x - 2)) g.text(x, ry++, l, C.fg);
+    ry++;
     const st = stated(this.game.sim, L, T, { fx: { law: { id, on: !on } } }, CHARTERS, this.game.day);
-    g.text(2, y + 4, on ? 'Throwing it out would move:' : 'Passing it would move:', C.dim);
-    factionDeltas(g, 30, y + 4, st.by, T.counts);
+    g.text(x, ry++, on ? 'Throwing it out would please:' : 'Passing it would please:', C.dim);
+    const M = members(L);
+    const sorted = FACTION_IDS.filter((f) => M[f].length).sort((a, b) => (st.by[b] || 0) - (st.by[a] || 0));
+    for (const f of sorted) {
+      const d = st.by[f] || 0;
+      if (ry > H - 7) break;
+      g.text(x + 1, ry, FACTIONS[f].glyph, FACTIONS[f].color);
+      g.text(x + 3, ry, FACTIONS[f].name.slice(0, 18), C.fg);
+      g.text(x + 22, ry++, d ? `${d > 0 ? '+' : ''}${d}` : '·', d > 0 ? '#80e070' : d < 0 ? '#ff7060' : C.faint);
+    }
     if (this.mine() && !dec) {
       const pending = T.agenda.some((q) => q.key === `law:${id}` && !q.done);
       const label = pending ? ' Before the council already ' : on ? ' Propose throwing it out ' : ' Propose passing it ';
-      const hov = !pending && this.hovering(W - 2 - label.length, y + 6, label.length, 1);
-      g.text(W - 2 - label.length, y + 6, label, pending ? '#a0c8ff' : hov ? '#1a1420' : C.hi, pending ? '#203048' : hov ? C.hi : '#2a2236');
-      if (!pending) this.hit(W - 2 - label.length, y + 6, label.length, 1, () => this.proposeIt(L, 'law', id));
-    } else if (dec) g.text(2, y + 6, 'No town of the realm can repeal a decree of the realm.', '#ff9070');
+      const hov = !pending && this.hovering(x, H - 5, label.length, 1);
+      g.text(x, H - 5, label, pending ? '#a0c8ff' : hov ? '#1a1420' : C.hi, pending ? '#203048' : hov ? C.hi : '#2a2236');
+      if (!pending) this.hit(x, H - 5, label.length, 1, () => this.proposeIt(L, 'law', id));
+    }
   }
 
   // ------------------------------------------------------------ 4 people
@@ -914,53 +942,52 @@ export class CouncilWindow extends Window {
       const F = FACTIONS[f];
       const v = A.by[f].v;
       const sel = this.facSel === f;
-      const hov = this.hovering(1, y, 50, 2);
-      g.fill(1, y, 50, 2, ' ', C.fg, sel ? '#2c2438' : hov ? '#221c2a' : undefined);
+      const hov = this.hovering(1, y, 46, 1);
+      g.fill(1, y, 46, 1, ' ', C.fg, sel ? '#2c2438' : hov ? '#221c2a' : undefined);
       g.text(2, y, F.glyph, F.color);
-      g.text(4, y, `${F.name} (${M[f].length})`.slice(0, 22), sel ? C.white : C.fg);
-      bar(g, 26, y, 18, v, approvalColor(v));
-      g.text(45, y, `${v}`.padStart(3), approvalColor(v));
+      g.text(4, y, `${F.name} (${M[f].length})`.slice(0, 21), sel ? C.white : C.fg);
+      bar(g, 26, y, 14, v, approvalColor(v));
+      g.text(41, y, `${v}`.padStart(3), approvalColor(v));
       const p = prev && prev[f] !== undefined ? v - prev[f] : 0;
-      if (p) g.text(48, y, p > 0 ? `▲${p}` : `▼${-p}`, p > 0 ? '#a8e070' : '#ffa050');
-      g.text(4, y + 1, `wants: ${wish(L, T, f, state, M, stances)}`.slice(0, 46), C.faint);
-      this.hit(1, y, 50, 2, () => {
+      if (p) g.text(44, y, p > 0 ? '▲' : '▼', p > 0 ? '#a8e070' : '#ffa050');
+      this.hit(1, y, 46, 1, () => {
         this.facSel = f;
         this.ui.audio?.play('select');
       });
-      y += 2;
+      y++;
     }
-    // The faction looked at: why they think as they do.
+    // The town over the last weeks, below.
+    this.moodArea = { x: 2, y: y + 2, w: 44, h: Math.min(9, H - 6 - y - 2) };
+    g.text(2, y + 1, 'Approval, sitting by sitting', C.faint);
+    for (let j = BODY; j < H - 3; j++) g.put(48, j, '│', '#3a3040');
+    // The faction looked at: what they want, and why they think as they do.
     const f = this.facSel;
-    const x = 53;
+    const x = 50;
     let ry = BODY;
     const F = FACTIONS[f];
     g.text(x, ry++, `${F.glyph} ${F.name}`, F.color);
-    wrap(F.about, W - x - 2).forEach((l) => g.text(x, ry++, l, C.dim));
+    for (const l of wrap(F.about, W - x - 2)) g.text(x, ry++, l, C.dim);
     ry++;
-    g.text(x, ry++, 'Why:', C.dim);
-    for (const w of A.by[f].why.slice(0, 6)) {
+    g.text(x, ry++, 'They want', C.dim);
+    for (const l of wrap(wish(L, T, f, state, M, stances), W - x - 3)) g.text(x + 1, ry++, l, C.white);
+    ry++;
+    g.text(x, ry++, 'Why they think as they do', C.dim);
+    for (const w of A.by[f].why.slice(0, 5)) {
       const v = Math.round(w.v);
-      if (!v || ry > H - 15) continue;
+      if (!v || ry > H - 9) continue;
       g.text(x, ry, `${v > 0 ? '+' : ''}${v}`.padStart(3), v > 0 ? '#a8e070' : '#ff8060');
       for (const l of wrap(w.text, W - x - 6).slice(0, 2)) g.text(x + 4, ry++, l, C.fg);
     }
-    ry++;
-    const names = M[f].slice(0, 6).map((r) => r.name.first).join(', ');
-    wrap(`Among them: ${names}${M[f].length > 6 ? '…' : ''}`, W - x - 2).slice(0, 2).forEach((l) => g.text(x, ry++, l, C.faint));
-    // Promises.
-    const pr = T.promises.filter((p) => p.state === 'open' || this.game.day - p.made < 14);
-    let py = Math.max(y + 1, H - 12);
-    g.text(2, py++, 'Promises', C.dim);
-    if (!pr.length) g.text(3, py++, 'None made.', C.faint);
-    for (const p of pr.slice(0, 3)) {
-      const fc = FACTIONS[p.f];
-      g.text(3, py, fc ? fc.glyph : '•', fc ? fc.color : C.fg);
-      g.text(5, py, `${p.text}${fc ? ` (to the ${fc.name.toLowerCase()})` : ''}`.slice(0, 38), C.fg);
-      g.text(44, py++, p.state === 'open' ? `by day ${p.due}` : p.state, p.state === 'kept' ? '#80e070' : p.state === 'broken' ? '#ff7060' : '#e8d060');
+    // Promises made them.
+    const pr = T.promises.filter((p) => p.f === f && (p.state === 'open' || this.game.day - p.made < 14));
+    if (pr.length) {
+      ry = Math.max(ry + 1, H - 8);
+      g.text(x, ry++, 'Your promises to them', C.dim);
+      for (const p of pr.slice(0, 2)) {
+        g.text(x + 1, ry, p.text.slice(0, 20), C.fg);
+        g.text(x + 22, ry++, p.state === 'open' ? `by day ${p.due}` : p.state, p.state === 'kept' ? '#80e070' : p.state === 'broken' ? '#ff7060' : '#e8d060');
+      }
     }
-    // The town's mood over the last weeks (in pixels).
-    this.moodArea = { x: 53, y: H - 11, w: W - 55, h: 8 };
-    g.text(53, H - 12, 'Approval, sitting by sitting', C.faint);
   }
 
   drawMoodChart(ctx) {
@@ -1012,10 +1039,30 @@ export class CouncilWindow extends Window {
   }
 
   // ------------------------------------------------------------ 5 officers
+  // A row of sub-views at the top of a page; the one shown.
+  subtabs(g, list, key, def) {
+    let x = 2;
+    const cur = this[key] && list.some((q) => q[0] === this[key]) ? this[key] : def;
+    for (const [id, label] of list) {
+      const lb = ` ${label} `;
+      const on = id === cur;
+      const hov = !on && this.hovering(x, BODY, lb.length, 1);
+      g.text(x, BODY, lb, on ? C.white : hov ? C.fg : C.dim, on ? '#3a3048' : hov ? '#2a2236' : undefined);
+      if (on) for (let i = 0; i < lb.length; i++) g.put(x + i, BODY + 1, '▀', '#c8a060');
+      this.hit(x, BODY, lb.length, 1, () => {
+        this[key] = id;
+        this.ui.audio?.play('select');
+      });
+      x += lb.length + 2;
+    }
+    return cur;
+  }
+
   drawOfficers(g, L, T) {
     const mine = this.mine();
-    let y = BODY;
-    g.text(2, y++, 'The town\'s officers', C.hi);
+    const view = this.subtabs(g, [['people', 'Officers and council'], ['orders', 'Standing orders']], 'oview', 'people');
+    if (view === 'orders') return this.drawOrders(g, L, T, mine);
+    let y = BODY + 3;
     for (const k of OFFICE_IDS) {
       const O = OFFICES[k];
       const r = this.office.officer(L, T, k);
@@ -1075,11 +1122,15 @@ export class CouncilWindow extends Window {
         y++;
       }
     }
-    for (let j = BODY; j < H - 3; j++) g.put(50, j, '│', '#3a3040');
-    // Right: someone to name, or the standing orders.
+    for (let j = BODY + 2; j < H - 3; j++) g.put(50, j, '│', '#3a3040');
+    // Right: someone to name.
     const x = 52;
-    let ry = BODY;
-    if (this.officeSel && mine) {
+    let ry = BODY + 3;
+    if (!this.officeSel || !mine) {
+      wrap(mine ? 'Choose an office on the left to name someone to it.' : 'The town\'s officers and its council.', W - x - 2).forEach((l) => g.text(x, ry++, l, C.faint));
+      return;
+    }
+    {
       const k = this.officeSel;
       g.text(x, ry++, `Name a ${OFFICES[k].name.toLowerCase()}`, C.hi);
       wrap(OFFICES[k].about, W - x - 2).slice(0, 3).forEach((l) => g.text(x, ry++, l, C.faint));
@@ -1108,19 +1159,23 @@ export class CouncilWindow extends Window {
       }
       return;
     }
-    g.text(x, ry++, 'Standing orders', C.hi);
-    g.text(x, ry++, 'What your steward does with', C.faint);
-    g.text(x, ry++, 'whatever you leave undecided:', C.faint);
-    let tip = null;
+  }
+
+  drawOrders(g, L, T, mine) {
+    const x = 4;
+    let ry = BODY + 3;
+    g.text(x, ry++, 'What your steward does with whatever you leave undecided by the next sitting:', C.dim);
+    ry++;
     for (const k of ORDER_IDS) {
       const O = ORDERS[k];
-      g.text(x, ry++, O.name, C.fg);
-      let bx = x + 2;
-      for (const [v, long, short] of O.opts) {
+      g.text(x, ry, O.name, C.fg);
+      let bx = x + 20;
+      let long = '';
+      for (const [v, desc, short] of O.opts) {
         const lb = ` ${short} `;
         const on = T.orders[k] === v;
         const hov = this.hovering(bx, ry, lb.length, 1);
-        if (hov || (on && !tip)) tip = hov ? long : tip;
+        if (on) long = desc;
         g.text(bx, ry, lb, on ? '#1a1420' : hov && mine ? C.white : C.dim, on ? '#c8a060' : hov && mine ? '#3a3048' : '#1c1824');
         if (mine && !on) this.hit(bx, ry, lb.length, 1, () => {
           this.office.setOrder(L, k, v);
@@ -1128,9 +1183,9 @@ export class CouncilWindow extends Window {
         });
         bx += lb.length + 1;
       }
-      ry++;
+      g.text(Math.max(bx + 2, 56), ry, long.slice(0, W - Math.max(bx + 2, 56) - 2), C.faint);
+      ry += 2;
     }
-    if (tip) g.text(x, ry, tip.slice(0, W - x - 2), '#c8b890');
   }
 
   trait(k, r) {
@@ -1158,200 +1213,177 @@ export class CouncilWindow extends Window {
 
   // ------------------------------------------------------------ 6 charter
   drawCharter(g, L, T) {
-    const cur = CHARTERS[T.charter];
     const choosing = !!T.chooseCharter && this.mine();
-    let y = BODY;
-    g.text(2, y++, choosing ? 'Write your village\'s charter: choose how it will be governed.' : `${L.settlement.name} is governed as ${cur.short}. Point at a charter to read it.`, choosing ? C.hi : C.fg);
+    const view = choosing ? 'charter' : this.subtabs(g, [['charter', 'Charter'], ['realm', 'The realm'], ['goals', 'Ambitions']], 'view', 'charter');
+    if (view === 'realm') return this.drawRealm(g, L, T);
+    if (view === 'goals') return this.drawAmbitions(g, L, T);
+    let y = BODY + 3;
+    g.text(2, y++, choosing ? 'Write your village\'s charter:' : 'How the town is governed:', choosing ? C.hi : C.dim);
     y++;
-    const VOTE = { council: 'A council of 4 votes', assembly: 'Every grown soul votes', guild: 'Guild masters vote', temple: 'The temple votes; veto', decree: 'You decree it all', factions: 'A voice per faction' };
-    const cw = 26;
-    const chh = 8;
-    let look = this.charterSel && CHARTERS[this.charterSel] ? this.charterSel : T.charter;
-    CHARTER_IDS.forEach((id, i) => {
+    const look = this.charterSel && CHARTERS[this.charterSel] ? this.charterSel : T.charter;
+    for (const id of CHARTER_IDS) {
       const c = CHARTERS[id];
-      const cx = 2 + (i % 3) * (cw + 1);
-      const cy = y + Math.floor(i / 3) * (chh + 1);
       const on = id === T.charter;
+      const sel = id === look;
       const fits = charterFits(L, id);
-      const hov = this.hovering(cx, cy, cw, chh);
-      if (hov) look = id;
-      g.box(cx, cy, cw, chh, { fg: on ? c.color : hov ? C.border : '#4a4050', bg: on ? '#241c2c' : hov ? '#1e1a26' : '#16121c', title: `${c.glyph} ${c.name}`, titleFg: on ? c.color : fits ? C.fg : C.faint });
-      const col = fits ? C.dim : C.faint;
-      g.text(cx + 2, cy + 1, VOTE[c.vote], col);
-      g.text(cx + 2, cy + 2, c.term ? `Elections: ${c.term} days` : 'No elections', col);
-      g.text(cx + 2, cy + 3, c.recall ? `Recall petition: ${Math.round(c.recall * 100)}%` : 'No recall petitions', col);
-      g.text(cx + 2, cy + 4, c.stipend ? `Your pay: ¤${c.stipend} a day` : 'No pay', col);
-      // Who likes it.
-      let mx = cx + 2;
-      for (const f of FACTION_IDS) {
-        const v = c.mod[f] || 0;
-        if (!v || mx > cx + cw - 4) continue;
-        g.put(mx, cy + 5, FACTIONS[f].glyph, FACTIONS[f].color);
-        g.put(mx + 1, cy + 5, v > 0 ? '▲' : '▼', v > 0 ? '#a8e070' : '#ff8060');
-        mx += 3;
-      }
-      if (on) g.text(cx + 2, cy + 6, choosing ? '(as it stands)' : 'the charter now', c.color);
-      else if (!fits) g.text(cx + 2, cy + 6, 'needs a temple and priest', C.faint);
-      else if (this.mine()) {
-        const pending = T.agenda.some((q) => q.key === 'charter' && !q.done && q.opts[0].fx.charter === id);
-        const lb = choosing ? ' Choose this ' : pending ? ' Before the council ' : ' Propose it ';
-        const bh = !pending && this.hovering(cx + 2, cy + 6, lb.length, 1);
-        g.text(cx + 2, cy + 6, lb, pending ? '#a0c8ff' : bh ? '#1a1420' : C.hi, pending ? '#203048' : bh ? C.hi : '#2a2236');
-        if (!pending) this.hit(cx + 2, cy + 6, lb.length, 1, () => {
+      const hov = this.hovering(1, y, 30, 1);
+      g.fill(1, y, 30, 1, ' ', C.fg, sel ? '#2c2438' : hov ? '#221c2a' : undefined);
+      g.text(2, y, c.glyph, fits ? c.color : C.faint);
+      g.text(4, y, c.name, on ? c.color : fits ? C.fg : C.faint);
+      if (on) g.text(24, y, 'now', c.color);
+      this.hit(1, y, 30, 1, () => {
+        this.charterSel = id;
+        this.ui.audio?.play('select');
+      });
+      y++;
+    }
+    for (let j = BODY + 2; j < H - 3; j++) g.put(32, j, '│', '#3a3040');
+    // The one looked at.
+    const c = CHARTERS[look];
+    const x = 34;
+    let ry = BODY + 3;
+    g.text(x, ry++, `${c.glyph} ${c.name}`, c.color);
+    ry++;
+    for (const rule of c.rules) for (const l of wrap(rule, W - x - 2)) if (ry < H - 9) g.text(x, ry++, l, C.fg);
+    ry++;
+    const likes = FACTION_IDS.filter((f) => c.mod[f]).sort((a, b) => c.mod[b] - c.mod[a]);
+    if (likes.length) {
+      g.text(x, ry++, 'Who it pleases:', C.dim);
+      whoMoves(g, x + 1, ry++, Object.fromEntries(likes.map((f) => [f, c.mod[f]])), W - x - 3);
+    }
+    const by = H - 6;
+    if (this.mine()) {
+      if (look === T.charter) g.text(x, by, choosing ? 'As it stands.' : 'The town\'s charter now.', C.faint);
+      else if (!charterFits(L, look)) g.text(x, by, 'Needs a temple and a priest.', C.faint);
+      else {
+        const pending = T.agenda.some((q) => q.key === 'charter' && !q.done && q.opts[0].fx.charter === look);
+        const lb = choosing ? ' Choose this charter ' : pending ? ' Before the council ' : ' Propose it (two in three) ';
+        const hov = !pending && this.hovering(x, by, lb.length, 1);
+        g.text(x, by, lb, pending ? '#a0c8ff' : hov ? '#1a1420' : C.hi, pending ? '#203048' : hov ? C.hi : '#2a2236');
+        if (!pending) this.hit(x, by, lb.length, 1, () => {
           if (choosing) {
-            this.office.chooseCharter(L, id);
+            this.office.chooseCharter(L, look);
             this.say(`${L.settlement.name} is to be governed as ${c.short}.`, c.color);
             this.ui.audio?.play('fanfare');
-          } else this.proposeIt(L, 'charter', id);
+          } else this.proposeIt(L, 'charter', look);
         });
       }
-      this.hit(cx, cy, cw, chh - 1, () => {
-        this.charterSel = id;
-      });
-    });
-    // The one pointed at, in full.
-    const c = CHARTERS[look];
-    let ry = y + 2 * (chh + 1);
-    g.text(2, ry++, `${c.glyph} ${c.name}`, c.color);
-    for (const rule of c.rules) for (const l of wrap(rule, W - 6)) if (ry < H - 4) g.text(4, ry++, l, C.dim);
-    // Stepping down.
-    const by = H - 3;
+    }
+    // Stepping down; who came before.
     if (this.mine() && !choosing) {
+      const sy = H - 4;
       const lb = this.confirm === 'step' ? ' Really step down? Click again ' : ' Step down ';
-      const hov = this.hovering(2, by, lb.length, 1);
-      g.text(2, by, lb, hov ? C.white : '#c08080', hov ? '#6a2a30' : '#2a1c20');
-      this.hit(2, by, lb.length, 1, () => {
+      const hov = this.hovering(2, sy, lb.length, 1);
+      g.text(2, sy, lb, hov ? C.white : '#c08080', hov ? '#6a2a30' : '#2a1c20');
+      this.hit(2, sy, lb.length, 1, () => {
         if (this.confirm === 'step') {
           this.office.stepDown(L);
           this.close();
         } else this.confirm = 'step';
       });
-      const past = T.past.slice(-2).map((p) => `${p.name} (day ${p.from}-${p.to}, ${p.why})`).join('; ');
-      if (past) g.text(4 + lb.length, by, `Before you: ${past}`.slice(0, W - 6 - lb.length), C.faint);
+      const h = T.holder;
+      const term = h.termEnd ? `Your term runs to day ${h.termEnd}.` : h.how === 'appointment' ? 'You serve at the realm\'s pleasure.' : 'You have no fixed term.';
+      g.text(2, sy - 1, term, C.faint);
     }
   }
 
-  // ------------------------------------------------------------ 7 realm
+  // The town's realm: its decrees and where the town stands with them,
+  // petitions, its council, the throne, breaking away.
   drawRealm(g, L, T) {
     const s = L.settlement;
     const civ = s.civ;
     const sim = this.game.sim;
-    let y = BODY;
+    const crown = sim.crown;
+    let y = BODY + 3;
     const mine = this.mine();
+    const btn = (x, yy, label, col, fn, on = true) => {
+      const hov = on && this.hovering(x, yy, label.length, 1);
+      g.text(x, yy, label, on ? (hov ? '#1a1420' : col) : C.faint, on ? (hov ? col : '#221c2a') : undefined);
+      if (on) this.hit(x, yy, label.length, 1, fn);
+      return x + label.length + 1;
+    };
     if (!civ) {
-      g.text(2, y++, `${s.name} answers to no realm.`, C.fg);
-    } else {
-      const realms = sim.realms;
-      const R = realms.realm(civ);
-      const ruler = realms.rulerName(civ);
-      g.text(2, y++, `${civ.name}`, '#a0c8ff');
-      for (const l of wrap(R.head === T.holder.pid ? 'Its head: you.' : `Ruled by ${ruler || authority(civ)}, from ${realms.capitalOf(civ)?.name || '?'}.`, 46).slice(0, 2)) g.text(2, y++, l, C.dim);
-      y++;
-      g.text(2, y++, 'Its decrees', C.hi);
-      const floor = R.decrees.taxFloor || 0;
-      const below = L.econ.tax < floor - 1e-9;
-      g.text(3, y, `Least tax: ${pc(floor)}`, C.fg);
-      g.text(24, y++, below ? (T.defy.taxFloor !== undefined ? '× defied' : '× the town falls short') : '✓ met', below ? '#ff8060' : '#80e070');
-      g.text(3, y, `Weapons ban: ${R.decrees.armsBan ? 'in every town' : 'none'}`, C.fg);
-      y++;
-      const tar = (R.decrees.tariffOn || []).map((id) => this.game.world.ow.civs[id]?.name.replace(/^The /, '')).filter(Boolean);
-      g.text(3, y++, `Tariffs on: ${tar.length ? tar.join(', ') : 'nobody'}`.slice(0, 46), C.fg);
-      if ((T.defyLevel || 0) > 0) g.text(3, y++, `The realm's patience: ${['', 'a warning sent', 'the town fined', 'an ultimatum'][Math.min(3, T.defyLevel)]}`, '#ff9070');
-      y++;
-      if (R.head === T.holder.pid) y = this.drawHeadDecrees(g, L, T, R, y);
-      else {
-        // Petitions.
-        g.text(2, y++, 'Petition the realm', C.hi);
-        const P = [['aid', 'Ask for aid (coin)'], ['floor', 'Ask for a lower least tax'], ['tribute', 'Ask to send less tribute'], ['road', `Ask for a road to ${realms.capitalOf(civ)?.name || 'the capital'}`]];
-        for (const [k, label] of P) {
-          const last = T.petitions[k];
-          const wait = k === 'floor' ? 14 : 7;
-          const ready = last === undefined || this.game.day - last >= wait;
-          const lb = ` ${label} `;
-          const hov = mine && ready && this.hovering(3, y, lb.length, 1);
-          g.text(3, y, lb, ready ? (hov ? '#1a1420' : C.fg) : C.faint, ready ? (hov ? C.hi : '#221c2a') : undefined);
-          if (!ready) g.text(4 + lb.length, y, `asked on day ${last}`, C.faint);
-          if (mine && ready) this.hit(3, y, lb.length, 1, () => {
-            const r = this.office.petition(L, k);
-            this.say(r.ok ? r.text : r.why, r.granted ? '#a0e8a0' : '#ffb080');
-            this.ui.audio?.play(r.granted ? 'chime' : 'page');
-          });
-          y++;
-        }
-        y++;
-        // The realm's council.
-        if (formOf(civ) === 'council') {
-          if (T.realm.seat) g.text(2, y++, '✦ You sit on the realm\'s council: its decrees come to you for a vote.', '#a0e8ff');
-          else if (T.realm.offered && mine) {
-            const lb = ' Take the seat on the realm\'s council ';
-            const hov = this.hovering(2, y, lb.length, 1);
-            g.text(2, y, lb, hov ? '#1a1420' : '#a0e8ff', hov ? '#a0e8ff' : '#1c2a34');
-            this.hit(2, y, lb.length, 1, () => {
-              const r = this.office.takeRealmSeat(L);
-              this.say(r.ok ? 'You sit on the realm\'s council.' : r.why, '#a0e8ff');
-            });
-            y++;
-          } else g.text(2, y++, 'The realm\'s council seats a town\'s head the town thinks well of (approval 55+).', C.faint);
-        }
-        // Breaking away.
-        if (mine && !realms.isCapital(s)) {
-          y++;
-          const pending = T.agenda.some((q) => q.key === 'secede' && !q.done);
-          const lb = pending ? ' Breaking away is before the council ' : ` Propose breaking away from the ${civ.name.replace(/^The /, '')} `;
-          const hov = !pending && this.hovering(2, y, lb.length, 1);
-          g.text(2, y, lb.slice(0, 48), pending ? '#a0c8ff' : hov ? C.white : '#ff9a7a', pending ? '#203048' : hov ? '#5a2a30' : '#2a1c20');
-          if (!pending) this.hit(2, y, lb.length, 1, () => this.proposeIt(L, 'secede'));
-          y++;
-          const sup = sim.realms.support(L);
-          g.text(3, y++, `The town ${sup > 0.15 ? 'is keen to go it alone' : sup > -0.1 ? 'is torn about going it alone' : 'wants to stay in the realm'}.`, C.faint);
-        }
-      }
+      g.text(2, y, `${s.name} answers to no realm.`, C.fg);
+      return;
     }
-    // Ambitions.
-    const x = 51;
-    let ay = BODY;
-    g.text(x, ay++, 'Ambitions', C.hi);
-    for (const go of this.office.goals(L, T)) {
-      g.text(x, ay, go.done ? '★' : '☆', go.done ? '#ffe070' : C.dim);
-      wrap(go.name, W - x - 4).slice(0, 2).forEach((l, i) => g.text(x + 2, ay + i, l, go.done ? '#ffe070' : C.fg));
-      ay += wrap(go.name, W - x - 4).slice(0, 2).length;
-      if (!go.done) bar(g, x + 2, ay, 20, go.v * 100, '#c8a060');
-      else g.text(x + 2, ay, 'realised', '#c8a060');
-      ay += 2;
+    const realms = sim.realms;
+    const R = realms.realm(civ);
+    const ruler = realms.rulerName(civ);
+    g.text(2, y++, civ.name, '#a0c8ff');
+    const yours = crown && crown.isRuler(civ, this.office.pid());
+    for (const l of wrap(yours ? 'You rule it.' : `Ruled by ${ruler || authority(civ)}${R.head ? ' (a player)' : ''}, from ${realms.capitalOf(civ)?.name || '?'}.`, 46).slice(0, 2)) g.text(2, y++, l, C.dim);
+    if (yours) {
+      y++;
+      btn(2, y, ' ★ Open the crown ', '#ffd070', () => this.ui.openCrown?.(this.game, civ));
+      return;
+    }
+    y++;
+    g.text(2, y++, 'Its decrees, and the town', C.hi);
+    const floor = R.decrees.taxFloor || 0;
+    const below = L.econ.tax < floor - 1e-9;
+    g.text(3, y, `Least tax ${pc(floor)}`, C.fg);
+    g.text(24, y++, below ? (T.defy.taxFloor !== undefined ? '× defied' : '× the town falls short') : '✓ met', below ? '#ff8060' : '#80e070');
+    g.text(3, y++, `Weapons ban: ${R.decrees.armsBan ? 'in every town' : 'none'}`, C.fg);
+    if ((T.defyLevel || 0) > 0) g.text(3, y++, `The realm's patience: ${['', 'a warning sent', 'the town fined', 'an ultimatum'][Math.min(3, T.defyLevel)]}`, '#ff9070');
+    y++;
+    // Petitions.
+    g.text(2, y++, R.head ? `Petition ${ruler}` : 'Petition the realm', C.hi);
+    const P = [['aid', 'Aid'], ['floor', 'A lower least tax'], ['tribute', 'Less tribute'], ['road', 'A road to the capital']];
+    let px = 3;
+    for (const [k, label] of P) {
+      const last = T.petitions[k];
+      const wait = k === 'floor' ? 14 : 7;
+      const ready = last === undefined || this.game.day - last >= wait;
+      px = btn(px, y, ` ${label} `, C.fg, () => {
+        const r = this.office.petition(L, k);
+        this.say(r.ok ? r.text : r.why, r.granted ? '#a0e8a0' : r.pending ? '#a0c8ff' : '#ffb080');
+        this.ui.audio?.play(r.granted ? 'chime' : 'page');
+      }, mine && ready);
+    }
+    y += 2;
+    // The realm's council, and its throne.
+    if (formOf(civ) === 'council') {
+      if (T.realm.seat) {
+        g.text(2, y++, '✦ You sit on the realm\'s council.', '#a0e8ff');
+        if (mine && !R.head) btn(3, y++, ' Stand for speaker ', '#a0e8ff', () => {
+          const r = crown.standForSpeaker(civ);
+          this.say(!r.ok ? r.why : r.won ? `The council chose you (${r.aye} to ${r.nay})!` : `The council would not have you (${r.aye} to ${r.nay}).`, r.won ? '#ffe070' : '#ffb080');
+        });
+      } else if (T.realm.offered && mine) {
+        btn(2, y++, ' Take the seat on the realm\'s council ', '#a0e8ff', () => {
+          const r = this.office.takeRealmSeat(L);
+          this.say(r.ok ? 'You sit on the realm\'s council.' : r.why, '#a0e8ff');
+        });
+      } else g.text(2, y++, 'Its council seats a town\'s head the town thinks well of.', C.faint);
+    }
+    if (crown && crown.heirs[civ.id] && crown.heirs[civ.id].pid === this.office.pid()) g.text(2, y++, `★ You are heir to the ${civ.name.replace(/^The /, '')}.`, '#ffe070');
+    if (mine && crown && realms.isCapital(s) && !R.head) {
+      const t = crown.canUsurp(civ);
+      btn(2, y++, ' Seize the throne ', '#ff9a7a', () => {
+        const r = crown.usurp(civ);
+        this.say(r.ok ? 'The throne is yours.' : r.why, r.ok ? '#ffe070' : '#ffb080');
+      }, t.ok);
+      if (!t.ok) g.text(3, y++, t.why.slice(0, 46), C.faint);
+    }
+    // Breaking away.
+    if (mine && !realms.isCapital(s)) {
+      y++;
+      const pending = T.agenda.some((q) => q.key === 'secede' && !q.done);
+      btn(2, y++, pending ? ' Breaking away is before the council ' : ' Propose breaking away ', '#ff9a7a', () => this.proposeIt(L, 'secede'), !pending);
+      const sup = sim.realms.support(L);
+      g.text(3, y++, `The town ${sup > 0.15 ? 'is keen to go it alone' : sup > -0.1 ? 'is torn about going it alone' : 'wants to stay in the realm'}.`, C.faint);
     }
   }
 
-  drawHeadDecrees(g, L, T, R, y) {
-    g.text(2, y++, 'Your realm\'s decrees', C.hi);
-    const FL = [0, 0.04, 0.06, 0.08, 0.1];
-    g.text(3, y, 'Least tax:', C.fg);
-    let bx = 15;
-    for (const v of FL) {
-      const lb = ` ${pc(v)} `;
-      const on = (R.decrees.taxFloor || 0) === v;
-      const hov = !on && this.hovering(bx, y, lb.length, 1);
-      g.text(bx, y, lb, on ? '#1a1420' : hov ? C.white : C.dim, on ? '#c8a060' : hov ? '#3a3048' : '#1c1824');
-      if (!on) this.hit(bx, y, lb.length, 1, () => this.office.realmDecree(L, 'taxFloor', v));
-      bx += lb.length + 1;
+  drawAmbitions(g, L, T) {
+    let y = BODY + 3;
+    for (const go of this.office.goals(L, T)) {
+      g.text(4, y, go.done ? '★' : '☆', go.done ? '#ffe070' : C.dim);
+      g.text(6, y, go.name.slice(0, 50), go.done ? '#ffe070' : C.fg);
+      if (!go.done) bar(g, 58, y, 20, go.v * 100, '#c8a060');
+      else g.text(58, y, 'realised', '#c8a060');
+      y += 2;
     }
-    y++;
-    const lb = R.decrees.armsBan ? ' Lift the weapons ban ' : ' Ban weapons in every town ';
-    const hov = this.hovering(3, y, lb.length, 1);
-    g.text(3, y, lb, hov ? '#1a1420' : C.fg, hov ? C.hi : '#221c2a');
-    this.hit(3, y, lb.length, 1, () => this.office.realmDecree(L, 'armsBan', !R.decrees.armsBan));
-    y += 2;
-    const civ = L.settlement.civ;
-    const others = this.game.sim.realms.civs.filter((o) => o !== civ && this.game.sim.realms.members(o).length).slice(0, 4);
-    g.text(3, y++, 'Tariffs:', C.fg);
-    for (const o of others) {
-      const on = R.decrees.tariffOn.includes(o.id);
-      const t = ` ${on ? '■' : '□'} ${o.name.replace(/^The /, '')} `.slice(0, 40);
-      const h2 = this.hovering(4, y, t.length, 1);
-      g.text(4, y, t, on ? '#ffb080' : C.dim, h2 ? '#3a3048' : undefined);
-      this.hit(4, y, t.length, 1, () => this.office.realmDecree(L, 'tariff', o.id));
-      y++;
-    }
-    return y + 1;
   }
 
   // ------------------------------------------------------------ keys

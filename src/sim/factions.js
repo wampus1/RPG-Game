@@ -15,13 +15,13 @@ import { LAWS, LAW_IDS, lawFits, lawOn, stance } from './laws.js';
 import { clamp } from '../util/rng.js';
 
 export const FACTIONS = {
-  merchants: { name: 'Merchants', glyph: '¤', color: '#ffd070', tax: 0.05, about: 'Traders, innkeepers and the well-off: low taxes, open trade, safe streets.' },
-  farmers: { name: 'Farmers & fishers', glyph: '♣', color: '#90d070', tax: 0.07, about: 'Those who work the land and the water: fair taxes, bread for the hungry, and the game law if they trap.' },
-  crafters: { name: 'Crafters', glyph: '⌂', color: '#e0a070', tax: 0.07, about: 'Smiths, builders, carpenters, miners and labourers: work, building, and the freedom to fell and dig.' },
-  guards: { name: 'Guards', glyph: '†', color: '#a0b8ff', tax: 0.12, about: 'The town\'s guards: their pay, a full watch, and order kept.' },
-  clergy: { name: 'Clergy', glyph: '✦', color: '#f0e8ff', tax: 0.1, about: 'Priests and the devout: charity, the temple, and quiet nights.' },
-  elders: { name: 'Elders', glyph: 'Ω', color: '#c8a0ff', tax: 0.09, about: 'The town\'s old folk: order, tradition and a full treasury.' },
-  poor: { name: 'Poor folk', glyph: '•', color: '#ff9a7a', tax: 0.03, about: 'Beggars and those with next to nothing: alms, bread and low taxes.' },
+  merchants: { short: 'Merchants', name: 'Merchants', glyph: '¤', color: '#ffd070', tax: 0.05, about: 'Traders, innkeepers and the well-off: low taxes, open trade, safe streets.' },
+  farmers: { short: 'Farmers', name: 'Farmers & fishers', glyph: '♣', color: '#90d070', tax: 0.07, about: 'Those who work the land and the water: fair taxes, bread for the hungry, and the game law if they trap.' },
+  crafters: { short: 'Crafters', name: 'Crafters', glyph: '⌂', color: '#e0a070', tax: 0.07, about: 'Smiths, builders, carpenters, miners and labourers: work, building, and the freedom to fell and dig.' },
+  guards: { short: 'Guards', name: 'Guards', glyph: '†', color: '#a0b8ff', tax: 0.12, about: 'The town\'s guards: their pay, a full watch, and order kept.' },
+  clergy: { short: 'Clergy', name: 'Clergy', glyph: '✦', color: '#f0e8ff', tax: 0.1, about: 'Priests and the devout: charity, the temple, and quiet nights.' },
+  elders: { short: 'Elders', name: 'Elders', glyph: 'Ω', color: '#c8a0ff', tax: 0.09, about: 'The town\'s old folk: order, tradition and a full treasury.' },
+  poor: { short: 'Poor', name: 'Poor folk', glyph: '•', color: '#ff9a7a', tax: 0.03, about: 'Beggars and those with next to nothing: alms, bread and low taxes.' },
 };
 export const FACTION_IDS = Object.keys(FACTIONS);
 

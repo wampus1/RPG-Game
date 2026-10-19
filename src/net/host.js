@@ -846,6 +846,10 @@ export class HostNet {
     let hud = [];
     try {
       hud = sim.careers.hudLines();
+      // (Round 122) Office and crown lines too: the guest's own sim holds
+      // neither.
+      if (sim.office) hud = hud.concat(sim.office.hudLines());
+      if (sim.crown) hud = hud.concat(sim.crown.hudLines());
     } catch {
       hud = [];
     }

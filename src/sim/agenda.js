@@ -52,7 +52,7 @@ export function nextSession(abs) {
 
 // Who speaks for the town in its ledger: "Mayor Wren Ashby".
 export function whoOf(L, T) {
-  return T && T.holder ? `${headTitle(T.charter, L.settlement)} ${T.holder.name}` : 'The council';
+  return T && T.holder ? `${headTitle(T.charter, L.settlement, T.holder && T.holder.style)} ${T.holder.name}` : 'The council';
 }
 
 // What the town's sums look like: people, reserve, the realm's least tax,
@@ -404,7 +404,7 @@ export function scandal(L, T, what, who = null) {
 export function ultimatum(L, T, civ) {
   return {
     key: 'crisis:crown', kind: 'crisis', crisis: 'crown', prio: 11, hours: 24, by: 'realm', title: `${cap1(authority(civ))} demands obedience`,
-    why: [`A rider has come from the capital: ${L.settlement.name} is to obey the realm's decrees, or its ${headTitle(T.charter, L.settlement).toLowerCase()} will be removed.`, 'Defy it, and only the town itself can keep you: if it stands behind you, it breaks away from the realm.'],
+    why: [`A rider has come from the capital: ${L.settlement.name} is to obey the realm's decrees, or its ${headTitle(T.charter, L.settlement, T.holder && T.holder.style).toLowerCase()} will be removed.`, 'Defy it, and only the town itself can keep you: if it stands behind you, it breaks away from the realm.'],
     opts: [
       { label: 'Submit to the realm', fx: { act: 'crown_submit', favour: { elders: 3, merchants: -2 } } },
       { label: 'Pay the realm off (¤100)', fx: { spend: 100, act: 'crown_pay' }, off: L.econ.treasury >= 100 ? null : 'the treasury can\'t pay' },

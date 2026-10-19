@@ -3,6 +3,7 @@
 // house building, traveling merchants, deferred world edits, and saving.
 import { Causes } from './causes.js';
 import { Office } from './office.js';
+import { Crown } from './crown.js';
 import { asSeat } from '../game/party.js';
 import { townMigrations } from '../game/migrate.js';
 import { isStar, starWary } from '../game/starfall.js';
@@ -173,6 +174,8 @@ export class Sim {
     this.causes = new Causes(game, this);
     // (Round 121) A town's office, when a player holds it (see office.js).
     this.office = new Office(game, this);
+    // (Round 122) A realm's throne, when a player holds it (see crown.js).
+    this.crown = new Crown(game, this);
     this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
     this.outings = new Outings(game, this);
@@ -390,6 +393,7 @@ export class Sim {
       this.religion.update();
       this.market.update();
       this.office.update();
+      this.crown.update();
     }
     if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) {
       this.laying = null;
@@ -2475,6 +2479,7 @@ export class Sim {
       petition: this.petition || null,
       causes: this.causes.serialize(),
       office: this.office.serialize(),
+      crown: this.crown.serialize(),
       // How towns have grown: their size now, and ground they've spread onto.
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
@@ -2582,6 +2587,7 @@ export class Sim {
     this.petition = data.petition || null;
     this.causes.load(data.causes);
     this.office.load(data.office);
+    this.crown.load(data.crown);
     for (const [id, type, base, suburbs, reach] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];
       if (!s) continue;

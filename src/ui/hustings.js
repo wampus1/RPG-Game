@@ -19,6 +19,7 @@ import { stated } from '../sim/agenda.js';
 import { LAWS, LAW_IDS, lawFits, lawOn, byDecree } from '../sim/laws.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { CouncilWindow } from './council.js';
+import { REALM_FORMS } from '../sim/realmforms.js';
 
 const full = (r) => (r && r.name ? `${r.name.first} ${r.name.last}` : 'someone');
 const BG = '#0e0b14';
@@ -419,9 +420,40 @@ const BANNER = {
   oath: (d, L) => ({ title: 'SWORN IN', head: `${d.title} of ${L.settlement.name}`, color: CHARTERS[d.charter].color, lines: [{ election: 'Elected by the town.', appointment: 'Appointed by the realm.', acclaim: 'Acclaimed by its people.', coup: 'The hall is yours. The town will remember how.', founding: 'Its founder.' }[d.how] || '', `${L.settlement.name} is governed as ${CHARTERS[d.charter].short}.`, 'Your steward keeps the hall; the council sits every morning at ten.', 'Press N to open your council.'] }),
   charter: (d, L) => ({ title: 'A NEW CHARTER', head: `${L.settlement.name}: ${CHARTERS[d.charter].name}`, color: CHARTERS[d.charter].color, lines: CHARTERS[d.charter].rules }),
   fallen: (d, L) => ({ title: 'OUT OF OFFICE', head: `No longer ${d.title} of ${L.settlement.name}`, color: '#a08080', lines: [`${d.why[0].toUpperCase()}${d.why.slice(1)}.`, `You served ${d.days} day${d.days === 1 ? '' : 's'}.`] }),
-  free: (d, L) => ({ title: 'A FREE STATE', head: d.civ, color: '#80e0c0', lines: [`${L.settlement.name} has broken away${d.from ? ` from the ${d.from.replace(/^The /, '')}` : ''}.`, 'You are the head of a realm of your own: its decrees are yours to set (N: the council, Realm).', 'Other towns may yet swear themselves to it.'] }),
+  free: (d, L) => ({ title: 'A FREE STATE', head: d.civ, color: '#80e0c0', lines: [`${L.settlement.name} has broken away${d.from ? ` from the ${d.from.replace(/^The /, '')}` : ''}.`, 'You lead a realm of your own now: its decrees, its towns, its neighbours (N: the crown).', 'Other towns may yet swear themselves to it.'] }),
   founding: (d, L) => ({ title: 'A VILLAGE BEGUN', head: L.settlement.name, color: '#a0e8a0', lines: ['Your settlers have pitched their tents. The village is yours to govern.', 'Write its charter: how it is to be governed.'], action: 'Write the charter' }),
-  offer: (d, L) => ({ title: d.how === 'acclaim' ? 'THE PEOPLE CALL FOR YOU' : 'AN OFFER OF OFFICE', head: `${L.settlement.name}`, color: '#ffe070', lines: [d.text, d.how === 'acclaim' ? 'Lead them, and you\'ll answer to them at the end of the term.' : 'Serve at the realm\'s pleasure: no elections, but the realm can dismiss you.'], yes: true }),
+  offer: (d, L) => ({
+    title: { acclaim: 'THE PEOPLE CALL FOR YOU', crown: 'THE REALM CALLS', heir: 'NAMED HEIR', governor: 'A GOVERNORSHIP' }[d.how] || 'AN OFFER OF OFFICE',
+    head: `${L.settlement.name}`,
+    color: '#ffe070',
+    lines: [d.text, { acclaim: 'Lead them, and you\'ll answer to them at the end of the term.', crown: 'Lead the realm: its matters, its decrees, its towns (N).', heir: 'Nothing changes until the throne falls empty.', governor: 'Serve at the crown\'s pleasure: no elections, but the crown can dismiss you.' }[d.how] || 'Serve at the realm\'s pleasure: no elections, but the realm can dismiss you.'],
+    yes: true,
+  }),
+  // (Round 122) A realm's throne taken; how its head is styled; a realm
+  // governed another way.
+  crowned: (d, L, game) => {
+    const civ = game.world.ow.civs[d.civ];
+    const R = game.sim.realms.realm(civ);
+    const F = REALM_FORMS[R.form] || REALM_FORMS.monarchy;
+    const how = { secession: 'Your town has broken away: the free realm is yours to lead.', succession: 'The throne has passed to you.', inheritance: 'The old ruler is dead, and you were their heir.', election: 'The realm has chosen you.', usurpation: 'You have seized the throne. The realm will remember how.' }[d.how] || '';
+    const grand = game.sim.realms.members(civ).length >= 5;
+    const styles = F.styles ? [...F.styles, ...(grand ? F.grand || [] : [])] : null;
+    return {
+      title: R.form === 'monarchy' ? 'CROWNED' : 'THE REALM IS YOURS', head: `${R.headStyle || F.title} of the ${civ.name.replace(/^The /, '')}`, color: F.color,
+      lines: [how, `It is governed as a ${F.name.toLowerCase()}: ${F.rules[0].toLowerCase()}`, styles ? 'How will you be styled?' : 'Press N for the crown.'],
+      choices: styles ? styles.map((st) => ({ label: st, fn: (w) => game.sim.crown.setStyle(civ, st) && w.close() })) : null,
+      crown: true,
+    };
+  },
+  style: (d, L, game) => ({
+    title: 'A LORDSHIP', head: L.settlement.name, color: CHARTERS.lordship.color, lines: [`${L.settlement.name} is yours by right now.`, 'How will you be styled?'],
+    choices: d.styles.map((st) => ({ label: st, fn: (w) => game.sim.office.setStyle(L, st) && w.close() })),
+  }),
+  realmform: (d, L, game) => {
+    const civ = game.world.ow.civs[d.civ];
+    const F = REALM_FORMS[d.form];
+    return { title: 'A NEW ORDER', head: `The ${civ.name.replace(/^The /, '')}: ${F.name}`, color: F.color, lines: F.rules, crown: true };
+  },
 };
 
 export class BannerWindow extends Window {
@@ -442,13 +474,17 @@ export class BannerWindow extends Window {
     const L = game.sim.layoutOf(this.d.sid);
     g.fill(0, 0, this.w, this.h, ' ', C.fg, BG);
     if (!L) return;
-    const B = BANNER[this.k](this.d, L);
+    const B = BANNER[this.k](this.d, L, game);
     this.B = B;
     g.box(0, 0, this.w, this.h, { bg: BG, double: true, fg: B.color, title: ` ${B.title} `, titleFg: B.color });
     g.center(8, B.head.slice(0, this.w - 4), C.white);
     let y = 10;
     for (const l of B.lines) for (const w of wrap(l, this.w - 8)) if (y < this.h - 3) g.center(y++, w, C.dim);
-    if (B.yes) {
+    if (B.choices) {
+      const tw = B.choices.reduce((n, c) => n + c.label.length + 3, -1);
+      let x = Math.floor((this.w - tw) / 2);
+      for (const c of B.choices) x = button(this, g, x, this.h - 2, ` ${c.label} `, true, () => c.fn(this), B.color) + 1;
+    } else if (B.yes) {
       let x = Math.floor(this.w / 2) - 12;
       x = button(this, g, x, this.h - 2, ' Accept ', true, () => this.answer(true), '#a0e8a0');
       button(this, g, x + 2, this.h - 2, ' Decline ', true, () => this.answer(false), '#ff9a7a');
@@ -460,7 +496,7 @@ export class BannerWindow extends Window {
   answer(yes) {
     const r = this.game.sim.office.answer(yes);
     this.close();
-    if (yes && r.ok) this.ui.open(new BannerWindow(this.ui, 'oath', { sid: this.d.sid, how: this.d.how, title: this.game.sim.office.title(r.L), charter: this.game.sim.office.of(this.d.sid).charter }));
+    if (yes && r.ok && !r.crown && !r.heir) this.ui.open(new BannerWindow(this.ui, 'oath', { sid: this.d.sid, how: this.d.how, title: this.game.sim.office.title(r.L), charter: this.game.sim.office.of(this.d.sid).charter }));
   }
 
   act() {
@@ -494,7 +530,7 @@ export class BannerWindow extends Window {
     }
     ctx.restore();
     ctx.globalAlpha = k;
-    const wax = this.k === 'fallen' ? '#5a4a50' : this.k === 'free' ? '#2a8a7a' : '#b81e2c';
+    const wax = this.k === 'fallen' ? '#5a4a50' : this.k === 'free' ? '#2a8a7a' : B.crown ? '#c89a30' : '#b81e2c';
     ctx.fillStyle = wax;
     ctx.beginPath();
     for (let j = 0; j < 18; j++) {
@@ -504,18 +540,27 @@ export class BannerWindow extends Window {
     }
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = this.k === 'fallen' ? '#6a5a60' : this.k === 'free' ? '#40b0a0' : '#d83040';
+    ctx.fillStyle = this.k === 'fallen' ? '#6a5a60' : this.k === 'free' ? '#40b0a0' : B.crown ? '#ffe070' : '#d83040';
     ctx.beginPath();
     ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
     ctx.fill();
-    // The town's mark pressed into it: a tower and a star.
-    ctx.fillStyle = this.k === 'fallen' ? '#4a3a40' : 'rgba(255,220,180,0.85)';
-    ctx.fillRect(cx - 4, cy - 6, 8, 11);
-    ctx.fillRect(cx - 6, cy - 8, 3, 3);
-    ctx.fillRect(cx - 1, cy - 8, 3, 3);
-    ctx.fillRect(cx + 4, cy - 8, 3, 3);
-    ctx.fillStyle = this.k === 'fallen' ? '#6a5a60' : this.k === 'free' ? '#40b0a0' : '#d83040';
-    ctx.fillRect(cx - 1, cy, 2, 5);
+    if (B.crown) {
+      // (A realm's: a crown pressed into gold.)
+      ctx.fillStyle = '#8a5a10';
+      ctx.fillRect(cx - 7, cy, 14, 4);
+      for (const dx of [-7, -1, 5]) ctx.fillRect(cx + dx, cy - 6, 2, 6);
+      ctx.fillRect(cx - 4, cy - 3, 2, 3);
+      ctx.fillRect(cx + 2, cy - 3, 2, 3);
+    } else {
+      // The town's mark pressed into it: a tower and a star.
+      ctx.fillStyle = this.k === 'fallen' ? '#4a3a40' : 'rgba(255,220,180,0.85)';
+      ctx.fillRect(cx - 4, cy - 6, 8, 11);
+      ctx.fillRect(cx - 6, cy - 8, 3, 3);
+      ctx.fillRect(cx - 1, cy - 8, 3, 3);
+      ctx.fillRect(cx + 4, cy - 8, 3, 3);
+      ctx.fillStyle = this.k === 'fallen' ? '#6a5a60' : this.k === 'free' ? '#40b0a0' : '#d83040';
+      ctx.fillRect(cx - 1, cy, 2, 5);
+    }
     if (this.k === 'fallen') {
       // Cracked across.
       ctx.strokeStyle = '#1a1014';
@@ -549,6 +594,7 @@ export class VoteWindow extends Window {
 
   draw(g, game) {
     this.game = game;
+    if (this.d.civ !== undefined) return this.drawCrown(g, game);
     const o = game.sim.office;
     const L = game.sim.layoutOf(this.d.sid);
     const T = o.of(this.d.sid);
@@ -562,7 +608,7 @@ export class VoteWindow extends Window {
     }
     const opt = it.opts[it.choice];
     let y = 2;
-    g.text(3, y++, `${headTitle(T.charter, L.settlement)} ${T.holder.name} proposes:`, C.dim);
+    g.text(3, y++, `${headTitle(T.charter, L.settlement, T.holder && T.holder.style)} ${T.holder.name} proposes:`, C.dim);
     wrap(`${it.title.replace(/\?$/, '')}: ${opt.label}`, this.w - 6).forEach((l) => g.text(3, y++, l, C.hi));
     y++;
     for (const p of it.why) for (const l of wrap(p, this.w - 6)) if (y < 12) g.text(3, y++, l, C.dim);
@@ -586,7 +632,55 @@ export class VoteWindow extends Window {
     g.text(2, this.h - 2, 'Esc: decide later (N: the council)', C.faint);
   }
 
+  // (Round 122) The realm's vote: its council, its moot or its league,
+  // and you have a voice in it.
+  drawCrown(g, game) {
+    const crown = game.sim.crown;
+    const civ = game.world.ow.civs[this.d.civ];
+    const K = civ && crown.of(civ);
+    const it = K && K.agenda.find((q) => q.id === this.d.id);
+    const F = civ ? REALM_FORMS[game.sim.realms.realm(civ).form] || REALM_FORMS.monarchy : REALM_FORMS.republic;
+    const body = F.vote === 'council' ? 'COUNCIL' : F.vote === 'league' ? 'LEAGUE' : 'MOOT';
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, BG);
+    g.box(0, 0, this.w, this.h, { bg: BG, double: true, fg: F.color, title: ` THE ${body} OF THE ${civ ? civ.name.replace(/^The /, '').toUpperCase() : ''} VOTES `, titleFg: F.color });
+    if (!it || it.state !== 'voting' || !it.vote) {
+      g.center(8, 'The vote is over.', C.dim);
+      g.center(this.h - 2, 'Enter: close', C.faint);
+      return;
+    }
+    const opt = it.opts[it.choice];
+    let y = 2;
+    g.text(3, y++, `${crown.who(civ)} proposes:`, C.dim);
+    wrap(`${it.title.replace(/\?$/, '')}: ${opt.label}`, this.w - 6).forEach((l) => g.text(3, y++, l, C.hi));
+    y++;
+    for (const p of it.why) for (const l of wrap(p, this.w - 6)) if (y < 11) g.text(3, y++, l, C.dim);
+    const st = crown.stated(civ, opt);
+    y = 12;
+    if (st.text) g.text(3, y++, st.text.slice(0, this.w - 6), '#c8b890');
+    // What it would do to your own town.
+    const T = game.sim.office.heldBy(game.sim.office.pid());
+    const mineBy = T && st.by[T.sid];
+    if (T) {
+      const nm = game.world.ow.settlements[T.sid].name;
+      g.text(3, y++, `${nm}: ${mineBy ? (mineBy > 0 ? `loyalty +${mineBy}` : `loyalty ${mineBy}`) : 'no matter'}`, mineBy > 0 ? '#a8e070' : mineBy < 0 ? '#ff8060' : C.dim);
+    }
+    g.text(3, y++, `The realm: ${st.overall ? (st.overall > 0 ? `+${st.overall}` : st.overall) : 'no change'}`, st.overall > 0 ? '#a8e070' : st.overall < 0 ? '#ff8060' : C.dim);
+    const mine = it.vote.ballots.find((b) => b.pid === game.sim.office.pid());
+    if (mine && mine.v === null) {
+      let x = 14;
+      x = button(this, g, x, this.h - 3, ' ✓ Vote for it ', true, () => this.cast(true), '#a0e8a0');
+      button(this, g, x + 2, this.h - 3, ' × Vote against it ', true, () => this.cast(false), '#ff9a7a');
+    } else g.center(this.h - 3, 'You\'ve voted. The realm will have its answer soon.', C.dim);
+    g.text(2, this.h - 2, 'Esc: decide later (it is decided without you in two hours)', C.faint);
+  }
+
   cast(aye) {
+    if (this.d.civ !== undefined) {
+      this.game.sim.crown.cast(this.d.civ, this.d.id, aye);
+      this.ui.audio?.play('select');
+      this.close();
+      return;
+    }
     this.game.sim.office.cast(this.d.sid, this.d.id, aye);
     this.ui.audio?.play('select');
     this.close();

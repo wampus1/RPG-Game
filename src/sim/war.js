@@ -530,6 +530,8 @@ export class War {
     const realms = this.realms;
     for (const a of civs) {
       if (this.atWar(a) || this.politics.lordOf(a)) continue;
+      // (A realm a player rules goes to war only when they say so.)
+      if (this.sim.crown && this.sim.crown.ruled(a)) continue;
       const ruler = realms.ruler(a);
       if (!ruler) continue;
       for (const b of civs) {
@@ -1429,9 +1431,17 @@ export class War {
     const asks = wa - wb > 0.1 ? 'a' : wb - wa > 0.1 ? 'b' : w.score >= 0 ? 'b' : 'a';
     const other = asks === 'a' ? wb : wa;
     const ahead = asks === 'a' ? w.score < -30 : w.score > 30;
-    if (other > 0.6 || !ahead || long || rng.chance(0.35)) return this.peace(w, day, rng, w.score > 0 ? 'a' : w.score < 0 ? 'b' : null, false);
     const asker = asks === 'a' ? ca : cb;
     const them = asks === 'a' ? cb : ca;
+    // (Round 122) A realm a player rules: it asks for peace only when they
+    // say so; asked, they answer.
+    const crown = this.sim.crown;
+    if (crown && asker && crown.ruled(asker)) return null;
+    if (crown && them && crown.ruled(them)) {
+      crown.peaceOffer(them, asker, w, day);
+      return null;
+    }
+    if (other > 0.6 || !ahead || long || rng.chance(0.35)) return this.peace(w, day, rng, w.score > 0 ? 'a' : w.score < 0 ? 'b' : null, false);
     if (asker && them) for (const c of [asker, them]) this.realms.proclaim(c, day, `The ${plain(asker)} asked for peace; the ${plain(them)} refused. The war goes on.`);
     return null;
   }

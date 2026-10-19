@@ -397,7 +397,11 @@ export class Politics {
           }
           continue;
         }
-        if (rng.chance(common ? 0.3 : 0.15)) this.ally(a, b, day, common);
+        if (!rng.chance(common ? 0.3 : 0.15)) continue;
+        // (Round 122) A realm a player rules is asked, not told.
+        const crown = this.sim.crown;
+        if (crown && (crown.ruled(a) || crown.ruled(b))) crown.allianceOffer(a, b, day, common);
+        else this.ally(a, b, day, common);
       }
     }
   }
@@ -437,6 +441,8 @@ export class Politics {
       const r = this.sim.realms.relation(a, b);
       if (r.score < 60) continue;
       const [small, big] = this.strength(a) <= this.strength(b) ? [a, b] : [b, a];
+      // (A realm a player rules isn't merged away.)
+      if (this.sim.crown && (this.sim.crown.ruled(small) || this.sim.crown.ruled(big))) continue;
       const like = (small.values || []).some((v) => (big.values || []).includes(v)) || small.style === big.style;
       if (!like || this.townsOf(small).length > 2 || this.strength(small) > this.strength(big) * 0.6) continue;
       if (rng.chance(0.2)) return this.merge(small, big, day, 'by long friendship');
@@ -445,6 +451,7 @@ export class Politics {
       const small = C[id];
       const lord = C[v.lord];
       if (!small || !lord || day - v.since < 45 || (war && war.atWar(small))) continue;
+      if (this.sim.crown && this.sim.crown.ruled(small)) continue;
       if (this.sim.realms.relation(small, lord).score >= 30 && this.townsOf(small).length <= 2 && rng.chance(0.1)) return this.merge(small, lord, day, 'after long years of service');
     }
     return null;
@@ -528,6 +535,8 @@ export class Politics {
     const cap = realms.capitalOf(civ);
     const ruler = realms.ruler(civ);
     if (!cap || !ruler) return null;
+    // (A realm a player rules: its watch and draft are theirs to decree.)
+    if (R.head) return null;
     d.watch ||= 'standard';
     d.draft ||= 'none';
     const war = this.sim.war;

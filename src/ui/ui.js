@@ -22,6 +22,7 @@ import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
 import { QuestWindow } from './quests.js';
 import { CouncilWindow } from './council.js';
+import { CrownWindow } from './crown.js';
 import { HustingsWindow, CountWindow, BannerWindow, VoteWindow } from './hustings.js';
 import { pidOf } from '../sim/saga/refs.js';
 import { ZONE, KINDS } from '../game/fishing.js';
@@ -152,11 +153,17 @@ export class UI {
     if (kind === 'count') return this.open(new CountWindow(this, data));
     if (kind === 'vote') return this.open(new VoteWindow(this, data));
     if (kind === 'voted') {
+      // (Round 122: the realm's vote, too.)
+      if (data.civ !== undefined) {
+        const w = this.find('crown');
+        if (w && w.civId === data.civ) w.say('The realm has voted.', '#a0e8ff');
+        return w;
+      }
       const w = this.find('council');
       if (w && w.sid === data.sid) w.say('The council has voted.', '#a0e8ff');
       return w;
     }
-    if (['oath', 'charter', 'fallen', 'free', 'founding', 'offer'].includes(kind)) return this.open(new BannerWindow(this, kind, data));
+    if (['oath', 'charter', 'fallen', 'free', 'founding', 'offer', 'crowned', 'style', 'realmform'].includes(kind)) return this.open(new BannerWindow(this, kind, data));
     return null;
   }
 
@@ -169,11 +176,37 @@ export class UI {
     const offer = o.offerFor(pid);
     if (offer) return this.open(new BannerWindow(this, 'offer', offer));
     const T = o.councilOf(pid);
+    // (Round 122) The realm you rule: its crown, unless the town you
+    // govern has the more pressing business.
+    const K = game.sim.crown && game.sim.crown.heldBy(pid);
+    if (K) {
+      const open = (A, crisis) => A.agenda.filter((q) => !q.done && q.state === 'open' && (!crisis || q.crisis)).length;
+      const town = T && T.holder && T.holder.pid === pid ? T : null;
+      if (!town || open(K, true) || (!open(town, true) && (open(K) || !open(town)))) return this.openCrown(game, K.civ);
+    }
     const q = Object.values(game.sim.causes.list).find((c) => c && !c.done && c.kind === 'office' && c.cands.some((x) => x.pid === pid));
     if (T && !(q && !o.isHolder(q.sid, pid))) return this.open(new CouncilWindow(this, T.sid));
     if (q) return this.open(new HustingsWindow(this, q.sid));
     this.msg('You hold no office. A citizen of a few days can stand for mayor at the town hall.', C.dim);
     return null;
+  }
+
+  // (Round 122) The crown of a realm you rule (a civilization, or its id).
+  openCrown(game, civ) {
+    const id = civ && typeof civ === 'object' ? civ.id : civ;
+    for (const k of ['council', 'crown']) {
+      const w = this.find(k);
+      if (w) this.close(w);
+    }
+    return this.open(new CrownWindow(this, id));
+  }
+
+  openCouncil(game, sid) {
+    for (const k of ['council', 'crown']) {
+      const w = this.find(k);
+      if (w) this.close(w);
+    }
+    return this.open(new CouncilWindow(this, sid));
   }
 
   toggle(kind, make) {
@@ -271,7 +304,7 @@ export class UI {
         // (Round 121) The council of the town you govern.
         case 'KeyN': {
           if (game.player.dead) continue;
-          const w = this.find('council') || this.find('hustings') || this.find('officebanner');
+          const w = this.find('council') || this.find('crown') || this.find('hustings') || this.find('officebanner');
           if (w) this.close(w);
           else this.openOffice(game);
           continue;
@@ -949,7 +982,9 @@ export class UI {
         g.text(1, y++, l.text.slice(0, 24), l.color);
       }
       // (Round 121) The town you govern: its matters, a crisis.
-      if (sim.office) for (const l of sim.office.hudLines()) {
+      // (Round 122) And the realm you rule.
+      const offLines = sim.office && !game.remote ? [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : [])] : [];
+      for (const l of offLines) {
         g.fill(0, y, 25, 1, ' ', C.fg, l.blink && Math.floor(this.time * 3) % 2 ? 'rgba(120,20,20,0.85)' : 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
       }

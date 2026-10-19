@@ -36,6 +36,7 @@ export const COMMANDS = {
   mod: { args: 'help | list | give | spawn | place | story | event | effect | dungeon ...', about: '(Round 62) For trying a mod out: what the world\'s mods add ("mod list"), and putting any of it here: an item, a creature, a structure, a story, an event, an effect, a dungeon to go down into ("mod help" for each).' },
   ship: { args: '<sloop|brigantine|galleon|frigate> [aboard] | foe <type> | list', about: '(Round 68) Launch a ship of your own on the nearest open water (and put you aboard her, with "aboard"), with a crew and shot; "foe" sends a warship against you; "list" names the ships about.' },
   office: { args: '[town] | sit | crisis <raid|famine|fever|unrest|scandal> | leave', about: '(Round 121) Take office in a town at once (the one you\'re in, or named), as if elected; "sit" holds the council\'s morning sitting now; "crisis" brings one on; "leave" steps you down.' },
+  crown: { args: '[realm] [monarchy|republic|elder|theocracy|league] | sit | crisis | leave', about: '(Round 122) Take the throne of a realm at once (the one you\'re in, or named), governed as you say; "sit" holds the crown\'s morning sitting now; "crisis" brings on a pretender; "leave" abdicates.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -88,6 +89,49 @@ function officeCmd(game, words) {
   if (o.isHolder(s.id)) return [`You already govern ${s.name}.`];
   o.install(L, o.pid(), game.playerName, 'election', game.day);
   return [`You are ${o.title(L)} of ${s.name}. Press N for the council.`];
+}
+
+// (Round 122) Ruling a realm at once, and its business on demand.
+function crownCmd(game, words) {
+  const sim = game.sim;
+  const crown = sim.crown;
+  const pid = sim.office.pid();
+  const first = (words[0] || '').toLowerCase();
+  const C = crown.heldBy(pid);
+  const civ = C ? crown.civ(C.civ) : null;
+  if (first === 'leave') {
+    if (!civ) return ['You rule no realm.'];
+    crown.abdicate(civ);
+    return [`You give up the throne of ${civ.name}.`];
+  }
+  if (first === 'sit') {
+    if (!civ) return ['You rule no realm.'];
+    crown.session(civ, crown.capitalL(civ), game.day, new RNG(hash4(game.day, civ.id, 0xc5)));
+    return [`The crown sits: ${C.agenda.filter((q) => !q.done).length} matter(s) before it (N).`];
+  }
+  if (first === 'crisis') {
+    if (!civ) return ['You rule no realm.'];
+    C.crisisDay = -99;
+    C.crises = {};
+    C.lowDays = 5;
+    const spec = crown.crisisFor(civ, C, game.day);
+    if (!spec) return ['No crisis can come on in a realm governed this way (a pretender rises only against a monarch or a hierarch).'];
+    crown.crisis(civ, C, spec, game.day, sim.abs);
+    return [`Crisis in the realm: ${spec.title}. (N: the crown)`];
+  }
+  const forms = ['monarchy', 'republic', 'elder', 'theocracy', 'league'];
+  const form = forms.find((f) => words.some((w) => w.toLowerCase() === f)) || null;
+  const rest = words.filter((w) => !forms.includes(w.toLowerCase()));
+  let target = rest.length ? civArg(game, rest.join(' ')) : null;
+  if (!target) {
+    const s = townArg(game, []);
+    target = s && s.civ;
+  }
+  if (!target) return ['No such realm (or you\'re not in one).'];
+  for (const s of sim.realms.members(target)) sim.layoutOf(s.id);
+  if (!crown.capitalL(target)) return [`The capital of ${target.name} isn't laid out yet: go nearer to it.`];
+  crown.crownPlayer(target, pid, game.playerName, 'succession', game.day, form ? { form } : {});
+  return [`You rule ${target.name} now. Press N for the crown.`];
 }
 
 // A town by name (or the start of it), or the one you're in.
@@ -272,6 +316,7 @@ export function runCommand(game, text) {
     case 'fete':
       return eventCmd(game, cmd, words);
     case 'office': return officeCmd(game, words);
+    case 'crown': return crownCmd(game, words);
     case 'street': {
       const s = townArg(game, words);
       const L = s && sim.layoutOf(s.id);

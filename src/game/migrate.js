@@ -915,6 +915,15 @@ export const STEPS = [
       log.push('You can govern a town: stand for mayor where you\'re a citizen (or be appointed, acclaimed, seize the hall, or found a village), and run it from the council window (N): its matters, taxes, laws, spending, factions, officers, charter and realm.');
     },
   },
+  {
+    to: '1.22.0',
+    data(d, log) {
+      // (No realm is a player's yet: every one keeps the government its
+      // name has always given it.)
+      if (d && d.sim && !d.sim.crown) d.sim.crown = { realms: {}, heirs: {} };
+      log.push('You can rule a realm: break your town away, be named heir, be chosen speaker, or seize the throne, and govern it from the crown window (N) as a monarchy, republic, clan moot, holy realm or merchant league.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

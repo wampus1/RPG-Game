@@ -15,21 +15,41 @@ import { alive, ledger, stockOf } from './econ.js';
 import { deserted } from './civic.js';
 import { retrain } from '../entities/npcgen.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
+import { REALM_FORMS, formFromLegacy } from './realmforms.js';
 
 // Titles of a realm's ruler, by what the realm calls itself.
 const MONARCH_TITLES = { Jarldom: 'Jarl', Thanedom: 'Thane', Sultanate: 'Sultan', Emirate: 'Emir', Caliphate: 'Caliph', Satrapy: 'Satrap', Protectorate: 'Protector', Hegemony: 'Hegemon' };
 const COUNCIL_WORDS = ['Free Towns', 'Free Cities', 'Republic', 'Confederacy', 'Commonwealth', 'League', 'Union', 'Compact', 'Alliance', 'Free State', 'Serpent Council'];
 const ELDER_WORDS = ['Shire', 'Clans', 'Holds', 'Hold', 'Tribes'];
 
+// (Round 122: a realm reformed by a player who rules it keeps its new form:
+// see realmforms.js and crown.js. `govForm` and `headStyle` are copied onto
+// the realm's civilization by Realms.realm.)
 export function formOf(civ) {
+  if (civ && civ.govForm && REALM_FORMS[civ.govForm]) return REALM_FORMS[civ.govForm].legacy;
+  return nameForm(civ);
+}
+
+export function nameForm(civ) {
   const n = civ.name || '';
   if (COUNCIL_WORDS.some((w) => n.includes(w))) return 'council';
   if (ELDER_WORDS.some((w) => new RegExp(`\\b${w}\\b`).test(n))) return 'elder';
   return 'monarch';
 }
 
+// The realm's form of government in full (monarchy, republic, elder,
+// theocracy, league).
+export function govOf(civ) {
+  return civ && civ.govForm && REALM_FORMS[civ.govForm] ? civ.govForm : formFromLegacy(nameForm(civ));
+}
+
 export function rulerTitle(civ) {
-  const f = formOf(civ);
+  // (A player on the throne: the style they chose; a reformed realm: its
+  // form's title.)
+  if (civ.headStyle) return civ.headStyle;
+  const g = civ.govForm;
+  if (g && g !== 'monarchy' && REALM_FORMS[g]) return g === 'republic' ? 'Speaker of the Council' : REALM_FORMS[g].title;
+  const f = g === 'monarchy' ? 'monarch' : nameForm(civ);
   if (f === 'council') return 'Speaker of the Council';
   if (f === 'elder') return 'High Elder';
   const k = Object.keys(MONARCH_TITLES).find((w) => (civ.name || '').includes(w));
@@ -44,11 +64,14 @@ export function shortTitle(civ) {
 
 // Who speaks for the realm in a decree: "the Crown", "the Council"...
 export function authority(civ) {
+  const g = civ.govForm;
+  if (g === 'theocracy') return 'the Hierarch';
+  if (g === 'league') return 'the Doge';
   const f = formOf(civ);
   if (f === 'council') return 'the Council';
   if (f === 'elder') return 'the High Elder';
   const t = rulerTitle(civ);
-  return t === 'Monarch' ? 'the Crown' : `the ${t}`;
+  return t === 'Monarch' || t === 'King' || t === 'Queen' || t === 'Sovereign' ? 'the Crown' : `the ${t}`;
 }
 
 export const STANDING = { friendly: 20, hostile: -20 };
@@ -96,6 +119,10 @@ export class Realms {
     }
     // (Towns read the realm's decrees straight off their civilization.)
     civ.decrees = R.decrees;
+    // (A realm renamed when its form changed: see crown.reform.)
+    if (R.name && civ.name !== R.name) civ.name = R.name;
+    civ.govForm = R.form || null;
+    civ.headStyle = R.head && R.headStyle ? R.headStyle : null;
     return R;
   }
 
@@ -203,6 +230,9 @@ export class Realms {
   }
 
   rulerName(civ) {
+    // (A player on the throne.)
+    const R = this.realm(civ);
+    if (R && R.head) return `${shortTitle(civ)} ${R.headName || 'the ruler'}`;
     const r = this.ruler(civ);
     return r ? `${shortTitle(civ)} ${fullName(r)}` : null;
   }
@@ -269,6 +299,8 @@ export class Realms {
     const f = formOf(civ);
     const title = shortTitle(civ);
     const cur = this.recOf(R.ruler);
+    // (Round 122) A player named heir, or chosen by the council.
+    if (!this.ruler(civ) && R.ruler && !R.head && this.sim.crown && this.sim.crown.succession(civ, L, cur, day)) return;
     if (!this.ruler(civ)) {
       const first = !R.ruler;
       const next = this.successor(civ, L, cur);
@@ -297,6 +329,13 @@ export class Realms {
         R.council.push({ sid: L.settlement.id, idx: pick.idx });
         if (R.since !== day) ledger(L, day, `${fullName(pick)} took a seat on the council of the ${civ.name.replace(/^The /, '')}.`);
       }
+    }
+    if (this.sim.crown && !R.head && day % 2 === 1) this.sim.crown.heirCheck(civ, L, day);
+    // (Round 122) A realm a player rules: the crown's sitting, and its
+    // chancellor about the rest by their standing orders (see crown.js).
+    if (R.head && this.sim.crown) {
+      this.sim.crown.session(civ, L, day, rng);
+      return;
     }
     if ((day + civ.id) % 7 === 0) this.decree(civ, day, rng);
     if (day % 2 === 0) this.aid(civ, L, day);
@@ -422,10 +461,12 @@ export class Realms {
   // put to the council first, and made only if it carries: see
   // office.realmProposal. A realm a player heads has its decrees from
   // them, not from here.)
-  decree(civ, day, rng) {
+  // (`advise`: only say what would be changed (the change, unmade), for a
+  // ruling player's privy council: see crown.js.)
+  decree(civ, day, rng, advise = false) {
     const R = this.realm(civ);
     const ruler = this.ruler(civ);
-    if (!ruler || R.head) return null;
+    if (!ruler || (R.head && !advise)) return null;
     const d = R.decrees;
     const towns = this.memberLayouts(civ);
     if (!towns.length) return null;
@@ -437,6 +478,7 @@ export class Realms {
     const poor = towns.filter((L) => L.econ.treasury < residents(L).length * 6).length;
     const i = TAX_FLOORS.indexOf(d.taxFloor);
     const put = (change) => {
+      if (advise) return change;
       if (this.sim.office && this.sim.office.realmProposal(civ, change, day)) return change.key;
       change.apply();
       return change.key;
@@ -444,14 +486,14 @@ export class Realms {
     // Arms: trouble across the realm brings a ban; long calm (and a bold
     // ruler) lifts it (never in a martial realm).
     if (!d.armsBan && violence >= 3 + (p.bravery ?? 0.5) * 3) {
-      return put({ key: 'armsBan', title: 'A weapons ban in every town', text: `drawn weapons forbidden in every town of the ${realmName}.`, lean: (r) => (0.5 - (r.personality?.bravery ?? 0.5)),
+      return put({ key: 'armsBan', fx: { decree: 'armsBan', v: true }, title: 'A weapons ban in every town', text: `drawn weapons forbidden in every town of the ${realmName}.`, lean: (r) => (0.5 - (r.personality?.bravery ?? 0.5)),
         apply: () => {
           d.armsBan = true;
           this.proclaim(civ, day, `By decree of ${who}: drawn weapons are forbidden in every town of the ${realmName}.`);
         } });
     }
     if (d.armsBan && violence === 0 && !(civ.values || []).includes('martial') && rng.chance(0.3 + (p.bravery ?? 0.5) * 0.4)) {
-      return put({ key: 'armsBan', title: 'Lifting the weapons ban', text: 'the realm\'s weapons ban lifted.', lean: (r) => ((r.personality?.bravery ?? 0.5) - 0.5),
+      return put({ key: 'armsBan', fx: { decree: 'armsBan', v: false }, title: 'Lifting the weapons ban', text: 'the realm\'s weapons ban lifted.', lean: (r) => ((r.personality?.bravery ?? 0.5) - 0.5),
         apply: () => {
           d.armsBan = false;
           this.proclaim(civ, day, `${cap(who)} has lifted the realm's weapons ban.`);
@@ -465,21 +507,21 @@ export class Realms {
       const on = d.tariffOn.includes(o.id);
       const them = o.name.replace(/^The /, '');
       if (on && free) {
-        return put({ key: 'tariff', title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted: the realm trades freely now.`,
+        return put({ key: 'tariff', fx: { decree: 'tariff', civ: o.id, v: false }, title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted: the realm trades freely now.`,
           apply: () => {
             d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
             this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${them}: the realm trades freely now.`);
           } });
       }
       if (!on && st === 'hostile' && !free) {
-        return put({ key: 'tariff', title: `A tariff on the ${them}`, text: `merchants of the ${them} to pay a tariff on all they sell here.`, lean: () => 0.2,
+        return put({ key: 'tariff', fx: { decree: 'tariff', civ: o.id, v: true }, title: `A tariff on the ${them}`, text: `merchants of the ${them} to pay a tariff on all they sell here.`, lean: () => 0.2,
           apply: () => {
             d.tariffOn.push(o.id);
             this.proclaim(civ, day, `By decree of ${who}: merchants of the ${them} pay a tariff on all they sell here.`);
           } });
       }
       if (on && st === 'friendly') {
-        return put({ key: 'tariff', title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted.`, lean: () => 0.1,
+        return put({ key: 'tariff', fx: { decree: 'tariff', civ: o.id, v: false }, title: `Lifting the tariff on the ${them}`, text: `the tariff on merchants of the ${them} lifted.`, lean: () => 0.1,
           apply: () => {
             d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
             this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${them}.`);
@@ -492,7 +534,7 @@ export class Realms {
     const flush = capL && capL.econ.treasury > residents(capL).length * 40;
     if (i < TAX_FLOORS.length - 1 && (poor * 2 > towns.length || (capL && capL.econ.treasury < residents(capL).length * 10)) && (p.kindness ?? 0.5) < 0.8) {
       const v = TAX_FLOORS[i + 1];
-      return put({ key: 'taxFloor', title: `A least tax of ${Math.round(v * 100)}%`, text: `no town of the ${realmName} to tax less than ${Math.round(v * 100)}%.`, lean: (r) => (0.5 - (r.personality?.kindness ?? 0.5)),
+      return put({ key: 'taxFloor', fx: { decree: 'taxFloor', v }, title: `A least tax of ${Math.round(v * 100)}%`, text: `no town of the ${realmName} to tax less than ${Math.round(v * 100)}%.`, lean: (r) => (0.5 - (r.personality?.kindness ?? 0.5)),
         apply: () => {
           d.taxFloor = v;
           this.proclaim(civ, day, `By decree of ${who}: no town of the ${realmName} may tax less than ${Math.round(d.taxFloor * 100)}%.`);
@@ -500,7 +542,7 @@ export class Realms {
     }
     if (i > 0 && flush && rng.chance(0.3 + (p.kindness ?? 0.5) * 0.5)) {
       const v = TAX_FLOORS[i - 1];
-      return put({ key: 'taxFloor', title: v ? `Lowering the least tax to ${Math.round(v * 100)}%` : 'No least tax', text: v ? `the realm's least tax lowered to ${Math.round(v * 100)}%.` : 'no least tax set for the towns.', lean: (r) => ((r.personality?.kindness ?? 0.5) - 0.4),
+      return put({ key: 'taxFloor', fx: { decree: 'taxFloor', v }, title: v ? `Lowering the least tax to ${Math.round(v * 100)}%` : 'No least tax', text: v ? `the realm's least tax lowered to ${Math.round(v * 100)}%.` : 'no least tax set for the towns.', lean: (r) => ((r.personality?.kindness ?? 0.5) - 0.4),
         apply: () => {
           d.taxFloor = v;
           this.proclaim(civ, day, d.taxFloor ? `${cap(who)} lowered the realm's least tax to ${Math.round(d.taxFloor * 100)}%.` : `${cap(who)} no longer sets a least tax for the towns.`);
@@ -532,7 +574,7 @@ export class Realms {
     const capL = this.sim.layoutOf(R.capital);
     if (!capL || !capL.econ) return 0;
     // (Round 121: halved for a while, at a governor's petition.)
-    const cut = this.sim.office && this.sim.office.of(s.id) && this.sim.office.of(s.id).tributeCut > day ? 0.5 : 1;
+    const cut = (this.sim.office && this.sim.office.of(s.id) && this.sim.office.of(s.id).tributeCut > day) || (this.sim.crown && this.sim.crown.relieved(civ, s.id, day)) ? 0.5 : 1;
     const n = Math.min(L.econ.treasury, Math.floor(L.econ.taxY * R.share * cut));
     if (n <= 0) return 0;
     L.econ.treasury -= n;
@@ -572,9 +614,18 @@ export class Realms {
     push += this.sim.war ? this.sim.war.weariness(civ) * 0.5 : 0;
     // (Clemency: grievances forgiven sooner.)
     e.unrest = Math.max(0, (e.unrest || 0) * (this.sim.tech && this.sim.tech.has(s, 'clemency') ? 0.7 : 0.85) + push);
+    // (Round 122) Under a ruler who plays: how loyal the town is to them.
+    if (R.head && this.sim.crown) e.unrest = Math.max(0, e.unrest + (45 - this.sim.crown.loyaltyOf(civ, L)) / 100);
     e.independence = this.support(L);
     e.secedeVotes = e.independence > 0.3 ? (e.secedeVotes || 0) + 1 : 0;
     if (e.secedeVotes === 1) ledger(L, day, `There's talk in ${s.name} of breaking away from the ${civ.name.replace(/^The /, '')}.`);
+    // (A town a player governs: theirs to decide; a realm a player rules:
+    // the ruler hears of it first.)
+    if (e.secedeVotes >= 1 && this.sim.office?.governs(L)) {
+      this.sim.office.secessionCall(L, day);
+      return null;
+    }
+    if (e.secedeVotes === 1 && R.head && this.sim.crown) this.sim.crown.rebelTown(civ, L, day);
     if (e.secedeVotes >= 2 && pop >= 12) return this.secede(L, day, rng);
     return null;
   }
@@ -913,7 +964,8 @@ export class Realms {
     else if ((day + s.id) % 7 === 0 && this.unrestWeekly(L, day, rng)) return;
     // The realm's least tax holds in every town.
     const floor = R.decrees.taxFloor;
-    if (floor && L.econ.tax < floor) {
+    // (A town a player governs answers for itself: see office.js.)
+    if (floor && L.econ.tax < floor && !this.sim.office?.governs(L)) {
       L.econ.tax = floor;
       ledger(L, day, `Taxes rose to ${Math.round(floor * 100)}%, the least ${authority(civ)} allows.`);
     }
@@ -936,7 +988,7 @@ export class Realms {
     }
     this.allegiance = (d && d.allegiance) || [];
     for (const [sid, cid] of this.allegiance) if (ow.settlements[sid] && ow.civs[cid]) this.join(ow.settlements[sid], ow.civs[cid]);
-    for (const civ of this.civs) if (this.state[civ.id]) civ.decrees = this.state[civ.id].decrees;
+    for (const civ of this.civs) if (this.state[civ.id]) this.realm(civ);
   }
 }
 

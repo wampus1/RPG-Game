@@ -155,7 +155,7 @@ export class Office {
   }
 
   title(L, T = this.of(L.settlement.id)) {
-    return headTitle(T ? T.charter : defaultCharter(L), L.settlement);
+    return headTitle(T ? T.charter : defaultCharter(L), L.settlement, T && T.holder && T.holder.style);
   }
 
   stewardOf(L, T = this.of(L.settlement.id)) {
@@ -426,10 +426,10 @@ export class Office {
       if (!countItem(p.inv, 'chain_of_office')) addItem(p.inv, 'chain_of_office', 1);
     });
     const how2 = { election: ', elected by the town', appointment: `, appointed by ${s.civ ? authority(s.civ) : 'the realm'}`, acclaim: ', acclaimed by its people', coup: ', having seized the town hall', founding: ', its founder' }[how] || '';
-    ledger(L, day, `${name} is now ${headTitle(T.charter, s)} of ${s.name}${how2}.`);
+    ledger(L, day, `${name} is now ${headTitle(T.charter, s, T.holder && T.holder.style)} of ${s.name}${how2}.`);
     this.asPid(pid, () => this.sim.addRenown?.(s.id, 2, 'taking up the town\'s office'));
     this.sim.saga?.emit('office_won', { pid, sid: s.id, how });
-    if (!o.quiet) this.show(pid, 'oath', { sid: s.id, how, title: headTitle(T.charter, s), charter: T.charter });
+    if (!o.quiet) this.show(pid, 'oath', { sid: s.id, how, title: headTitle(T.charter, s, T.holder && T.holder.style), charter: T.charter });
     this.table(L, T, day, this.sim.abs, true);
     this.recordApproval(L, T, day);
     return T;
@@ -443,7 +443,7 @@ export class Office {
     const h = T.holder;
     T.past.push({ pid: h.pid, name: h.name, from: h.since, to: day, how: h.how, why, approval: T.lastOverall });
     if (T.past.length > 12) T.past.shift();
-    const title = headTitle(T.charter, s);
+    const title = headTitle(T.charter, s, T.holder && T.holder.style);
     T.holder = null;
     T.agenda = [];
     T.recall = null;
@@ -544,6 +544,17 @@ export class Office {
       if (L) this.unseat(L, 'no longer a citizen', this.game.day);
     }
     if (T) T.council = T.council.filter((c) => c.pid !== this.pid());
+  }
+
+  // How the head of the town is styled (under a charter that lets them
+  // choose: a lordship).
+  setStyle(L, style) {
+    const T = this.of(L.settlement.id);
+    const ch = T && CHARTERS[T.charter];
+    if (!T || !T.holder || !ch || !ch.styles || !ch.styles.includes(style)) return false;
+    T.holder.style = style;
+    ledger(L, this.game.day, `${T.holder.name} is to be known as ${style} of ${L.settlement.name}.`);
+    return true;
   }
 
   stepDown(L) {
@@ -967,7 +978,7 @@ export class Office {
     if (fx.relief || fx.act === 'famine_buy' || fx.act === 'fever_heal' || (fx.budget && fx.budget.relief !== undefined)) u += ((P.kindness ?? 0.5) - 0.5) * 0.8;
     if (fx.defy || fx.act === 'crown_defy' || fx.act === 'secede') u += ((P.bravery ?? 0.5) - 0.55) * 1.2;
     if (fx.law) u += stance(r, fx.law.id) * (fx.law.on ? 1 : -1) * 0.5;
-    if (fx.charter) u += fx.charter === 'autocracy' ? -1 : fx.charter === T.charter ? 0 : -0.15;
+    if (fx.charter) u += fx.charter === 'autocracy' ? -1 : fx.charter === 'lordship' ? -0.6 : fx.charter === T.charter ? 0 : -0.15;
     return u;
   }
 
@@ -1081,7 +1092,12 @@ export class Office {
     }
     if (id === 'commune' && T.budget.relief < 1) T.budget.relief = 1;
     if (ch.taxCap && L.econ.tax > ch.taxCap) L.econ.tax = ch.taxCap;
-    if (id !== 'autocracy') T.unrest = 0;
+    if (id !== 'autocracy' && id !== 'lordship') T.unrest = 0;
+    // (A lordship: how its holder is styled is theirs to choose.)
+    if (id === 'lordship' && T.holder) {
+      T.holder.style ||= 'Liege';
+      this.show(T.holder.pid, 'style', { sid: L.settlement.id, styles: CHARTERS.lordship.styles, scope: 'town' });
+    } else if (T.holder) T.holder.style = null;
     T.recall = null;
     ledger(L, day, `${L.settlement.name} has a new charter: it is governed as ${ch.short} now (it was ${CHARTERS[was].short}).`);
     if (T.holder) this.show(T.holder.pid, 'charter', { sid: L.settlement.id, charter: id, was });
@@ -1171,6 +1187,9 @@ export class Office {
     }
     // (Under a protectorate: unrest, when the town's unhappy.)
     if (T.charter === 'autocracy') T.unrest = clamp((T.unrest || 0) + ((T.lastOverall ?? 50) < 30 ? 0.5 : -0.25), 0, 5);
+    // (A lordship's people are slower to rise: it's how things have
+    // always been.)
+    if (T.charter === 'lordship') T.unrest = clamp((T.unrest || 0) + ((T.lastOverall ?? 50) < 25 ? 0.3 : -0.25), 0, 5);
   }
 
   // The town's drafted laws, at work (in any town that has them, governed
@@ -1324,7 +1343,7 @@ export class Office {
     // An appointee the realm thinks has lost the town.
     if (T.holder.how === 'appointment' && T.lowDays >= 5) return this.unseat(L, `dismissed by ${L.settlement.civ ? authority(L.settlement.civ) : 'the realm'}, the town being against you`, day);
     // A protectorate risen against.
-    if (T.charter === 'autocracy' && (T.unrest || 0) >= 3.5 && !T.agenda.some((q) => q.key === 'crisis:uprising')) this.crisis(L, T, uprising(L, T), day, day * DAY + SESSION);
+    if ((T.charter === 'autocracy' || T.charter === 'lordship') && (T.unrest || 0) >= 3.5 && !T.agenda.some((q) => q.key === 'crisis:uprising')) this.crisis(L, T, uprising(L, T), day, day * DAY + SESSION);
     return null;
   }
 
@@ -1570,6 +1589,20 @@ export class Office {
     return { ok: true, item: it };
   }
 
+  // (Round 122) The town wants to break away from its realm: its head who
+  // plays decides.
+  secessionCall(L, day) {
+    const T = this.of(L.settlement.id);
+    if (!T || !T.holder || T.agenda.some((q) => q.key === 'secede' && !q.done)) return null;
+    const civ = L.settlement.civ;
+    const ruler = civ ? this.sim.realms.rulerName(civ) : null;
+    return this.addItem(T, {
+      key: 'secede', kind: 'secede', prio: 9, title: `${L.settlement.name} wants to break away`,
+      why: [`The town has had enough of the ${civ ? civ.name.replace(/^The /, '') : 'realm'}${ruler ? ` and ${ruler}` : ''}: most would go it alone.`, 'Lead it out, and you head a free state; hold it, and the town will resent you for it.'],
+      opts: [{ label: 'Declare the town free', fx: { act: 'secede' } }, { label: 'Keep the town in the realm', fx: { favour: Object.fromEntries(FACTION_IDS.map((f) => [f, -4])), act: 'stay' }, trivial: true }],
+    }, day, day * DAY + SESSION);
+  }
+
   // A petition a player brought, with its signatures, to a town another
   // player governs: it goes before their council.
   petitionItem(L, pet, name) {
@@ -1616,7 +1649,10 @@ export class Office {
     // Defying the realm: it answers, once a week, harder each time.
     const live = Object.keys(T.defy).filter((k) => T.defy[k] !== undefined);
     if (T.defy.taxFloor !== undefined && L.econ.tax >= realms.taxFloor(s) - 1e-9) delete T.defy.taxFloor;
-    if (live.length && (day + s.id) % 7 === 0 && !(T.defyGrace > day)) {
+    // (Round 122) A realm a player rules: its ruler hears of it, and answers.
+    if (live.length && realms.realm(civ).head && this.sim.crown) {
+      if (realms.realm(civ).head !== T.holder.pid && !(T.defyGrace > day)) this.sim.crown.defiance(L, live[0], day);
+    } else if (live.length && (day + s.id) % 7 === 0 && !(T.defyGrace > day)) {
       T.defyLevel = (T.defyLevel || 0) + 1;
       const capL = realms.capitalOf(civ) && this.sim.layoutOf(realms.capitalOf(civ).id);
       if (T.defyLevel === 1) {
@@ -1651,12 +1687,18 @@ export class Office {
     const realms = this.sim.realms;
     if (!T || !T.holder || !civ) return { ok: false, why: 'No realm to petition.' };
     const R = realms.realm(civ);
-    if (R.head) return { ok: false, why: 'The realm is yours.' };
+    if (R.head === T.holder.pid) return { ok: false, why: 'The realm is yours.' };
     const day = this.game.day;
     const last = T.petitions[kind];
     const wait = kind === 'floor' ? 14 : 7;
     if (last !== undefined && day - last < wait) return { ok: false, why: `The realm heard you on that ${day - last} day${day - last === 1 ? '' : 's'} ago. (Ask again after day ${last + wait}.)` };
     T.petitions[kind] = day;
+    // (Round 122) A realm another player rules: it goes to them.
+    if (R.head && this.sim.crown) {
+      if (this.sim.crown.realms[civ.id]?.agenda.some((q) => q.key === `petition:${s.id}:${kind}` && !q.done)) return { ok: false, why: 'Your petition is before the throne already.' };
+      this.sim.crown.petitionFrom(L, kind, T.holder.name);
+      return { ok: true, granted: null, pending: true, text: `Your petition goes to ${realms.rulerName(civ)}, who will answer it.` };
+    }
     const ruler = realms.ruler(civ);
     const capS = realms.capitalOf(civ);
     const capL = capS && this.sim.layoutOf(capS.id);
@@ -1725,6 +1767,7 @@ export class Office {
   // council, it's put to them (and the realm's own councillors) first.
   // `change`: { key, text, apply() }. Whether it was held for a vote.
   realmProposal(civ, change, day) {
+    if (this.sim.crown && this.sim.crown.ruled(civ)) return false;
     const seats = this.realmSeats(civ);
     if (!seats.length || this.realmVotes[civ.id]) return false;
     this.realmVotes[civ.id] = { change, day, votes: {}, text: change.text };
@@ -1780,6 +1823,11 @@ export class Office {
     if (!civ || !T || !T.holder) return { ok: false };
     const R = this.sim.realms.realm(civ);
     if (R.head !== T.holder.pid) return { ok: false, why: 'The realm isn\'t yours to command.' };
+    // (Round 122: the crown's own decree, when the realm is a crown's.)
+    if (this.sim.crown && this.sim.crown.isRuler(civ, T.holder.pid)) {
+      const w = key === 'tariff' ? this.sim.crown.decree(civ, 'tariff', !R.decrees.tariffOn.includes(v), v) : this.sim.crown.decree(civ, key, v);
+      return { ok: !!w };
+    }
     const day = this.game.day;
     const who = `${whoOf(L, T)}, head of the ${civ.name.replace(/^The /, '')}`;
     if (key === 'taxFloor') {
@@ -1876,8 +1924,8 @@ export class Office {
     return null;
   }
 
-  offer(pid, L, how, text, days = 2) {
-    const o = { pid, sid: L.settlement.id, how, text, until: this.sim.abs + days * DAY, day: this.game.day };
+  offer(pid, L, how, text, days = 2, extra = {}) {
+    const o = { pid, sid: L.settlement.id, how, text, until: this.sim.abs + days * DAY, day: this.game.day, ...extra };
     this.offers.push(o);
     this.tell(pid, `${text} (N: answer)`, '#ffe070');
     this.show(pid, 'offer', { sid: o.sid, how, text });
@@ -1901,10 +1949,21 @@ export class Office {
     const L = this.sim.layoutOf(o.sid);
     if (!L || !L.econ) return { ok: false };
     if (!yes) {
-      ledger(L, this.game.day, `${this.game.playerName} declined to take office in ${L.settlement.name}.`);
+      ledger(L, this.game.day, `${this.game.playerName} declined ${o.how === 'heir' ? 'to be named heir' : o.how === 'crown' ? 'to lead the realm' : `to take office in ${L.settlement.name}`}.`);
       return { ok: true, declined: true };
     }
-    this.install(L, pid, this.game.playerName, o.how, this.game.day);
+    // (Round 122) The realm's throne, or the promise of it.
+    const civ = o.civ !== undefined ? this.game.world.ow.civs[o.civ] : null;
+    if (o.how === 'crown' && civ && this.sim.crown) {
+      this.sim.crown.crownPlayer(civ, pid, this.game.playerName, 'election', this.game.day);
+      return { ok: true, L, crown: true };
+    }
+    if (o.how === 'heir' && civ && this.sim.crown) {
+      this.sim.crown.heirs[civ.id] = { pid, name: this.game.playerName };
+      this.sim.realms.proclaim(civ, this.game.day, `${this.sim.realms.rulerName(civ)} has named ${this.game.playerName} heir to the ${civ.name.replace(/^The /, '')}.`);
+      return { ok: true, L, heir: true };
+    }
+    this.install(L, pid, this.game.playerName, o.how === 'governor' ? 'appointment' : o.how, this.game.day);
     return { ok: true, L };
   }
 
@@ -2182,14 +2241,21 @@ const ACTS = {
     const old = L.settlement.civ;
     const res = o.sim.realms.secede(L, day, new RNG(hash4(L.settlement.id, day, 0x5ece)), null);
     if (!res) return null;
-    const R = o.sim.realms.realm(res.civ);
-    if (T.holder) R.head = T.holder.pid;
+    // (Round 122) Its head is the free state's ruler: see crown.js.
+    if (T.holder && o.sim.crown && !res.joined) o.sim.crown.crownPlayer(res.civ, T.holder.pid, T.holder.name, 'secession', day, { form: 'republic' });
     T.defy = {};
     T.defyLevel = 0;
     T.realm = {};
     T.goals.free = day;
-    if (T.holder) o.show(T.holder.pid, 'free', { sid: L.settlement.id, civ: res.civ.name, from: old ? old.name : '' });
+    // (A realm another player ruled hears of it.)
+    const OC = old && o.sim.crown ? o.sim.crown.of(old) : null;
+    if (OC) o.tell(OC.holder.pid, `${L.settlement.name} has broken away from your realm!`, '#ff7060');
     return `declared ${L.settlement.name} free of the ${old ? old.name.replace(/^The /, '') : 'realm'}`;
+  },
+  stay: (o, L) => {
+    L.econ.secedeVotes = 0;
+    L.econ.unrest = Math.max(0, (L.econ.unrest || 0) - 0.5);
+    return 'kept the town in the realm';
   },
   uprising_charter: (o, L, T, day) => {
     o.reform(L, T, 'council', day);

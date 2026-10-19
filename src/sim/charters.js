@@ -37,6 +37,15 @@ export const CHARTERS = {
     rules: ['You decide everything by decree: no votes.', 'No elections and no petitions: but unrest builds whenever the town is unhappy, and an unhappy town may rise against you.', '¤14 a day.'],
     mod: { guards: 6, elders: -6, clergy: -4, merchants: -3, poor: -4, farmers: -2 },
   },
+  // (Round 122) A town held by right, like a little kingdom: its lord or
+  // lady decrees, rules for life and names an heir. A monarch can grant
+  // one (see crown.js); a town can make itself one only by two in three.
+  lordship: {
+    name: 'Lordship', short: 'a lordship', title: 'Lord', villageTitle: 'Lord', styles: ['Lord', 'Lady', 'Liege'], seats: 0, term: 0, recall: 0, stipend: 12, vote: 'decree',
+    glyph: '♠', color: '#d8b0ff',
+    rules: ['You rule by right, and decree: no votes.', 'No elections and no petitions: you rule for life.', 'A lordship is granted by the realm\'s monarch, or made by the town, two in every three.', '¤12 a day.'],
+    mod: { elders: 4, guards: 3, merchants: -2, poor: -5, farmers: -2 },
+  },
   commune: {
     name: 'Commune', short: 'a commune', title: 'First Speaker', villageTitle: 'First Speaker', seats: 0, term: 14, recall: 0.25, stipend: 0, vote: 'factions',
     glyph: '•', color: '#ff9a7a',
@@ -57,8 +66,10 @@ export function defaultCharter(L) {
 }
 
 // The head of the town's title, under a charter.
-export function headTitle(id, s) {
+export function headTitle(id, s, style = null) {
   const c = CHARTERS[id] || CHARTERS.council;
+  // (A charter whose head chooses how they're styled: Lord, Lady, Liege.)
+  if (style && c.styles && c.styles.includes(style)) return style;
   return s && s.type === 'village' ? c.villageTitle : c.title;
 }
 

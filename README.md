@@ -9454,6 +9454,88 @@ You can now hold a town's office, and run it.
 - **Version 1.21.0.** Worlds from 1.20 load as before. No town has a
   player's office yet.
 
+## Round 122: Ruling a realm
+
+The office you hold in a town now reaches up to a realm's throne, and a
+realm can be governed in five ways.
+
+- **Five forms of government.** Each realm is one of these:
+  - a **monarchy**: you decree, and you're styled King, Queen or Monarch
+    (Emperor, Empress or Sovereign once the realm has five towns);
+  - a **republic**: the realm's council votes, and its Speaker serves a
+    30-day term;
+  - a **clan moot**: the heads of the realm's towns vote;
+  - a **holy realm**: you decree, but the high priest can veto any war
+    that isn't holy and any rise in tribute, and every town keeps the
+    temple tithe;
+  - a **merchant league**: the towns vote, each weighted by its treasury,
+    and tribute is never more than a tenth.
+
+  Each form has its own pay, and its own way of turning against you. A
+  realm's name follows its form: the Republic of Tansyley made a monarchy
+  becomes the Kingdom of Tansyley, and an emperor's kingdom becomes an
+  empire.
+- **Ways to the throne.**
+  - Break your town away: you head the free republic it becomes.
+  - Be named heir. An heirless monarch may name you if you govern one of
+    their towns well and are known at court. You're crowned when they die.
+  - Be chosen. A republic's council may offer you the speakership when
+    its speaker dies, and you can stand for speaker yourself if you sit on
+    it.
+  - Seize the throne. Govern the capital with half its watch behind you,
+    and the realm becomes your monarchy.
+
+  The old ruler stays on as your chancellor.
+- **The crown window (N).** It replaces the council window when the realm
+  has the more pressing business. The council window's header has a
+  ★ The crown button, and the crown window has a ♦ Your town button. Five
+  pages:
+  - **Matters:** what the privy council advises, towns asking for aid or
+    lighter tribute, roads, a quarrel worth a war, suing for peace,
+    petitions and defiance from towns other players govern, and crises (a
+    pretender, a town about to break away). Each choice shows which towns
+    it would please or anger. Decide one and it's decreed, or put to the
+    realm's vote. In the throne room below, each voter raises their vote
+    and the seal comes down (gold for a decree).
+  - **Decrees:** the least tax, the tribute, the weapons ban, the watch,
+    the draft and tariffs, each a row of choices. Point at one to see how
+    every town would take it.
+  - **Towns:** each town's loyalty to you and the reasons for it. Send
+    aid, grant lighter tribute or build a road. For a town another player
+    governs, raise them to a lordship (as a monarch) or depose them. Offer
+    a town no player governs to a fellow player as its governor.
+  - **Court:** reform the realm's government (two in every three, unless
+    you decree it), choose your title, name your heir, set the
+    chancellor's standing orders, and read the chronicle. You can also
+    abdicate here.
+  - **Realms:** your neighbours: declare war, offer an alliance, or sue
+    for peace.
+- **Overruled.** A monarch or hierarch the realm turns against faces a
+  pretender. A council, moot or league votes no confidence when the realm
+  has had enough, and at the end of each term. Towns that lose faith in
+  you rise up, or vote to break away.
+- **Playing together.**
+  - The heads of your towns who play bring you their petitions, and their
+    defiance of your decrees: fine them, let it be, or depose them.
+  - They vote in your moot, league or council. The vote waits for them,
+    and they see what it would do to their own town.
+  - A lordship is a new town charter: its holder rules for life, by
+    decree, styled Lord, Lady or Liege.
+  - Another player ruling a neighbouring realm decides your offers of
+    alliance and peace.
+  - A player you name heir succeeds you when you step down.
+  - The HUD shows your realm's matters and crises for guests too.
+- **A tidier council window.** It has six pages: Matters, Money, Laws,
+  People, Offices and Charter. Each choice names the factions it moves
+  in words (Merchants▲, Poor▼▼). Laws and People each have a list with a
+  detail pane. The standing orders are a view of Offices. The realm and
+  your ambitions are views of Charter.
+- **Command console:** `crown [realm] [form]` takes a realm's throne at
+  once; `crown sit` holds the crown's sitting now; `crown crisis` brings
+  on a pretender; `crown leave` abdicates.
+- **Version 1.22.0.** Worlds from 1.21 load as before. No realm has a
+  player on its throne yet.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -9469,6 +9551,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `reveal [off]` | shows the whole world map |
 | `towns`, `where` | every place, nearest first; where you are |
 | `office [town] \| sit \| crisis <kind> \| leave` | take office in a town at once; hold the council's sitting now; bring on a crisis (raid, famine, fever, unrest, scandal); step down |
+| `crown [realm] [form] \| sit \| crisis \| leave` | take a realm's throne at once (as a monarchy, republic, elder, theocracy or league); hold the crown's sitting now; bring on a pretender; abdicate |
 | `wedding [now] [town]` | two single grown-ups get engaged; the wedding is in two days, or within a few hours with `now` |
 | `feast [now] [town]`, `fete [now] [town]` | a feast day, or a celebration of the town |
 | `street [town]` | the builders lay out a new street with lots |
