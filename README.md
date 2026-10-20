@@ -10309,6 +10309,114 @@ A world saved in an earlier version gets its havens when it loads. They
 are placed on land nobody has seen yet. Anyone already sworn to a guild
 is put on its rolls and told where its havens are.
 
+## Round 131: Pirate lore, havens on the shore, and ships' crews as people
+
+### Fixes
+
+- **Ships on land or in ponds.** Merchantmen, warships, pirate ships and
+  town ships now only appear on water that reaches the open sea. A pond
+  in a hollow, or a lake with no way out, never gets a ship. A town pier
+  on such water is left for the fishing boats.
+- **Havens without a dock.** A haven is now always placed on a stretch of
+  coast with the sea close by, and it builds the biggest pier there's
+  room for. Its own great ship is a black-hulled brigantine under the
+  guild's flag, with a pirate's name.
+- **Havens too small.** Lone pirates now share shacks (the rest sleep in
+  hammocks), so a haven on a cramped shore is still lived in.
+- **The haven's flag.** It now stands alone on the square as a single
+  mast, two blocks tall. It used to sit on an invisible plinth three
+  blocks wide. Cutting it down removes all of it.
+- **Sailcloth roofs.** Calmer: broad strips of canvas with faint seams,
+  and only an occasional patch or smear of tar.
+- **Attacking aboard ship.** With a weapon in hand, clicking on a ship's
+  planks now swings (or shoots), as it does anywhere else. Her wheel,
+  guns, hatches and doors are still used with a click.
+- **A hand's blows.** A ship's hand now winds up a blow before striking,
+  with the same red "!" over them and the warning on the ground that
+  anyone ashore shows. They used to strike with no warning.
+- **Named as people.** A ship's hand is named and titled like anyone
+  else ("killed by Ada Lane", "Ada Lane the Gunner"). The death screen
+  used to say "object".
+- **Crews kept with the save.** A passing ship you're aboard (a
+  merchantman, a town's ship) is now saved with you, crew and all. Her
+  hands are no longer taken off her as she sails out of sight of a town
+  with you aboard. If her hands are ever missing while she's reckoned
+  crewed, they come back on deck.
+
+### Talking to a ship's hand
+
+- **The same window as anyone ashore.** It shows their name, their
+  berth aboard and their ship, their years at sea, their health and
+  mood, and what they're doing just now. While you talk they stop work
+  and turn to you.
+- **Much more to say:**
+  - who they are: where they're from, how they came to the sea, and the
+    sea-charm they swear by;
+  - their ship: her guns, her crew and her captain;
+  - where she's bound, and how long until port (stay aboard and you'll
+    step ashore there with them);
+  - the wind and the weather;
+  - news off the water: the brethren's doings, wars on the sea lanes,
+    and now and then a pirates' haven given away (once per hand);
+  - something of the sea learned, by their trade (gunners on elevation,
+    mates on mending, captains on raking fire);
+  - a yarn, or a shanty that the rest of the crew join in.
+- **Trade and manners.**
+  - A merchant aboard sells a few wares on deck.
+  - You can stand a hand a tot of rum or a mug of grog.
+- **Your own crew.** You give orders (the guns, the pump, carry on, pay
+  off), and can ask how the crew are bearing up: their numbers, their
+  wounds, and what they think of their shares.
+- **A pirate captain.** You can swear to their guild, as before.
+
+### The brethren's lore
+
+A haven now learns from its own tree, the Lore of the Brethren. Banks,
+mints, siege trains, prisons, schools, aqueducts and fortresses are torn
+out. The brethren have their own steps in their places, and every one of
+them does something of its own.
+
+- **From the first:** Fair Shares, Boarding Drill, the Articles, Stilt
+  Shacks, Smugglers' Runs and Black Ships. A haven also knows its forge,
+  its pier and its great ship from the day it's made.
+- **The chest:**
+  - The Fences' Ring: the fence pays a quarter more for plunder.
+  - Ransom Brokers: ransoms run half again as high, and are paid twice
+    as readily.
+  - Prize Courts: every prize is worth 40% more.
+  - The Treasure Fleet: a weekly take from each haven, and share-outs
+    half as big again.
+- **The cutlass:**
+  - Grapnels and Pikes: more prizes taken.
+  - Powder Magazines: the shore guns are manned, and fewer of a realm's
+    marines get ashore.
+  - Coastal Raids: the chief's raids hit harder.
+  - Fireships: a realm's expedition loses half its strength before it
+    can land.
+- **The Articles:**
+  - Grog Rations: the haven's folk wake healthier, and the Revel comes
+    twice as often.
+  - Honour Among Thieves: captains are slower to turn.
+  - Hidden Coves: word of the haven gets about half as often, and
+    captives are sent home blindfolded, unable to say where they were
+    held.
+  - The Pirate Republic: the guilds grow friendly faster, and the
+    brethren's temper never falls far.
+- **The shore:**
+  - Careening Beach: the guild's ships are back at sea sooner.
+  - Lookout Towers: when an expedition is coming, the guild's ships are
+    called home to meet it.
+  - Shore Batteries.
+- **How it's studied.** The haven's study is paid for out of the guild's
+  chest, so a rich guild learns fast. Ask a Quartermaster "What do the
+  brethren know?" to see the tree.
+
+### Older worlds
+
+An older haven gets its flag put right: the plinth goes, and its upper
+half goes on. Its learning becomes the brethren's when it next studies.
+A haven placed inland in an older world stays where it is.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -22,7 +22,7 @@
 // deck*), goes below (down her hatches, through a cabin door, through a
 // hole in her deck), takes her wheel, mans a gun, or goes over the side.
 import { loadAboard } from './stalls.js';
-import { GROUND, SURFACE, PLAYER_STEP_TIME, GAME_MINUTES_PER_SECOND } from '../config.js';
+import { GROUND, SURFACE, PLAYER_STEP_TIME, GAME_MINUTES_PER_SECOND, REGION_W, REGION_D } from '../config.js';
 import { rule } from '../mod/rules.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { shipModel, SHIP_TYPES, standOn, stepOn, onPlan, isInside, vAt } from '../world/shipmodels.js';
@@ -221,7 +221,8 @@ export function roomFor(game, type, x, z, yaw, skip = null, margin = 0) {
 // fleet's) looks only where's already made, and only as far as it'll
 // take: a search out to 360 paces making every region on the way was a
 // second's stall, again and again.)
-export function waterSpot(game, type, x, z, min = 0, maxR = 360, load = true) {
+// (Round 131: `sea`, only water that reaches the open sea: see seaLinked.)
+export function waterSpot(game, type, x, z, min = 0, maxR = 360, load = true, sea = false) {
   for (let R = Math.max(4, min); R < maxR; R += 4) {
     const n = Math.max(12, Math.round(R / 2));
     for (let k = 0; k < n; k++) {
@@ -233,10 +234,74 @@ export function waterSpot(game, type, x, z, min = 0, maxR = 360, load = true) {
         game.loadAround?.(px, pz, true);
       }
       if (!sailable(game, px, pz)) continue;
+      if (sea && !seaLinked(game, px, pz)) continue;
       for (const yaw of [a + Math.PI / 2, a, a - Math.PI / 2, a + Math.PI]) if (roomFor(game, type, px, pz, yaw, null, R > 200 ? 1 : 4)) return { x: px, z: pz, yaw: ((yaw % TAU) + TAU) % TAU };
     }
   }
   return null;
+}
+
+// (Round 131) Does the water at (x, z) reach the open sea? Not a pond in
+// a hollow, nor a lake with no way out: a merchantman or a pirate never
+// lies there. Followed along the water a pace at a time as far as the
+// land's made; where it runs on into land not yet made, the map says (the
+// sea there, or a river that runs to it). Remembered by the patch of
+// water, a while.
+export function seaLinked(game, x, z) {
+  const w = game.world;
+  const ow = w.ow;
+  const memo = (game.seaLinkMemo ||= new Map());
+  const bk = (bx, bz) => (bx >> 3) * 100000 + (bz >> 3);
+  const k0 = bk(x, z);
+  if (memo.has(k0)) return memo.get(k0);
+  const cellOf = (tx, tz) => ow.cell(Math.floor(tx / REGION_W), Math.floor(tz / REGION_D));
+  const wet = (tx, tz) => w.regionAt(tx, tz) && w.isWaterAt(tx, SURFACE, tz);
+  const seen = new Set([`${x},${z}`]);
+  const q = [[x, z]];
+  let ok = false;
+  for (let i = 0; i < q.length && i < 40000 && !ok; i++) {
+    const [tx, tz] = q[i];
+    const c = cellOf(tx, tz);
+    if (c && c.biome === 'ocean') ok = true;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = tx + dx;
+      const nz = tz + dz;
+      const kk = `${nx},${nz}`;
+      if (seen.has(kk)) continue;
+      seen.add(kk);
+      if (!w.regionAt(nx, nz)) {
+        // (On into land not made yet: the map's word for it.)
+        const nc = cellOf(nx, nz);
+        if (nc && (nc.biome === 'ocean' || (nc.river && riverToSea(ow, nc.cx, nc.cz)))) ok = true;
+        continue;
+      }
+      if (wet(nx, nz)) q.push([nx, nz]);
+    }
+  }
+  // (Each patch of water followed, the same answer.)
+  for (let i = 0; i < q.length; i += 7) memo.set(bk(q[i][0], q[i][1]), ok);
+  memo.set(k0, ok);
+  if (memo.size > 20000) memo.clear();
+  return ok;
+}
+
+// Does the river through map square (cx, cz) run on to the sea?
+function riverToSea(ow, cx, cz) {
+  const seen = new Set([cz * 100000 + cx]);
+  const q = [[cx, cz]];
+  for (let i = 0; i < q.length && i < 600; i++) {
+    const [x, z] = q[i];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const c = ow.cell(x + dx, z + dz);
+      if (!c) continue;
+      if (c.biome === 'ocean') return true;
+      const k = c.cz * 100000 + c.cx;
+      if (!c.river || seen.has(k)) continue;
+      seen.add(k);
+      q.push([c.cx, c.cz]);
+    }
+  }
+  return false;
 }
 
 // --------------------------------------------------------------- the wind
@@ -1776,7 +1841,10 @@ export function shipStatus(game, S) {
 
 // Saved with the world.
 export function saveShips(game) {
-  return shipsOf(game).filter((S) => !S.sinking && !S.transient).map((S) => S.save());
+  // (Round 131: one only passing, with any of you aboard her, too: she was
+  // gone when you came back, and her crew with her.)
+  const aboard = (S) => (game.everyone ? game.everyone() : [game.player]).some((q) => q && q.deck && q.deck.s === S.id);
+  return shipsOf(game).filter((S) => !S.sinking && (!S.transient || aboard(S))).map((S) => S.save());
 }
 
 export function loadShips(game, list) {

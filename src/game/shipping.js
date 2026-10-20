@@ -11,9 +11,10 @@
 import { Engine } from './engines.js';
 import { SURFACE, GROUND } from '../config.js';
 import { setOverride } from '../sim/econ.js';
-import { Ship, addShip, shipsOf, roomFor, waterSpot } from './ships3d.js';
+import { Ship, addShip, shipsOf, roomFor, waterSpot, seaLinked } from './ships3d.js';
 import { makeCrew } from './shipcrew.js';
 import { shipModel } from '../world/shipmodels.js';
+import { GUILD_COLORS } from '../world/havenkit.js';
 
 const is3d = (e) => e instanceof Ship;
 
@@ -160,6 +161,8 @@ function waypoints(path) {
 // city or an empire's capital, else a brigantine.
 export function townShipKind(s) {
   if (!s) return 'brigantine';
+  // (Round 131) A pirates' haven's black ship: fast and well-gunned.
+  if (s.haven) return 'brigantine';
   if (s.empire || s.type === 'city') return 'galleon';
   if (s.type === 'village') return 'sloop';
   return 'brigantine';
@@ -168,19 +171,25 @@ export function townShipKind(s) {
 function make(game, P, sid, x, z, building = false) {
   const s = game.world.ow.settlements[sid];
   const civ = s?.civ;
+  // (Round 131) Never on dry land, nor on a pond or a lake with no way out
+  // to the sea: a pier there's for the fishing boats.
+  if (!game.world.isWaterAt(x, SURFACE, z) || !seaLinked(game, x, z)) return null;
   // A great ship, if there's room for her by the pier.
   const site = P.site;
   const yaw = Math.atan2(site.side.x, site.side.z);
   for (const type of [townShipKind(s), 'brigantine', 'sloop']) {
     let at = roomFor(game, type, x, z, yaw) ? { x, z, yaw } : null;
     if (!at) {
-      const w = waterSpot(game, type, x, z, 0, 16, false);
+      const w = waterSpot(game, type, x, z, 0, 16, false, true);
       if (w && Math.hypot(w.x - x, w.z - z) < 12) at = w;
     }
     if (!at) continue;
     const col = civ ? civ.color.hex : '#a02020';
+    // (Round 131) A pirates' haven's: black-hulled, under the guild's colours.
+    const gi = s && s.haven ? s.haven.guild : null;
+    const look = gi !== null ? { paint: '#24222a', paint2: '#0e0c10', flag: GUILD_COLORS[gi] || GUILD_COLORS[0], emblem: 'saltire', markColor: '#121212' } : { paint: col, paint2: '#1e1a18', flag: col, emblem: civ && civ.empire ? 'cross' : 'stripe' };
     const S = addShip(game, {
-      type, x: at.x, z: at.z, yaw: at.yaw, name: P.name, civ: civ ? civ.id : null, paint: col, paint2: '#1e1a18', flag: col, emblem: civ && civ.empire ? 'cross' : 'stripe', anchor: true,
+      type, x: at.x, z: at.z, yaw: at.yaw, name: P.name, civ: civ ? civ.id : null, ...look, anchor: true,
       crew: makeCrew(sid * 7919 + 13, type, s?.style || 'vale', Math.max(2, Math.round(shipModel(type).T.crew * 0.5)), civ ? civ.id : null),
     });
     S.transient = true;
@@ -272,13 +281,13 @@ function sailIn(game, P, sid) {
 function drop(game, sid, e) {
   game.shipProps.delete(sid);
   if (is3d(e)) {
-    dropCrew(game, e, () => true);
     // (Anyone aboard her as she goes out of sight: still aboard, she's
-    // kept.)
+    // kept, and her crew with her. Round 131: they were taken off her.)
     if ((game.everyone ? game.everyone() : [game.player]).some((q) => q.deck && q.deck.s === e.id)) {
       e.transient = false;
       return;
     }
+    dropCrew(game, e, () => true);
     const list = shipsOf(game);
     const i = list.indexOf(e);
     if (i >= 0) list.splice(i, 1);

@@ -82,6 +82,21 @@ export class Brethren {
     return GUILDS.map((_, i) => this.of(i));
   }
 
+  // (Round 131) What the guild's havens know comes to (see haventech.js):
+  // the best of them, for most things; `sum`, added up over them (a chest
+  // filled from each).
+  fx(i, key, sum = false) {
+    const T = this.sim.tech;
+    if (!T) return 0;
+    let out = 0;
+    for (const h of this.sim.havens.standing(i)) {
+      const s = this.sim.havens.settlement(h);
+      const v = s ? T.fxOf(s, key) : 0;
+      out = sum ? out + v : Math.max(out, v);
+    }
+    return out;
+  }
+
   name(i) {
     return (GUILDS[i] || GUILDS[0]).name;
   }
@@ -363,6 +378,8 @@ export class Brethren {
 
   // A prize taken by captain `c` of guild G off realm `civ`'s shipping.
   prize(G, c, n, civ, day, rng, port = null) {
+    // (Prize Courts: sold whole.)
+    n = Math.round(n * (1 + this.fx(G.id, 'prize')));
     this.income(G.id, n);
     c.prizes++;
     c.infamy += 2;
@@ -386,12 +403,33 @@ export class Brethren {
       if (!G.captains.length) continue;
       this.cruise(G, day, rng);
       if ((day + G.id * 2) % 7 === 0) this.shareOut(G, day, rng);
+      this.lore(G, day);
       this.temper(G, day, rng);
       this.autoMatters(G, day, rng);
     }
     if (day % 7 === 3) this.reckon(day);
     if (day % 5 === 1) this.guildsDrift(day);
     this.sim.havens.changes(day);
+  }
+
+  // (Round 131) The brethren's own lore (see haventech.js): each haven's
+  // study kept up out of the chest (a scholar's wage for a captain's share
+  // of a night's rum), and what it knows paying into the chest each week.
+  lore(G, day) {
+    const T = this.sim.tech;
+    if (!T) return;
+    for (const h of this.sim.havens.standing(G.id)) {
+      const s = this.sim.havens.settlement(h);
+      if (!s || !this.sim.havens.layout(h)) continue;
+      if (G.treasury >= 20) {
+        G.treasury -= 2;
+        T.addPoints(s, 3 + Math.min(4, G.captains.length * 0.5), day);
+      }
+    }
+    if (day % 7 === G.id) {
+      const chest = Math.round(this.fx(G.id, 'chest', true));
+      if (chest > 0) this.income(G.id, chest, 'the havens\' cut');
+    }
   }
 
   // The captains' comings and goings: out, prizes, back, careened.
@@ -420,7 +458,8 @@ export class Brethren {
         }
         continue;
       }
-      if (c.state === 'careen' && day >= c.until) {
+      // (A careening beach: back to sea sooner.)
+      if (c.state === 'careen' && day >= c.until - (this.fx(G.id, 'careen') >= 0.5 ? 1 : 0)) {
         c.state = 'haven';
         c.until = day + rng.int(1, 2);
         continue;
@@ -428,7 +467,7 @@ export class Brethren {
       if (c.state !== 'sea') continue;
       // A prize, off whoever's shipping they can find.
       const civs = this.preyFor(G);
-      if (civs.length && rng.chance(0.2 * (G.articles.fishers === 'take' ? 1.15 : 1))) {
+      if (civs.length && rng.chance(0.2 * (G.articles.fishers === 'take' ? 1.15 : 1) * (1 + this.fx(G.id, 'prizeOdds')))) {
         const civ = rng.pick(civs);
         const ports = this.sim.realms.memberLayouts(this.game.world.ow.civs[civ]).filter((L) => L.settlement.coast);
         const port = ports.length ? rng.pick(ports) : null;
@@ -513,6 +552,9 @@ export class Brethren {
     }
     const pot = Math.floor(G.treasury * k);
     G.treasury -= pot;
+    // (The Treasure Fleet: and the season's take on top.)
+    const bonus = Math.floor(pot * this.fx(G.id, 'shares'));
+    if (bonus) for (const m of Object.values(G.members)) if (!m.gone) m.owed = (m.owed || 0) + Math.floor(bonus / Math.max(1, 8 * G.captains.length));
     G.lastShare = { day, pot };
     const art = G.articles.shares;
     const chiefCut = art === 'chief' ? 3 : art === 'captain' ? 2 : 1;
@@ -540,8 +582,11 @@ export class Brethren {
   // out its chief.
   temper(G, day, rng) {
     G.mood = clamp(G.mood + (0.5 - G.mood) * 0.03, 0, 1);
+    // (The Articles, honour, the Republic: a floor under it.)
+    const steady = this.fx(G.id, 'temper');
+    if (steady) G.mood = Math.max(G.mood, Math.min(0.45, 0.2 + steady * 0.5));
     const live = G.captains.filter((c) => ['haven', 'sea', 'careen'].includes(c.state));
-    if (G.mood < 0.35 && live.length > 1 && rng.chance(0.08)) {
+    if (G.mood < 0.35 && live.length > 1 && rng.chance(0.08 * (1 - Math.min(0.8, this.fx(G.id, 'loyalty') * 2)))) {
       const c = [...live].sort((a, b) => a.loyalty - b.loyalty)[0];
       const chief = this.chief(G.id);
       if (!(chief && chief.cap === c)) {
@@ -861,7 +906,7 @@ export class Brethren {
       const L = this.game.world.layouts.get(m.sid);
       if (!L || !L.econ) return 'The fleet couldn\'t find the place.';
       const def = this.sim.war.defence(L);
-      const atk = 2 + live.length * 2.2;
+      const atk = (2 + live.length * 2.2) * (1 + this.fx(G.id, 'raid'));
       const win = rng.chance(atk / (atk + def));
       if (win) {
         const loot = Math.min(Math.floor(L.econ.treasury * 0.25), 160);

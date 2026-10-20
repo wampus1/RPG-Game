@@ -15,7 +15,7 @@
 import { REGION_W, REGION_D, GROUND } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { addShip, shipsOf, shipById, waterSpot, boardAt, deckPath, ownerId } from './ships3d.js';
-import { makeCrew, crewOf } from './shipcrew.js';
+import { makeCrew, crewOf, crewBlow } from './shipcrew.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { DAY } from '../sim/econ.js';
 import { pidOf } from '../sim/saga/refs.js';
@@ -140,7 +140,7 @@ export function spawnPirate(game, x, z, o = {}) {
   const seed = o.seed ?? Math.floor(Math.random() * 1e9);
   const rng = new RNG(seed >>> 0);
   const type = o.type || (rng.chance(0.6) ? 'brigantine' : 'sloop');
-  const at = waterSpot(game, type, Math.round(x), Math.round(z), 0, 60, true);
+  const at = waterSpot(game, type, Math.round(x), Math.round(z), 0, 60, true, true);
   if (!at) return null;
   const T = SHIP_TYPES[type];
   const n = T.crew + 4;
@@ -368,6 +368,11 @@ function fightTick(game, dt) {
     if (!t) continue;
     c.angry = true;
     const adj = Math.max(Math.abs(t.x - c.x), Math.abs(t.z - c.z)) <= 1 && Math.abs(t.y - c.y) <= 1;
+    // (Round 131: a blow wound up first, seen coming; see crewBlow.)
+    if (c.windup) {
+      crewBlow(game, c, t, dt);
+      continue;
+    }
     if (c.attackCd > 0) continue;
     if (c.role === 'pirate_archer' && !adj && bd <= (across ? 16 : 9)) {
       c.attackCd = 1.8;
@@ -377,10 +382,7 @@ function fightTick(game, dt) {
       continue;
     }
     if (adj) {
-      c.attackCd = 1.1;
-      c.actionTimer = 0.25;
-      c.face(t.x, t.z);
-      game.damage(t, c.dmg, c);
+      crewBlow(game, c, t, dt);
       continue;
     }
     if (!c.deck.mv && (!c.task || !c.task.path || !c.task.path.length) && t.deck && t.deck.s === S.id) {

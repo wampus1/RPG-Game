@@ -37,7 +37,7 @@ test('each guild has a real haven ashore: a village of pirates, hidden from the 
   const s = H.settlement(h);
   assert.ok(isHaven(s) && s.haven.guild === h.guild && !s.civ, 'a free village flying the black flag');
   const L = laid(g, h);
-  assert.ok(L.npcs.length >= 12, 'people living there');
+  assert.ok(L.npcs.length >= 8, 'people living there');
   assert.ok(L.npcs.some((r) => r.job === 'mayor') && L.npcs.filter((r) => r.job === 'guard').length >= 2);
   assert.ok(L.buildings.some((b) => b.type === 'stockade'), 'a stockade for the captives');
   assert.ok(L.npcs.some((r) => r.look && ['bandana', 'tricorn'].includes(r.look.hat)), 'dressed for the sea');

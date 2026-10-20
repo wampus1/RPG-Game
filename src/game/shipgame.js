@@ -667,6 +667,18 @@ export function shipMouse(game, dt, clicks, input) {
   }
   const S = shipById(game, c.ship.s);
   if (!S) return used;
+  // (Round 131) A weapon in hand: a click on her planks is a swing (or a
+  // shot), as it is anywhere, not swallowed by her; only her wheel, a gun,
+  // a hatch or a door are used.
+  const armed = held && (held.kind === 'weapon' || held.ranged);
+  if (armed && !used && !game.shipClickHeld) {
+    const fit = fittingAt(S, c.ship.vi) || fittingNear(game, S, c.mx, c.my);
+    const usable = fit && (p.deck ? p.deck.s === S.id : c.inReach);
+    if (!usable || !clicks.some((ck) => ck.type === 'down' && (ck.button === 0 || ck.button === 2))) {
+      game.shipMining = null;
+      return false;
+    }
+  }
   for (const ck of clicks) {
     if (ck.type !== 'down' || used) continue;
     // Her wheel, a gun, a hatch, a door, the capstan: used.
@@ -772,6 +784,11 @@ export function sailorTalk(game, c) {
   const lines = SAY[c.role] || SAY.sailor;
   const p = game.player;
   c.face(p.x, p.z);
+  // (Round 131) In the same window as anyone ashore (see sailortalk.js).
+  if (game.ui && game.ui.openSailorTalk) {
+    game.talkingTo = c;
+    return game.ui.openSailorTalk(c, game);
+  }
   const S = c.shipId !== null && c.shipId !== undefined ? shipById(game, c.shipId) : null;
   const line = lines[Math.floor(Math.random() * lines.length)];
   // (Round 69) A word with them, and (her own crew) orders.
@@ -787,7 +804,7 @@ export function sailorTalk(game, c) {
     });
   }
   const role = c.role === 'gunner' ? 'gunner' : c.role === 'marine' ? 'marine' : 'hand';
-  talk(`${line} (${c.name.first || c.name}, ${role} of ${S.name}.) Orders, captain?`, ['Man the guns.', 'Below, and work the pump.', 'Carry on.', 'You\'re paid off: go ashore.'], (i) => {
+  talk(`${line} (${c.first || c.name}, ${role} of ${S.name}.) Orders, captain?`, ['Man the guns.', 'Below, and work the pump.', 'Carry on.', 'You\'re paid off: go ashore.'], (i) => {
     if (i === 0) {
       c.order = 'guns';
       c.task = null;

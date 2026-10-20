@@ -1695,6 +1695,9 @@ def('sail_roof', { hardness: 0.4, rotatable: true, tool: 'axe', drop: 'cloth', l
 def('jolly_gull', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Black Gull Brethren\'s Flag' });
 def('jolly_hand', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Red Hand Company\'s Flag' });
 def('jolly_tide', { ...sprite, tall: true, solid: true, interact: 'haven', tool: 'axe', hardness: 2, drop: null, label: 'The Free Tide\'s Flag' });
+// (Round 131) The upper half of a guild's flag on its mast: unseen (the flag
+// sprite stands two tall), but it stops you, and it's the flag you use.
+def('jolly_top', { solid: true, opaque: false, render: 'none', standable: false, interact: 'haven', hardness: Infinity, drop: null, label: 'Guild Flag' });
 def('haven_wanted', { ...sprite, tall: true, solid: true, interact: 'havenbills', hardness: Infinity, drop: null, label: 'Wanted Bills' });
 def('shore_gun', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 4, drop: null, label: 'A Gun Run Out' });
 def('plunder_heap', { ...sprite, solid: true, tool: 'axe', hardness: 1, drop: null, label: 'Plunder' });

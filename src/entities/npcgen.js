@@ -725,13 +725,26 @@ export function generateNPCs(layout, plan, seed) {
   const avail = availOf(layout);
   // Pair households with houses (largest households get the largest houses).
   const houses = layout.buildings.filter((b) => b.residential);
-  const hh = plan.households
+  // (Round 131) A haven on a cramped shore: its lone hands bunk together,
+  // two and three to a shack, rather than go without a roof.
+  let plHouseholds = plan.households;
+  if (s.haven && houses.length && plHouseholds.length > houses.length) {
+    const lone = plHouseholds.filter((h) => h.kind === 'single');
+    const rest = plHouseholds.filter((h) => h.kind !== 'single');
+    const bunks = [];
+    const per = Math.min(3, Math.max(2, Math.ceil(lone.length / Math.max(1, houses.length - rest.length))));
+    for (let i = 0; i < lone.length; i += per) bunks.push({ kind: 'crew', members: lone.slice(i, i + per).flatMap((h) => h.members) });
+    plHouseholds = [...rest, ...bunks];
+  }
+  const hh = plHouseholds
     .map((h, i) => ({ h, i }))
     .sort((a, b) => b.h.members.length - a.h.members.length);
   const freeHouses = [...houses].sort((a, b) => b.beds.length - a.beds.length);
   const jobQueue = [...plan.jobs];
   for (const { h } of hh) {
-    const house = freeHouses.find((b) => b.beds.length >= h.members.length && !b.household);
+    // (A haven's bunkmates take a shack however few its beds: the rest sleep
+    // in hammocks, or on the floor.)
+    const house = freeHouses.find((b) => !b.household && (b.beds.length >= h.members.length || (h.kind === 'crew' && b.beds.length >= 1)));
     if (!house) continue;
     house.household = h;
     // (Round 130: in a haven, each household from its own shore.)

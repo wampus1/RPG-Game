@@ -111,6 +111,7 @@ export function havenTopics(npc, game) {
       add('hv_council', st.m.rank === 'chief' ? 'Sit the council. (the chief\'s chair)' : 'What\'s before the council?');
     }
     if (sim.havens.held(H.h).length) add('hv_captives', 'The captives in your stockade...');
+    add('hv_lore', 'What do the brethren know? (the haven\'s lore)');
   }
   if (role === 'chief') {
     add('hv_news', 'Any word of prizes on the water?');
@@ -216,6 +217,21 @@ export function havenRespond(npc, game, id, arg) {
       if (game.duel) return { lines: ['One fight at a time.'] };
       game.startDuel(npc, 0, { challenge: st.i });
       return { lines: ['Under the Articles, then. Steel, here, before the brethren. The first to yield loses all.'], close: true };
+    }
+    // (Round 131) The brethren's own tree of learning (see sim/haventech.js).
+    case 'hv_lore': {
+      const T = sim.tech;
+      const s = npc.settlement;
+      const st = T.stateOf(s);
+      const cur = st.current ? T.def(st, st.current) : null;
+      const pct = cur ? Math.floor((st.progress / cur.cost) * 100) : 0;
+      return {
+        lines: [
+          cur ? `The chest pays for it: we've a few clever hands working out ${cur.name.toLowerCase()}. ${cur.desc} About ${pct}% there.` : 'Nobody\'s working anything out just now. The chest\'s empty, or the brethren are drunk.',
+          `${s.name} knows ${st.done.length} of the brethren's ${T.treeFor(st).ids.length} arts. No banks here, no schools, no siege engines: what we know is ships, shares, powder and how to keep a secret. Have a look.`,
+        ],
+        open: 'tech',
+      };
     }
     case 'hv_news':
       return { lines: [pick(rng, [

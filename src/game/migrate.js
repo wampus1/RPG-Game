@@ -16,7 +16,7 @@ import { shortName } from '../world/dungeonnames.js';
 import { stairFor, BLOCKS } from '../world/blocks.js';
 import { NO_PAINTINGS } from '../world/settlement.js';
 import { wallDirOf, WALL_DIRS } from './displays.js';
-import { SURFACE } from '../config.js';
+import { SURFACE, GROUND } from '../config.js';
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
 import { cookDish, parseDish } from '../world/dishes.js';
@@ -1001,6 +1001,31 @@ export const STEPS = [
         for (const h of H.standing(r.guild)) H.learn(h, pid, 'heard', 'the brethren');
       }
       log.push(`Pirates' havens: ${H.list.length} of them, hidden on lonely shores till you stumble on one or hear of it; captives in their stockades; the brethren's captains, chiefs and Articles, and a way up from hand to chief; realms that burn havens out, and villages that turn pirate.`);
+    },
+  },
+  {
+    to: '1.31.0',
+    game(game, log) {
+      log.push('Pirates\' havens learn the brethren\'s own lore (black ships, ransom brokers, powder magazines, fireships, hidden coves and more), and build a great pier for a black ship of their own. Ships keep to water that reaches the sea. A ship\'s hands talk as anyone does, and much more; their blows are seen coming; and they stay aboard when you save on a ship.');
+    },
+    town(L, game) {
+      // A haven's flag: one mast, two tall, with nothing round it (it stood
+      // on an unseen plinth three paces wide, and was only one tall).
+      const s = L.settlement;
+      const w = game && game.world;
+      const sim = game && game.sim;
+      if (!s || !s.haven || s.haven.razed || !w || !sim || !sim.setBlocks || !L.plaza) return;
+      const { cx, cz } = L.plaza;
+      const key = w.regionKey(Math.floor(cx / REGION_W), Math.floor(cz / REGION_D));
+      const loaded = w.regionAt(cx, cz);
+      const kept = w.saved && w.saved.has(key);
+      if (!loaded && !kept) return;
+      const flag = /^jolly_(gull|hand|tide)$/.test((BLOCKS[w.getBlock(cx, GROUND, cz)] || {}).name || '');
+      if (loaded && !flag) return;
+      const ops = [];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && (!loaded || w.getBlock(cx + dx, GROUND, cz + dz) === B.plinth)) ops.push([cx + dx, GROUND, cz + dz, B.air, 0]);
+      ops.push([cx, GROUND + 1, cz, B.jolly_top, 0]);
+      sim.setBlocks(ops);
     },
   },
 ];

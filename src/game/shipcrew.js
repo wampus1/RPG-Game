@@ -16,6 +16,7 @@ import { Sailor } from '../entities/sailor.js';
 import { capstanOf, capstanHands } from './anchor.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
+import { STYLES, weaponStyle, strikeAnim } from './combat.js';
 import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel, roomFor } from './ships3d.js';
 
 const TAU = Math.PI * 2;
@@ -41,6 +42,9 @@ export function makeCrew(seed, type, style, n, civ = null) {
 // each of them about their work; her helmsman sailing her.
 export function crewTick(game, S, dt) {
   if (game.remote) return;
+  // (Round 131) Her hands taken off her some other way while she's still
+  // reckoned crewed (and nobody of them dead): back on her deck.
+  if (S.crewHere && !S.sinking && !crewOf(game, S).length && S.crewRecs.some((r) => !r.dead && !r.paidOff)) S.crewHere = false;
   const near = playersNear(game, S, S.crewHere ? FAR : NEAR);
   if (near && !S.crewHere && S.crewRecs.length && !S.sinking) spawnCrew(game, S);
   else if (!near && S.crewHere) despawnCrew(game, S);
@@ -201,6 +205,11 @@ function boarderBrain(game, c) {
 function deckBrain(game, S, c, dt) {
   const d = c.deck;
   if (d.mv) return;
+  // (Round 131) Talking with you: they stop and listen, as anyone does.
+  if (game.talkingTo === c && !c.angry) {
+    c.face(game.player.x, game.player.z);
+    return;
+  }
   // Walking somewhere.
   const t = c.task;
   if (t && t.path && t.path.length) {
@@ -682,6 +691,38 @@ export function crewHurt(game, c, by) {
   }
 }
 
+// (Round 131) A hand's blow at `foe`, seen coming as anyone's is (a red
+// "!" over them and the ground it'll land on: see renderer): wound up,
+// then struck if they're still within reach. True while it's coming.
+// (They struck with no warning at all.)
+export function crewBlow(game, c, foe, dt) {
+  const w = c.windup;
+  if (w) {
+    w.t += dt;
+    if (c.dead || (c.stunT || 0) > 0) {
+      c.windup = null;
+      return false;
+    }
+    if (w.t < w.dur) {
+      c.face(w.target.x, w.target.z);
+      return true;
+    }
+    c.windup = null;
+    c.attackCd = 0.8;
+    const t = w.target;
+    strikeAnim(c, w.st);
+    c.actionTimer = 0.25;
+    game.audio?.play('swing', c);
+    if (t && !t.dead && !(t.rollT > 0) && Math.max(Math.abs(t.x - c.x), Math.abs(t.z - c.z)) <= 1.5 && Math.abs(t.y - c.y) <= 1) game.damage(t, c.dmg, c);
+    return false;
+  }
+  if (!foe || foe.dead || c.attackCd > 0) return false;
+  c.face(foe.x, foe.z);
+  const st = STYLES[weaponStyle(c.heldItem && c.heldItem())] || STYLES.fist;
+  c.windup = { t: 0, dur: c.role === 'marine' || c.role === 'captain' ? 0.5 : 0.6, st, target: foe, tiles: [{ x: Math.round(foe.x), z: Math.round(foe.z) }], y: c.y, heading: [Math.sign(Math.round(foe.x - c.x)), Math.sign(Math.round(foe.z - c.z))], combo: 0, press: 0 };
+  return true;
+}
+
 // Her crew fighting whoever's attacked them, hand to hand on her deck.
 export function crewFight(game, S, dt) {
   for (const c of crewOf(game, S)) {
@@ -691,13 +732,9 @@ export function crewFight(game, S, dt) {
       c.angry = false;
       continue;
     }
-    if (Math.max(Math.abs(foe.x - c.x), Math.abs(foe.z - c.z)) <= 1 && Math.abs(foe.y - c.y) <= 1) {
-      if (c.attackCd <= 0) {
-        c.attackCd = 1.1;
-        c.actionTimer = 0.25;
-        c.face(foe.x, foe.z);
-        game.damage(foe, c.dmg, c);
-      }
+    if (c.windup) crewBlow(game, c, foe, dt);
+    else if (Math.max(Math.abs(foe.x - c.x), Math.abs(foe.z - c.z)) <= 1 && Math.abs(foe.y - c.y) <= 1) {
+      if (c.attackCd <= 0) crewBlow(game, c, foe, dt);
     } else if (c.deck && foe.deck && foe.deck.s === S.id && !c.deck.mv) {
       const path = deckPath(S, { x: c.deck.cx, y: c.deck.y, z: c.deck.cz }, { x: foe.deck.cx, y: foe.deck.y, z: foe.deck.cz });
       if (path && path.length > 1) c.task = { kind: 'go', path: path.slice(0, -1) };

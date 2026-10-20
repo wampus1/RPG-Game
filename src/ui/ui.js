@@ -1321,7 +1321,7 @@ export class UI {
       } else if (e.kind === 'sailor') {
         // (Round 69) A ship's hand (their name was drawn as nothing at all,
         // and the box with it).
-        const nm = e.name && typeof e.name === 'object' ? `${e.name.first || ''} ${e.name.last || ''}`.trim() : String(e.name || 'A sailor');
+        const nm = String(e.name || 'A sailor');
         const sh = game.ships3d ? game.ships3d.find((q) => q.id === e.shipId) : null;
         const own = !!(sh && sh.owner && sh.owner === ownerId(game, game.player));
         const role = { captain: 'Captain', mate: 'Mate', gunner: 'Gunner', marine: 'Marine', merchant: 'Merchant', passenger: 'Passenger' }[e.role] || 'Hand';
@@ -1716,6 +1716,11 @@ export class UI {
   openBook(lines, o = {}) {
     this.closeAll();
     this.open(new DocumentWindow(this, { title: lines[0], lines: lines.slice(1), kind: o.kind || 'book', from: o.from || null, key: o.key || null, by: o.by || null, sign: o.sign || null, year: o.year || null, genre: o.genre || null, style: o.style || null }));
+  }
+  // (Round 131) A word with a ship's hand, in the same window as anyone.
+  openSailorTalk(c, game) {
+    this.closeAll();
+    this.open(new W.SailorDialogueWindow(this, c, game));
   }
   openDeath(cause, below = null) {
     this.closeAll();

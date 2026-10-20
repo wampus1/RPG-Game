@@ -23,8 +23,12 @@ export class Sailor extends Entity {
   constructor(game, rec, x = 0, y = 0, z = 0) {
     super(game, x, y, z);
     this.kind = 'sailor';
-    this.rec = { name: rec.name, role: rec.role || 'sailor', civ: rec.civ ?? null, style: rec.style || null };
-    this.name = rec.name;
+    this.rec = { name: rec.name, role: rec.role || 'sailor', civ: rec.civ ?? null, style: rec.style || null, age: 'adult', traits: rec.traits || [], mood: rec.mood ?? 0.6 };
+    // (Round 131) Named as anyone is (their name was an object: "slain by
+    // [object]"), with their berth for a title.
+    const nm = rec.name;
+    this.name = nm && typeof nm === 'object' ? `${nm.first || ''} ${nm.last || ''}`.trim() || 'A sailor' : String(nm || 'A sailor');
+    this.first = nm && typeof nm === 'object' ? nm.first || this.name : this.name.split(' ')[0];
     this.look = rec.look;
     this.role = rec.role || 'sailor';
     const R = SAILOR_ROLES[this.role] || SAILOR_ROLES.sailor;
@@ -36,6 +40,11 @@ export class Sailor extends Entity {
     this.task = null;
     this.attackCd = 0;
     this.solid = true;
+  }
+
+  // Their berth aboard, as a person's trade is (see NPC.title).
+  get title() {
+    return (SAILOR_ROLES[this.role] || SAILOR_ROLES.sailor).name;
   }
 
   // What's in their hand (a gunner's rammer, a marine's musket's no

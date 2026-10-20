@@ -4184,7 +4184,12 @@ class Layout {
     const piece = s.haven ? B[GUILD_FLAGS[s.haven.guild] || GUILD_FLAGS[0]] : { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain, ...FAR_PIECE_BLOCKS }[s.style];
     const room = [];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) room.push([p.cx + dx, p.cz + dz]);
-    if (piece && room.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) {
+    // (Round 131: a haven's flag is one mast, two tall, nothing round it.)
+    if (piece && s.haven && this.maskAt(p.cx, p.cz) === M.PLAZA) {
+      this.put(p.cx, Y0, p.cz, piece, 0);
+      this.put(p.cx, Y0 + 1, p.cz, B.jolly_top);
+      this.setMask(p.cx, p.cz, M.DECOR);
+    } else if (piece && room.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) {
       this.put(p.cx, Y0, p.cz, piece, (piece === B.heartfire || piece === B.frost_hearth || piece === B.beacon) && !ruined ? META_STATE : 0);
       for (const [x, z] of room) {
         if (x !== p.cx || z !== p.cz) this.put(x, Y0, z, B.plinth);

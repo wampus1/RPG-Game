@@ -992,7 +992,10 @@ export class Sim {
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
     const raw = (ITEMS[k]?.value || 0) * 0.5 * rule('sell') * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
-    const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
+    // (Round 131) A haven's fence, of the Fences' Ring: pays more.
+    const fs = npc.layout && npc.layout.settlement;
+    const fence = fs && fs.haven && this.tech && sh && sh.kind === 'general' ? 1 + this.tech.fxOf(fs, 'fence') : 1;
+    const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw * fence));
     const lic = this.careers.sellFactor(npc, k);
     // (A Kavorent core, beyond the storm: worth far more there.)
     if (k === 'kav_core' && npc.layout && isFar(npc.layout.settlement)) return Math.round((lic > 1 ? Math.max(normal + 1, raw * lic) : normal) * FAR_CORE);

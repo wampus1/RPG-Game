@@ -459,7 +459,7 @@ function make(game, v, pos, d) {
   const ow = game.world.ow;
   const civ = ow.civs.find((c) => c.id === v.civ) || null;
   game.loadAround?.(Math.round(pos.x), Math.round(pos.z), false);
-  const at = waterSpot(game, v.type, Math.round(pos.x), Math.round(pos.z), 0, 44, false);
+  const at = waterSpot(game, v.type, Math.round(pos.x), Math.round(pos.z), 0, 44, false, true);
   if (!at || Math.hypot(at.x - pos.x, at.z - pos.z) > 40) {
     v.at = d;
     v.atT = game.sim.abs;
@@ -495,9 +495,15 @@ function peopleAboard(game, S) {
 }
 
 function unmake(game, v, S) {
+  // (Round 131) Anyone aboard her: she's kept, crew and all (her hands
+  // were taken off her from under you, and never came back), and she's
+  // saved with the world from now on.
+  if (peopleAboard(game, S)) {
+    S.transient = false;
+    return;
+  }
   for (const c of crewOf(game, S)) game.removeOcc?.(c);
   game.sailors = (game.sailors || []).filter((c) => c.shipId !== S.id);
-  if (peopleAboard(game, S)) return;
   const list = shipsOf(game);
   const i = list.indexOf(S);
   if (i >= 0) list.splice(i, 1);

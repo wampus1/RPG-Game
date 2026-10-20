@@ -130,14 +130,16 @@ export class Havens {
         if (!this.open(cx, cz)) continue;
         const c = ow.cell(cx, cz);
         const land = this.landIn(cx, cz);
-        if (land < 0.6) continue;
-        opts.push({ cx, cz, r, land, coast: ow.nearOcean(c) });
+        // (Round 131: on the sea itself, always, for the harbour.)
+        // (And the sea in its own square: close enough for a pier.)
+        if (land < 0.72 || land > 0.93 || !ow.nearOcean(c)) continue;
+        opts.push({ cx, cz, r, land, coast: true });
       }
     }
     if (!opts.length) return null;
     // (By the sea, with room on it for a haven, and as near the cove as
     // can be.)
-    opts.sort((a, b) => (b.coast ? 1 : 0) - (a.coast ? 1 : 0) || (b.land >= 0.8 ? 1 : 0) - (a.land >= 0.8 ? 1 : 0) || a.r - b.r);
+    opts.sort((a, b) => (b.land >= 0.8 ? 1 : 0) - (a.land >= 0.8 ? 1 : 0) || a.r - b.r);
     return opts[0];
   }
 
@@ -166,7 +168,8 @@ export class Havens {
       const c = ow.cell(cx, cz);
       if (!c || c.biome === 'ocean' || !ow.nearOcean(c)) continue;
       if (ow.settlements.some((o) => Math.hypot(o.cx - cx, (o.cz - cz) * 1.4) < 6)) continue;
-      if (!this.open(cx, cz) || this.landIn(cx, cz) < 0.6) continue;
+      const land = this.landIn(cx, cz);
+      if (!this.open(cx, cz) || land < 0.72 || land > 0.93) continue;
       out.push({ cx, cz, own: land && c.island === land ? 0 : 1 });
     }
     if (!out.length) return null;
@@ -265,7 +268,7 @@ export class Havens {
       // (In a haven, the brethren know their own guild's.)
       const own = here && here.guild === h.guild;
       const told = h.told && h.told[s.id];
-      const p = own ? 0.9 : told ? 0.95 : knowing * (d < 20 ? 1 : d < 45 ? 0.55 : d < 90 ? 0.25 : 0.08);
+      const p = own ? 0.9 : told ? 0.95 : knowing * (d < 20 ? 1 : d < 45 ? 0.55 : d < 90 ? 0.25 : 0.08) * (1 - this.fxOf(h, 'hidden'));
       return { h, d, p };
     }).sort((a, b) => b.p - a.p);
     const q = cand.find((c) => rng.chance(c.p));
@@ -367,7 +370,7 @@ export class Havens {
     if (!p) return null;
     p.pirate = h.guild;
     p.haven = h.id;
-    p.ransom = 30 + rng.int(0, 50) + (rec.job === 'merchant' ? 40 : 0);
+    p.ransom = Math.round((30 + rng.int(0, 50) + (rec.job === 'merchant' ? 40 : 0)) * (1 + this.fxOf(h, 'ransom')));
     p.noted = day;
     const G = GUILDS[h.guild] || GUILDS[0];
     ledger(L, day, `${p.name} was ${how} by pirates of ${G.name}. Nobody knows where they've been taken.`);
@@ -378,6 +381,8 @@ export class Havens {
   released(p, how, day) {
     const h = this.get(p.haven);
     if (!h) return;
+    // (Hidden Coves: blindfolded there and back. They can't say where.)
+    if (this.fxOf(h, 'hidden') >= 0.5) return;
     const ow = this.game.world.ow;
     const home = ow.settlements[p.sid];
     if (!home) return;
@@ -427,7 +432,7 @@ export class Havens {
       const days = day - p.day;
       if (days > 0 && days % 5 === 0 && p.noted !== day) {
         p.noted = day;
-        const pay = HL.econ.treasury > (p.ransom || 40) + 60 && rng.chance(0.35);
+        const pay = HL.econ.treasury > (p.ransom || 40) + 60 && rng.chance(0.35 * (1 + this.fxOf(h, 'ransomPay')));
         if (pay) {
           HL.econ.treasury -= p.ransom || 40;
           ledger(HL, day, `The town paid the pirates ¤${p.ransom} to have ${p.name} back.`);
@@ -491,7 +496,9 @@ export class Havens {
     const people = FL.npcs.filter((r) => alive(r) && !r.away && !r.visitor && r.age === 'adult' && r.ruler === undefined && r.job !== 'mayor' && r.raid === undefined && r.soldier === undefined && r.captive === undefined);
     const guards = people.filter((r) => r.job === 'guard').sort((a, b) => (b.personality?.bravery ?? 0.5) - (a.personality?.bravery ?? 0.5));
     const bold = people.filter((r) => r.job !== 'guard' && (r.personality?.bravery ?? 0) > 0.55);
-    const party = [...guards.slice(0, Math.max(0, guards.length - 1)), ...bold].slice(0, 8);
+    // (Powder, batteries, fireships: the fewer of them that get ashore.)
+    const repel = Math.min(0.75, this.fxOf(h, 'repel'));
+    const party = [...guards.slice(0, Math.max(0, guards.length - 1)), ...bold].slice(0, Math.max(4, Math.round(8 * (1 - repel))));
     if (party.length < 4) return null;
     const id = war.nextId++;
     const at = (day + 2) * DAY + 21 * 60 + rng.int(0, 150);
@@ -512,6 +519,20 @@ export class Havens {
     if (B) {
       B.note(h.guild, `The lookout at ${h.name} has seen sails: marines of the ${rn} are coming to burn it out, in two nights.`, day);
       B.tellMembers(h.guild, `Marines of the ${rn} are coming to burn out ${h.name}, two nights from now! The brethren will want every blade there.`, '#ff9070');
+      // (Lookout Towers: seen in time to call the guild's ships home.)
+      if (this.fxOf(h, 'warn')) {
+        let n = 0;
+        for (const c of B.of(h.guild).captains) {
+          if (c.state !== 'sea' && c.state !== 'careen') continue;
+          c.state = 'haven';
+          c.haven = h.id;
+          c.until = day + 3;
+          const r = B.recOf(c);
+          if (r) r.away = false;
+          n++;
+        }
+        if (n) B.note(h.guild, `The lookouts' signal brought ${n} of the guild's ships home to ${h.name} to meet the marines.`, day);
+      }
     }
     this.sim.saga?.emit('haven_expedition', { haven: h.id, civ: C.id, raid: id });
     return raid;
@@ -629,6 +650,7 @@ export class Havens {
     if (p) {
       for (let z = p.z0 - 2; z <= p.z1 + 2; z++) for (let x = p.x0 - 2; x <= p.x1 + 2; x++) if (rng.chance(0.3)) ops.push([x, GROUND - 1, z, rng.chance(0.5) ? B.ash : B.scorched, 0]);
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) ops.push([p.cx + dx, GROUND, p.cz + dz, B.air, 0]);
+      ops.push([p.cx, GROUND + 1, p.cz, B.air, 0]);
       ops.push([p.cx, GROUND, p.cz, B.campfire, 0]);
     }
     this.sim.setBlocks(ops);
@@ -714,7 +736,7 @@ export class Havens {
     for (const r of L.npcs) if (alive(r) && r.age !== 'child' && r.look && rng.chance(0.5)) r.look = { ...r.look, hat: rng.pick(['bandana', 'bandana', 'tricorn']), hatColor: rng.pick(['#1a1a1a', '#8a1a1a']) };
     if (!L.prisonCells.length && this.sim.works) this.sim.works.startBuilding(L, 'stockade', ', for the brethren\'s captives', false, 0);
     const p = L.plaza;
-    if (p) this.sim.setBlocks([[p.cx + 3, GROUND, p.cz, B[GUILD_FLAGS[gi]], 0, true]]);
+    if (p) this.sim.setBlocks([[p.cx + 3, GROUND, p.cz, B[GUILD_FLAGS[gi]], 0, true], [p.cx + 3, GROUND + 1, p.cz, B.jolly_top, 0, true]]);
     const G = GUILDS[gi] || GUILDS[0];
     ledger(L, day, pid ? `${playerName(this.game, pid)} has raised the black flag of ${G.name} over ${s.name}: it's a pirates' haven now.` : `Captains of ${G.name} have been coming and going all season, and now the black flag flies over ${s.name}: it's a pirates' haven.`);
     this.sim.brethren?.note(gi, `${s.name} has come over to ${G.name}: a haven of ours now.`, day);
@@ -747,7 +769,7 @@ export class Havens {
     const L = h && this.layout(h);
     const E = this.sim.events;
     if (!L || !L.econ || !E || !E.fete || (L.econ.events || []).some((q) => q.state !== 'done' && q.state !== 'off')) return;
-    if (h.lastRevel && day - h.lastRevel < 10) return;
+    if (h.lastRevel && day - h.lastRevel < 10 / (1 + this.fxOf(h, 'revel'))) return;
     h.lastRevel = day;
     const ev = E.fete(L, day + 1, 'village');
     if (ev) {
@@ -846,6 +868,12 @@ export class Havens {
     this.game.audio?.play('secret');
     this.game.renderer?.emit?.(x, y + 1, z, { n: 18, color: ['#f0d050', '#fff0a0', '#c8a040'], up: 40, speed: 40, life: 0.9, glow: true });
     return true;
+  }
+
+  // (Round 131) What haven `h` knows comes to (see haventech.js).
+  fxOf(h, key) {
+    const s = this.settlement(h);
+    return s && this.sim.tech ? this.sim.tech.fxOf(s, key) : 0;
   }
 
   // What's on someone's head, by the realms they've sunk ships of.

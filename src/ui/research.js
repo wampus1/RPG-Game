@@ -179,7 +179,7 @@ export class TechWindow extends Window {
     const T = game.sim.tech;
     const st = T.stateOf(s);
     const civ = s.civ;
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(10,9,16,0.97)', double: true, title: `WHAT THE REALM KNOWS${this.tree.isle ? ` · THE LEARNING OF ${this.tree.isle.toUpperCase()}` : ''}` });
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(10,9,16,0.97)', double: true, title: this.tree.isle === 'haven' ? 'WHAT THE HAVEN KNOWS · THE LORE OF THE BRETHREN' : `WHAT THE REALM KNOWS${this.tree.isle ? ` · THE LEARNING OF ${this.tree.isle.toUpperCase()}` : ''}` });
     const who = T.leaderOf(s);
     const realm = civ ? civ.name.replace(/^The /, '') : `free town of ${s.name}`;
     g.center(1, `${realm.toUpperCase()}${who ? ` · ${who.name.first} ${who.name.last} decides what is studied` : ''}`, '#f0e0c0');

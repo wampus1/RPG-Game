@@ -11,6 +11,7 @@ import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
 import { openingLine, topicsFor, respond, TOPIC_CATS, leaderOf } from '../game/dialogue.js';
+import { sailorTopics, sailorRespond, sailorOpening, shipOf, isOwnCrew, roleName, background, doing } from '../game/sailortalk.js';
 import { TechWindow } from './research.js';
 import { RelicAnvilWindow } from './relicanvil.js';
 import { AncientWindow } from './ancient.js';
@@ -579,12 +580,23 @@ export class DialogueWindow extends Window {
     // topic keeps the words it first had: a label picked from a few (a
     // story's "You look troubled...") doesn't flicker from one to another.
     this.said ||= new Map();
-    return topicsFor(this.npc, game).map((o) => {
+    return this.topics(game).map((o) => {
       const k = `${o.id}|${o.arg ?? ''}`;
       if (!this.said.has(k)) this.said.set(k, o.label);
       const label = this.said.get(k);
       return label === o.label ? o : { ...o, label };
     });
+  }
+  // (Round 131) What there is to say, their answer, and their first words:
+  // a ship's hand's are their own (see SailorDialogueWindow).
+  topics(game) {
+    return topicsFor(this.npc, game);
+  }
+  answer(o, game) {
+    return respond(this.npc, game, o.id, o.arg);
+  }
+  opening(game) {
+    return openingLine(this.npc, game);
   }
   // Long option labels get the full width (one column).
   isWide(all) {
@@ -624,7 +636,7 @@ export class DialogueWindow extends Window {
       this.page = 0;
       return;
     }
-    const r = respond(n, game, o.id, o.arg);
+    const r = this.answer(o, game);
     game.audio?.play('select');
     if (r.open === 'trade') return this.ui.openTrade(n);
     if (r.open === 'gift') return this.ui.open(new GiftWindow(this.ui, n));
@@ -652,12 +664,17 @@ export class DialogueWindow extends Window {
     }
   }
   draw(g, game) {
-    const n = this.npc;
-    if (this.queue === null) this.say([openingLine(n, game)]);
-    const rec = n.rec;
+    if (this.queue === null) this.say([this.opening(game)]);
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true });
     g.box(1, 1, 5, 5, { fg: C.faint });
     this.portraitPos = { x: (this.x + 2) * CHAR_W + 1, y: (this.y + 2) * CHAR_H - 4 };
+    this.header(g, game);
+    this.body(g, game);
+  }
+  // Who they are: name, trade, traits, what they think of you, now.
+  header(g, game) {
+    const n = this.npc;
+    const rec = n.rec;
     g.text(7, 1, n.name, C.hi);
     const title = `${n.title}${rec.age === 'child' && n.title !== 'Child' ? ' · child' : rec.age === 'elder' && n.title !== 'Retiree' ? ' · elder' : ''} of ${n.homeName}`;
     g.text(7, 2, title.slice(0, 62), C.cyan);
@@ -672,6 +689,9 @@ export class DialogueWindow extends Window {
     g.text(46, 4, mood > 0.7 ? 'Mood: cheerful' : mood < 0.3 ? 'Mood: miserable' : mood < 0.45 ? 'Mood: low' : 'Mood: fine', C.faint);
     if (n.activity) g.text(7, 5, `Now: ${describeActivity(n.activity.entry)}`.slice(0, 40), C.faint);
     if (rec.hungry >= 1) g.text(46, 5, rec.hungry >= 2 ? 'Starving' : 'Hungry', C.orange);
+  }
+  // What they're saying, and what you can say back.
+  body(g, game) {
     // Current line, typed out.
     const line = this.line || '...';
     const shown = line.slice(0, Math.floor(this.chars));
@@ -730,7 +750,7 @@ export class DialogueWindow extends Window {
     if (game && game.talkingTo === this.npc) game.talkingTo = null;
     // Walking out on the mayor's lecture counts as brushing it off.
     const cf = game && game.sim.confront;
-    if (cf && cf.arrived && cf.idx === this.npc.rec.idx && cf.sid === this.npc.settlement.id) game.sim.settleConfront(this.npc, cf.stage === 'expel' ? 'expel' : 'defy');
+    if (cf && this.npc.settlement && cf.arrived && cf.idx === this.npc.rec.idx && cf.sid === this.npc.settlement.id) game.sim.settleConfront(this.npc, cf.stage === 'expel' ? 'expel' : 'defy');
   }
   drawPixels(ctx) {
     const sheet = humanoidSheet(this.npc.look);
@@ -3445,5 +3465,54 @@ export class SettingWindow extends Window {
       if (k.code === 'Space') this.press();
     } else if ((k.code === 'Enter' || k.code === 'Space') && (this.t || 0) - (this.endAt || 0) > 0.6) this.close();
     return true;
+  }
+}
+
+// (Round 131) A word with one of a great ship's people, in the same window
+// as anyone ashore (it was a box of its own, unlike any other): their name
+// and berth aboard her, how they are, what they're at, and what there is
+// to say to them (see game/sailortalk.js).
+export class SailorDialogueWindow extends DialogueWindow {
+  topics(game) {
+    return sailorTopics(this.npc, game);
+  }
+  answer(o, game) {
+    return sailorRespond(this.npc, game, o.id, o.arg);
+  }
+  opening(game) {
+    return sailorOpening(this.npc, game);
+  }
+  header(g, game) {
+    const c = this.npc;
+    const S = shipOf(game, c);
+    g.text(7, 1, c.name, c.angry ? C.red : C.hi);
+    const own = isOwnCrew(game, c);
+    g.text(7, 2, `${roleName(c)}${S ? ` of ${S.name}` : ''}${own ? ' · your crew' : ''}`.slice(0, 62), C.cyan);
+    const b = background(c);
+    g.text(7, 3, (c.role === 'merchant' || c.role === 'passenger' ? 'aboard as a passenger' : b.years ? `${b.years} years at sea` : 'new to the sea').slice(0, 62), C.purple);
+    const f = Math.max(0, Math.min(1, c.hp / Math.max(1, c.maxHp)));
+    const bars = Math.round(f * 10);
+    g.text(7, 4, 'Health', C.dim);
+    g.text(15, 4, '■'.repeat(bars) + '□'.repeat(10 - bars), f > 0.6 ? C.green : f > 0.3 ? C.orange : C.red);
+    g.text(26, 4, `${Math.ceil(c.hp)}/${c.maxHp}`, C.dim);
+    const mood = c.rec.mood ?? 0.6;
+    g.text(46, 4, mood > 0.75 ? 'Mood: merry' : mood < 0.35 ? 'Mood: sour' : 'Mood: fine', C.faint);
+    g.text(7, 5, `Now: ${doing(c)}`.slice(0, 40), C.faint);
+  }
+  onClose(game) {
+    if (game && game.talkingTo === this.npc) game.talkingTo = null;
+  }
+  update(dt, game) {
+    this.chars += dt * 60;
+    if (this.closing !== undefined) {
+      this.closing -= dt;
+      if (this.closing <= 0) {
+        this.close();
+        if (this.after) this.after();
+        return;
+      }
+    }
+    const c = this.npc;
+    if (c.dead || (c.paidOff && this.closing === undefined) || c.distTo(game.player) > 6 || (c.angry && !isOwnCrew(game, c))) this.close();
   }
 }

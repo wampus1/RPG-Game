@@ -4517,7 +4517,8 @@ export class Renderer {
         for (let i = 0; i <= n * f; i++) ctx.fillRect(Math.round(a.x + 8 + ((b.x - a.x) * i) / n), Math.round(a.y + 2 + ((b.y - a.y) * i) / n), 1, 1);
       }
     }
-    for (const e of [...game.npcs, ...game.creatures]) {
+    // (Round 131: and a ship's hands, on her deck.)
+    for (const e of [...game.npcs, ...game.creatures, ...(game.sailors || [])]) {
       if (e.dead || !near(e)) continue;
       const w = e.windup;
       if (w && !w.dash) {

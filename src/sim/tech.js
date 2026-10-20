@@ -21,6 +21,7 @@ import { tradeWeekly } from './isletrades.js';
 import { farTable } from '../world/farlands.js';
 import { LANDMASSES } from '../world/geography.js';
 import { FAR_TECH_DEFS, FAR_TREES } from './fartech.js';
+import { HAVEN_TECH_DEFS, HAVEN_TREE, HAVEN_STARTS } from './haventech.js';
 
 export const BRANCHES = [
   { id: 'economy', name: 'Economy', color: '#e8c060' },
@@ -133,6 +134,8 @@ export const TECHS = {
 
 // (Round 68: and the far lands' peoples' own: see fartech.js.)
 for (const [id, a] of Object.entries(FAR_TECH_DEFS)) TECHS[id] = T(...a);
+// (Round 131: and the brethren's own: see haventech.js.)
+for (const [id, a] of Object.entries(HAVEN_TECH_DEFS)) TECHS[id] = T(...a);
 
 export const TECH_IDS = Object.keys(TECHS);
 
@@ -207,6 +210,8 @@ export const ISLE_TREES = {
 
 // (Round 68) And each far people's tree: see fartech.js.
 Object.assign(ISLE_TREES, FAR_TREES);
+// (Round 131) And a pirates' haven's: see haventech.js.
+ISLE_TREES.haven = HAVEN_TREE;
 
 // An island's tree (or the common one, for anywhere else): each step as it
 // sits there.
@@ -259,6 +264,8 @@ const met = (done, r) => (Array.isArray(r) ? r.some((k) => done.includes(k)) : d
 // the Jade Court's...)
 export function isleOf(s) {
   if (!s) return null;
+  // (Round 131: a pirates' haven learns as the brethren do.)
+  if (s.haven && !s.civ) return 'haven';
   const civ = s.civ || (s.values !== undefined ? s : null);
   if (civ && civ.far && FAR_TREES[civ.style]) return civ.style;
   if (s.civ) return s.civ.island || null;
@@ -365,7 +372,26 @@ export class Tech {
     st.banked ||= {};
     // (Which island's tree it learns from: its capital's.)
     if (st.isle === undefined) st.isle = isleOf(s);
+    // (Round 131) A pirates' haven (a village turned, too): the brethren's
+    // tree, and what every haven knows from the first.
+    if (s.haven && !s.civ && !s.values && !st.haven) this.toHaven(st);
     return st;
+  }
+
+  // (Round 131) A free town's learning made a haven's: the brethren's first
+  // steps, and what it knew of the common tree that the brethren keep (the
+  // rest forgotten: of no use to pirates).
+  toHaven(st) {
+    st.isle = 'haven';
+    st.haven = true;
+    const tree = treeOf('haven');
+    st.done = st.done.filter((k) => tree.techs[k]);
+    for (const k of HAVEN_STARTS) if (!st.done.includes(k)) this.learnWithReqs(st, k);
+    if (st.current && !tree.techs[st.current]) {
+      st.current = null;
+      st.progress = 0;
+    }
+    for (const k of Object.keys(st.banked || {})) if (!tree.techs[k]) delete st.banked[k];
   }
 
   // The tree a realm (or free town) learns from, and a step as it sits on it.

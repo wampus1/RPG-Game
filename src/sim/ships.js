@@ -27,6 +27,8 @@ const NAMES = {
   tide: ['Pearl Diver', 'Turtle Back', 'Swift Gull', 'Reef Dancer', 'Tide Bride'],
 };
 Object.assign(NAMES, farTable('ships'));
+// (Round 131) A pirates' haven's own black ship.
+NAMES.haven = ['Black Revenge', 'Widow\'s Kiss', 'Bloody Mary', 'Sea Hag', 'Gallows Bird', 'Dead Man\'s Chest', 'Cutthroat', 'Grinning Jack'];
 const CREW = 5;
 // (Round 73) Every town on the coast has a dock, as big as the town: a
 // little plank jetty for a village, a broad pier with posts for a town, a
@@ -36,7 +38,9 @@ export const DOCKS = {
   medium: { len: 6, wide: 3, cost: 90, rank: 1, label: 'a pier' },
   large: { len: 8, wide: 3, head: 2, cost: 150, rank: 2, label: 'a harbour pier' },
 };
-export const dockSizeFor = (s) => (s && (s.empire || s.type === 'city') ? 'large' : s && s.type === 'town' ? 'medium' : 'small');
+// (Round 131: a pirates' haven, the biggest pier it can get: the brethren's
+// ships are great ones.)
+export const dockSizeFor = (s) => (s && (s.empire || s.type === 'city' || s.haven) ? 'large' : s && s.type === 'town' ? 'medium' : 'small');
 
 export class Ships {
   constructor(game, sim) {
@@ -290,7 +294,7 @@ export class Ships {
         return null;
       }
       delete L.econ.noDock;
-      const names = NAMES[s.style] || NAMES.vale;
+      const names = (s.haven ? NAMES.haven : NAMES[s.style]) || NAMES.vale;
       P = this.ports[s.id] = { sid: s.id, site, size: site.size, ship: knows, state: 'planned', name: names[hash4(s.id, s.seed >>> 0, 0x5b1) % names.length], voyage: null, next: day, voyages: 0, earned: 0 };
       // (There from the first: a town that's always been on the coast has
       // always had its dock.)

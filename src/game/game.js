@@ -4179,6 +4179,8 @@ export class Game {
     if (id === B.bed) for (const n of this.npcs) if (n.sleeping && !n.dead && n.x === x && n.z === z && Math.abs(n.y - y) <= 1) n.bedGone?.(byPlayer ? this.player : null);
     const rand = Math.random;
     const drops = [];
+    // (Round 131) A guild's flag cut down: its unseen upper half with it.
+    if (/^jolly_(gull|hand|tide)$/.test(b.name) && w.getBlock(x, y + 1, z) === B.jolly_top) w.setBlock(x, y + 1, z, B.air);
     if (b.render === 'door') {
       // Remove both halves; only the bottom drops the door item.
       const bottomY = id === B.door_top ? y - 1 : y;

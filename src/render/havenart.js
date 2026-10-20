@@ -14,34 +14,37 @@ const spr = (h = SPR) => new Px(16, h);
 const WOOD = ['#6a4a2c', '#4e3420', '#8a6440', '#2e2014'];
 const ROPE = '#b8a070';
 
-// Sailcloth: old canvas laid in strips, seams stitched across it, a patch
-// of another cloth here and there and a smear of tar.
-const SAIL = ['#d8ccb0', '#c4b696', '#e8dcc4', '#8a7a5a'];
-const PATCH = ['#a8483a', '#4a5a7a', '#6a6a48', '#c8b070'];
+// Sailcloth: old canvas laid in broad strips, a stitched seam between
+// them; now and then (one tile in five or so) a patch of a darker cloth,
+// and rarer still a smear of tar. (Round 131: calmer, as a roof reads from
+// a distance: it was a patchwork on every tile.)
+const SAIL = ['#d4c8ac', '#c8bb9c', '#ddd2b8', '#a89878'];
+const PATCH = ['#9a8a6a', '#8a7a64', '#b0a07c'];
 function sailFace(p, rand, h, f) {
   for (let y = 0; y < h; y++) {
+    const strip = (y >> 3) % 2;
     for (let x = 0; x < 16; x++) {
-      let c = SAIL[(x + (y >> 2)) % 3 === 0 ? 1 : 0];
-      if (y % 5 === 4) c = SAIL[3];
-      else if (y % 5 === 0 && x % 2 === 0) c = SAIL[2];
-      if (rand() < 0.04) c = SAIL[1];
+      let c = SAIL[strip];
+      // (The seam: a stitch every other pace.)
+      if (y % 8 === 7) c = x % 2 ? SAIL[3] : SAIL[strip];
+      // (The weave, faint.)
+      else if ((x + y) % 7 === 0) c = SAIL[2];
       p.set(x, y, shade(hex(c), f));
     }
   }
   // A patch, stitched round.
-  const px = Math.floor(rand() * 10);
-  const py = Math.floor(rand() * Math.max(1, h - 6));
-  const pc = PATCH[Math.floor(rand() * PATCH.length)];
-  p.rect(px, py, 5, 4, shade(hex(pc), f));
-  for (let i = 0; i < 5; i += 2) {
-    p.set(px + i, py, shade(hex('#2a2018'), f));
-    p.set(px + i, py + 3, shade(hex('#2a2018'), f));
+  if (rand() < 0.2) {
+    const px = 2 + Math.floor(rand() * 9);
+    const py = 1 + Math.floor(rand() * Math.max(1, h - 6));
+    const pc = PATCH[Math.floor(rand() * PATCH.length)];
+    p.rect(px, py, 4, 3, shade(hex(pc), f));
+    for (let i = 0; i < 4; i += 2) p.set(px + i, py, shade(hex('#6a5a44'), f));
   }
   // Tar.
-  if (rand() < 0.6) {
+  if (rand() < 0.12) {
     const tx = Math.floor(rand() * 14);
     const ty = Math.floor(rand() * Math.max(1, h - 2));
-    p.rect(tx, ty, 2, 1, shade(hex('#2a2422'), f));
+    p.rect(tx, ty, 2, 1, shade(hex('#4a4038'), f));
   }
 }
 
