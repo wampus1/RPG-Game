@@ -17,17 +17,19 @@
 import { RNG, hash4 } from '../util/rng.js';
 import { REGION_W, REGION_D, MAP_W, MAP_H, GROUND } from '../config.js';
 import { ledger, alive, DAY } from './econ.js';
-import { exploredByAny } from '../game/party.js';
-import { pidOf, playerOf, playerName } from './saga/refs.js';
+import { exploredByAny, seatMap } from '../game/party.js';
+import { pidOf, playerOf, playerName, seatOfPid } from './saga/refs.js';
 import { isHaven } from './havenref.js';
 import { covesOf, GUILDS } from '../game/pirates.js';
+import { piracyOf, pirateTo, PIRATE_AT } from '../game/piracy.js';
 import { relocate } from './civic.js';
-import { retrain } from '../entities/npcgen.js';
+import { retrain, makeAdventurer } from '../entities/npcgen.js';
 import { B } from '../world/blocks.js';
 import { GUILD_FLAGS } from '../world/havenkit.js';
 import { ignite } from '../game/fire.js';
 
 const NOTICE_AT = 22; // paces from its edge at which you come upon one
+const HUNT_AT = 120; // the price on a pirate's head that brings out bounty hunters
 const centre = (s) => ({ x: Math.floor((s.cx + (s.cw || 1) / 2) * REGION_W), z: Math.floor((s.cz + (s.cd || 1) / 2) * REGION_D) });
 
 export class Havens {
@@ -198,7 +200,13 @@ export class Havens {
   knows(sid, pid) {
     const h = this.of(sid);
     if (!h) return 'seen';
-    return (h.know && h.know[pid]) || false;
+    const k = (h.know && h.know[pid]) || false;
+    if (k || !h.cover) return k;
+    // (A village turned pirate: those who've been there know a village.)
+    const s = this.settlement(h);
+    const seat = seatOfPid(this.game, pid);
+    const om = seat ? seatMap(this.game, seat) : this.game.world.ow;
+    return s && om.explored && om.explored[s.cz * MAP_W + s.cx] ? 'cover' : false;
   }
 
   // `pid` has come upon haven `h` (or heard of it: 'heard'). True if that's
@@ -353,7 +361,8 @@ export class Havens {
     const people = L.npcs.filter((r) => alive(r) && !r.away && !r.visitor && r.age === 'adult' && r.ruler === undefined && r.job !== 'mayor' && r.captive === undefined && r.soldier === undefined && r.raid === undefined && !(r.ent && !r.ent.dead));
     if (!people.length) return null;
     const pref = people.filter((r) => ['fisher', 'merchant', 'laborer', 'trapper'].includes(r.job));
-    const rec = (pref.length && rng.chance(0.7) ? pref : people)[rng.int(0, (pref.length && rng.chance(0.7) ? pref : people).length - 1)];
+    const pool = pref.length && rng.chance(0.7) ? pref : people;
+    const rec = pool[rng.int(0, pool.length - 1)];
     const p = war.takePrisoner(rec, L, null, day, how, h.sid);
     if (!p) return null;
     p.pirate = h.guild;
@@ -776,11 +785,13 @@ export class Havens {
   // that shows the way. The item's key, or null.
   treasureMap(rng, near = null) {
     const ow = this.game.world.ow;
-    const c0 = near ? centre(near) : this.game.player ? { x: this.game.player.x, z: this.game.player.z } : null;
+    // (`near`: a settlement, or a haven's record.)
+    const c0 = near ? (near.sid !== undefined ? this.centre(near) : centre(near)) : this.game.player ? { x: this.game.player.x, z: this.game.player.z } : null;
     if (!c0) return null;
-    for (let i = 0; i < 80; i++) {
+    // (Further afield, if the coast's a long way off.)
+    for (let i = 0; i < 160; i++) {
       const a = rng.next() * Math.PI * 2;
-      const r = rng.int(80, 260);
+      const r = i < 80 ? rng.int(80, 260) : rng.int(200, 700);
       const x = Math.round(c0.x + Math.cos(a) * r);
       const z = Math.round(c0.z + Math.sin(a) * r);
       const c = ow.continentAt(x, z);
@@ -845,6 +856,181 @@ export class Havens {
     return n ? 25 + n * 20 + (r.bounty || 0) : r.bounty || 0;
   }
 
+  // ------------------------------------------------------------ the law
+  // `p` takes the King's Pardon from realm `civ` (see justice.js): their
+  // piracy against it forgiven, the brethren renounced (a turncoat now).
+  pardon(p, civ) {
+    const pid = pidOf(p);
+    const r = piracyOf(this.game, p);
+    const was = r.guild;
+    if (civ !== null && civ !== undefined) r.sunk[civ] = 0;
+    r.n = Math.min(r.n, PIRATE_AT - 1);
+    r.guild = null;
+    r.bounty = 0;
+    if (this.game.hero && this.game.hero.infamy && civ !== null) delete this.game.hero.infamy[civ];
+    const B = this.sim.brethren;
+    const st = B && B.standingOf(pid);
+    if (st) {
+      st.m.gone = this.game.day;
+      st.m.turncoat = this.game.day;
+      B.note(st.i, `${playerName(this.game, pid)} took a realm's pardon and turned their back on the brethren. Turncoat: their name's nailed to the gallows.`);
+    } else if (was !== null && B) (B.of(was).members[pid] ||= { rank: 'hand', merit: 0, joined: this.game.day, owed: 0 }).turncoat = this.game.day;
+  }
+
+  // `p` hanged by realm `civ` for piracy: the realm's debt paid.
+  hanged(p, civ) {
+    const pid = pidOf(p);
+    const r = piracyOf(this.game, p);
+    if (civ !== null && civ !== undefined) r.sunk[civ] = 0;
+    r.bounty = 0;
+    const st = this.sim.brethren && this.sim.brethren.standingOf(pid);
+    if (st) this.sim.brethren.note(st.i, `${playerName(this.game, pid)} was hanged by a realm at its harbour mouth. The brethren drink to them.`);
+  }
+
+  // Each little while: a known pirate with a price on their head, seen by
+  // the watch of a realm that wants them, is seized (see justice.js); a
+  // turncoat or an enemy in a haven, set upon by its corsairs.
+  watch() {
+    const g = this.game;
+    const war = this.sim.justice;
+    for (const p of g.everyone ? g.everyone() : [g.player]) {
+      if (!p || p.dead) continue;
+      const pid = pidOf(p);
+      const s = g.world.ow.settlementAt(p.x, p.z);
+      if (!s) {
+        this.bountyHunt(p);
+        continue;
+      }
+      if (!g.active.has(s.id)) continue;
+      if (isHaven(s)) {
+        const h = this.of(s.id);
+        const why = h && this.hostileTo(h, pid);
+        if (!why) continue;
+        this.alarm ||= {};
+        const k = `${pid}:${h.id}`;
+        if (this.alarm[k] && this.sim.abs - this.alarm[k] < 60) continue;
+        this.alarm[k] = this.sim.abs;
+        let n = 0;
+        for (const q of g.guardsOf(s.id)) {
+          if (q.sleeping || q.distTo(p) > 14) continue;
+          q.engage(p);
+          if (!n++) q.say(why === 'turncoat' ? 'TURNCOAT! Cut them down!' : why === 'war' ? 'One of theirs! At them, brothers!' : 'A realm\'s dog! Gut them!', 3, '#ff7060');
+        }
+        if (n) this.tell(pid, why === 'turncoat' ? `They know you in ${h.name}, turncoat: the corsairs are coming for you.` : why === 'war' ? `${h.name}'s corsairs know your colours: your guilds are at war.` : `${h.name}'s corsairs know you for the realm's: they're coming for you.`, '#ff7060');
+        continue;
+      }
+      if (!s.civ || !war || war.jail) continue;
+      if (!pirateTo(g, p, s.civ.id) || this.bountyOf(pid) < 80) continue;
+      this.seized ||= {};
+      const k = `${pid}:${s.id}:${g.day}`;
+      if (this.seized[k]) continue;
+      const guard = g.guardsOf(s.id).find((q) => !q.sleeping && q.distTo(p) <= 7);
+      if (!guard) continue;
+      this.seized[k] = true;
+      const seize = () => {
+        guard.say(`It's ${g.playerName}, the pirate! In the crown's name!`, 3, '#ff9070');
+        war.commit(s.id, 'piracy', { witnesses: [guard], desc: 'Piracy on the high seas', known: true });
+        g.ui.msg(`The watch of ${s.name} know your face from the bills: there's a price on your head here. They mean to hang you.`, '#ff7060');
+      };
+      g.asPlayer ? g.asPlayer(p, seize) : seize();
+    }
+  }
+
+  // Bounty hunters: a pirate with a big enough price on their head, out
+  // in the country near a town of a realm that wants them, is come after
+  // (at most once a day) by a few hard folk out of that town, set on the
+  // reward. True if they were sent.
+  bountyHunt(p) {
+    const g = this.game;
+    const pid = pidOf(p);
+    const bounty = this.bountyOf(pid);
+    if (bounty < HUNT_AT || p.dead || p.limbo || p.sagaHeld) return false;
+    if (g.world.ow.settlementAt(p.x, p.z) || g.world.isWaterAt(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) return false;
+    this.hunted ||= {};
+    if (this.hunted[pid] === g.day) return false;
+    let best = null;
+    let bd = 170;
+    for (const a of g.active.values()) {
+      const s = a.layout && a.layout.settlement;
+      if (!s || !s.civ || isHaven(s) || !pirateTo(g, p, s.civ.id)) continue;
+      const d = Math.hypot(a.layout.plaza.cx - p.x, a.layout.plaza.cz - p.z);
+      if (d >= 30 && d < bd) {
+        bd = d;
+        best = a.layout;
+      }
+    }
+    if (!best) return false;
+    const rng = new RNG(hash4(g.seed >>> 0, pid === 'host' ? 0 : Number(pid) + 1, g.day, 0xb077));
+    // (Not every day they're about: word has to reach the right ears.)
+    if (!rng.chance(Math.min(0.6, bounty / 400))) {
+      this.hunted[pid] = g.day;
+      return false;
+    }
+    const n = Math.min(4, 2 + Math.floor(bounty / 200));
+    const ang = Math.atan2(best.plaza.cz - p.z, best.plaza.cx - p.x);
+    let spot = null;
+    for (let k = 0; k < 8 && !spot; k++) {
+      const a = ang + (k - 4) * 0.4;
+      const x = Math.round(p.x + Math.cos(a) * 24);
+      const z = Math.round(p.z + Math.sin(a) * 24);
+      if (!g.world.regionAt(x, z) || g.inSight(x, z, 2) || g.world.ow.settlementAt(x, z)) continue;
+      const y = g.world.findStandY(x, z, GROUND);
+      if (y <= 0 || g.world.isWaterAt(x, y, z)) continue;
+      spot = g.findFreeSpot(x, z, y);
+    }
+    if (!spot) return false;
+    this.hunted[pid] = g.day;
+    const name = playerName(g, pid);
+    const C = best.settlement.civ;
+    const cries = [`${name}! There's ¤${bounty} on your head, and it's mine!`, 'That\'s the pirate off the bills! Take them!', `In the name of ${C.name}, and the reward!`, 'Dead or alive, the bill says. Dead\'s easier.'];
+    const weapons = ['iron_sword', 'hand_axe', 'spear', 'crossbow'];
+    for (let i = 0; i < n; i++) {
+      const x = spot.x + (i % 2);
+      const z = spot.z + (i >> 1);
+      const y = g.world.findStandY(x, z, spot.y);
+      const at = (y > 0 && g.findFreeSpot(x, z, y)) || spot;
+      const weapon = weapons[(i + rng.int(0, 3)) % weapons.length];
+      const adv = makeAdventurer(rng, best.settlement.style || C.style || 'vale', 1);
+      const rec = {
+        id: `bh${pid}:${g.day}:${i}`, idx: 7900 + i, sid: best.settlement.id, visitor: true, bountyHunter: pid,
+        name: adv.name,
+        age: 'adult', job: 'bounty hunter', home: null, bed: 0, household: null,
+        partner: null, children: [], parents: [], friends: [], personality: adv.personality, traits: adv.traits,
+        hobbies: [], look: { ...adv.look, hat: 'hood', outfit: 'hunter', accent: '#2a2a2a' }, alive: true, shift: 'day', restDay: -1,
+        equipment: { tool: weapon, hobbyItem: null, items: [{ item: weapon, count: 1 }, ...(weapon === 'crossbow' ? [{ item: 'bolt', count: 12 }] : [])], coins: 0, armor: 0.3, shield: null },
+        maxHp: 34, hp: 34, work: { kind: 'none' }, schedule: { work: [{ s: 0, e: 1440, act: 'adventure', place: 'camp' }], rest: [{ s: 0, e: 1440, act: 'adventure', place: 'camp' }] },
+        coins: 4 + rng.int(0, 12), inv: [], skills: { trading: 0, cooking: 0, hunting: 0.7, fishing: 0, farming: 0, building: 0, crafting: 0 },
+        fed: 1, hungry: 0, mood: 0.5, grief: [], override: null, away: false, doneKey: null,
+      };
+      const e = g.spawnWarrior(rec, best, at);
+      e.warband = { kind: 'saga', role: 'hunter', foe: true, phase: 'hunt', target: pid, brave: true, cry: rng.pick(cries), home: { x: best.plaza.cx, z: best.plaza.cz }, fleeLines: ['No bounty\'s worth this!', 'Keep your head, then!', 'Another day, pirate!'] };
+      e.hostileNow = true;
+    }
+    this.tell(pid, `Riders on the road behind you, keeping pace. The price on your head (¤${bounty}) has brought out the bounty hunters of ${C.name}.`, '#ff9070');
+    return true;
+  }
+
+  // Why haven `h`'s corsairs would set on `pid` (or null): a turncoat of
+  // its guild, one of a guild it's at war with, a ruler of a realm hunting
+  // it.
+  hostileTo(h, pid) {
+    const B = this.sim.brethren;
+    if (!B || h.razed) return null;
+    const own = B.of(h.guild).members[pid];
+    if (own && own.turncoat) return 'turncoat';
+    const st = B.standingOf(pid);
+    if (st && st.i !== h.guild && B.relation(st.i, h.guild) === 'war') return 'war';
+    const crown = this.sim.crown;
+    if (crown) {
+      for (const C of this.game.world.ow.civs || []) {
+        if (!C || !crown.isRuler(C, pid)) continue;
+        const R = B.of(h.guild).realms[C.id];
+        if (R && R.stance === 'hunted') return 'realm';
+      }
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------ each tick
   update(dt = 0.5) {
     if (this.game.remote) return;
@@ -852,6 +1038,11 @@ export class Havens {
     if (this.t > 0) return;
     this.t = 0.5;
     this.notice();
+    this.watchT = (this.watchT || 0) - 0.5;
+    if (this.watchT <= 0) {
+      this.watchT = 2;
+      this.watch();
+    }
     const day = this.game.day;
     if (this.lastDay === null || this.lastDay === undefined) this.lastDay = day;
     if (day > this.lastDay) {
@@ -862,7 +1053,7 @@ export class Havens {
 
   // What a guest needs to know, for their own map: [sid, guild, known, razed].
   forPid(pid) {
-    return this.list.map((h) => [h.sid, h.guild, (h.know && h.know[pid]) || 0, h.razed ? 1 : 0]);
+    return this.list.map((h) => [h.sid, h.guild, this.knows(h.sid, pid) || 0, h.razed ? 1 : 0]);
   }
 
   // ------------------------------------------------------------ save

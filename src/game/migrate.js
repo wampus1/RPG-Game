@@ -985,6 +985,24 @@ export const STEPS = [
       log.push('Festivals spread round the town (ale tables by the tavern, a blessing at the temple, stalls, games on the green) to a programme from morning to night; and they have games to play: archery, a foot race, wrestling the champion, an eating match, riddles, the dance, a cook-off, and each people\'s own (ringing the bell, the log toss, the raft race, the lantern walk), with prizes; music for tips, helping beforehand, a leader\'s speech, and mischief in the crowd.');
     },
   },
+  {
+    to: '1.30.0',
+    game(game, log) {
+      // Each guild's haven put ashore, on land nobody's seen yet (hidden
+      // till it's found or heard of); anyone already sworn to a guild, on
+      // its rolls and told where its havens are.
+      const H = game.sim.havens;
+      if (!H || game.remote) return;
+      H.ensure();
+      const B = game.sim.brethren;
+      for (const [pid, r] of Object.entries((game.piracy && game.piracy.p) || {})) {
+        if (r.guild === null || r.guild === undefined) continue;
+        B?.joined(pid, r.guild);
+        for (const h of H.standing(r.guild)) H.learn(h, pid, 'heard', 'the brethren');
+      }
+      log.push(`Pirates' havens: ${H.list.length} of them, hidden on lonely shores till you stumble on one or hear of it; captives in their stockades; the brethren's captains, chiefs and Articles, and a way up from hand to chief; realms that burn havens out, and villages that turn pirate.`);
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

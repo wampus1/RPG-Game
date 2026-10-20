@@ -34,6 +34,9 @@ export const CRIMES = {
   desertion: { label: 'Desertion', sev: 'severe', fine: 120 },
   // (Round 79) A forged paper, spotted (see saga/resolve.js).
   forgery: { label: 'Forgery', sev: 'moderate', fine: 50 },
+  // (Round 130) Known for a pirate in a realm whose ships you've sunk, and
+  // recognised by its watch: the gallows, or the King's Pardon.
+  piracy: { label: 'Piracy on the high seas', sev: 'severe', fine: 300 },
 };
 export const SEV_RANK = { minor: 1, moderate: 2, severe: 3 };
 const HOURLY_RATE = 5; // coins of fine worked off per hour in a cell
@@ -914,6 +917,10 @@ export class Justice {
     let sentence = 'fine';
     if (seriousNow && prior + seriousNow >= 3) sentence = severeNow && (harsh || rec.severe >= 1) ? 'death' : 'exile';
     else if (severeNow && rec.severe >= 1) sentence = 'death';
+    // (Round 130) Piracy proven: the gallows (unless they'll take the
+    // King's Pardon).
+    const piracy = proven.some((c) => c.type === 'piracy');
+    if (piracy) sentence = 'death';
     const e = L.econ;
     let fine = 0;
     for (const c of proven) fine += CRIMES[c.type].fine + (c.type === 'theft' ? c.value * 2 : 0);
@@ -927,7 +934,7 @@ export class Justice {
       sid: j.sid, town: s.name, judgeName: judge ? `${judge.name.first} ${judge.name.last}` : 'The council', judgeTitle: judge ? jobTitle(judge, s) : 'Council',
       charges, proven, fine, hours, coins, canPay: coins >= fine, sentence, citizen: this.sim.isCitizen(j.sid), pleaded: false, prior,
       fineScale: e.fineScale, weapons: this.held && this.held.items.length ? (proven.some((c) => c.type === 'murder') ? 'forfeit' : 'returned') : null,
-      stripped,
+      stripped, piracy, civ: s.civ ? s.civ.id : null,
     };
   }
 
@@ -955,6 +962,14 @@ export class Justice {
         if (judge && judge.ent) this.sim.changeRep(judge.ent, -4);
       }
       return v;
+    }
+    // (Round 130) The King's Pardon: the brethren renounced, the noose off.
+    if (choice === 'pardon' && v.piracy) {
+      this.pending.delete(v.sid);
+      game.sim.havens?.pardon(game.player, v.civ);
+      ledger(L, game.day, `${game.playerName}, a pirate, took the King's Pardon and swore off the sea.`);
+      game.ui.msg('You take the King\'s Pardon: the noose is lifted, and your name struck from the realm\'s bills. The brethren will call you turncoat.', '#ffe070');
+      return this.release('paid');
     }
     this.convict(L, v);
     if (!v.proven.length || choice === 'free') return this.release('acquitted');
@@ -1103,8 +1118,9 @@ export class Justice {
     this.dismissParty(L);
     this.jail = null;
     this.held = null;
-    ledger(L, game.day, `${game.playerName} was executed by order of ${v.judgeName}.`);
-    game.executePlayer(`the executioner of ${L.settlement.name}`);
+    ledger(L, game.day, v.piracy ? `${game.playerName}, the pirate, was hanged at the harbour mouth by order of ${v.judgeName}.` : `${game.playerName} was executed by order of ${v.judgeName}.`);
+    if (v.piracy) game.sim.havens?.hanged(game.player, v.civ);
+    game.executePlayer(v.piracy ? `the hangman of ${L.settlement.name}` : `the executioner of ${L.settlement.name}`);
     return { executed: true };
   }
 

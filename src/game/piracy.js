@@ -224,7 +224,8 @@ export function pledge(game, p, guild, G) {
   const was = r.guild;
   r.guild = guild;
   tell(game, p, `You swear yourself to ${G ? G.name : 'the brotherhood'}${was !== null && was !== guild ? ', forsaking your old one' : ''}. Their ships will never fire on you; other guilds' still may.`, '#ffd080');
-  game.audio?.play('fanfare');  // (Round 130) Sworn: told where the guild's havens are (see
+  game.audio?.play('fanfare');
+  // (Round 130) Sworn: told where the guild's havens are (see
   // sim/havens.js), and on its rolls as a hand (see sim/brethren.js).
   const H = game.sim && game.sim.havens;
   if (H) for (const h of H.standing(guild)) H.learn(h, pidOf(p), 'heard', 'the brethren');

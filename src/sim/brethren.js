@@ -279,6 +279,29 @@ export class Brethren {
     return { ok: true };
   }
 
+  // Your own ship's articles: what share of what you take goes to your
+  // crew (none, a tenth, a quarter, half). More, and they're loyal; none,
+  // and they grumble, and a hand may jump ship at the next haven.
+  crewCut(pid, n) {
+    const st = this.standingOf(pid);
+    if (!st) return 0;
+    const share = st.m.crewShare ?? 0.25;
+    if (share <= 0) {
+      st.m.grumble = (st.m.grumble || 0) + 1;
+      if (st.m.grumble >= 3) this.tellPid(pid, 'Your crew mutter that the Articles promised them shares. They\'re getting none.', '#ffb080');
+      return 0;
+    }
+    st.m.grumble = 0;
+    return Math.round(n * share);
+  }
+
+  setCrewShare(pid, v) {
+    const st = this.standingOf(pid);
+    if (!st) return 'You\'re not of the brethren.';
+    st.m.crewShare = [0, 0.1, 0.25, 0.5].includes(v) ? v : 0.25;
+    return st.m.crewShare ? `Your crew's share: ${Math.round(st.m.crewShare * 100)} in the hundred of every prize.` : 'Your crew get no share. They won\'t like it.';
+  }
+
   // ------------------------------------------------------------ income
   income(i, n, why = 'a prize') {
     const G = this.of(i);
@@ -311,7 +334,9 @@ export class Brethren {
       const st = civ !== null ? G.realms[civ] : null;
       if (st && (st.stance === 'tribute' || st.stance === 'marque')) continue;
       const fleet = G.captains.filter((c) => c.state === 'sea').length;
-      out += 0.012 * fleet * (G.articles.fishers === 'take' ? 1.2 : 1);
+      // (Convoys, lately: half the prizes.)
+      const convoy = st && st.convoy !== undefined && this.game.day - st.convoy < 20 ? 0.5 : 1;
+      out += 0.012 * fleet * (G.articles.fishers === 'take' ? 1.2 : 1) * convoy;
     }
     return clamp(out, 0, 0.12);
   }
@@ -624,6 +649,15 @@ export class Brethren {
             R.stance = 'hunted';
             R.pressure = 0;
             continue;
+          }
+        }
+        // (The coast feels it: convoys, a lookout on every harbour wall.)
+        if (R.pressure >= 2 && (!R.convoy || day - R.convoy >= 20)) {
+          R.convoy = day;
+          for (const L of this.sim.realms.memberLayouts(C)) {
+            if (!L.settlement.coast) continue;
+            ledger(L, day, `With ${this.name(G.id)} taking ships off the coast, merchantmen sail in convoy now, a warship with them, and the watch keeps a lookout on the harbour wall.`);
+            L.econ.pirateWatch = day;
           }
         }
         if (R.pressure >= 3 && !G.matters.some((m) => m.civ === civ)) {
@@ -1116,7 +1150,7 @@ export class Brethren {
       rel: GUILDS.map((_, j) => (j === i ? null : { j, name: this.name(j), rel: this.relation(i, j) })).filter(Boolean),
       realms, held, havens: H.standing(i).map((h) => ({ id: h.id, name: h.name })),
       targets: mine && mine.rank === 'chief' ? this.raidTargets(G) : [],
-      me: mine ? { rank: mine.rank, merit: mine.merit, owed: mine.owed || 0, king: !!mine.king } : null,
+      me: mine ? { rank: mine.rank, merit: mine.merit, owed: mine.owed || 0, king: !!mine.king, crewShare: mine.crewShare ?? 0.25 } : null,
       king: this.king ? this.king.name : null, captainAt: CAPTAIN_AT, chiefAt: CHIEF_AT,
       lastVote: G.lastVote ?? null, day: this.game.day,
     };

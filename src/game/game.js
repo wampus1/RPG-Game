@@ -2939,6 +2939,7 @@ export class Game {
     if (!B || !msg) return null;
     if (msg.a === 'decide') return { text: B.decide(i, msg.mid, msg.k, pid) || 'That\'s been settled already.' };
     if (msg.a === 'chief') return { text: B.chiefAct(i, pid, msg.act, msg.arg) };
+    if (msg.a === 'crew') return { text: B.setCrewShare(pid, +msg.v) };
     if (msg.a === 'vote') {
       const r = B.callVote(i, pid);
       return r.ok ? { text: r.carried ? 'The captains have chosen you: chief!' : 'The vote went against you.', vote: { votes: r.votes, carried: r.carried } } : { text: r.why };

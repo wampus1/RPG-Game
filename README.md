@@ -10167,6 +10167,148 @@ standings back. Players who've had a go show up as rivals at each
 other's tables and boats. Everyone runs the same foot race. The leader's
 speech, music tips, gifts and mischief are each player's own.
 
+## Round 130: Pirates' havens and the brethren
+
+### The havens
+
+- **Real places.** Each of the three guilds (the Black Gulls, the Red
+  Hand, the Drowned Tide) has a haven ashore near its cove: a village
+  of 16 to 22 people. It has:
+  - driftwood and dark-plank shacks under patched sail roofs, on
+    mangrove posts;
+  - a tavern, a fence's shop, a smithy and a stockade;
+  - the guild's flag snapping on its mast in the square;
+  - wanted bills, shore guns, a plunder heap, the Articles board, the
+    stocks, a gallows and a lookout mast.
+
+  Its people dress for the sea (bandanas, tricorns, an eyepatch here and
+  there) and go by the haven's own titles: the Quartermaster, Corsairs,
+  the Fence.
+- **Hidden, like the dungeons.** A haven isn't on your map at the start.
+  You find one in two ways:
+  - **Stumble on it.** A painted card comes up with the haven's name,
+    and an exact × goes on your map.
+  - **Hear of it.** Fishers, innkeepers and sailors in port towns know
+    most (ask "Pirates hereabouts?"). So do captives you free,
+    pirates you beat at sea (they sometimes carry a chart), and the
+    brethren once you swear to a guild. You get a rough "?" mark
+    somewhere near the haven. It goes when you see the place itself.
+- **Each player knows their own.** In multiplayer, what each player
+  knows is kept apart. The host tells each guest only the havens that
+  guest has found or heard of.
+
+### Captives
+
+- People the pirates take (off fishing boats, off merchantmen, from the
+  shore) are held in the haven's stockade and jail cells. You can see
+  them there, and talk to them.
+- Every five days their town gets a ransom note, and it may pay.
+- You can pay a ransom yourself (ask the Quartermaster).
+- Anyone nobody pays for may in the end take the oath and become one of
+  the haven's people.
+- A captive who gets home tells everyone where the haven is, including
+  their realm.
+
+### Realms, and new havens
+
+- **Burned for good.** A realm that learns where a haven is (from a
+  freed captive, a sailor, or a player who sells the secret) sends
+  marines by longboat. If you're there, the fight happens on the beach.
+  - If the marines win, the haven burns: roofs gone, walls black, the
+    flag down.
+  - Its people are killed, taken, or flee to the guild's other haven.
+  - It never comes back.
+- **New havens.**
+  - A poor free village by the sea, far from any realm's care, can turn
+    pirate. Those who knew it before see only a village until they look
+    again or hear.
+  - A guild with coin to spare can found a new haven on a lonely shore.
+  - An outlaw band can take to the sea under a guild's flag.
+  - A player who governs a free village can raise the black flag over
+    it.
+
+### The brethren
+
+- Each guild is a polity of its own, with:
+  - captains, each with a ship and a name;
+  - a chief, a treasury and a mood;
+  - its own Articles (shares, the punishments, how a chief is
+    challenged);
+  - relations with the other guilds (war, rival, truce, alliance);
+  - a stance toward each realm (prey, tribute, letters of marque, or
+    hunted).
+- Captains go cruising and take prizes. The treasury is shared out.
+  Realms that suffer enough offer tribute, a marque, or pardons, or send
+  convoys and expeditions.
+- **The council.** At a haven's guild hall, the council window shows
+  the hall itself:
+  - the Articles on the wall and the flag rippling;
+  - a swinging lantern over the captains at the table;
+  - cutlasses raised and tankards banged as they vote;
+  - coins flying at a share-out.
+
+  Its tabs are Council, Articles, Captains, Realms, Stockade and Orders.
+
+### Rising to chief
+
+- **Hand.** Swear to a guild (any player can). You earn merit by:
+  - taking prizes;
+  - beating the guild's rivals;
+  - paying in your shares;
+  - bringing in captives;
+  - winning raids and duels.
+- **Captain.** With 40 merit and a ship of your own, ask the
+  Quartermaster for a commission. Your ship flies the guild's colours,
+  and you set your crew's share (none, a tenth, a quarter or half).
+- **Chief.** With 120 merit, either call the captains to a vote, or
+  challenge the chief to a duel under the Articles. As chief, you:
+  - decide the council's matters;
+  - careen ships;
+  - call raids on ships or coasts;
+  - change the Articles;
+  - make war or peace with the other guilds;
+  - found havens;
+  - free or press captives.
+- **Pirate King.** A chief whose guild is allied with both other guilds
+  is the Pirate King.
+
+### The law
+
+- **Piracy.** Piracy is now a crime in the realms' courts. If you're a
+  known pirate with a big enough price on your head, the town watch
+  knows your face from the bills and seizes you. The court then either:
+  - hangs you at the harbour mouth; or
+  - offers the King's Pardon. Your piracy against that realm is
+    forgiven, but the brethren call you a turncoat and their corsairs
+    set on you in any haven.
+- **Bounty hunters.** A price of ¤120 or more on your head brings out
+  bounty hunters. Out in the country near a town of a realm that wants
+  you, a few of them may come after you (at most once a day).
+- **Rulers.** A player ruler can:
+  - send an expedition against a haven they know of;
+  - put a bounty on a pirate player.
+
+### Treasure and the revel
+
+- **Treasure maps.** An old salt in a haven sells a dead captain's
+  treasure map (¤45). The map shows the coast, a pulsing X and a hint.
+  Dig with a shovel at the X to find an iron-bound sea chest of coin,
+  gems and odd pieces.
+- **The Brethren's Revel.** After a big share-out, the haven holds the
+  Revel, a festival with the brethren's own games:
+  - the cutlass bout;
+  - the grog match;
+  - the gig race;
+  - the beach run.
+- **New goods.** Rum, grog and hardtack at the inn, cannonballs at the
+  smith, and the fence buys what you've taken.
+
+### Older worlds
+
+A world saved in an earlier version gets its havens when it loads. They
+are placed on land nobody has seen yet. Anyone already sworn to a guild
+is put on its rolls and told where its havens are.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

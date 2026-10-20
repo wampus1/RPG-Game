@@ -9,11 +9,11 @@
 // captain of the brethren, raising the black flag; and a realm's ruler,
 // or anyone who knows where a haven is, at a realm's hall.
 import { GUILDS } from './pirates.js';
-import { isKnownPirate, piracyOf, pledge } from './piracy.js';
+import { isKnownPirate, piracyOf, pledge, pirateTo } from './piracy.js';
 import { shipsOf, ownerId } from './ships3d.js';
 import { makeCrew, addHand } from './shipcrew.js';
 import { countItem, removeItem } from './inventory.js';
-import { pidOf } from '../sim/saga/refs.js';
+import { pidOf, playerName } from '../sim/saga/refs.js';
 import { isHaven } from '../sim/havenref.js';
 import { RANK_NAMES, CAPTAIN_AT, CHIEF_AT } from '../sim/brethren.js';
 import { hash4, RNG } from '../util/rng.js';
@@ -91,6 +91,8 @@ export function havenTopics(npc, game) {
     if (sim.crown && sim.crown.isRuler(s.civ, pid)) {
       const hunt = H.standing().filter((h) => H.realmKnows(h, civ) && !h.expedition);
       if (hunt.length) add('hv_hunt', `Send our marines to burn out ${hunt[0].name}.`);
+      // (A price on a pirate's head: another player the realm knows for one.)
+      if (pirates(game, civ, pid).length) add('hv_bounty', 'Put a price on a pirate\'s head. (¤50 from the treasury)');
     }
   }
   const H = havenOf(game, npc);
@@ -291,6 +293,22 @@ export function havenRespond(npc, game, id, arg) {
       }
       return { lines: [`${h.name}? That's worth ¤40 to the crown, and more if our ships find it where you say.`] };
     }
+    case 'hv_bounty': {
+      const civ = s.civ;
+      const list = pirates(game, civ.id, pid);
+      if (!arg) return { lines: ['Whose head?'], choices: list.slice(0, 5).map((q) => ({ id: 'hv_bounty', arg: q.pid, label: `${q.name} (¤${sim.havens.bountyOf(q.pid)} now)` })) };
+      const q = list.find((o) => o.pid === arg);
+      const cap = sim.realms.capitalOf(civ);
+      const CL = cap && game.world.layouts.get(cap.id);
+      if (!q || !CL || !CL.econ || CL.econ.treasury < 50) return { lines: ['The treasury can\'t spare it.'] };
+      CL.econ.treasury -= 50;
+      const r = piracyOf(game, q.p);
+      r.bounty = (r.bounty || 0) + 50;
+      sim.realms.proclaim(civ, game.day, `By the crown's order: ¤${sim.havens.bountyOf(q.pid)} for the pirate ${q.name}, dead or alive.`);
+      const tell = () => game.ui.msg(`The ${civ.name.replace(/^The /, '')} has put ¤${sim.havens.bountyOf(q.pid)} on your head. Its watch will be looking for you.`, '#ff9070');
+      game.asPlayer ? game.asPlayer(q.p, tell) : tell();
+      return { lines: [`It's proclaimed in every town of the realm: ¤${sim.havens.bountyOf(q.pid)} for ${q.name}.`] };
+    }
     case 'hv_hunt': {
       const civ = s.civ;
       const h = sim.havens.standing().find((q) => sim.havens.realmKnows(q, civ.id) && !q.expedition);
@@ -301,6 +319,17 @@ export function havenRespond(npc, game, id, arg) {
     }
   }
   return null;
+}
+
+// The players realm `civ` knows for pirates (but `pid`): { pid, p, name }.
+function pirates(game, civ, pid) {
+  const out = [];
+  for (const q of game.everyone ? game.everyone() : [game.player]) {
+    const qp = pidOf(q);
+    if (!q || qp === pid || !pirateTo(game, q, civ)) continue;
+    out.push({ pid: qp, p: q, name: playerName(game, qp) });
+  }
+  return out;
 }
 
 // A captive at the bars (see game.talk): who they are, and what they want.

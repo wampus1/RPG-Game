@@ -1275,10 +1275,15 @@ export class TrialWindow extends Window {
       g.text(2, y++, `Previous serious convictions here: ${v.prior}.`, C.orange);
       const t = ld
         ? v.sentence === 'exile' ? `"It gives this court no pleasure, ${A}. No one who rules may break the law so often and still rule here. You are BANISHED from ${v.town}."` : `"Crown or no crown, ${A}, your crimes are beyond forgiveness. The sentence is DEATH."`
-        : v.sentence === 'exile' ? `"You are a menace. You are BANISHED from ${v.town}, never to return."` : '"Your crimes are beyond forgiveness. The sentence is DEATH."';
+        : v.sentence === 'exile' ? `"You are a menace. You are BANISHED from ${v.town}, never to return."` : v.piracy ? '"For piracy on the high seas: you will HANG at the harbour mouth, at dawn."' : '"Your crimes are beyond forgiveness. The sentence is DEATH."';
       for (const l of wrap(t, this.w - 4)) g.text(2, y++, l, C.red);
-      if (!v.pleaded) opts.push(['2', 'Plead for mercy', 'plead']);
+      if (!v.pleaded && !v.piracy) opts.push(['2', 'Plead for mercy', 'plead']);
       opts.unshift(['1', 'Accept your fate', 'accept']);
+      // (Round 130) A pirate's way out: the King's Pardon.
+      if (v.piracy) {
+        for (const l of wrap('"Or take the King\'s Pardon: renounce the brethren and the sea, and go free."', this.w - 4)) g.text(2, y++, l, C.hi);
+        opts.push([String(opts.length + 1), 'Take the King\'s Pardon (renounce the brethren)', 'pardon']);
+      }
     } else {
       if (ld) for (const l of wrap(`"The law is the same for the ${ld.title} as for the least of us, ${A}. The court sets a fine."`, this.w - 4)) g.text(2, y++, l, C.white);
       g.text(2, y, `Fine: ¤${v.fine}`, C.hi);
@@ -1843,8 +1848,11 @@ export function settlementIcons(game) {
   const size = (s) => (s.empire ? [3, 3] : ICON_SIZE[s.type] || [1, 1]);
   const list = [...ow.settlements].sort((a, b) => size(b)[0] * size(b)[1] - size(a)[0] * size(a)[1]);
   for (const s of list) {
-    // (Round 130) A pirates' haven nobody here has found or heard of.
-    if (s.haven && !knowsHaven(game, s)) continue;
+    // (Round 130) A pirates' haven nobody here has found or heard of (or,
+    // a village turned pirate, known only as the village it was).
+    const hk = s.haven ? knowsHaven(game, s) : 'seen';
+    if (!hk) continue;
+    const shownHaven = !!s.haven && hk !== 'cover';
     const [w, h] = size(s);
     reach = reachedCells(s);
     spill = !!s.baseType && s.baseType !== s.type;
@@ -1880,7 +1888,7 @@ export function settlementIcons(game) {
       for (let dx = 0; dx < cw; dx++) {
         let glyph;
         let shade = 0.35;
-        if (cw === 1 && ch === 1) glyph = s.haven ? (s.haven.razed ? ' †' : ' ☠') : s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
+        if (cw === 1 && ch === 1) glyph = shownHaven ? (s.haven.razed ? ' †' : ' ☠') : s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
         else if (ch === 1) {
           // (A city squeezed onto one row still reads as a city.)
           glyph = s.type === 'city' ? (dx === 0 ? '╠▓' : '▓╣') : dx === 0 ? '[■' : '■]';
@@ -1895,7 +1903,7 @@ export function settlementIcons(game) {
           glyph = dz === 0 ? (dx === 0 ? tl : tr) : dx === 0 ? bl : br;
           shade = 0.6;
         }
-        out.set((z0 + dz) * 10000 + x0 + dx, { s, glyph, shade });
+        out.set((z0 + dz) * 10000 + x0 + dx, { s, glyph, shade, haven: shownHaven });
       }
     }
   }
@@ -1945,7 +1953,7 @@ export class BannerWindow extends Window {
     ui.windows = ui.windows.filter((w) => w.kind !== 'banner');
     const sub = `${s.empire && s.condition !== 'abandoned' && !s.deserted ? 'Imperial capital' : cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.deserted ? 'deserted ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
     // (Round 130) A pirates' haven: whose it is.
-    const hsub = s.haven ? (s.haven.razed ? 'A pirates\' haven, burned out' : `Pirates' haven · ${cap(GUILD_NAMES[s.haven.guild] || 'the brethren')}`) : null;
+    const hsub = s.haven && (!ui.game || knowsHaven(ui.game, s) !== 'cover') ? (s.haven.razed ? 'A pirates\' haven, burned out' : `Pirates' haven · ${cap(GUILD_NAMES[s.haven.guild] || 'the brethren')}`) : null;
     const w = Math.max(s.name.length + 8, (hsub || sub).length + 4);
     super(ui, w, 4, { kind: 'banner', modal: false, y: 5 });
     this.s = s;

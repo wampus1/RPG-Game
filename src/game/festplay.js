@@ -53,6 +53,20 @@ export const CONTESTS = {
   lantern: { name: 'the lantern walk', short: 'LANTERN WALK', v: ['shrine', 'stage'], slots: ['fair', 'feast', 'procession'], play: 'win', tries: 2, max: 100, unit: '', glyph: '*', people: ['mist', 'jade', 'wyrd', 'hollow'] },
 };
 export const CONTEST_KEYS = Object.keys(CONTESTS);
+// (Round 130) At a pirates' haven's revel (see sim/havens.js): the bout's
+// with cutlasses (blunted, mostly), the race is rowed in the ships' gigs,
+// the eating match is drunk in grog, and the foot race run on the sand.
+export const HAVEN_GAMES = {
+  wrestling: { title: 'the cutlass bout', short: 'CUTLASS BOUT' },
+  eating: { title: 'the grog match', short: 'GROG MATCH' },
+  raft: { title: 'the gig race', short: 'GIG RACE' },
+  race: { title: 'the beach run', short: 'BEACH RUN' },
+};
+// A contest of a day's, as it's called there.
+export function contestOf(c) {
+  const C = CONTESTS[c.k];
+  return c.title ? { ...C, name: c.title, short: c.short || C.short } : C;
+}
 
 // What a winner's given (coin, by place; more in a bigger town).
 const PURSE = [15, 8, 4];
@@ -173,9 +187,11 @@ export function contestsFor(events, L, ev) {
   if (!prog.length || ev.rite === 'vigil') return;
   const out = {};
   const style = L.settlement.style || L.settlement.culture || 'vale';
+  // (Round 130) A pirates' haven's revel: its own games.
+  const haven = !!(L.settlement.haven && !L.settlement.haven.razed);
   for (const k of CONTEST_KEYS) {
     const C = CONTESTS[k];
-    if (C.people && !C.people.includes(style)) continue;
+    if (haven ? !HAVEN_GAMES[k] : C.people && !C.people.includes(style)) continue;
     let slot = null;
     let v = null;
     for (const sk of C.slots) {
@@ -209,6 +225,7 @@ export function contestsFor(events, L, ev) {
     }
     if (k === 'dance' || k === 'eating' || k === 'riddles') c.from = slot.from + Math.min(20, Math.floor(len / 6));
     if (c.to - c.from < 20) continue;
+    if (haven) Object.assign(c, HAVEN_GAMES[k]);
     out[k] = c;
   }
   if (!Object.keys(out).length) return;
@@ -337,7 +354,7 @@ export function openNow(ev, now, v = null) {
 // The standings: the players' best goes and the townsfolk's (those who've
 // had theirs), best first.
 export function standings(c, now = Infinity) {
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   const best = new Map();
   for (const q of [...c.entries, ...c.npc.filter((n) => n.at !== null && n.at <= now && C.play !== 'race')]) {
     if (q.score === null || q.score === undefined) continue;
@@ -351,7 +368,7 @@ export function standings(c, now = Infinity) {
 }
 
 export function scoreText(c, q) {
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   if (C.play === 'bout') return q.champ ? 'champion' : q.score > 0 ? 'beat the champion' : 'thrown';
   if (C.unit === 's') return `${q.score.toFixed(1)}s`;
   if (c.k === 'eating') return `${q.score.toFixed(1)} plates`;
@@ -366,7 +383,7 @@ export function boardRows(L, ev, now, pid = null) {
   for (const k of CONTEST_KEYS) {
     const c = ev.contests && ev.contests[k];
     if (!c) continue;
-    const C = CONTESTS[k];
+    const C = contestOf(c);
     const st = c.done ? 'done' : now < c.from ? 'soon' : now < c.to ? 'open' : 'closing';
     const when = C.play === 'race' ? `starts ${hm(c.at)}` : C.play === 'dish' ? `judged ${hm(c.at)}` : st === 'soon' ? `from ${hm(c.from)}` : st === 'open' ? `till ${hm(c.to)}` : '';
     const used = pid ? c.tries[pid] || 0 : 0;
@@ -385,7 +402,7 @@ export function boardRows(L, ev, now, pid = null) {
 // What's said back, if anything (the window opens itself).
 export function enter(game, L, ev, k) {
   const c = ev.contests && ev.contests[k];
-  const C = CONTESTS[k];
+  const C = c ? contestOf(c) : CONTESTS[k];
   const p = game.player;
   if (!c || !C || !p) return 'There\'s no such contest today.';
   const pid = pidOf(p);
@@ -437,7 +454,7 @@ export function enter(game, L, ev, k) {
 // the rivals, and what's to be played.
 function windowCfg(game, L, ev, c, token) {
   const s = L.settlement;
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   const seed = hash4(s.seed, ev.id, token, 0xf35);
   const rows = standings(c, game.sim.abs).slice(0, 5).map((q) => ({ name: q.name, score: scoreText(c, q) }));
   const cfg = {
@@ -494,7 +511,7 @@ function windowCfg(game, L, ev, c, token) {
 // playing who's had a go already (their best), then the townsfolk.
 function rivalsFor(game, L, c, n) {
   const me = `pl:${pidOf(game.player)}`;
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   const best = new Map();
   for (const q of c.entries) {
     if (q.who === me || !q.who.startsWith('pl:') || q.score === null) continue;
@@ -574,7 +591,7 @@ export function boutDone(game, d, outcome) {
 export function tick(events, L, ev, now) {
   for (const c of Object.values(ev.contests || {})) {
     if (c.done) continue;
-    const C = CONTESTS[c.k];
+    const C = contestOf(c);
     // A townsperson has their go: said, by them, if anyone's watching.
     for (const q of c.npc) {
       if (q.said || q.at === null || q.at === undefined || now < q.at) continue;
@@ -605,7 +622,7 @@ function close(events, L, ev, c) {
   if (c.done) return;
   c.done = true;
   const game = events.game;
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   // (A race nobody saw: the townsfolk's times, as they'd have run it.)
   if (C.play === 'race') for (const q of c.npc) if (!c.entries.some((e) => e.who === q.who) && !(c.race && c.race.go)) c.entries.push({ ...q, t: q.score });
   const list = standings(c, Infinity).filter((q) => C.play !== 'bout' || q.champ || q.score > 0);
@@ -639,7 +656,7 @@ function close(events, L, ev, c) {
 function prize(game, L, ev, c, i, coins) {
   const p = game.player;
   if (!p) return;
-  const C = CONTESTS[c.k];
+  const C = contestOf(c);
   const left = p.give('coin', coins);
   if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
   const key = prizeKey(c.k, i + 1, yearOf(game.day), L.settlement.name);

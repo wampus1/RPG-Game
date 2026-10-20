@@ -415,10 +415,15 @@ function fightTick(game, dt) {
     S.sailGoal = 0;
     const who = players.find((q) => q && !q.dead && Math.hypot(q.x - S.x, q.z - S.z) < 60);
     if (who) {
-      const n = S.plunder || 80;
+      const n0 = S.plunder || 80;
+      // (Round 130) Sworn to the brethren: your crew take their shares by
+      // your ship's articles (see sim/brethren.js).
+      const Bc = game.sim.brethren;
+      const cut = Bc ? Bc.crewCut(pidOf(who), n0) : 0;
+      const n = n0 - cut;
       game.asPlayer ? game.asPlayer(who, () => {
         who.give('coin', n);
-        game.ui.msg(`${S.name}'s crew are beaten. In her hold, the plunder: ¤${n}, and she's adrift for you to take.`, '#ffe070');
+        game.ui.msg(`${S.name}'s crew are beaten. In her hold, the plunder: ¤${n0}${cut ? ` (your crew take ¤${cut} in shares, and cheer you)` : ''}, and she's adrift for you to take.`, '#ffe070');
       }) : who.give('coin', n);
       if (S.cove) coveState(state(game), S.coveIdx ?? 0).done = true;
       game.sim.saga?.emit('pirates_beaten', { ship: S.id, name: S.name, cove: !!S.cove, pid: pidOf(who) });

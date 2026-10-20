@@ -1301,7 +1301,7 @@ export class Events {
       // A contest open where you're standing.
       if (p) {
         const here = contestsOpen(ev, now).filter((c) => CONTESTS[c.k].play !== 'race' && nearVenue(ev, c.v, p.x, p.z, 4) && (c.tries[pid] || 0) < CONTESTS[c.k].tries);
-        if (here.length) out.push({ text: `  ${here.map((c) => CONTESTS[c.k].short).join(', ')} HERE (ASK)`, color: '#a8f0a0' });
+        if (here.length) out.push({ text: `  ${here.map((c) => c.short || CONTESTS[c.k].short).join(', ')} HERE (ASK)`, color: '#a8f0a0' });
       }
     }
     return out;

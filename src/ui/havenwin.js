@@ -808,6 +808,17 @@ export class HavenCouncilWindow extends Window {
         (V.log || []).slice(-2).forEach((l, k) => text(ctx, String(l.text).slice(0, 80), 12, row(4) + k * 9, '#a89878'));
       }
     }
+    // (Your own ship's articles: your crew's share of what you take.)
+    if (this.tab === 'orders' && me) {
+      text(ctx, 'YOUR CREW\'S SHARE:', 290, row(3) + 2, '#ffe070');
+      [[0, 'NONE'], [0.1, '10'], [0.25, '25'], [0.5, '50']].forEach(([v, l], j) => {
+        const x = 404 + j * 26;
+        if (me.crewShare === v) {
+          rect(ctx, x, row(3), 24, 11, '#6a4a24');
+          text(ctx, l, x + 12, row(3) + 2, '#ffe070', { align: 'center' });
+        } else btn(x, row(3), 24, l, () => this.act({ a: 'crew', v }));
+      });
+    }
     text(ctx, 'ESC: LEAVE THE HALL  ·  TAB: NEXT', UW / 2, UH - 9, '#6a6050', { align: 'center' });
   }
 }
