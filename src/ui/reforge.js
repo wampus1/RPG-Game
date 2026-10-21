@@ -2,12 +2,20 @@
 // from your pack reforged, or a modifier moved off one piece onto another
 // of the same kind. Pick the piece on the left; what can be done with it,
 // and what it costs, on the right.
+// (Round 132) Reforging and tempering are worked at the forge, by hand (see
+// ui/forgewin.js, game/smithing.js); a piece of your own pressed into a
+// blank cast; a cast poured, as many copies as the makings allow.
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
 import { parseStar, modOf, gearClass, starText } from '../world/quality.js';
 import { countItem } from '../game/inventory.js';
-import { workable, reforgeCost, moveCost, reforge, movable, moveMod } from '../game/reforge.js';
+import { workable, moveCost, movable, moveMod } from '../game/reforge.js';
+import { reforgeCostOf, pressCast, recipeFor, masteryCap } from '../game/smithing.js';
+import { mastery } from '../game/mastery.js';
+import { lifts } from '../world/smithmats.js';
+import { craftSources, countFrom } from '../game/invtools.js';
+import { openForge } from './forgewin.js';
 
 export class ReforgeWindow extends Window {
   constructor(ui) {
@@ -21,14 +29,14 @@ export class ReforgeWindow extends Window {
     const inv = game.player.inv;
     const out = [];
     inv.forEach((s, i) => {
-      if (s && workable(s.item)) out.push(i);
+      if (s && (workable(s.item) || (ITEMS[s.item] && ITEMS[s.item].cast))) out.push(i);
     });
     return out;
   }
   draw(g, game) {
     const inv = game.player.inv;
     g.fill(0, 0, this.w, this.h, ' ', C.fg, C.bg);
-    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · REFORGE · MOVE A MODIFIER' });
+    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · REFORGE · TEMPER · CASTS · MOVE A MODIFIER' });
     const list = this.pieces(game);
     if (!list.includes(this.sel)) this.sel = -1;
     if (!list.includes(this.target) || this.target === this.sel) this.target = -1;
@@ -60,11 +68,13 @@ export class ReforgeWindow extends Window {
     });
     const x = 34;
     if (this.sel < 0) {
-      wrap('Pick a piece on the left to reforge it: beaten out afresh, its make and modifiers rolled again, its stars kept (now and then one more), any far land\'s mark kept.', 33).forEach((l, k) => g.text(x, 2 + k, l, C.dim));
-      wrap('Or pick the piece a modifier\'s on, then the piece of the same kind it\'s to go onto: the first is used up in the doing.', 33).forEach((l, k) => g.text(x, 8 + k, l, C.dim));
+      wrap('Pick a piece on the left to reforge it at the forge (its modifiers beaten out afresh, its stars kept, any far land\'s mark kept), or to temper it (a rare material worked in, for a star more).', 33).forEach((l, k) => g.text(x, 2 + k, l, C.dim));
+      wrap('Or pick the piece a modifier\'s on, then the piece of the same kind it\'s to go onto: the first is used up in the doing.', 33).forEach((l, k) => g.text(x, 9 + k, l, C.dim));
+      wrap('A piece you forged yourself can be pressed into a blank cast; a cast, poured again and again.', 33).forEach((l, k) => g.text(x, 14 + k, l, C.dim));
       return;
     }
     const s = inv[this.sel];
+    if (ITEMS[s.item] && ITEMS[s.item].cast) return this.drawCast(g, game, s, x);
     const it = ITEMS[s.item];
     const p = parseStar(s.item);
     const cls = gearClass(it.stars ? ITEMS[it.plain] : it);
@@ -73,7 +83,8 @@ export class ReforgeWindow extends Window {
     let y = 4;
     for (const m of p ? p.mods : []) {
       const d = modOf(cls, m);
-      for (const [j, l] of wrap(`${d.land ? '✦' : '◆'} ${d.name}: ${d.about}`, 34).entries()) g.text(x, y++, j ? `  ${l}` : l, d.land ? '#80e8d0' : '#f0c070');
+      if (!d) continue;
+      for (const [j, l] of wrap(`${d.flaw ? '×' : d.land ? '✦' : '◆'} ${d.name}: ${d.about}`, 34).entries()) g.text(x, y++, j ? `  ${l}` : l, d.flaw ? '#f08060' : d.land ? '#80e8d0' : d.cond ? '#90c8f8' : '#f0c070');
     }
     y++;
     const coins = countItem(inv, 'coin');
@@ -85,15 +96,35 @@ export class ReforgeWindow extends Window {
       if (can) this.hit(x, yy, label.length, 1, (ck, gm) => fn(gm || game));
     };
     if (this.target < 0) {
-      const c = reforgeCost(s.item);
-      g.text(x, y++, `Reforge: ${costLine(c)}`, ok(c) ? C.fg : C.red);
-      button(y++, ' Reforge it ', ok(c), (gm) => {
-        const r = reforge(gm, this.sel);
-        if (!r.ok) return this.ui.msg(r.why, '#ffb080');
-        this.ui.msg(`Reforged: ${ITEMS[r.key].name} ${starText(ITEMS[r.key].stars)}${ITEMS[r.key].mods.length ? ` (${ITEMS[r.key].mods.map((m) => modOf(ITEMS[r.key].gear, m).name).join(', ')})` : ''}.`, '#ffd060');
-        this.sel = gm.player.inv.findIndex((q) => q && q.item === r.key);
+      const c = reforgeCostOf(s.item);
+      const src = craftSources(game);
+      const canR = coins >= c.coin && countFrom(src, c.item) >= 1;
+      g.text(x, y++, `Reforge: ¤${c.coin} and ${c.name}`, canR ? C.fg : C.red);
+      button(y++, ' Reforge it at the forge ', canR, (gm) => {
+        this.close();
+        openForge(this.ui, gm, null, { mode: 'reforge', slot: this.sel, station: 'anvil' });
       });
       y++;
+      // (Round 132) Tempering: a rare material for a star more.
+      const cap = masteryCap(mastery(game, 'smithing').rank);
+      const rare = inv.some((q) => q && lifts(q.item));
+      const stars = p ? p.stars : 1;
+      g.text(x, y++, stars >= 5 ? 'Temper: it has all the stars it can.' : stars >= cap ? `Temper: your rank allows ${cap} stars.` : `Temper: a rare material${rare ? '' : ' (you have none)'}`, stars < cap && rare ? C.fg : C.red);
+      button(y++, ' Temper it at the forge ', stars < Math.min(5, cap) && rare, (gm) => {
+        this.close();
+        openForge(this.ui, gm, null, { mode: 'temper', slot: this.sel, station: 'anvil' });
+      });
+      y++;
+      // (Round 132) A piece of your own, pressed into a blank cast.
+      if (p && p.origin === 'c') {
+        const blanks = countItem(inv, 'blank_cast');
+        g.text(x, y++, `Press a cast: a blank cast${blanks ? ` (${blanks})` : ' (none)'}`, blanks ? C.fg : C.red);
+        button(y++, ' Press it into a cast ', blanks > 0, (gm) => {
+          const r = pressCast(gm, s.item);
+          this.ui.msg(r.text, r.ok ? '#ffd060' : '#ffb080');
+        });
+        y++;
+      }
       if (p && p.mods.length) wrap('To move one of its modifiers, pick the piece it\'s to go onto (green when it can).', 34).forEach((l) => g.text(x, y++, l, C.faint));
       return;
     }
@@ -124,6 +155,61 @@ export class ReforgeWindow extends Window {
       this.target = -1;
       this.mod = null;
     });
+  }
+  // (Round 132) A cast: poured as many times as you like, for its
+  // makings and a relic shard each.
+  drawCast(g, game, s, x) {
+    const it = ITEMS[s.item];
+    const of = ITEMS[it.cast];
+    const sp = parseStar(it.cast);
+    const r = recipeFor(sp ? sp.plain : it.cast);
+    g.text(x, 2, it.name.slice(0, 34), C.hi);
+    g.text(x, 3, of ? `${starText(of.stars || 0)} ${of.name}`.slice(0, 34) : '?', '#ffd060');
+    let y = 4;
+    for (const m of (of && of.mods) || []) {
+      const d = modOf(of.gear, m);
+      if (d) g.text(x, y++, `◆ ${d.name}`.slice(0, 34), d.flaw ? C.red : '#f0c070');
+    }
+    y++;
+    if (!r) {
+      g.text(x, y, 'There\'s no knowing how to make it.', C.faint);
+      return;
+    }
+    const src = craftSources(game);
+    this.times = Math.max(1, Math.min(99, this.times || 1));
+    const n = this.times;
+    g.text(x, y++, 'Each pour takes:', C.dim);
+    const need = { ...r.in, relic_shard: 1 };
+    let ok = true;
+    for (const [k, c] of Object.entries(need)) {
+      const have = countFrom(src, k);
+      const good = have >= c * n;
+      ok &&= good;
+      g.text(x + 1, y++, `${c * n} ${ITEMS[k] ? ITEMS[k].name : k} (${have})`.slice(0, 33), good ? C.green : C.red);
+    }
+    y++;
+    const lbl = (t) => `[${t}]`;
+    g.text(x, y, 'Copies:', C.dim);
+    const bx = x + 8;
+    for (const [t, d, xx] of [['-', -1, bx], ['+', 1, bx + 8], ['+5', 5, bx + 12]]) {
+      const hov = this.hovering(xx, y, lbl(t).length, 1);
+      g.text(xx, y, lbl(t), hov ? C.white : C.hi, hov ? '#4a3a60' : undefined);
+      this.hit(xx, y, lbl(t).length, 1, () => {
+        this.times = Math.max(1, Math.min(99, this.times + d));
+        this.ui.audio?.play('select');
+      });
+    }
+    g.text(bx + 4, y, String(n).padStart(2), C.white);
+    y += 2;
+    const label = ` Pour ${n} at the forge `;
+    const hov = this.hovering(x, y, label.length, 1);
+    g.text(x, y, label, ok ? (hov ? C.white : C.hi) : C.faint, ok ? (hov ? '#4a3a60' : '#2a2230') : undefined);
+    if (ok) this.hit(x, y, label.length, 1, (ck, gm) => {
+      this.close();
+      openForge(this.ui, gm || game, r, { mode: 'cast', cast: s.item, times: n, station: 'anvil' });
+    });
+    y += 2;
+    wrap('Each copy comes out exactly as the piece was, its stars and modifiers and all.', 34).forEach((l) => g.text(x, y++, l, C.faint));
   }
   onWheel(d) {
     this.scroll += d;

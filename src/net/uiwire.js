@@ -7,6 +7,7 @@ import { Window } from '../ui/window.js';
 import { Grid } from '../ui/ascii.js';
 import { DocumentWindow } from '../ui/document.js';
 import { FestWindow } from '../ui/festwin.js';
+import { ForgeWindow } from '../ui/forgewin.js';
 import { HAVEN_WINDOWS } from '../ui/havenwin.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 
@@ -89,7 +90,7 @@ export function uiFrame(ui, game, last, pixels = null) {
       (last.grids ||= new Map()).set(w.netId, grid);
     }
     // (Pictures a window draws itself, a lock or a map: as an image.)
-    if (w.drawPixels && pixels && !w.fest && !w.mir) {
+    if (w.drawPixels && pixels && !w.fest && !w.mir && !w.forge) {
       const url = pixels(w);
       const was = last.px && last.px.get(w.netId);
       if (url && url !== was) {
@@ -120,6 +121,17 @@ export function uiFrame(ui, game, last, pixels = null) {
         last.fests.set(w.netId, j);
       }
     }
+    // (Round 132) The forge's games: what's to be made, for the player's
+    // own screen to play (sent again when the piece comes back).
+    if (w.forge) {
+      const j = JSON.stringify(w.forge);
+      last.forges ||= new Map();
+      if (last.forges.get(w.netId) === j) win.forged = 1;
+      else {
+        win.forge = w.forge;
+        last.forges.set(w.netId, j);
+      }
+    }
     // (Round 130) A window that draws itself on the player's own screen
     // (a haven's card, its council, a treasure map): what it shows, sent
     // when it changes (see ui/havenwin.js).
@@ -137,6 +149,7 @@ export function uiFrame(ui, game, last, pixels = null) {
   last.n = n;
   if (last.mirs) for (const id of [...last.mirs.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.mirs.delete(id);
   if (last.fests) for (const id of [...last.fests.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.fests.delete(id);
+  if (last.forges) for (const id of [...last.forges.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.forges.delete(id);
   if (last.grids) for (const id of [...last.grids.keys()]) if (!ui.windows.some((w) => w.netId === id)) last.grids.delete(id);
   if (last.docs) for (const id of [...last.docs]) if (!ui.windows.some((w) => w.netId === id)) last.docs.delete(id);
   out.tip = ui.tooltip || null;
@@ -247,6 +260,16 @@ export function applyFrame(ui, f) {
         d.mirrorOf = wf.id;
         ui.windows.push(d);
       } else if (m && wf.fest && wf.fest.reply) m.fest.reply = wf.fest.reply;
+      continue;
+    }
+    // (Round 132) The forge: worked here, on this screen.
+    if (wf.forge || wf.forged) {
+      const m = ui.windows.find((q) => q.mirrorOf === wf.id);
+      if (!m && wf.forge && !(ui.putDown && ui.putDown.has(wf.id))) {
+        const d = new ForgeWindow(ui, wf.forge, { mirror: true });
+        d.mirrorOf = wf.id;
+        ui.windows.push(d);
+      } else if (m && wf.forge && wf.forge.reply) m.forge.reply = wf.forge.reply;
       continue;
     }
     // (Round 130) One of a haven's windows: drawn here, on this screen.

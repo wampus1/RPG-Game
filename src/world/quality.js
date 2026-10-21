@@ -137,13 +137,52 @@ export const LAND_MODS = {
     armor: 'struck up close, now and then you loose lightning into the striker',
   },
 };
+// (Round 132) Flaws: what a piece botched at the forge comes out with (see
+// game/smithing.js), named before it like a modifier. A reforge done well
+// beats them out.
+export const FLAWS = {
+  blade: {
+    dull: { name: 'Dull', about: 'a poor edge: its blows land a sixth lighter', flaw: true },
+    heavy: { name: 'Ill-balanced', about: 'badly balanced: it swings a sixth slower', flaw: true },
+  },
+  bow: {
+    warped: { name: 'Warped', about: 'its stave warped: it reaches a fifth less far', flaw: true },
+  },
+  shield: {
+    cracked: { name: 'Cracked', about: 'a crack through it: it takes less of each blow', flaw: true },
+  },
+  armor: {
+    loose: { name: 'Ill-fitting', about: 'it fits badly: it takes a sixth less off each blow', flaw: true },
+    heavy: { name: 'Cumbersome', about: 'too heavy: you move a little slower in it', flaw: true },
+  },
+  tool: {
+    dull: { name: 'Blunt', about: 'blunt: it works a sixth slower', flaw: true },
+  },
+};
+// (Round 132) A modifier that works only at certain times ("keen-night"):
+// its own name, and the time (see game/cooking.js COND_TEST).
+export const COND_WORDS = {
+  night: 'at night', hurt: 'while you\'re below half health', deep: 'down in the old places', wild: 'out in the wilds', water: 'in or beside water', fight: 'in a fight', day: 'by day',
+};
+export function splitMod(m) {
+  const i = String(m).indexOf('-');
+  return i < 0 ? { m, cond: null } : { m: m.slice(0, i), cond: m.slice(i + 1) };
+}
+// (Those that change what the piece is outright, worked out once: they
+// can't be made to work only at some times.)
+export const STATIC_MODS = { tool: ['quick', 'long', 'keen'], bow: ['far'], armor: ['sturdy'], shield: ['stalwart'] };
+
 // (Kept apart from the eight of each kind, by kind: see modOf.)
 export const LAND_MOD_DEFS = {};
 for (const cls of Object.keys(MODS)) LAND_MOD_DEFS[cls] = {};
 for (const [k, L] of Object.entries(LAND_MODS)) for (const cls of Object.keys(MODS)) if (L[cls]) LAND_MOD_DEFS[cls][k] = { name: L.name, about: L[cls], land: L.land };
 // A modifier of a kind of gear, an ordinary one or a far land's.
 export function modOf(cls, m) {
-  return (MODS[cls] && MODS[cls][m]) || (LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][m]) || null;
+  const sp = splitMod(m);
+  const base = (MODS[cls] && MODS[cls][sp.m]) || (LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][sp.m]) || (FLAWS[cls] && FLAWS[cls][sp.m]) || null;
+  if (!base || !sp.cond) return base;
+  if (!COND_WORDS[sp.cond] || base.flaw || base.land || (STATIC_MODS[cls] || []).includes(sp.m)) return null;
+  return { ...base, cond: sp.cond, about: `${base.about}, ${COND_WORDS[sp.cond]}` };
 }
 // Each far land's own (its key in LAND_MODS).
 export const LAND_MOD_OF = Object.fromEntries(Object.entries(LAND_MODS).map(([k, L]) => [L.land, k]));
@@ -172,7 +211,7 @@ export function starable(key) {
 // dug out the block above every time, Sawing left you no logs), read as
 // their replacements in pieces from older saves.
 const RENAMED = { wide: 'clean', sawing: 'lumber' };
-const KEY = /^(.+)~([1-5])([dc])([0-9a-z]{2})((?:\.[a-z]+)*)$/;
+const KEY = /^(.+)~([1-5])([dc])([0-9a-z]{2})((?:\.[a-z]+(?:-[a-z]+)?)*)$/;
 const ROLLS = 36 * 36;
 
 export function starKey(plain, stars, origin, roll, mods = []) {
@@ -230,20 +269,26 @@ export function deriveStarred(key) {
   const mods = p.mods.filter((m) => modOf(cls, m));
   if (mods.length !== p.mods.length) return null;
   const k = starMult(p.stars, p.roll);
+  // (Round 132: a modifier that works only at some times does nothing
+  // here, where what the piece is is worked out once; a flaw does.)
   const has = (m) => mods.includes(m);
   const d = { ...base, key, stars: p.stars, origin: p.origin, roll: p.roll, mods, gear: cls, plain: p.plain, base: base.base || p.plain };
-  if (base.damage) d.damage = r2(base.damage * k + (cls === 'tool' && has('keen') ? 2 : 0));
+  const flawK = (cls === 'blade' && has('dull')) ? 0.85 : 1;
+  if (base.damage) d.damage = r2(base.damage * k * flawK + (cls === 'tool' && has('keen') ? 2 : 0));
   if (cls === 'tool') {
-    d.speed = r2(base.speed * k * (has('quick') ? 1.35 : 1) * (has('legion') ? 1.17 : 1));
+    d.speed = r2(base.speed * k * (has('quick') ? 1.35 : 1) * (has('legion') ? 1.17 : 1) * (has('dull') ? 0.85 : 1));
     if (has('long') || has('whaler')) d.reach = (base.reach || 1.5) + 1;
   }
-  if (cls === 'bow' && base.range) d.range = Math.round(base.range * (1 + (k - 1) * 0.5) * (has('far') ? 1.5 : 1));
+  if (cls === 'bow' && base.range) d.range = Math.round(base.range * (1 + (k - 1) * 0.5) * (has('far') ? 1.5 : 1) * (has('warped') ? 0.8 : 1));
   // (Armour: stars count for less than on a blade, and every piece is
   // held under its place's cap: see softArmor.)
-  if (cls === 'armor') d.armor = softArmor(base.slot, r3(base.armor * (1 + (k - 1) * 0.75) * (has('sturdy') ? 1.2 : 1) * (has('legion') ? 1.1 : 1)));
-  if (cls === 'shield') d.block = r3(Math.min(0.96, 1 - (1 - base.block) / k * (has('stalwart') ? 0.7 : 1)));
-  d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * mods.length);
-  d.name = mods.length ? `${modOf(cls, mods[0]).name} ${base.name}` : base.name;
+  if (cls === 'armor') d.armor = softArmor(base.slot, r3(base.armor * (1 + (k - 1) * 0.75) * (has('sturdy') ? 1.2 : 1) * (has('legion') ? 1.1 : 1) * (has('loose') ? 0.85 : 1)));
+  if (cls === 'shield') d.block = r3(Math.min(0.96, 1 - (1 - base.block) / k * (has('stalwart') ? 0.7 : 1) * (has('cracked') ? 1.25 : 1)));
+  const good = mods.filter((m) => !modOf(cls, m).flaw);
+  const bad = mods.filter((m) => modOf(cls, m).flaw);
+  d.flaws = bad;
+  d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * good.length - 8 * bad.length);
+  d.name = good.length ? `${modOf(cls, good[0]).name} ${base.name}` : bad.length ? `${modOf(cls, bad[0]).name} ${base.name}` : base.name;
   return d;
 }
 
@@ -259,22 +304,25 @@ const LOOSE = {
 // How many stars: made at a bench, mostly one or two (a tinker's hand a
 // little better); found below, more the deeper (`tier`, as the old place's
 // loot runs: see dungeongen.lootTier), and more again off a master.
-const FOUND_W = [50, 30, 14, 5, 1];
+// (Round 132: found below, rarer than they were. A chest on Thessa holds
+// one or two stars, three only now and then, deep down; a master's piece
+// is two or three; on the far lands a chest's no better than three, and
+// four and five come only off their masters. And made at a bench, see
+// game/smithing.js: what your hands do, not a roll.)
+const FOUND_W = [65, 30, 5];
+const FAR_W = [52, 36, 12];
+const FAR_BOSS_W = [0, 30, 40, 22, 8];
 export function rollStars(rng = LOOSE, o = {}) {
-  // Found below: each star the rarer, though less so the deeper (`tier`);
-  // off a master (`boss`), never one star and the good ones likelier. On
-  // Thessa no more than three; on the far islands (`far`) four, and five
-  // only off a master.
   if (o.origin === 'd') {
-    const top = o.far ? (o.boss ? 5 : 4) : 3;
-    const g = (1 + Math.max(0, o.tier || 0) * 0.25) * (o.boss ? 1.8 : 1);
-    const w = FOUND_W.slice(0, top).map((v, i) => (o.boss && i === 0 ? 0 : v * g ** i));
+    const t = Math.max(0, o.tier || 0);
+    const g = 1 + t * 0.1;
+    const w = o.boss ? (o.far ? FAR_BOSS_W : [0, 70, 30 * (1 + Math.max(0, t - 1) * 0.12)]) : (o.far ? FAR_W : FOUND_W).map((v, i) => v * g ** i);
     let r = rng.float(0, w.reduce((a, b) => a + b, 0));
     for (let i = 0; i < w.length; i++) {
       r -= w[i];
       if (r < 0) return i + 1;
     }
-    return top;
+    return w.length;
   }
   const w = o.tinker ? [30, 32, 22, 11, 5] : [45, 30, 16, 7, 2];
   let r = rng.float(0, w.reduce((a, b) => a + b, 0));

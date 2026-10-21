@@ -6,7 +6,6 @@ import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } f
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandLight, offhandOk } from '../world/items.js';
-import { starable, starGear } from '../world/quality.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
@@ -36,6 +35,8 @@ import { pidOf as sagaPid } from '../sim/saga/refs.js';
 import { questSummary } from './quests.js';
 import { sortPack, quickStack, craftSources, countFrom, takeFrom } from '../game/invtools.js';
 import { ReforgeWindow } from './reforge.js';
+import { forgeKind } from '../game/smithing.js';
+import { openForge } from './forgewin.js';
 import { clock } from '../sim/careers.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
@@ -360,7 +361,19 @@ export class CraftWindow extends Window {
   // chests you've set down nearby: see invtools.craftSources).
   canCraft(inv, r) {
     for (const [k, n] of Object.entries(r.in)) if (countFrom(inv, k) < n) return false;
-    return true;
+    return !this.ranked(r);
+  }
+  // (Round 132) Arms, armour and tools are worked at the forge, one at a
+  // time (see ui/forgewin.js): not down in a dungeon, where it's plain
+  // work at a makeshift bench, as ever.
+  forged(r, game) {
+    return !!forgeKind(r) && !(game || this.ui.game)?.dungeon;
+  }
+  // (Round 132) The Smithing rank a recipe wants, if you've not got it.
+  ranked(r) {
+    const game = this.ui.game;
+    if (!r.rank || !game) return 0;
+    return mastery(game, 'smithing').rank < r.rank ? r.rank : 0;
   }
   // (Round 79) How many times over the makings would stretch.
   maxTimes(inv, r) {
@@ -374,6 +387,7 @@ export class CraftWindow extends Window {
     const src = craftSources(game);
     const done = [];
     for (const r of this.sorted || this.recipes) {
+      if (this.forged(r, game) || this.ranked(r)) continue;
       const n = this.maxTimes(src, r);
       if (n <= 0) continue;
       const got = this.craft(r, game, n, true);
@@ -412,9 +426,18 @@ export class CraftWindow extends Window {
         g.text(xx, y + 1, it.text, it.ok ? C.green : C.red);
         xx += it.text.length + 2;
       }
+      const want = this.ranked(r);
+      if (want) g.text(xx, y + 1, `(Smithing rank ${want})`, C.red);
       this.hit(1, y, this.w - 2, 2, (ck, gm) => this.craft(r, gm, ck.shift ? 5 : 1));
-      // (Round 79) One, five, or as many as the makings allow.
-      if (ok) {
+      // (Round 132) Worked at the forge, one at a time.
+      if (ok && this.forged(r, game)) {
+        const lbl = '[forge]';
+        const bx = this.w - 2 - lbl.length;
+        const on = this.hovering(bx, y, lbl.length, 1);
+        g.text(bx, y, lbl, on ? C.white : hover ? C.hi : '#e0a060', on ? '#5a3a2a' : undefined);
+        this.hit(bx, y, lbl.length, 1, (ck, gm) => this.craft(r, gm, 1));
+      } else if (ok) {
+        // (Round 79) One, five, or as many as the makings allow.
         const most = this.maxTimes(inv, r);
         const btns = [['1', 1], ['x5', 5], [`max ${most}`, most]];
         let bx = this.w - 2;
@@ -432,7 +455,7 @@ export class CraftWindow extends Window {
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
     // (Round 79) Everything you can make from what you have, as much of
     // each as it allows (asked twice: it can eat up a lot).
-    const anyOk = list.some((r) => this.canCraft(inv, r));
+    const anyOk = list.some((r) => this.canCraft(inv, r) && !this.forged(r, game));
     const allTxt = this.allArmed ? ' Sure? Click again to craft all ' : ' Craft all you can ';
     const ay = this.h - 3;
     const aHov = this.hovering(2, ay, allTxt.length, 1);
@@ -502,8 +525,25 @@ export class CraftWindow extends Window {
   craft(r, game, times, quiet = false) {
     const inv = game.player.inv;
     const src = craftSources(game);
+    const want = this.ranked(r);
+    if (want) {
+      if (!quiet) {
+        this.ui.msg(`That wants a smith of some skill (Smithing rank ${want}).`, '#ffb080');
+        game.audio?.play('error');
+      }
+      return 0;
+    }
+    // (Round 132) To the forge, to be worked by hand.
+    if (this.forged(r, game)) {
+      if (quiet) return 0;
+      if (!this.canCraft(src, r)) {
+        game.audio?.play('error');
+        return 0;
+      }
+      openForge(this.ui, game, r, { station: this.station });
+      return 0;
+    }
     let made = 0;
-    const madeKeys = [];
     const saved = [];
     let burnt = 0;
     for (let t = 0; t < times; t++) {
@@ -519,11 +559,10 @@ export class CraftWindow extends Window {
         made++;
         continue;
       }
-      // Arms, armour and tools come off the bench with stars of their own
-      // (a tinker's hand a little finer): see world/quality.js. (Round 73:
-      // not down in a dungeon, at a makeshift bench: plain work there.)
-      const out = starable(r.out) && !game.dungeon ? starGear(r.out, { origin: 'c', tinker: heroHas(game.hero, 'tinker') }) : r.out;
-      if (out !== r.out) madeKeys.push(out);
+      // (Round 132) Arms, armour and tools are worked at the forge (above),
+      // their stars your own work; down in a dungeon, at a makeshift bench,
+      // plain work (as since Round 73); a piece dyed comes out plain too.
+      const out = r.out;
       const left = addItem(inv, out, r.n + extra);
       if (left) game.spawnDrop(out, left, game.player.x, game.player.y, game.player.z, true);
       if (extra) saved.push(`an extra ${ITEMS[r.out].name}`);
@@ -538,8 +577,6 @@ export class CraftWindow extends Window {
       game.stats.crafted += made - burnt;
       if (made > burnt && !quiet) this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * (made - burnt)}`, C.green);
       if (burnt) this.ui.msg(`You burnt ${burnt > 1 ? `${burnt} batches` : 'a batch'}: nothing to eat from ${burnt > 1 ? 'them' : 'it'}.`, '#ff9060');
-      // (Each piece's stars, and anything special about it.)
-      for (const k of madeKeys) this.ui.msg(`${'★'.repeat(ITEMS[k].stars)} ${ITEMS[k].name}${ITEMS[k].mods.length ? `: ${ITEMS[k].mods.length > 1 ? 'modifiers' : 'a modifier'}!` : ''}`, ITEMS[k].mods.length ? '#f0c070' : '#ffd060');
       if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
       // (Round 53: a dish that answers something made: see dishacts.js.)
       if (made > burnt) dishTrigger(game, game.player, 'craft', {});

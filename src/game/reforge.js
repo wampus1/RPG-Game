@@ -1,11 +1,12 @@
 // (Round 78) At the anvil (or a smith's grindstone): a piece of gear
 // reforged (beaten out afresh: its make and its modifiers rolled again, its
-// stars kept, now and then one more; a far land's own mark kept), or one
+// stars kept; a far land's own mark kept: Round 132, done by hand at the
+// forge now, see game/smithing.js), or one
 // of its modifiers moved onto another piece of the same kind (the piece it
 // came off used up in the doing). Either for a price in coin and a bar of
 // iron (a bowstring, for a bow). See ui/reforge.js.
 import { ITEMS } from '../world/items.js';
-import { gearClass, parseStar, starKey, rollMods, rollStars, modOf, LAND_MOD_DEFS, STAR_MAX } from '../world/quality.js';
+import { gearClass, parseStar, starKey, rollMods, modOf, LAND_MOD_DEFS } from '../world/quality.js';
 import { countItem, removeItem } from './inventory.js';
 
 const ROLLS = 36 * 36;
@@ -58,8 +59,10 @@ export function reforgeKey(key, rng = LOOSE) {
   const base = ITEMS[plain];
   const cls = gearClass(base);
   if (!cls) return key;
-  let stars = p ? p.stars : rollStars(rng, { origin: 'c' });
-  if (rng.chance(0.15)) stars = Math.min(STAR_MAX, stars + 1);
+  // (Round 132: its stars as they were, always. They climbed one at a time
+  // with every reforge, to five; a star more is tempering's: see
+  // game/smithing.js.)
+  const stars = p ? p.stars : 1;
   const land = p ? p.mods.filter((m) => LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][m]) : [];
   const fresh = rollMods(cls, stars, rng, base).filter((m) => !land.includes(m));
   const mods = [...land, ...fresh].slice(0, MAX_MODS);
@@ -99,7 +102,7 @@ export function movable(fromKey, toKey) {
   const b = parseStar(toKey);
   const has = b ? b.mods : [];
   if (has.length >= MAX_MODS) return [];
-  return a.mods.filter((m) => !has.includes(m) && modOf(cls, m) && (!modOf(cls, m).land || !has.some((q) => modOf(cls, q) && modOf(cls, q).land)));
+  return a.mods.filter((m) => !has.includes(m) && modOf(cls, m) && !modOf(cls, m).flaw && (!modOf(cls, m).land || !has.some((q) => modOf(cls, q) && modOf(cls, q).land)));
 }
 
 // Move modifier `mod` off the piece in slot `from` onto the piece in slot

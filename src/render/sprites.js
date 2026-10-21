@@ -9,6 +9,7 @@ import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
 import { barrowIcon } from './art/barrow_items.js';
+import { smithItemIcon } from './art/smith_items.js';
 import { gutIcon } from './art/gut_items.js';
 import { saltIcon } from './art/salt_items.js';
 import { BARROW_MOBS } from './art/barrow_mobs.js';
@@ -857,7 +858,7 @@ function toolIcon(kind, tier) {
 
 function simpleIcon(key) {
   // (Round 95: the old places' own, drawn by hand.)
-  const deep = barrowIcon(key) || gutIcon(key) || saltIcon(key);
+  const deep = barrowIcon(key) || gutIcon(key) || saltIcon(key) || smithItemIcon(key);
   if (deep) return deep;
   // (The other Dagoni Islands' goods: see isleart.js.)
   const isle = isleIcon(key);
@@ -2233,6 +2234,20 @@ export function itemIcon(key) {
   // (Round 130) A treasure map: the map's own picture.
   if (it && it.tmap) {
     c = itemIcon('treasure_map');
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 132) A cast: the blank, a small picture of its piece pressed
+  // into it. A pattern: a scroll, the piece drawn on it.
+  if (it && (it.cast || it.pattern)) {
+    c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(itemIcon(it.cast ? 'blank_cast' : 'scroll'), 0, 0);
+    const of = it.cast ? ITEMS[it.cast] && ITEMS[it.cast].plain : it.pattern.plain;
+    if (of) g.drawImage(itemIcon(of), it.cast ? 4 : 5, it.cast ? 5 : 4, 8, 8);
     iconCache.set(key, c);
     return c;
   }

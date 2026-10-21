@@ -26,6 +26,7 @@ import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
+import { bossMaterials, RARITY } from '../world/smithmats.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { maybeWallFalls } from './wallfall.js';
@@ -1566,7 +1567,19 @@ export class DungeonRun {
       }
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.
-      this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
+      // (Round 132: one, and a second only off a great master.)
+      const btier = e.tier || this.rec.tier || 1;
+      this.dropGear(e, btier >= 3 && Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
+      // (Round 132) And what the place was made of, for the forge: one or
+      // two of its materials, rarer off a greater master (see
+      // world/smithmats.js).
+      const mats = bossMaterials(btier, { chance: (q) => Math.random() < q, int: (a, b) => a + Math.floor(Math.random() * (b - a + 1)), float: (a, b) => a + Math.random() * (b - a) });
+      for (const m of mats) game.spawnDrop(m, 1, e.x, e.y, e.z, true);
+      if (mats.length) {
+        const best = mats.map((m) => ITEMS[m]).sort((a, b) => (RARITY[b.smithMat]?.n || 0) - (RARITY[a.smithMat]?.n || 0))[0];
+        game.renderer.emit(e.x, e.y + 1.2, e.z, { n: 18, color: [RARITY[best.smithMat].color, '#ffffff'], up: 36, speed: 28, life: 1, glow: true, shape: 'star' });
+        this.eachHere(() => game.ui.msg(`It leaves ${mats.map((m) => `${ITEMS[m].name} (${RARITY[ITEMS[m].smithMat].name.toLowerCase()})`).join(' and ')}: a smith's material.`, RARITY[best.smithMat].color));
+      }
       // (Round 72) An evolved master: its own thing, and the best arms and
       // armour there are (see evolvedgear.js).
       dropEvolvedLoot(this, e);

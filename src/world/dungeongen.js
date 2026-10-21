@@ -14,6 +14,7 @@ import { REGION_W, REGION_D, WORLD_Y, INST_RX } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { chestMaterial } from './smithmats.js';
 import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js';
 import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES, SPIRE_MASTERS } from './isledeep.js';
 import { FAR_DTYPES, FAR_BOSSES } from './fardeep.js';
@@ -945,8 +946,11 @@ function foundIn(ctx, boss = false) {
 // How good an old place's things run on floor `n` (see tierOf).
 // (Round 61: and a whole floor's worth better for each tier a place has
 // been turned back to: see game/timecrystal.js.)
+// (Round 132: each tier a place is turned back to adds half a floor's
+// worth, not a whole one: a turned place's first floor ran as rich as the
+// deepest of a fresh one.)
 export function lootTier(rec, n) {
-  return n + ((rec.level || 1) - 1) * 0.5 + (FAR_LOOT[rec.isle] || 0) + ((rec.tier || 1) - 1);
+  return n + ((rec.level || 1) - 1) * 0.5 + (FAR_LOOT[rec.isle] || 0) + ((rec.tier || 1) - 1) * 0.5;
 }
 
 // What a chest down here holds, by kind of place and how far down: poor
@@ -996,6 +1000,7 @@ export function dungeonDish(type, T, rng) {
 export function lootFor(type, tier, rng, rich = 1, T = null) {
   const out = [];
   const t = Math.max(0, tier);
+  let gearGot = null;
   const add = (k, lo, hi, chance = 1) => {
     if (rng.chance(Math.min(1, chance * rich))) out.push([k, rng.int(lo, Math.max(lo, hi))]);
   };
@@ -1030,7 +1035,12 @@ export function lootFor(type, tier, rng, rich = 1, T = null) {
       : t < 2 ? ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield']
         : t < 3 ? ['steel_sword', 'sabre', 'flail', 'chainmail', 'iron_helmet', 'iron_shield', 'longbow']
           : ['steel_sword', 'battle_axe', 'halberd', 'greatsword', 'warhammer', 'crossbow', 'iron_breastplate', 'iron_greaves', 'chainmail'];
-    add(rng.pick(gear), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
+    // (Round 132) Rolled apart, and kept apart from the cut to the best
+    // few kinds below: it crowded everything else out of the deep chests.
+    // One chest in twenty near the top, one in seven at the most.
+    // (The same dice as ever, so every floor falls out as it did.)
+    const gk = rng.pick(gear);
+    if (rng.chance(Math.min(1, Math.min(0.15, 0.05 + t * 0.02) * rich))) gearGot = [gk, 1];
     if (type === 'mine') add(rng.pick(t >= 2 ? ['iron_ore', 'gold_ore', 'coal'] : ['coal', 'iron_ore']), 1, 3 + Math.floor(t), 0.5);
     if (type === 'holdout') add('arrow', 2, 5 + 2 * Math.floor(t), 0.4);
     // (What's to be found only on its island: see isledeep.js.)
@@ -1039,6 +1049,15 @@ export function lootFor(type, tier, rng, rich = 1, T = null) {
   // Only a few kinds of thing to a chest: the best of them.
   const kinds = Math.min(4, 2 + Math.floor(t / 2) + (rich >= 1.5 ? 1 : 0));
   const got = out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
+  if (gearGot && ITEMS[gearGot[0]]) got.push(gearGot);
+  // (Round 132) Now and then, deep enough, a smith's material of the old
+  // places (see world/smithmats.js): moderate ones from the middle floors,
+  // a rare one now and then deep down.
+  if (type !== 'kavorent' && t >= 1.5) {
+    rng.mats = (rng.mats || 0) + 1;
+    const m = chestMaterial(t, new RNG(hash4(rng.seed, rng.mats, 0x5317)), rich);
+    if (m) got.push([m, 1]);
+  }
   // (Round 70) Their provisions, and a recipe: on top of the rest. (Drawn
   // apart from the floor's own dice, a chest at a time, so every floor
   // falls out as it did before.)
@@ -1072,7 +1091,7 @@ export const FOUNDRY_FLOOR = 2;
 // How good a floor's loot runs: its number down, and a little for how hard
 // the place is.
 function tierOf(ctx) {
-  return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5 + (FAR_LOOT[ctx.rec.isle] || 0) + ((ctx.rec.tier || 1) - 1);
+  return lootTier(ctx.rec, ctx.n);
 }
 // (Round 114) How many foes one room's fight holds at most, by the place's
 // tier (as a time crystal turns it: 1 to 4).

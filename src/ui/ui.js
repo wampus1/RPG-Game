@@ -833,7 +833,9 @@ export class UI {
     // Its modifiers, each with what it does.
     for (const m of d.mods || []) {
       const md = modOf(d.gear, m);
-      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}${md.land ? ` (only from ${LAND_NAME[md.land] || md.land}'s old places)` : ''}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `${md.land ? '✦' : '◆'} ${t}`, color: md.land ? '#80e8d0' : '#f0c070' });
+      // (Round 132: a flaw in red, a modifier that works only at times in
+      // blue.)
+      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}${md.land ? ` (only from ${LAND_NAME[md.land] || md.land}'s old places)` : ''}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `${md.flaw ? '×' : md.land ? '✦' : '◆'} ${t}`, color: md.flaw ? '#f08060' : md.land ? '#80e8d0' : md.cond ? '#90c8f8' : '#f0c070' });
     }
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {

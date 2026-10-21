@@ -10417,6 +10417,133 @@ An older haven gets its flag put right: the plinth goes, and its upper
 half goes on. Its learning becomes the brethren's when it next studies.
 A haven placed inland in an older world stays where it is.
 
+## Round 132: Gear won the hard way — the forge, materials and casts
+
+### Finding gear
+
+- **Humbler loot.** Chests in the old places hold gear less often (5% at
+  the shallowest, up to 15% deep down), and what they hold is mostly one
+  or two stars. A home chest gives three stars only now and then, and
+  never four or five. A time crystal's tier counts for half as much depth
+  as it did.
+- **Masters.** A master leaves one piece of gear (two now and then, off
+  the greatest), of two or three stars at home. The far lands' masters
+  still leave better.
+- **Materials.** Every master also leaves one or two of the old places'
+  own materials, and the greater the master, the rarer they are:
+  - a lesser master: almost always uncommon, now and then rare;
+  - the greatest: mostly rare, often very rare.
+
+  Deep chests hold an uncommon material now and then, and a rare one
+  deeper still.
+  - Uncommon: Grave Iron, Cave Silver, Beast Sinew, Ironbark, Bog Resin.
+  - Rare: Star Iron, Drake Scale, Living Amber, Wraith Silk, Rime Heart.
+  - Very rare: Heartstone, Void Glass, Phoenix Ash.
+
+### Making gear at the forge
+
+Arms, armour and tools are no longer crafted with random stars on the
+spot. Pick one at a bench and the forge's window opens over the whole
+screen, painted as the openings are. Before you begin, you choose what
+goes into the piece. Then you work it, stage by stage:
+
+- **At the forge (anything with metal in it):**
+  - The heat: hold Space to work the bellows, bring the iron up to the
+    colour in the band and hold it there till it's soaked through. Too
+    hot and it burns.
+  - The hammer: strike as each ring closes on its mark while the
+    billet is drawn out into the piece. It cools as you go, and blows on
+    cold iron don't take.
+  - The quench: plunge it into the barrel when it's the colour asked
+    for.
+- **At the bench (wood and stone):**
+  - The shaping: strike with the mallet as the chisel passes over each
+    chalk mark.
+  - The binding: wrap the grip turn by turn, at the arrows shown.
+- **At the bowyer's (bows and slings):**
+  - The tillering: draw the stave down to each notch in turn. Pull past
+    it and the stave cracks.
+  - The stringing: pluck the string as the needle on the dial comes
+    true.
+- **At the cutting table (leather and cloth):**
+  - The cutting: keep the knife on the chalk as the hide is drawn
+    under it.
+  - The stitching: left and right by turns, on the beat.
+
+Each stage is graded. Together they decide the piece's stars, capped by
+two things:
+
+- **Your Smithing rank.** Up to two stars to begin with, three at rank
+  3, four at rank 6 and five at rank 9. Practice widens every stage's
+  timing.
+- **What it's made of.** Wood, stone, leather and cloth allow three
+  stars; iron and the like allow four. A rare material or better in it
+  allows five.
+
+A botched piece can come out with a **flaw**: a dull edge, a heavy blade,
+a warped bow, loose armour, a cracked shield. Flaws show in red. Walking
+away mid-work spoils the piece as far as it went (you're asked first).
+Down in a dungeon, at a makeshift bench, gear is still made plain, at
+once.
+
+### Additives and their natures
+
+Up to two additives can go into a piece: coal, bone, salt, feathers,
+ember pods, sulfur, frost crystals, gems' shards, pearls, gold, old
+coins, the old places' materials, and more.
+
+- **Hidden at first.** Each has a nature you only learn by working it
+  (shown as "?" until then), as a cook learns ingredients.
+- **They lean the modifiers.** A fiery thing leans toward searing blades
+  and fire arrows, a light one toward swift blades, and so on.
+- **Some modifiers work only at times.** Something of the night, of the
+  deep, desperate or battle-born can make one modifier work only then:
+  "keen, at night". These show in blue.
+- **Some change the work.** Pure things make it go better, brittle ones
+  worse (and flaws likelier), tough ones make flaws rarer.
+
+### Patterns and casts
+
+- **Patterns.** After a piece is made, "Write pattern" (a blank scroll)
+  writes down its modifiers and what went into it. Forging from the
+  pattern gives those modifiers again; the stars are your own work each
+  time.
+- **Casts, for making in bulk.** A blank cast is made at an anvil from
+  one very rare material (Heartstone, Void Glass or Phoenix Ash), six
+  clay, three iron ingots and four sand. Press a piece you forged by hand
+  into it, after making it or at the anvil's other work (R). From then
+  on, pour copies at the anvil: each copy is exactly the piece, stars and
+  all, and takes the piece's makings plus one relic shard. The pour is a
+  short game of its own.
+
+### Reforging, tempering and steel
+
+- **Reforging keeps a piece's stars.** It no longer adds a star now and
+  then. It's worked at the forge (heat and hammer), beating the
+  modifiers out afresh; done well, it beats out flaws too.
+- **Tempering.** At the anvil's other work (R): heat and quench a rare
+  material or better into a piece for one more star, up to what your
+  rank allows. The material is spent whether or not it takes.
+- **Steel.** Steel ingots (two iron, three coal, at a furnace) need
+  Smithing rank 4. The anvil makes a steel sword from them.
+
+### Town smiths
+
+A town's blacksmith takes commissions: "Could you make me something?"
+You pay up front and the piece is ready the next day. How good it is
+depends on the place:
+
+- a village smith: two stars;
+- a town smith: two or three;
+- a city smith: three, and four now and then, with steel among the
+  wares.
+
+A smith's work never comes out of the shop with a flaw.
+
+### Older worlds
+
+Your gear keeps its stars. Nothing in an older world needs changing.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

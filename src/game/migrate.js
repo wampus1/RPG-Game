@@ -1028,6 +1028,15 @@ export const STEPS = [
       sim.setBlocks(ops);
     },
   },
+  {
+    to: '1.32.0',
+    game(game, log) {
+      // (Nothing in the world to change: the forge's ways are new, and what
+      // you've made already keeps its stars.)
+      ((game.stats ||= {}).smithKnown ||= {});
+      log.push('Arms, armour and tools are worked by hand now, at the forge, the bench, the bowyer\'s and the cutting table: their stars come of how well it\'s done, and of your Smithing. Additives and the old places\' materials lean what a piece comes out with; casts make copies. Dungeon loot is rarer and humbler, and reforging keeps a piece\'s stars as they are.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

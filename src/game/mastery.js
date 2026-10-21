@@ -14,6 +14,10 @@ export const CRAFTS = {
   // a fight. Cooking: every dish comes out a little better, rank on rank;
   // dueling: a parry's moment a little longer.)
   cooking: { name: 'Cookery', rank: ['Scorcher', 'Kitchen Hand', 'Kitchen Hand', 'Cook', 'Cook', 'Good Cook', 'Good Cook', 'Chef', 'Chef', 'Master Chef'] },
+  // (Round 132: at the forge and the benches. The stars a piece can have:
+  // two to begin with, three at rank 3, four at 6, five at 9. See
+  // smithing.js.)
+  smithing: { name: 'Smithing', rank: ['Botcher', 'Apprentice', 'Apprentice', 'Journeyman', 'Journeyman', 'Smith', 'Smith', 'Master Smith', 'Master Smith', 'Legendary Smith'] },
   dueling: { name: 'Swordplay', rank: ['Flailer', 'Novice', 'Novice', 'Fencer', 'Fencer', 'Duellist', 'Duellist', 'Blademaster', 'Blademaster', 'Sword Saint'] },
 };
 

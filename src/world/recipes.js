@@ -133,6 +133,10 @@ r('workbench', 'arrow', 8, { stick: 1, feather: 1, cobblestone: 1 });
 // --- furnace --------------------------------------------------------------------
 r('furnace', 'iron_ingot', 1, { iron_ore: 1, coal: 1 });
 r('furnace', 'gold_ingot', 1, { gold_ore: 1, coal: 1 });
+// (Round 132) Steel: iron worked with coal in the furnace's heart, by a
+// smith of some skill (Smithing rank 4; see game/smithing.js).
+r('furnace', 'steel_ingot', 1, { iron_ingot: 2, coal: 3 });
+R[R.length - 1].rank = 4;
 r('furnace', 'glass', 2, { sand: 2, coal: 1 });
 r('furnace', 'stone', 4, { cobblestone: 4, coal: 1 });
 r('furnace', 'bricks', 4, { clay: 4, coal: 1 });
@@ -210,6 +214,10 @@ r('anvil', 'iron_breastplate', 1, { iron_ingot: 8, leather: 1 });
 r('anvil', 'iron_greaves', 1, { iron_ingot: 5, leather: 1 });
 r('anvil', 'iron_boots', 1, { iron_ingot: 3, leather: 1 });
 r('anvil', 'gold_circlet', 1, { gold_ingot: 2, gem: 1 });
+// (Round 132) Steel, and a blank cast: a mould of fired clay round a core
+// of something very rare (see game/smithing.js: Casts).
+r('anvil', 'steel_sword', 1, { steel_ingot: 2, stick: 1, leather: 1 });
+for (const m of ['heartstone', 'void_glass', 'phoenix_ash']) r('anvil', 'blank_cast', 1, { [m]: 1, clay: 6, iron_ingot: 3, sand: 4 });
 
 // --- the trade benches themselves (at a workbench) ------------------------------
 r('workbench', 'loom', 1, { planks: 6, stick: 4, string: 6 });

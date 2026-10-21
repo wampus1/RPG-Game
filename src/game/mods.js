@@ -5,10 +5,11 @@ import { ITEMS } from '../world/items.js';
 import { B, BLOCKS, LOGS } from '../world/blocks.js';
 import { burn, chill, mend, stun, knockBack, bleed } from './gems.js';
 import { has as heroHas } from './hero.js';
-import { dishFx } from './cooking.js';
+import { dishFx, COND_TEST } from './cooking.js';
+import { splitMod } from '../world/quality.js';
 
 const WORN = ['head', 'body', 'legs', 'feet'];
-const EMPTY = Object.freeze({ blade: [], bow: [], shield: [], tool: [], armor: {} });
+const EMPTY = Object.freeze({ blade: [], bow: [], shield: [], tool: [], armor: {}, cond: [] });
 const POISON = ['#8ac040', '#c8f070', '#5a8a20'];
 const FIRE = ['#ff6030', '#ffb040', '#fff0a0'];
 const FROST = ['#a0d8ff', '#e0f4ff', '#60a0ff'];
@@ -26,14 +27,23 @@ export function modsOf(e) {
   const eq = e.equip || {};
   const key = `${held || ''}|${eq.shield || ''}|${WORN.map((k) => eq[k] || '').join('|')}`;
   if (e._modsKey === key) return e._mods;
-  const out = { blade: [], bow: [], shield: [], tool: [], armor: {} };
+  const out = { blade: [], bow: [], shield: [], tool: [], armor: {}, cond: [] };
+  // (Round 132) A modifier that works only at some times ("keen-night"):
+  // kept apart, and looked at as it's asked for (see hasMod).
+  const put = (cls, mods, into) => {
+    for (const m of mods) {
+      const sp = splitMod(m);
+      if (sp.cond) out.cond.push({ cls, m: sp.m, cond: sp.cond });
+      else into(sp.m);
+    }
+  };
   const h = held && ITEMS[held];
-  if (h && h.mods && out[h.gear]) out[h.gear] = h.mods;
+  if (h && h.mods && out[h.gear]) put(h.gear, h.mods, (m) => out[h.gear].push(m));
   const sh = eq.shield && ITEMS[eq.shield];
-  if (sh && sh.gear === 'shield') out.shield = sh.mods;
+  if (sh && sh.gear === 'shield') put('shield', sh.mods, (m) => out.shield.push(m));
   for (const slot of WORN) {
     const it = eq[slot] && ITEMS[eq[slot]];
-    if (it && it.gear === 'armor') for (const m of it.mods) out.armor[m] = (out.armor[m] || 0) + 1;
+    if (it && it.gear === 'armor') put('armor', it.mods, (m) => (out.armor[m] = (out.armor[m] || 0) + 1));
   }
   e._modsKey = key;
   e._mods = out;
@@ -43,7 +53,12 @@ export function modsOf(e) {
 // Has it (and for armour, on how many pieces)?
 export function hasMod(e, kind, m) {
   const ms = modsOf(e);
-  return kind === 'armor' ? ms.armor[m] || 0 : ms[kind].includes(m);
+  let n = kind === 'armor' ? ms.armor[m] || 0 : ms[kind].includes(m) ? 1 : 0;
+  if (ms.cond.length) {
+    const g = e.game;
+    for (const q of ms.cond) if (q.cls === kind && q.m === m && g && COND_TEST[q.cond] && COND_TEST[q.cond](g, e)) n++;
+  }
+  return kind === 'armor' ? n : n > 0;
 }
 
 // ------------------------------------------------------------ a blade
@@ -64,7 +79,7 @@ export function bladeMult(e, t) {
 
 // Swung quicker.
 export function swingModMult(e) {
-  return hasMod(e, 'blade', 'swift') ? 0.8 : 1;
+  return (hasMod(e, 'blade', 'swift') ? 0.8 : 1) * (hasMod(e, 'blade', 'heavy') ? 1.17 : 1);
 }
 
 // A blow of yours has landed.
@@ -211,7 +226,9 @@ export function stepModMult(e) {
   const n = hasMod(e, 'armor', 'fleet');
   // (And a dish that quickens you, or weighs you down: see cooking.js.)
   const d = e && e.kind === 'player' ? Math.max(-0.4, Math.min(0.4, dishFx(e, 'speed'))) : 0;
-  return (n ? 1 / (1 + Math.min(0.18, 0.06 * n)) : 1) / (1 + d);
+  // (Round 132: cumbersome armour, a little slower.)
+  const heavy = hasMod(e, 'armor', 'heavy');
+  return (n ? 1 / (1 + Math.min(0.18, 0.06 * n)) : 1) / (1 + d) * (1 + Math.min(0.12, 0.05 * heavy));
 }
 
 // Health from hale armour.

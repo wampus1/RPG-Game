@@ -2,6 +2,7 @@
 import { BLOCKS, B } from './blocks.js';
 import { SHIP_TYPES, DESIGNS } from './shipmodels.js';
 import { deriveStarred, softArmor } from './quality.js';
+import { MATERIALS, RARITY } from './smithmats.js';
 import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
 import { rule } from '../mod/rules.js';
 import { bookInfo, bookIdOf, fameWord } from './bookreg.js';
@@ -20,7 +21,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('prize~') ? derivePrize(k) : k.startsWith('tmap~') ? deriveTmap(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('book~') ? deriveBook(k) : k.startsWith('prize~') ? derivePrize(k) : k.startsWith('tmap~') ? deriveTmap(k) : k.startsWith('cast~') ? deriveCast(k) : k.startsWith('smithpat~') ? derivePattern(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -177,6 +178,38 @@ function deriveTmap(k) {
   return {
     key: k, kind: 'misc', stack: 1, value: 25, tmap: { x: +x || 0, z: +z || 0, n: +n || 0 }, icon: 'treasure_map', name: 'Treasure Map', noSell: false,
     about: 'A captain\'s treasure map: a stretch of coast drawn in brown ink, a dotted way, and an X. Right-click it to read it; dig at the X with a shovel.',
+  };
+}
+
+// (Round 132) A cast of a forged piece: "cast~<the piece's key>". Poured
+// at an anvil, it makes the piece again, stars and modifiers and all.
+function deriveCast(k) {
+  const of = String(k).slice(5);
+  const it = ITEMS[of];
+  if (!it) return null;
+  return {
+    key: k, kind: 'misc', stack: 1, value: 200, cast: of, icon: 'blank_cast', name: `Cast of ${it.name}`,
+    about: `A fired mould, the shape of ${it.name}${it.stars ? ` (${'★'.repeat(it.stars)})` : ''} pressed into it. At an anvil (its other work, R), pour copies of the piece: each one takes what the piece is made of, and a relic shard to set it.`,
+  };
+}
+
+// (Round 132) A smith's pattern: "smithpat~<plain>~<modifiers, by .>~<the
+// additives, by +>". Forged from it, a piece comes out with those
+// modifiers; its stars are still your own work.
+export function patternKey(plain, mods = [], adds = []) {
+  return `smithpat~${plain}~${mods.join('.')}~${adds.join('+')}`;
+}
+export function parsePattern(k) {
+  const [, plain, mods, adds] = String(k).split('~');
+  return { plain, mods: mods ? mods.split('.').filter(Boolean) : [], adds: adds ? adds.split('+').filter(Boolean) : [] };
+}
+function derivePattern(k) {
+  const P = parsePattern(k);
+  const it = ITEMS[P.plain];
+  if (!it) return null;
+  return {
+    key: k, kind: 'misc', stack: 1, value: 40, pattern: P, icon: 'scroll', name: `Pattern: ${it.name}`,
+    about: `A smith's pattern for ${it.name}, written down by whoever forged it: what went into it, and how.${P.adds.length ? ` (Takes ${P.adds.map((a) => (ITEMS[a] ? ITEMS[a].name : a)).join(' and ')}.)` : ''} Forge from it at the bench and the piece comes out with the same modifiers; its stars are your own work.`,
   };
 }
 
@@ -763,6 +796,12 @@ function deriveGrown(key) {
 // town's thinkers can learn from it what nobody else alive knows), and
 // shards of crystal in a gem's colours (five fuse into a whole stone).
 item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 14, about: 'A crafting material: a furnace smelts two (and a coal) into an iron ingot; an anvil makes two iron ingots from one.' });
+// (Round 132) The old places' own materials, for the forge (see
+// world/smithmats.js, game/smithing.js); a blank cast to press a piece's
+// shape into, and steel.
+for (const [k, m] of Object.entries(MATERIALS)) item(k, { name: m.name, kind: 'material', stack: 16, value: m.value, color: m.color, smithMat: m.rarity, about: `${RARITY[m.rarity].name} material. ${m.about} Add it at the forge: what it does to a piece, you'll find out when you've worked it.` });
+item('blank_cast', { name: 'Blank Cast', kind: 'material', stack: 4, value: 320, about: 'A mould of fired clay round a core of something very rare, waiting for a shape. At an anvil (its other work, R), press a piece you\'ve forged by hand into it; from then on, pour copies of that piece, stars and all, for its makings and a relic shard each.' });
+item('steel_ingot', { name: 'Steel Ingot', kind: 'material', stack: 64, value: 26, about: 'Iron worked with coal in the heart of a furnace till it\'s hard and springy. A smith of some skill (Smithing rank 4) can make it.' });
 // (Round 61) Time crystals: what a master leaves when it falls, of its
 // tier. Used at the way into a beaten place, they turn it back to what it
 // was before anyone went down, a tier harder (and richer) than the crystal:

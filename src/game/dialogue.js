@@ -6,6 +6,7 @@
 import { storyCallback } from '../sim/saga/memory.js';
 import { isHaven } from '../sim/havenref.js';
 import { havenHello, havenTopics, havenRespond } from './haventalk.js';
+import { smithTopics, smithRespond } from './smithtalk.js';
 import { isPlanKey, planOf, quote, commission } from './plans.js';
 import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
@@ -358,7 +359,7 @@ export const TOPIC_CATS = [
 const CAT_OF = {};
 for (const [cat, ids] of Object.entries({
   now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer',
-  business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay',
+  business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
   town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   manners: 'gift rude',
@@ -481,6 +482,8 @@ function topicsRaw(npc, game) {
   out.push(...sagaTopics(npc, game));
   // (Round 130) In a pirates' haven, and about one (see haventalk.js).
   out.push(...havenTopics(npc, game));
+  // (Round 132) A smith's commissions (see smithtalk.js).
+  if (rep > -40) out.push(...smithTopics(npc, game));
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
   // (Round 54) The tavern's room to let: see sim/inns.js.
   if (rep > -40 && !npc.hired && innFor(npc)) {
@@ -1789,6 +1792,10 @@ function respondRaw(npc, game, id, arg) {
   if (id.startsWith('hv_')) {
     const hv = havenRespond(npc, game, id, arg);
     if (hv) return hv;
+  }
+  if (id.startsWith('sm_')) {
+    const sm = smithRespond(npc, game, id, arg);
+    if (sm) return sm;
   }
   const rec = npc.rec;
   const L = npc.layout;
