@@ -101,7 +101,8 @@ test('stars: made at a bench mostly one or two; found below, more the deeper, mo
   assert.ok(made < 2.3, `made ${made}`);
   assert.ok(avg({ origin: 'c', tinker: true }) > made);
   // (Since round 56: no more than three on Thessa; see round56.test.)
-  assert.ok(avg({ origin: 'd', tier: 3, far: true }) > avg({ origin: 'd', tier: 0, far: true }) + 0.4);
+  // (Round 132: a little better the deeper, no longer a whole star.)
+  assert.ok(avg({ origin: 'd', tier: 3, far: true }) > avg({ origin: 'd', tier: 0, far: true }) + 0.12);
   assert.ok(avg({ origin: 'd', tier: 1, boss: true }) > avg({ origin: 'd', tier: 1 }) + 0.6);
   for (let i = 0; i < 300; i++) {
     const s = rollStars(rng, { origin: 'd', tier: 6, boss: true, far: true });

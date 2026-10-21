@@ -310,7 +310,7 @@ const LOOSE = {
 // four and five come only off their masters. And made at a bench, see
 // game/smithing.js: what your hands do, not a roll.)
 const FOUND_W = [65, 30, 5];
-const FAR_W = [52, 36, 12];
+const FAR_W = [52, 34, 11, 3];
 const FAR_BOSS_W = [0, 30, 40, 22, 8];
 export function rollStars(rng = LOOSE, o = {}) {
   if (o.origin === 'd') {

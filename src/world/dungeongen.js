@@ -1040,7 +1040,9 @@ export function lootFor(type, tier, rng, rich = 1, T = null) {
     // One chest in twenty near the top, one in seven at the most.
     // (The same dice as ever, so every floor falls out as it did.)
     const gk = rng.pick(gear);
-    if (rng.chance(Math.min(1, Math.min(0.15, 0.05 + t * 0.02) * rich))) gearGot = [gk, 1];
+    const f = rng.next();
+    if (f < Math.min(1, (t < 1 ? 0.05 : 0.08 + t * 0.04) * rich)) rng.int(1, 1);
+    if (f < Math.min(1, Math.min(0.15, 0.05 + t * 0.02) * rich)) gearGot = [gk, 1];
     if (type === 'mine') add(rng.pick(t >= 2 ? ['iron_ore', 'gold_ore', 'coal'] : ['coal', 'iron_ore']), 1, 3 + Math.floor(t), 0.5);
     if (type === 'holdout') add('arrow', 2, 5 + 2 * Math.floor(t), 0.4);
     // (What's to be found only on its island: see isledeep.js.)
