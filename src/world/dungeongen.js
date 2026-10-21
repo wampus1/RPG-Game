@@ -1050,16 +1050,19 @@ export function lootFor(type, tier, rng, rich = 1, T = null) {
   }
   // Only a few kinds of thing to a chest: the best of them.
   const kinds = Math.min(4, 2 + Math.floor(t / 2) + (rich >= 1.5 ? 1 : 0));
-  const got = out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
-  if (gearGot && ITEMS[gearGot[0]]) got.push(gearGot);
   // (Round 132) Now and then, deep enough, a smith's material of the old
   // places (see world/smithmats.js): moderate ones from the middle floors,
-  // a rare one now and then deep down.
+  // a rare one now and then deep down. It and the gear take their places
+  // among the few kinds.
+  let mat = null;
   if (type !== 'kavorent' && t >= 1.5) {
     rng.mats = (rng.mats || 0) + 1;
-    const m = chestMaterial(t, new RNG(hash4(rng.seed, rng.mats, 0x5317)), rich);
-    if (m) got.push([m, 1]);
+    mat = chestMaterial(t, new RNG(hash4(rng.seed, rng.mats, 0x5317)), rich);
   }
+  const gearOk = gearGot && ITEMS[gearGot[0]];
+  const got = out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, Math.max(1, kinds - (gearOk ? 1 : 0) - (mat ? 1 : 0)));
+  if (gearOk) got.push(gearGot);
+  if (mat) got.push([mat, 1]);
   // (Round 70) Their provisions, and a recipe: on top of the rest. (Drawn
   // apart from the floor's own dice, a chest at a time, so every floor
   // falls out as it did before.)
