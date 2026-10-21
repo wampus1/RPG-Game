@@ -25,7 +25,7 @@ import { smithTopics, smithRespond } from '../src/game/smithtalk.js';
 import { ForgeWindow } from '../src/ui/forgewin.js';
 import { CraftWindow } from '../src/ui/windows.js';
 import { countItem } from '../src/game/inventory.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 const world = () => makeGame(12345, { wg: 9 });
@@ -313,7 +313,7 @@ test('a town\'s blacksmith takes a commission, ready the next day', () => {
 });
 
 test('version 1.32.0, and the forge\'s ways explained to an older world', () => {
-  assert.equal(GAME_VERSION, '1.32.0');
+  assert.ok(compareVersions('1.32.0', GAME_VERSION) <= 0);
   const s = stepsFor('1.31.0').find((q) => q.to === '1.32.0');
   assert.ok(s && s.game);
   const g = world();

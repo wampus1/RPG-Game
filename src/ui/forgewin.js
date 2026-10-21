@@ -1,16 +1,18 @@
 // (Round 132) The forge's games, played over the whole screen (see
-// game/smithing.js for what comes of them): iron heated in the furnace with
-// the bellows, beaten out on the anvil stroke by stroke, quenched in the
-// barrel at the colour it wants; wood and stone shaped at the bench with
-// mallet and chisel and their grips bound; a bow's stave bent on the
-// tillering board notch by notch and its string tuned; leather cut along
-// the chalk and stitched to a beat; a cast's mould poured from the crucible.
+// game/smithing.js for what comes of them): iron heated in the hearth with
+// the bellows, beaten out on the anvil stroke by stroke, quenched in the tub
+// at the colour it wants; wood and stone shaped at the bench with mallet and
+// chisel and their grips bound; a bow's stave bent on the tillering post
+// notch by notch and its string tuned; leather cut along the chalk and
+// stitched to a beat; a cast's mould poured from the crucible.
 //
-// Painted as the openings are (see ui/forgepaint.js, render/brush.js): a
-// scene of 256 by 144 pixels shown twice the size, its lasting parts painted
-// once, what moves (the fire, the work, the light, the steam) drawn over it
-// a whole pixel at a time; the words and the boards over that in the view's
-// own pixels, in the game's own letters.
+// (Round 133) The workshops are built and lit rather than painted (see
+// ui/forgepaint.js, ui/forgelight.js): rooms in perspective, solid things
+// standing in them casting their shadows, lit afresh each moment by the
+// fire, the lamp, the window, the hot iron; and what moves (the bar, the
+// hammer, the bellows, the bow, the hide) laid into the same light. The
+// words and the boards over it are in the view's own pixels, in the game's
+// own letters.
 //
 // Before the work, what's to go into it (its additives, a pattern); after,
 // the piece as it came out, and what's to be done with it (written down as
@@ -25,9 +27,9 @@ import { C } from './ascii.js';
 import { COLS, ROWS } from '../config.js';
 import { ITEMS } from '../world/items.js';
 import { itemIcon } from '../render/sprites.js';
-import { hex, rgb, mixC, hash2 } from '../render/brush.js';
-import { UW, UH, makeBuf, rand, rect, dot, line, disc, text, wrap, panel, meter, Sparks, Pops } from './festpaint.js';
-import { FW, FH, SMITHY, BENCH, BOWYER, TABLE, paintWork, heatColour } from './forgepaint.js';
+import { hex, rgb, mixC } from '../render/brush.js';
+import { UW, UH, makeBuf, rand, rect, disc, text, wrap, panel, meter, Sparks, Pops } from './festpaint.js';
+import { FW, FH, SMITHY, BENCH, BOWYER, TABLE, Shop, shopOf, heatColour, fire, bellows, ironBar, billet, hammer, quenchPiece, water, tubMouth, crucible, motes, blank, chisel, binding, lamp, bowOnPost, lantern, hide, seam } from './forgepaint.js';
 import { forgeCfg, forgeResult, writePattern, pressCast, materialCap, masteryCap, WORK_NAMES, MAX_ADDS } from '../game/smithing.js';
 import { RARITY, lifts } from '../world/smithmats.js';
 import { mastery } from '../game/mastery.js';
@@ -40,65 +42,17 @@ const hx = (c) => hex(c);
 const grade = (q) => (q >= 0.92 ? ['MASTERLY!', '#ffe070'] : q >= 0.76 ? ['FINE WORK', '#a8f0a0'] : q >= 0.56 ? ['GOOD', '#d8e8a0'] : q >= 0.36 ? ['FAIR', '#e8c890'] : ['POOR', '#f09070']);
 // Each stage's name, at its head.
 const STAGE_NAMES = { heat: 'THE HEAT', hammer: 'THE HAMMER', quench: 'THE QUENCH', shape: 'THE SHAPING', bind: 'THE BINDING', bend: 'THE TILLERING', string: 'THE STRINGING', cut: 'THE CUTTING', stitch: 'THE STITCHING', pour: 'THE POUR' };
-// Which workshop each work's done in.
-const SHOP = { forge: 'forge', reforge: 'forge', temper: 'forge', cast: 'forge', carve: 'carve', bow: 'bow', stitch: 'stitch' };
+// Where things are on the scene (the cameras never move).
+const FIRE_AT = SMITHY.cam.p(...SMITHY.fire);
+const sp = (cam, x, y, d) => cam.p(x, y, d);
 
-// ------------------------------------------------------------ pixels
-// Light, in stepped rings (as the openings' lamps), added to what's there.
-function glow(g, x, y, r, col, a) {
-  g.save();
-  g.globalCompositeOperation = 'lighter';
-  g.globalAlpha = a;
-  for (let i = 4; i >= 1; i--) disc(g, x, y, Math.max(1, Math.round((r * i) / 4)), col);
-  g.restore();
-}
-// A line a few pixels thick.
-function thick(g, x0, y0, x1, y1, w, col) {
-  const d = Math.hypot(x1 - x0, y1 - y0) || 1;
-  const nx = -(y1 - y0) / d;
-  const ny = (x1 - x0) / d;
-  for (let i = 0; i < w; i++) {
-    const o = i - (w - 1) / 2;
-    line(g, x0 + nx * o, y0 + ny * o, x1 + nx * o, y1 + ny * o, col);
-  }
-}
-// An icon drawn in the scene at a whole-number size, hot iron's glow over
-// it (`heat` 0, as it is; 1, white-hot) and `alpha` of it.
-function hotIcon(win, g, key, x, y, s, heat = 0, alpha = 1) {
-  let icon = null;
-  try {
-    icon = itemIcon(key);
-  } catch {
-    icon = null;
-  }
-  if (!icon) return;
-  const c = (win.tintC ||= makeBuf(16, 16));
-  if (!c) return;
-  const t = c.getContext('2d');
-  t.clearRect(0, 0, 16, 16);
-  t.globalCompositeOperation = 'source-over';
-  t.globalAlpha = 1;
-  t.drawImage(icon, 0, 0);
-  if (heat > 0.05) {
-    t.globalCompositeOperation = 'source-atop';
-    t.globalAlpha = clamp(0.25 + heat * 0.85);
-    t.fillStyle = hx(heatColour(heat));
-    t.fillRect(0, 0, 16, 16);
-  }
-  g.save();
-  g.globalAlpha = alpha;
-  g.imageSmoothingEnabled = false;
-  g.drawImage(c, Math.round(x), Math.round(y), 16 * s, 16 * s);
-  g.restore();
-}
-
-// Steam (or smoke): puffs that rise, swell and thin.
+// Steam (or smoke): puffs that rise, swell and thin, in steps.
 class Puffs {
   constructor() {
     this.list = [];
   }
 
-  add(x, y, n, { col = '#e8eef0', speed = 18, life = 1.6, r = 2 } = {}) {
+  add(x, y, n, { col = '#dfe6ea', speed = 18, life = 1.6, r = 2 } = {}) {
     for (let i = 0; i < n; i++) this.list.push({ x: x + (Math.random() - 0.5) * 10, y, vx: (Math.random() - 0.5) * speed * 0.6, vy: -speed * (0.5 + Math.random() * 0.6), r: r * (0.6 + Math.random() * 0.8), t: 0, life: life * (0.6 + Math.random() * 0.6), col });
   }
 
@@ -114,175 +68,35 @@ class Puffs {
     this.list = this.list.filter((p) => p.t < p.life);
   }
 
+  // (Lit from below and the side by the fire: a warm rim on a cool puff.)
   draw(g) {
     g.save();
     for (const p of this.list) {
       const k = p.t / p.life;
-      // (In steps, as the openings' mists thin.)
-      g.globalAlpha = Math.round((1 - k) * 4) * 0.12;
-      disc(g, p.x, p.y, Math.round(p.r), p.col);
+      g.globalAlpha = Math.round((1 - k) * 4) * 0.11;
+      disc(g, p.x, p.y, Math.round(p.r), '#8a98a8');
+      disc(g, p.x - 1, p.y - 1, Math.max(1, Math.round(p.r * 0.75)), p.col);
       g.globalAlpha *= 0.8;
-      disc(g, p.x - 1, p.y - 1, Math.max(1, Math.round(p.r * 0.5)), '#ffffff');
+      disc(g, p.x - Math.round(p.r * 0.4), p.y + Math.round(p.r * 0.3), Math.max(1, Math.round(p.r * 0.35)), '#ffc890');
     }
     g.restore();
   }
 }
 
-// ------------------------------------------------------------ the shops' life
-// The furnace's fire, `k` how fierce (0 to 1): its coals and its tongues,
-// flickering, white at their roots, red at their tips.
-function drawFire(g, t, k) {
-  const M = SMITHY.mouth;
-  const floor = M.y + M.ry - 1;
-  for (let x = M.x - M.rx + 1; x <= M.x + M.rx - 1; x++) {
-    const dx = (x - M.x) / M.rx;
-    const edge = Math.sqrt(Math.max(0, 1 - dx * dx));
-    const n = 0.55 + 0.25 * Math.sin(x * 0.9 + t * 11) + 0.2 * hash2(x, Math.floor(t * 14), 3);
-    const h = Math.round((5 + 20 * k) * edge * n);
-    for (let j = 0; j < h; j++) {
-      const y = floor - 3 - j;
-      if ((x - M.x) ** 2 / M.rx ** 2 + Math.min(0, y - M.y) ** 2 / M.ry ** 2 > 1) break;
-      const f = 1 - j / Math.max(1, h);
-      // (A tongue's tip breaks off now and then.)
-      if (j === h - 1 && hash2(x, Math.floor(t * 20), 9) < 0.4) continue;
-      dot(g, x, y, hx(heatColour(0.28 + f * (0.5 + 0.22 * k))));
-    }
-    for (let j = 0; j < 3; j++) {
-      const fl = hash2(x, j + Math.floor(t * 3), 5);
-      dot(g, x, floor - j, hx(heatColour(0.18 + (0.25 + 0.35 * k) * fl * (1 - j * 0.2))));
-    }
+// A ring of pixels on the scene (a timing mark).
+function ring(g, x, y, r, col, n = null) {
+  const steps = n || Math.max(12, Math.round(r * 6));
+  g.fillStyle = col;
+  for (let a = 0; a < steps; a++) {
+    const an = (a / steps) * Math.PI * 2;
+    g.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y + Math.sin(an) * r), 1, 1);
   }
-}
-// The light the fire throws on the wall and the floor.
-function fireLight(g, t, k) {
-  const M = SMITHY.mouth;
-  const fl = 0.85 + Math.sin(t * 13) * 0.08 + Math.sin(t * 5.3) * 0.07;
-  glow(g, M.x, M.y + 2, Math.round(30 + 40 * k * fl), '#ff7a20', 0.035 + 0.04 * k);
-  glow(g, M.x, M.y + M.ry + 6, Math.round(22 + 24 * k), '#ffa040', 0.03 + 0.03 * k);
-}
-// The bellows, hinged at their brass nozzle, `c` how far squeezed (0 to
-// 1): two boards, the leather between them pleated, folding as they close.
-function drawBellows(g, c) {
-  const B = SMITHY.bellows;
-  const hxp = B.x - 16;
-  const hy = B.y;
-  const L = 34;
-  const open = Math.round(12 * (1 - c)) + 2;
-  // The pipe to the furnace, and the nozzle.
-  rect(g, 80, hy, hxp - 80, 3, '#2e2e36');
-  rect(g, 80, hy, hxp - 80, 1, '#6a6a78');
-  rect(g, hxp - 4, hy - 1, 5, 5, '#a87830');
-  rect(g, hxp - 4, hy - 1, 5, 1, '#e8c060');
-  for (let x = 0; x <= L; x++) {
-    // (The boards widen from the nozzle, rounded at the far end.)
-    const k = x / L;
-    const round = x > L - 4 ? Math.round((x - (L - 4)) ** 2 / 5) : 0;
-    const top = hy - Math.round(open * k) + round;
-    const bot = hy + 3 + Math.round(k * 3) - round;
-    // The leather: pleats that bunch as it closes.
-    const pleat = Math.max(2, Math.round(3 + (1 - c) * 3));
-    for (let y = top + 2; y < bot; y++) {
-      const f = (y - top) % pleat;
-      dot(g, hxp + x, y, f === 0 ? '#4a2a18' : f === 1 ? '#a86a3a' : '#7a4a2a');
-    }
-    dot(g, hxp + x, top, '#c8925a');
-    dot(g, hxp + x, top + 1, '#8a5a30');
-    dot(g, hxp + x, bot, '#8a5a30');
-    dot(g, hxp + x, bot + 1, '#4a2e18');
-    if (x % 9 === 4) dot(g, hxp + x, top, '#e8c060');
-  }
-  // The handles, the top one leaned on.
-  const ex = hxp + L - 2;
-  const ey = hy - open + 1;
-  thick(g, ex, ey, ex + 9, ey - 9, 2, '#6a4428');
-  disc(g, ex + 10, ey - 10, 1, '#9a6a3a');
-  thick(g, ex, hy + 5, ex + 9, hy + 8, 2, '#5a3a20');
-}
-// The anvil's work: a billet, or the piece it's becoming.
-function drawBillet(win, g, key, heat, p) {
-  const A = SMITHY.anvil;
-  if (p < 1) {
-    const w = 30 - Math.round(p * 6);
-    const x0 = A.x - Math.round(w / 2);
-    const y0 = A.y - 4;
-    for (let x = 0; x < w; x++) for (let y = 0; y < 4; y++) {
-      const k = clamp(heat * (y === 0 ? 1.08 : y === 3 ? 0.78 : 0.95) + (hash2(x, y, 4) - 0.5) * 0.04);
-      dot(g, x0 + x, y0 + y, hx(heatColour(k)));
-    }
-  }
-  if (p > 0) hotIcon(win, g, key, A.x - 16, A.y - 30, 2, heat, clamp(p * 1.3));
-  if (heat > 0.35) glow(g, A.x, A.y - 3, Math.round(8 + heat * 14), '#ff8030', 0.03 + heat * 0.04);
-}
-// A smith's hammer swung from off to the right: `s` 0 raised, 1 struck.
-function drawHammer(g, s, head = '#4a4a56') {
-  const A = SMITHY.anvil;
-  const px = A.x + 46;
-  const py = A.y - 46;
-  const a = 3.95 + (2.36 - 3.95) * s;
-  const hxp = px + Math.cos(a) * 40;
-  const hyp = py + Math.sin(a) * 40;
-  thick(g, px, py, hxp, hyp, 2, '#7a5030');
-  line(g, px, py, hxp, hyp, '#a87448');
-  const nx = Math.cos(a + Math.PI / 2);
-  const ny = Math.sin(a + Math.PI / 2);
-  const dx = Math.cos(a);
-  const dy = Math.sin(a);
-  for (let i = -5; i <= 5; i++) {
-    for (let j = -2; j <= 3; j++) {
-      const c = j === -2 ? '#8a8a98' : j === 3 ? '#26262e' : i === -5 || i === 5 ? '#3a3a44' : head;
-      dot(g, hxp + nx * i + dx * j, hyp + ny * i + dy * j, c);
-    }
-  }
-  // (The hand on its haft, the sleeve off the edge.)
-  disc(g, px - 2, py + 1, 3, '#c89070');
-  dot(g, px - 3, py - 1, '#e8b090');
-  thick(g, px + 1, py + 1, px + 30, py - 12, 6, '#5a3a2a');
-  thick(g, px + 1, py - 2, px + 30, py - 15, 1, '#7a5a40');
-}
-// The quench barrel's water, still or stirred.
-function drawWater(g, t, stir) {
-  const B = SMITHY.barrel;
-  for (let x = B.x - 15; x < B.x + 15; x++) {
-    const e = ((x - B.x) / 15) ** 2;
-    const yy = B.y - 2 + Math.round(Math.sin(x * 0.6 + t * (3 + stir * 10)) * (0.3 + stir * 1.2));
-    if (e < 0.85 && (x + Math.floor(t * 4)) % 7 === 0) dot(g, x, yy, stir > 0.1 ? '#c8e0f0' : '#5a7a8a');
-  }
-}
-// The bench's light: a shaft from the window, motes drifting in it.
-function benchLight(g, t) {
-  const W = BENCH.window;
-  g.save();
-  g.globalCompositeOperation = 'lighter';
-  g.globalAlpha = 0.05;
-  for (let y = W.y + W.h; y < BENCH.top + 8; y++) {
-    const k = (y - W.y - W.h) / (BENCH.top + 8 - W.y - W.h);
-    rect(g, W.x + 4 + k * 70, y, W.w - 2 + k * 40, 1, '#fff0c0');
-  }
-  g.restore();
-  for (let i = 0; i < 14; i++) {
-    const k = (hash2(i, 1, 7) + t * 0.02 * (0.5 + hash2(i, 2, 7))) % 1;
-    const x = W.x + 8 + k * 90 + Math.sin(t * 0.7 + i) * 3;
-    const y = W.y + W.h + 4 + hash2(i, 3, 7) * 40 + k * 14;
-    if (Math.floor(t * 3 + i) % 5) dot(g, x, y, '#fff4d0');
-  }
-}
-// A lamp hung from a chain (the bowyer's), or a lantern stood on a shelf
-// (the cutter's): its flame and its light.
-function lamp(g, x, y, t, hang) {
-  if (hang) for (let j = 0; j < y - 8; j += 2) dot(g, x, 6 + j, '#4a4038');
-  rect(g, x - 3, y - 2, 7, 1, '#3a3028');
-  rect(g, x - 2, y - 1, 5, 6, '#c89a40');
-  rect(g, x - 1, y, 3, 4, '#ffe8a0');
-  rect(g, x - 3, y + 5, 7, 1, '#3a3028');
-  const f = Math.floor(t * 9) % 3;
-  dot(g, x, y + 1 - (f === 0 ? 1 : 0), '#ffffff');
-  const fl = 0.9 + Math.sin(t * 11) * 0.06 + Math.sin(t * 4.1) * 0.05;
-  glow(g, x, y + 2, Math.round(40 * fl), '#ffb050', 0.035);
 }
 
 // ------------------------------------------------------------ the stages
-// Each stage: `rules` (its card), `hint` (along the foot), update/paint, and
-// when it's done, `done` and its `score` (0 to 1).
+// Each stage: `rules` (its card), `hint` (along the foot); update; paint
+// (into the shop's light), over (marks on the scene), paintUI (the view's
+// boards); when it's done, `done` and its `score` (0 to 1).
 class Stage {
   constructor(win) {
     this.win = win;
@@ -334,14 +148,13 @@ class Heat extends Stage {
     const w = this.win;
     this.t += dt;
     const hold = w.holding();
-    // (The bellows' strokes: down as you lean on them, up as you ease.)
     if (hold) {
       this.cyc += dt * 4.2;
       const s = (1 - Math.cos(this.cyc)) / 2;
       if (s > 0.95 && !this.puffed) {
         this.puffed = true;
         w.sfx('whoosh');
-        w.sparks.burst(SMITHY.mouth.x + 4, SMITHY.mouth.y + 4, 6, ['#ffd060', '#ff8030', '#fff0b0'], 30, 1.2, -40);
+        w.sparks.burst(FIRE_AT[0], FIRE_AT[1] + 4, 7, ['#ffd060', '#ff8030', '#fff0b0'], 32, 1.2, -40);
       }
       if (s < 0.5) this.puffed = false;
       this.squeeze = s;
@@ -352,9 +165,9 @@ class Heat extends Stage {
     if (this.heat >= lo && this.heat <= hi) this.soak += dt;
     if (this.heat > hi + 0.08) {
       this.burn += dt;
-      if (Math.random() < dt * 14) w.sparks.burst(SMITHY.mouth.x + 10, SMITHY.mouth.y + 6, 2, ['#ffffff', '#fff0a0'], 40, 0.5, 40);
+      if (Math.random() < dt * 14) w.sparks.burst(FIRE_AT[0] + 10, FIRE_AT[1] + 6, 2, ['#ffffff', '#fff0a0'], 40, 0.5, 40);
     }
-    if (Math.random() < dt * (2 + this.fire * 6)) w.sparks.burst(SMITHY.mouth.x + (Math.random() - 0.5) * 20, SMITHY.mouth.y - 4, 1, ['#ffb040', '#ff6020'], 18, 1.6, -22);
+    if (Math.random() < dt * (2 + this.fire * 6)) w.sparks.burst(FIRE_AT[0] + (Math.random() - 0.5) * 22, FIRE_AT[1] + 2, 1, ['#ffb040', '#ff6020'], 18, 1.6, -22);
     if (this.soak >= this.need || this.t >= this.limit) {
       const soaked = clamp(this.soak / this.need);
       const quick = clamp(1 - Math.max(0, this.t - (this.need + 3)) / 7);
@@ -367,22 +180,12 @@ class Heat extends Stage {
     return clamp(this.soak / this.need) * 0.6;
   }
 
-  paint(g, t) {
-    const M = SMITHY.mouth;
-    drawFire(g, t, this.fire);
-    // The iron in the fire, held in tongs: hot where it's in the coals,
-    // cooler toward your hand.
-    const y = M.y + 7;
-    for (let x = M.x - 8; x < M.x + 34; x++) {
-      const inside = x < M.x + M.rx - 2;
-      const k = inside ? this.heat : this.heat * clamp(1 - (x - (M.x + M.rx - 2)) / 10);
-      for (let j = 0; j < 3; j++) dot(g, x, y + j, hx(heatColour(clamp(k * (j === 0 ? 1.06 : j === 2 ? 0.8 : 0.95)))));
-    }
-    line(g, M.x + 30, y, M.x + 58, y - 8, '#3a3a42');
-    line(g, M.x + 30, y + 2, M.x + 58, y + 6, '#4a4a52');
-    if (this.heat > 0.4) glow(g, M.x + 4, y + 1, Math.round(6 + this.heat * 10), '#ffb040', 0.05);
-    fireLight(g, t, this.fire);
-    drawBellows(g, this.squeeze);
+  paint(S, t, st) {
+    fire(S, t, this.fire);
+    bellows(S, this.squeeze);
+    st.fire = this.fire;
+    st.iron = ironBar(S, this.heat);
+    water(S, t);
   }
 
   paintUI(u) {
@@ -390,7 +193,7 @@ class Heat extends Stage {
     const x = 470;
     const y0 = 40;
     const h = 180;
-    rect(u, x - 3, y0 - 3, 20, h + 6, '#000000');
+    gauge(u, x, y0, h);
     for (let j = 0; j < h; j++) rect(u, x, y0 + h - 1 - j, 14, 1, hx(heatColour(j / h)));
     const [lo, hi] = this.band();
     const by0 = y0 + h - Math.round(hi * h);
@@ -399,12 +202,26 @@ class Heat extends Stage {
     rect(u, x - 6, by1, 26, 1, '#a8f0a0');
     rect(u, x - 6, by0, 1, by1 - by0, '#a8f0a0');
     rect(u, x + 19, by0, 1, by1 - by0, '#a8f0a0');
-    const my = y0 + h - Math.round(clamp(this.heat) * h);
-    for (let i = 0; i < 5; i++) rect(u, x - 12 + i, my - 4 + i, 1, 9 - i * 2, '#ffffff');
+    pointer(u, x - 12, y0 + h - Math.round(clamp(this.heat) * h));
     text(u, 'HEAT', x + 7, y0 - 14, '#e8d0a0', { align: 'center' });
     meter(u, 24, 40, 140, 8, this.soak / this.need, '#ff9a40', 'SOAKED THROUGH');
     if (this.burn > 0 && this.heat > this.band()[1] + 0.08 && Math.floor(this.t * 6) % 2) text(u, 'TOO HOT! IT\'S BURNING', 256, 56, '#ff7050', { scale: 2, align: 'center' });
   }
+}
+// A gauge's frame: iron, riveted.
+function gauge(u, x, y0, h) {
+  rect(u, x - 4, y0 - 4, 22, h + 8, '#1a1820');
+  rect(u, x - 3, y0 - 3, 20, h + 6, '#4a4a56');
+  rect(u, x - 3, y0 - 3, 20, 1, '#8a8a9a');
+  rect(u, x - 1, y0 - 1, 16, h + 2, '#0c0a10');
+  for (const yy of [y0 - 2, y0 + h + 1]) {
+    rect(u, x - 2, yy, 1, 1, '#c8c8d8');
+    rect(u, x + 15, yy, 1, 1, '#c8c8d8');
+  }
+}
+// A pointer at a gauge's side.
+function pointer(u, x, y) {
+  for (let i = 0; i < 5; i++) rect(u, x + i, y - 4 + i, 1, 9 - i * 2, i === 4 ? '#ffe070' : '#ffffff');
 }
 
 // The hammer: the billet on the anvil; strike as each ring closes on its
@@ -420,12 +237,13 @@ class Hammer extends Stage {
     this.heat = clamp(win.ironHeat || 0.65, 0.3, 0.95);
     this.swing = 1;
     this.gap = 0.5;
+    this.flash = 0;
     this.next();
   }
 
   next() {
-    const A = SMITHY.anvil;
-    this.ring = { x: A.x - 10 + this.r.int(0, 20), y: A.y - 3 - this.r.int(0, 8), r: 22, dur: Math.max(0.65, 1.15 - this.i * 0.06) };
+    const [x, y] = sp(SMITHY.cam, this.r.float(-1, 19), SMITHY.anvil.face - 2, 71);
+    this.ring = { x, y, r: 22, dur: Math.max(0.65, 1.15 - this.i * 0.06) };
     this.rt = 0;
   }
 
@@ -434,6 +252,7 @@ class Hammer extends Stage {
     this.t += dt;
     this.heat = Math.max(0.1, this.heat - dt * 0.035);
     this.swing = Math.min(1, this.swing + dt * 5);
+    this.flash = Math.max(0, this.flash - dt * 8);
     if (this.gap > 0) {
       this.gap -= dt;
       return;
@@ -465,10 +284,9 @@ class Hammer extends Stage {
     this.swing = 0;
     w.sfx('clang');
     w.shake = 0.12;
-    const n = q >= 1 ? 26 : q >= 0.7 ? 16 : 8;
-    w.sparks.burst(R.x, R.y, n, ['#fff8d0', '#ffd060', '#ff9030', '#ffffff'], q >= 1 ? 80 : 55, 0.6, 140);
+    w.sparks.burst(R.x, R.y, q >= 1 ? 28 : q >= 0.7 ? 18 : 9, ['#fff8d0', '#ffd060', '#ff9030', '#ffffff'], q >= 1 ? 85 : 58, 0.6, 140);
     w.pops.add(cold ? 'TOO COLD' : q >= 1 ? 'TRUE!' : q >= 0.7 ? 'GOOD' : q >= 0.4 ? 'OFF' : 'WILD', R.x, R.y - 14, cold ? '#90b0f0' : grade(q)[1]);
-    this.flash = 0.08;
+    this.flash = 1;
     this.after();
   }
 
@@ -482,31 +300,22 @@ class Hammer extends Stage {
     return this.hits.reduce((a, b) => a + b, 0) / this.n;
   }
 
-  paint(g, t) {
-    drawFire(g, t, 0.35);
-    fireLight(g, t, 0.35);
-    drawBellows(g, 0);
-    const p = this.i / this.n;
-    this.flash = Math.max(0, (this.flash || 0) - 1 / 60);
-    drawBillet(this.win, g, this.cfg.out, clamp(this.heat + (this.flash > 0 ? 0.3 : 0)), p);
-    // The ring closing on its mark.
-    if (this.gap <= 0 && this.i < this.n) {
-      const R = this.ring;
-      const rad = R.r * (1 - this.rt / R.dur);
-      for (let a = 0; a < 40; a++) {
-        const an = (a / 40) * Math.PI * 2;
-        dot(g, R.x + Math.cos(an) * 3, R.y + Math.sin(an) * 3, '#a8f0a0');
-      }
-      if (rad > 0) {
-        const near = Math.abs(rad - 3) <= 1.6 * this.win.ease;
-        const steps = Math.max(12, Math.round(rad * 6));
-        for (let a = 0; a < steps; a++) {
-          const an = (a / steps) * Math.PI * 2 + t;
-          dot(g, R.x + Math.cos(an) * rad, R.y + Math.sin(an) * rad, near ? '#ffffff' : '#ffd060');
-        }
-      }
-    }
-    drawHammer(g, this.swing < 0.15 ? 1 : 1 - (this.swing - 0.15) / 0.85);
+  paint(S, t, st) {
+    fire(S, t, 0.35);
+    bellows(S, 0);
+    water(S, t);
+    st.fire = 0.35;
+    st.iron = billet(S, this.cfg.out, this.heat, this.i / this.n, this.flash);
+    hammer(S, this.swing < 0.15 ? 1 : 1 - (this.swing - 0.15) / 0.85);
+  }
+
+  over(g, t) {
+    if (this.gap > 0 || this.i >= this.n) return;
+    const R = this.ring;
+    const rad = R.r * (1 - this.rt / R.dur);
+    ring(g, R.x, R.y, 3, '#a8f0a0', 24);
+    if (rad > 0) ring(g, R.x, R.y, rad, Math.abs(rad - 3) <= 1.6 * this.win.ease ? '#ffffff' : '#ffd060');
+    void t;
   }
 
   paintUI(u) {
@@ -520,7 +329,7 @@ class Hammer extends Stage {
   }
 }
 
-// The quench: the piece held over the barrel, cooling; plunge it at the
+// The quench: the piece held over the tub, cooling; plunge it at the
 // colour it wants.
 const QUENCH_AT = [[0.66, 'ORANGE'], [0.54, 'CHERRY RED'], [0.43, 'BLOOD RED']];
 class Quench extends Stage {
@@ -546,8 +355,8 @@ class Quench extends Stage {
       this.dip = Math.min(1, this.dip + dt * 5);
       this.heat = Math.max(0, this.heat - dt * 1.6);
       this.after += dt;
-      const B = SMITHY.barrel;
-      if (this.after < 1.2 && Math.random() < dt * 30) w.puffs.add(B.x + (Math.random() - 0.5) * 20, B.y - 4, 1, { speed: 24, life: 1.8, r: 2.5 });
+      const [mx, my] = tubMouth(w.shopArt || { p: (...a) => SMITHY.cam.p(...a) });
+      if (this.after < 1.2 && Math.random() < dt * 30) w.puffs.add(mx + (Math.random() - 0.5) * 20, my - 2, 1, { speed: 24, life: 1.8, r: 2.5 });
       if (this.after > 1.6) this.finish(this.q);
     }
   }
@@ -559,32 +368,17 @@ class Quench extends Stage {
     this.q = clamp(1 - Math.max(0, e - 0.025 * w.ease) / (0.16 * w.ease));
     w.sfx('hiss');
     w.sfx('splash');
-    const B = SMITHY.barrel;
-    w.puffs.add(B.x, B.y - 6, 16, { speed: 34, life: 2, r: 3 });
-    w.pops.add(grade(this.q)[0], B.x - 20, B.y - 50, grade(this.q)[1]);
+    const [mx, my] = SMITHY.cam.p(SMITHY.tub.cx, SMITHY.tub.water, SMITHY.tub.cz - 3);
+    w.puffs.add(mx, my - 4, 18, { speed: 34, life: 2, r: 3 });
+    w.pops.add(grade(this.q)[0], mx - 20, my - 46, grade(this.q)[1]);
   }
 
-  partial() {
-    return 0;
-  }
-
-  paint(g, t) {
-    drawFire(g, t, 0.3);
-    fireLight(g, t, 0.3);
-    drawBellows(g, 0);
-    const B = SMITHY.barrel;
-    const y = B.y - 40 + Math.round(this.dip * 34) + (this.plunged ? 0 : Math.round(Math.sin(t * 2) * 1));
-    g.save();
-    g.beginPath();
-    g.rect(0, 0, FW, B.y - 2);
-    g.clip();
-    hotIcon(this.win, g, this.cfg.out, B.x - 16, y, 2, this.heat);
-    g.restore();
-    // The tongs, off to the upper right.
-    thick(g, B.x + 6, y + 10, B.x + 44, y - 26, 2, '#3a3a44');
-    line(g, B.x + 8, y + 14, B.x + 46, y - 20, '#5a5a66');
-    if (this.heat > 0.35 && !this.plunged) glow(g, B.x, y + 16, Math.round(8 + this.heat * 12), '#ff8030', 0.05);
-    drawWater(g, t, this.plunged ? Math.max(0, 1 - this.after) : 0);
+  paint(S, t, st) {
+    fire(S, t, 0.3);
+    bellows(S, 0);
+    st.fire = 0.3;
+    st.iron = quenchPiece(S, this.heat, this.dip);
+    water(S, t, this.plunged ? Math.max(0, 1 - this.after * 0.7) : 0, this.plunged ? Math.max(0, 0.8 - this.after) : 0);
   }
 
   paintUI(u) {
@@ -595,25 +389,25 @@ class Quench extends Stage {
     text(u, 'IT\'S NOW', 24, 66, '#e8d0a0');
     rect(u, 24, 78, 24, 16, '#000000');
     rect(u, 25, 79, 22, 14, hx(heatColour(this.heat)));
-    // The colours it'll pass through, and where it is.
     for (let i = 0; i < 160; i++) rect(u, 24 + i, 102, 1, 6, hx(heatColour(1 - i / 160)));
     rect(u, 24 + Math.round((1 - this.target[0]) * 160), 98, 1, 14, '#a8f0a0');
     rect(u, 24 + Math.round((1 - this.heat) * 160), 100, 2, 10, '#ffffff');
   }
 }
 
-// The shaping: the chisel slides along the blank; strike with the mallet
-// as it passes over each chalk mark.
+// The shaping: the chisel slides along the blank; strike with the mallet as
+// it passes over each chalk mark. (Room units along the blank.)
 class Shape extends Stage {
   constructor(win) {
     super(win);
     this.rules = ['THE CHISEL SLIDES ALONG THE BLANK', 'STRIKE (SPACE OR CLICK) AS IT PASSES OVER A MARK', 'MISS AND YOU GOUGE IT'];
     this.hint = 'STRIKE: SPACE OR CLICK  ·  ESC: LEAVE';
-    this.x0 = 74;
-    this.x1 = 182;
-    this.marks = [];
+    const B = BENCH.blank;
+    this.x0 = B.x0 + 3;
+    this.x1 = B.x1 - 3;
     const n = 6;
-    for (let i = 0; i < n; i++) this.marks.push({ x: this.x0 + 8 + Math.round(((i + 0.2 + this.r.float(0, 0.6)) / n) * (this.x1 - this.x0 - 16)), hit: null });
+    this.marks = [];
+    for (let i = 0; i < n; i++) this.marks.push({ u: (i + 0.25 + this.r.float(0, 0.5)) / n, hit: null });
     this.cuts = [];
     this.gouges = [];
     this.pos = 0;
@@ -621,10 +415,16 @@ class Shape extends Stage {
     this.swing = 1;
   }
 
+  // Where the chisel is along the blank (0..1), and in the room.
+  cu() {
+    const sp0 = 0.32 + this.t * 0.018;
+    const k = (this.pos * sp0) % 2;
+    return k < 1 ? k : 2 - k;
+  }
+
   cx() {
-    const sp = 0.32 + this.t * 0.018;
-    const k = (this.pos * sp) % 2;
-    return this.x0 + (k < 1 ? k : 2 - k) * (this.x1 - this.x0);
+    const B = BENCH.blank;
+    return B.x0 + this.cu() * (B.x1 - B.x0);
   }
 
   update(dt) {
@@ -633,26 +433,28 @@ class Shape extends Stage {
     this.pos += dt;
     this.swing = Math.min(1, this.swing + dt * 5);
     if (w.tapped()) {
-      const x = this.cx();
+      const B = BENCH.blank;
+      const L = B.x1 - B.x0;
+      const u = this.cu();
       const open = this.marks.filter((m) => m.hit === null);
-      const m = open.sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0];
+      const m = open.sort((a, b) => Math.abs(a.u - u) - Math.abs(b.u - u))[0];
       this.swing = 0;
       w.sfx('chop');
-      const d = m ? Math.abs(m.x - x) : 99;
-      if (d > 8 * w.ease) {
-        this.gouges.push(Math.round(x));
-        w.pops.add('GOUGED', x, BENCH.top - 26, '#f09070');
-        w.sparks.burst(x, BENCH.top - 9, 5, ['#8a5a30', '#c89a60'], 30, 0.5, 120);
+      const d = m ? Math.abs(m.u - u) * L : 99;
+      const [px, py] = sp(BENCH.cam, B.x0 + u * L, B.y0, B.d0);
+      if (d > 5 * w.ease) {
+        this.gouges.push(u);
+        w.pops.add('GOUGED', px, py - 16, '#f09070');
+        w.sparks.burst(px, py, 5, ['#8a5a30', '#c89a60'], 30, 0.5, 120);
       } else {
-        m.hit = d <= 1.6 * w.ease ? 1 : d <= 4 * w.ease ? 0.72 : 0.42;
-        this.cuts.push(m.x);
-        w.pops.add(m.hit >= 1 ? 'CLEAN!' : m.hit >= 0.7 ? 'GOOD' : 'ROUGH', m.x, BENCH.top - 26, grade(m.hit)[1]);
-        w.sparks.burst(m.x, BENCH.top - 9, 12, ['#e8c890', '#d8b070', '#b88a50', '#fff0d0'], 45, 0.8, 140);
+        m.hit = d <= 1 * w.ease ? 1 : d <= 2.5 * w.ease ? 0.72 : 0.42;
+        this.cuts.push(m.u);
+        w.pops.add(m.hit >= 1 ? 'CLEAN!' : m.hit >= 0.7 ? 'GOOD' : 'ROUGH', px, py - 16, grade(m.hit)[1]);
+        w.sparks.burst(px, py, 14, ['#e8c890', '#d8b070', '#b88a50', '#fff0d0'], 46, 0.8, 140);
       }
     }
     if (this.marks.every((m) => m.hit !== null) || this.t >= this.limit) {
-      const sum = this.marks.reduce((a, m) => a + (m.hit || 0), 0);
-      this.finish(sum / this.marks.length - this.gouges.length * 0.07);
+      this.finish(this.marks.reduce((a, m) => a + (m.hit || 0), 0) / this.marks.length - this.gouges.length * 0.07);
     }
   }
 
@@ -660,49 +462,14 @@ class Shape extends Stage {
     return this.marks.reduce((a, m) => a + (m.hit || 0), 0) / this.marks.length;
   }
 
-  paint(g, t) {
-    benchLight(g, t);
-    const y0 = BENCH.top - 10;
-    // The blank: its grain, lit along its top, carved where it's been cut.
-    for (let x = this.x0; x < this.x1; x++) {
-      const cut = this.cuts.some((c) => Math.abs(c - x) <= 2);
-      const gouge = this.gouges.some((c) => Math.abs(c - x) <= 1);
-      for (let y = y0; y < BENCH.top; y++) {
-        if (cut && y < y0 + 3) continue;
-        if (gouge && y < y0 + 2) continue;
-        const grain = (x + Math.round(Math.sin(y * 0.9 + x * 0.05) * 2)) % 9 === 0;
-        let c = y === y0 || (cut && y === y0 + 3) ? '#f0d098' : y === BENCH.top - 1 ? '#7a5028' : grain ? '#a87440' : '#c89458';
-        if (cut && y === y0 + 3) c = '#f8e0b0';
-        if (gouge && y === y0 + 2) c = '#6a4020';
-        dot(g, x, y, c);
-      }
-      if (x === this.x0 || x === this.x1 - 1) for (let y = y0; y < BENCH.top; y++) dot(g, x, y, '#8a5a30');
-    }
-    // The chalk marks still to cut.
-    for (const m of this.marks) if (m.hit === null) for (let y = y0 - 4; y < y0 + 2; y += 1) if (y % 2 || y >= y0) dot(g, m.x, y, '#f4f0e8');
-    // The chisel, and the mallet over it.
-    const x = Math.round(this.cx());
-    const s = this.swing < 0.15 ? 1 : 1 - (this.swing - 0.15) / 0.85;
-    const cy = y0 - 2 - Math.round((1 - s) * 2);
-    for (let y = cy - 14; y < cy - 6; y++) {
-      dot(g, x, y, '#9a6a3a');
-      dot(g, x + 1, y, '#6a4428');
-    }
-    for (let y = cy - 6; y <= cy; y++) {
-      dot(g, x, y, y === cy ? '#ffffff' : '#a8a8b8');
-      dot(g, x + 1, y, '#6a6a78');
-    }
-    const my = cy - 16 - Math.round((1 - s) * 12);
-    const mx = x + 1 + Math.round((1 - s) * 6);
-    rect(g, mx - 5, my - 5, 11, 6, '#9a6a3a');
-    rect(g, mx - 5, my - 5, 11, 1, '#c89a60');
-    rect(g, mx - 5, my, 11, 1, '#5a3a1e');
-    thick(g, mx, my - 5, mx + 14, my - 18, 2, '#7a5030');
+  paint(S, t) {
+    motes(S, t);
+    blank(S, this.marks.filter((m) => m.hit === null).map((m) => m.u), this.cuts, this.gouges);
+    chisel(S, this.cx(), this.swing < 0.15 ? 1 : 1 - (this.swing - 0.15) / 0.85);
   }
 
   paintUI(u) {
-    const left = this.marks.filter((m) => m.hit === null).length;
-    text(u, `MARKS LEFT: ${left}`, 24, 30, '#e8d0a0');
+    text(u, `MARKS LEFT: ${this.marks.filter((m) => m.hit === null).length}`, 24, 30, '#e8d0a0');
     meter(u, 24, 50, 140, 8, 1 - this.t / this.limit, '#d8b070', 'TIME');
   }
 }
@@ -735,18 +502,16 @@ class Bind extends Stage {
     const want = this.seq[this.i][0];
     let got = null;
     for (const [code] of ARROWS) if (w.pressed(code) || w.pressed(ALT[code])) got = code;
-    if (got) {
-      const q = got !== want ? 0.2 : this.pt <= 0.65 * w.ease ? 1 : 0.7;
-      this.turn(q);
-    } else if (this.pt > this.limitEach) this.turn(0);
+    if (got) this.turn(got !== want ? 0.2 : this.pt <= 0.65 * w.ease ? 1 : 0.7);
+    else if (this.pt > this.limitEach) this.turn(0);
   }
 
   turn(q) {
     const w = this.win;
     this.turns.push(q);
     w.sfx(q >= 0.7 ? 'select' : 'error');
-    const gx = 104 + this.i * 6;
-    w.pops.add(q >= 1 ? 'TIGHT' : q >= 0.7 ? 'GOOD' : q > 0 ? 'LOOSE' : 'SLIPPED', gx, BENCH.top - 30, grade(q)[1], 1, 0.7);
+    const [px, py] = sp(BENCH.cam, -16 + this.i * 2.6, BENCH.bench.y - 3, 55);
+    w.pops.add(q >= 1 ? 'TIGHT' : q >= 0.7 ? 'GOOD' : q > 0 ? 'LOOSE' : 'SLIPPED', px, py - 12, grade(q)[1], 1, 0.7);
     this.i++;
     this.pt = 0;
   }
@@ -755,48 +520,24 @@ class Bind extends Stage {
     return this.turns.reduce((a, b) => a + b, 0) / this.n;
   }
 
-  paint(g, t) {
-    benchLight(g, t);
-    const y0 = BENCH.top - 8;
-    // The haft laid along the bench, the piece's head at its end.
-    for (let x = 64; x < 172; x++) for (let y = y0 + 1; y < y0 + 6; y++) dot(g, x, y, y === y0 + 1 ? '#f0d098' : y === y0 + 5 ? '#7a5028' : '#c89458');
-    hotIcon(this.win, g, this.cfg.out, 168, BENCH.top - 34, 2, 0);
-    // The turns of the binding.
-    this.turns.forEach((q, i) => {
-      const x = 104 + i * 6;
-      const off = q >= 0.7 ? 0 : 1;
-      const col = q >= 0.7 ? ['#5a3a20', '#7a5030', '#9a6a40'] : ['#4a2a18', '#6a4428', '#7a5030'];
-      for (let j = 0; j < 7; j++) {
-        dot(g, x + Math.floor(j / 2) + off, y0 + j, col[j % 3]);
-        dot(g, x + Math.floor(j / 2) + 1 + off, y0 + j, col[(j + 1) % 3]);
-      }
-      if (q < 0.7) dot(g, x + 5, y0 - 1, '#6a4428');
-    });
-    // The strap's end, and the spool of it.
-    const ex = 104 + this.i * 6;
-    if (this.i < this.n) {
-      const sway = Math.round(Math.sin(t * 3) * 2);
-      line(g, ex, y0 + 6, ex + 10 + sway, y0 + 22, '#7a5030');
-      disc(g, ex + 12 + sway, y0 + 24, 3, '#5a3a20');
-      dot(g, ex + 12 + sway, y0 + 24, '#9a6a40');
-    }
+  paint(S, t) {
+    motes(S, t);
+    binding(S, this.cfg.out, this.turns, this.n, t);
   }
 
   paintUI(u) {
     text(u, `TURN ${Math.min(this.n, this.i + 1)} OF ${this.n}`, 24, 30, '#e8d0a0');
     if (this.i >= this.n) return;
-    // The arrows to come, the one to press now large.
     const [, glyph] = this.seq[this.i];
     panel(u, 226, 40, 160, 54);
-    const pulse = Math.floor(this.t * 6) % 2;
-    text(u, glyph, 256, 52, pulse ? '#ffffff' : '#ffe070', { scale: 5, align: 'center' });
+    text(u, glyph, 256, 52, Math.floor(this.t * 6) % 2 ? '#ffffff' : '#ffe070', { scale: 5, align: 'center' });
     this.seq.slice(this.i + 1, this.i + 5).forEach(([, gl], k) => text(u, gl, 302 + k * 18, 62, '#a89878', { scale: 2 }));
     meter(u, 226, 100, 60, 6, 1 - this.pt / this.limitEach, '#d8b070');
   }
 }
 
-// The tillering: the stave bent on the board, notch by notch; let go in
-// the green, not past it (past it and it cracks).
+// The tillering: the stave bent on the post, notch by notch; let go at the
+// notch, not past it (past it and it cracks).
 class Bend extends Stage {
   constructor(win) {
     super(win);
@@ -830,6 +571,7 @@ class Bend extends Stage {
       return;
     }
     const tgt = this.targets[this.i];
+    const [gx, gy] = sp(BOWYER.cam, ...BOWYER.grip);
     if (w.holding()) {
       if (!this.drawing) w.sfx('draw');
       this.drawing = true;
@@ -837,17 +579,17 @@ class Bend extends Stage {
       this.bend += this.v * dt;
       if (this.bend > tgt + 0.15) {
         this.pulls.push(0.05);
-        this.cracks.push(this.r.int(0, 1) ? -1 : 1);
+        const side = this.r.int(0, 1) ? -1 : 1;
+        this.cracks.push(side);
         w.sfx('crumble');
-        w.sparks.burst(BOWYER.tiller.x + 40 * this.cracks[this.cracks.length - 1], 40, 10, ['#c89a60', '#8a5a30'], 40, 0.7, 120);
-        w.pops.add('CRACKED!', BOWYER.tiller.x, 20, '#f09070');
+        w.sparks.burst(gx + side * 30, gy + 8, 12, ['#c89a60', '#8a5a30'], 40, 0.7, 120);
+        w.pops.add('CRACKED!', gx, gy - 14, '#f09070');
         this.release();
       }
     } else if (this.drawing) {
-      const e = Math.abs(this.bend - tgt);
-      const q = clamp(1 - Math.max(0, e - this.tol) / 0.16);
+      const q = clamp(1 - Math.max(0, Math.abs(this.bend - tgt) - this.tol) / 0.16);
       this.pulls.push(q);
-      w.pops.add(grade(q)[0], BOWYER.tiller.x, 20, grade(q)[1]);
+      w.pops.add(grade(q)[0], gx, gy - 14, grade(q)[1]);
       w.sfx(q >= 0.56 ? 'bow' : 'error');
       this.release();
     }
@@ -865,33 +607,18 @@ class Bend extends Stage {
     return this.pulls.reduce((a, b) => a + b, 0) / this.targets.length;
   }
 
-  paint(g, t) {
-    lamp(g, BOWYER.lamp.x, BOWYER.lamp.y, t, true);
-    const T = BOWYER.tiller;
-    const gy = 30;
+  paint(S, t) {
+    lamp(S, t);
     const tgt = this.targets[Math.min(this.i, this.targets.length - 1)];
-    // The notch it's to come down to, lit.
-    const ny = gy + 10 + Math.round(tgt * 70);
-    if (this.i < this.targets.length) for (let x = T.x - 6; x < T.x - 1; x++) dot(g, x, ny, Math.floor(t * 4) % 2 ? '#a8f0a0' : '#5a9a50');
-    const b = this.bend + Math.sin(t * 22) * 0.012 * this.wob;
-    paintBow(g, T.x, gy, b, this.cracks, false, 0, t);
-    // The cord from the stave's middle to the notch, when it's drawn.
-    if (b > 0.02) {
-      const tipY = gy + Math.round(4 + b * 34);
-      const py = gy + 10 + Math.round(b * 70);
-      line(g, T.x - 62, tipY, T.x, py, '#e8e0c8');
-      line(g, T.x + 62, tipY, T.x, py, '#e8e0c8');
-      rect(g, T.x - 2, py - 1, 4, 3, '#8a5a30');
-    }
+    bowOnPost(S, this.bend + Math.sin(t * 22) * 0.012 * this.wob, this.cracks, false, 0, t, this.i < this.targets.length ? tgt : -1);
   }
 
   paintUI(u) {
     text(u, `PULL ${Math.min(this.targets.length, this.i + 1)} OF ${this.targets.length}`, 24, 30, '#e8d0a0');
-    // How far it's bent, the notch, and the breaking point.
     const x = 470;
     const y0 = 40;
     const h = 180;
-    rect(u, x - 3, y0 - 3, 20, h + 6, '#000000');
+    gauge(u, x, y0, h);
     rect(u, x, y0, 14, h, '#2a2430');
     const tgt = this.targets[Math.min(this.i, this.targets.length - 1)];
     const ty0 = y0 + Math.round((tgt - this.tol) * h);
@@ -901,40 +628,9 @@ class Bend extends Stage {
     if (cy < y0 + h) rect(u, x, cy, 14, y0 + h - cy, '#7a2a20');
     const by = y0 + Math.round(clamp(this.bend) * h);
     rect(u, x, y0, 14, by - y0, 'rgba(232,208,160,0.5)');
-    for (let i = 0; i < 5; i++) rect(u, x - 12 + i, by - 4 + i, 1, 9 - i * 2, '#ffffff');
+    pointer(u, x - 12, by);
     text(u, 'BEND', x + 7, y0 - 14, '#e8d0a0', { align: 'center' });
   }
-}
-// A bow (or its stave) on the tillering board: its grip at (x, y), bent
-// `b` (0 to 1), its cracks; strung (`string`), the string trembling `vib`.
-function paintBow(g, x, y, b, cracks = [], strung = false, vib = 0, t = 0) {
-  const half = 62;
-  const tipDy = 4 + b * 34;
-  for (let dx = -half; dx <= half; dx++) {
-    const k = Math.abs(dx) / half;
-    const yy = y + Math.round(tipDy * k * k);
-    const th = k < 0.15 ? 4 : k < 0.6 ? 3 : k < 0.9 ? 2 : 1;
-    for (let j = 0; j < th; j++) dot(g, x + dx, yy + j, j === 0 ? '#d8a868' : j === th - 1 ? '#6a4428' : '#a87440');
-  }
-  // The grip, bound.
-  rect(g, x - 4, y - 1, 9, 6, '#5a3a20');
-  for (let i = 0; i < 9; i += 2) dot(g, x - 4 + i, y, '#8a5a30');
-  for (const side of cracks) {
-    const cx = x + side * 34;
-    const cy = y + Math.round(tipDy * 0.3);
-    line(g, cx - 3, cy - 1, cx + 3, cy + 2, '#2a1a10');
-    dot(g, cx, cy - 1, '#f0d098');
-  }
-  if (strung) {
-    const ty = y + Math.round(tipDy);
-    for (let dx = -half + 1; dx < half; dx++) {
-      const k = 1 - Math.abs(dx) / half;
-      const off = Math.round(Math.sin(dx * 0.3 + t * 60) * vib * 3 * k);
-      dot(g, x + dx, ty + off, '#f0e8d0');
-    }
-  }
-  dot(g, x - half, y + Math.round(tipDy), '#2a1a10');
-  dot(g, x + half, y + Math.round(tipDy), '#2a1a10');
 }
 
 // The stringing: the bow strung, and its string tuned, a pluck at a time,
@@ -972,7 +668,8 @@ class StringIt extends Stage {
       this.vib = 1;
       w.sfx('bow');
       w.pluck(q);
-      w.pops.add(q >= 1 ? 'TRUE!' : q >= 0.7 ? 'NEAR' : q >= 0.4 ? 'SHARP' : 'SOUR', BOWYER.tiller.x, 20, grade(q)[1]);
+      const [gx, gy] = sp(BOWYER.cam, ...BOWYER.grip);
+      w.pops.add(q >= 1 ? 'TRUE!' : q >= 0.7 ? 'NEAR' : q >= 0.4 ? 'SHARP' : 'SOUR', gx, gy - 14, grade(q)[1]);
       this.i++;
     }
   }
@@ -981,17 +678,22 @@ class StringIt extends Stage {
     return this.plucks.reduce((a, b) => a + b, 0) / this.n;
   }
 
-  paint(g, t) {
-    lamp(g, BOWYER.lamp.x, BOWYER.lamp.y, t, true);
-    paintBow(g, BOWYER.tiller.x, 30, 0.35, [], true, this.vib, t);
+  paint(S, t) {
+    lamp(S, t);
+    bowOnPost(S, 0.35, [], true, this.vib, t);
   }
 
   paintUI(u) {
     text(u, `PLUCK ${Math.min(this.n, this.i + 1)} OF ${this.n}`, 24, 30, '#e8d0a0');
-    // The dial: an arc, its true point in the middle, the needle.
+    // The dial: a brass arc, its true point in the middle, the needle.
     const cx = 256;
-    const cy = 250;
+    const cy = 258;
     const R = 60;
+    disc(u, cx, cy, R + 8, 'rgba(12,10,18,0.85)');
+    for (let a = -64; a <= 64; a++) {
+      const an = ((a - 90) * Math.PI) / 180;
+      rect(u, cx + Math.cos(an) * (R + 4), cy + Math.sin(an) * (R + 4), 2, 2, '#8a6a30');
+    }
     for (let a = -60; a <= 60; a++) {
       const an = ((a - 90) * Math.PI) / 180;
       const good = Math.abs(a) <= 6 * this.win.ease;
@@ -1003,46 +705,54 @@ class StringIt extends Stage {
   }
 }
 
-// The cutting: the hide drawn under the knife; keep the knife on the
-// chalk.
+// The cutting: the hide drawn along under the knife; keep the knife on the
+// chalk. (The knife's depth on the table, in room units.)
 class Cut extends Stage {
   constructor(win) {
     super(win);
-    this.rules = ['THE HIDE IS DRAWN UNDER YOUR KNIFE', 'KEEP THE KNIFE ON THE CHALK LINE:', 'THE POINTER, OR UP AND DOWN (W AND S)'];
+    this.rules = ['THE HIDE IS DRAWN ALONG UNDER YOUR KNIFE', 'KEEP THE KNIFE ON THE CHALK LINE:', 'THE POINTER, OR UP AND DOWN (W AND S)'];
     this.hint = 'STEER: POINTER OR UP/DOWN  ·  ESC: LEAVE';
-    this.kx = 96;
-    this.ky = this.lineY(this.kx);
+    this.kx = -24;
+    this.seed = this.r.float(0, 50);
     this.scroll = 0;
+    this.kd = this.chalk(this.kx);
     this.dur = 7;
     this.sum = 0;
     this.tot = 0;
     this.slit = [];
-    this.seed = this.r.float(0, 50);
   }
 
-  lineY(xw) {
+  // The chalk line's depth on the table at `w` along the hide.
+  chalk(w) {
     const s = this.seed || 0;
-    return 108 + Math.sin(xw * 0.045 + s) * 11 + Math.sin(xw * 0.12 + s * 2) * 4;
+    return 72 + Math.sin(w * 0.06 + s) * 10 + Math.sin(w * 0.15 + s * 2) * 3;
   }
 
   update(dt) {
     const w = this.win;
     this.t += dt;
-    this.scroll += dt * 24;
+    this.scroll += dt * 16;
     const m = w.mouse();
-    if (w.held('ArrowUp', 'KeyW')) this.ky -= dt * 42;
-    if (w.held('ArrowDown', 'KeyS')) this.ky += dt * 42;
-    if (this.lastM && Math.abs(m.sy - this.lastM) > 0.2) this.ky = m.sy;
+    if (w.held('ArrowUp', 'KeyW')) this.kd += dt * 26;
+    if (w.held('ArrowDown', 'KeyS')) this.kd -= dt * 26;
+    // (The pointer: where on the table it's over.)
+    if (this.lastM !== undefined && Math.abs(m.sy - this.lastM) > 0.2) {
+      const c = TABLE.cam;
+      const ay = (m.sy + 0.5 - c.vy) / c.D;
+      if (ay > 0) this.kd = (TABLE.top.y - 0.3) / ay;
+    }
     this.lastM = m.sy;
-    this.ky = clamp(this.ky, 84, 136);
-    const want = this.lineY(this.kx + this.scroll);
-    const e = Math.abs(this.ky - want);
-    const q = clamp(1 - Math.max(0, e - 1.2 * w.ease) / (6 * w.ease));
+    this.kd = clamp(this.kd, 50, 96);
+    const e = Math.abs(this.kd - this.chalk(this.kx + this.scroll));
+    const q = clamp(1 - Math.max(0, e - 2 * w.ease) / (9 * w.ease));
     this.sum += q * dt;
     this.tot += dt;
-    this.slit.push([this.kx + this.scroll, this.ky, q]);
-    if (this.slit.length > 400) this.slit.shift();
-    if (q < 0.3 && Math.random() < dt * 4) w.pops.add('OFF THE LINE', this.kx, this.ky - 12, '#f09070', 1, 0.6);
+    this.slit.push([this.kx + this.scroll, this.kd, q]);
+    if (this.slit.length > 500) this.slit.shift();
+    if (q < 0.3 && Math.random() < dt * 4) {
+      const [px, py] = sp(TABLE.cam, this.kx, TABLE.top.y, this.kd);
+      w.pops.add('OFF THE LINE', px, py - 12, '#f09070', 1, 0.6);
+    }
     if (this.t >= this.dur) this.finish(this.sum / Math.max(0.01, this.tot));
   }
 
@@ -1050,35 +760,9 @@ class Cut extends Stage {
     return this.tot ? (this.sum / this.tot) * (this.t / this.dur) : 0;
   }
 
-  paint(g, t) {
-    lamp(g, TABLE.lantern.x, TABLE.lantern.y, t, false);
-    // The hide, its edge ragged, mottled.
-    for (let x = 0; x < FW; x++) {
-      const xw = x + this.scroll;
-      const top = 84 + Math.round(Math.sin(xw * 0.07) * 2 + hash2(Math.floor(xw / 3), 1, 3) * 2);
-      for (let y = top; y < 140; y++) {
-        const n = hash2(Math.floor(xw / 2), y >> 1, 5);
-        dot(g, x, y, y === top ? '#d8a870' : n < 0.12 ? '#8a5a30' : n < 0.5 ? '#a87444' : '#b88250');
-      }
-      // The chalk, dashed.
-      if (Math.floor(xw / 3) % 2 === 0 && x > this.kx) dot(g, x, Math.round(this.lineY(xw)), '#f4f0e8');
-    }
-    // What's been cut.
-    for (const [xw, y, q] of this.slit) {
-      const x = Math.round(xw - this.scroll);
-      if (x < 0 || x > this.kx) continue;
-      dot(g, x, Math.round(y), q > 0.5 ? '#2a1408' : '#5a1a10');
-      dot(g, x, Math.round(y) + 1, '#6a4020');
-    }
-    // The knife: its blade down in the hide, its haft up to the right.
-    const kx = this.kx;
-    const ky = Math.round(this.ky);
-    for (let i = 0; i < 9; i++) {
-      dot(g, kx + i, ky - i, '#d8d8e0');
-      dot(g, kx + i + 1, ky - i, '#8a8a98');
-    }
-    thick(g, kx + 9, ky - 9, kx + 20, ky - 20, 3, '#5a3a20');
-    line(g, kx + 9, ky - 10, kx + 20, ky - 21, '#8a5a30');
+  paint(S, t) {
+    lantern(S, t);
+    hide(S, this.scroll, (w) => this.chalk(w), this.slit, this.kx, this.kd);
   }
 
   paintUI(u) {
@@ -1126,8 +810,7 @@ class Stitch extends Stage {
     if (got) {
       if (off < -this.beat * 0.5) return;
       const e = Math.abs(off);
-      const q = got !== want ? 0.25 : e <= this.win2 ? 1 : e <= this.win2 * 2.2 ? 0.72 : 0.38;
-      this.sew(q);
+      this.sew(got !== want ? 0.25 : e <= this.win2 ? 1 : e <= this.win2 * 2.2 ? 0.72 : 0.38);
     } else if (off > this.beat * 0.45) this.sew(0);
   }
 
@@ -1135,8 +818,8 @@ class Stitch extends Stage {
     const w = this.win;
     this.st.push(q);
     w.sfx(q >= 0.7 ? 'select' : 'error');
-    const hx0 = 40 + this.i * 18;
-    w.pops.add(q >= 1 ? 'TRUE' : q >= 0.7 ? 'GOOD' : q > 0 ? 'WONKY' : 'MISSED', hx0, 86, grade(q)[1], 1, 0.7);
+    const [px, py] = sp(TABLE.cam, -60 + this.i * 12, TABLE.top.y, 62);
+    w.pops.add(q >= 1 ? 'TRUE' : q >= 0.7 ? 'GOOD' : q > 0 ? 'WONKY' : 'MISSED', px, py - 16, grade(q)[1], 1, 0.7);
     this.i++;
   }
 
@@ -1144,59 +827,29 @@ class Stitch extends Stage {
     return this.st.reduce((a, b) => a + b, 0) / this.n;
   }
 
-  paint(g, t) {
-    lamp(g, TABLE.lantern.x, TABLE.lantern.y, t, false);
-    // Two pieces laid over each other, the seam's holes along them.
-    for (let x = 20; x < 236; x++) {
-      for (let y = 90; y < 106; y++) dot(g, x, y, y === 90 ? '#d8a870' : hash2(x >> 1, y >> 1, 2) < 0.15 ? '#8a5a30' : '#a87444');
-      for (let y = 100; y < 118; y++) dot(g, x, y, y === 100 ? '#e0b880' : y === 117 ? '#5a3a1e' : hash2(x >> 1, y >> 1, 4) < 0.15 ? '#7a4a28' : '#946234');
-    }
-    for (let k = 0; k <= this.n; k++) {
-      const x = 40 + k * 18;
-      dot(g, x, 98, '#2a1408');
-      dot(g, x, 106, '#2a1408');
-    }
-    // The stitches made.
-    this.st.forEach((q, k) => {
-      const x0 = 40 + k * 18;
-      const up = k % 2 === 0;
-      const col = q >= 0.7 ? '#f0e8c8' : q > 0 ? '#c8a878' : null;
-      if (!col) return;
-      const wob = q >= 0.7 ? 0 : 2;
-      line(g, x0, up ? 98 : 106, x0 + 18, (up ? 106 : 98) + wob, col);
-    });
-    // The needle at the hole it's to go through, bobbing to the beat.
-    if (this.i < this.n) {
-      const x = 40 + this.i * 18;
-      const ph = ((this.t - this.lead) / this.beat) % 1;
-      const bob = Math.round(Math.abs(Math.sin(ph * Math.PI)) * 6);
-      line(g, x, 96 - bob, x + 4, 84 - bob, '#d8d8e0');
-      dot(g, x + 4, 84 - bob, '#8a8a98');
-      line(g, x + 4, 84 - bob, x + 18, 70, '#f0e8c8');
-    }
+  paint(S, t) {
+    lantern(S, t);
+    const ph = ((this.t - this.lead) / this.beat) % 1;
+    seam(S, this.n, this.st, this.i, Math.abs(Math.sin(Math.max(0, ph) * Math.PI)));
   }
 
   paintUI(u) {
     text(u, `STITCH ${Math.min(this.n, this.i + 1)} OF ${this.n}`, 24, 30, '#e8d0a0');
     if (this.i >= this.n) return;
-    // The beats to come along a rail, sliding toward the line.
     const ly = 40;
     const lx = 120;
     panel(u, 100, ly - 8, 320, 34);
     rect(u, 110, ly + 8, 300, 2, '#5a4a30');
     rect(u, lx, ly - 2, 2, 22, '#a8f0a0');
     for (let k = this.i; k < Math.min(this.n, this.i + 6); k++) {
-      const dtk = this.due(k) - this.t;
-      const x = lx + dtk * 90;
+      const x = lx + (this.due(k) - this.t) * 90;
       if (x > 410) continue;
-      const glyph = k % 2 ? '→' : '←';
-      text(u, glyph, x - 6, ly + 2, k === this.i ? '#ffe070' : '#c8b890', { scale: 2 });
+      text(u, k % 2 ? '→' : '←', x - 6, ly + 2, k === this.i ? '#ffe070' : '#c8b890', { scale: 2 });
     }
   }
 }
 
-// The pour: the crucible tipped over the cast's mould; fill it to the
-// line.
+// The pour: the crucible tipped over the cast's mould; fill it to the line.
 class Pour extends Stage {
   constructor(win) {
     super(win);
@@ -1214,7 +867,8 @@ class Pour extends Stage {
     this.tilt = clamp(this.tilt + (hold ? dt * 1.4 : -dt * 2.5));
     const rate = Math.max(0, this.tilt - 0.35) * 0.55;
     this.fill += rate * dt;
-    if (rate > 0 && Math.random() < dt * 20) w.sparks.burst(SMITHY.anvil.x + 2, SMITHY.anvil.y - 8, 1, ['#fff0a0', '#ffa030'], 25, 0.5, 120);
+    const [ax, ay] = sp(SMITHY.cam, 9, SMITHY.anvil.face - 5, 72);
+    if (rate > 0 && Math.random() < dt * 20) w.sparks.burst(ax, ay, 1, ['#fff0a0', '#ffa030'], 25, 0.5, 120);
     if (rate > 0 && !this.pouring) {
       this.pouring = true;
       w.sfx('pour');
@@ -1232,43 +886,12 @@ class Pour extends Stage {
     return 0.5;
   }
 
-  paint(g, t) {
-    drawFire(g, t, 0.4);
-    fireLight(g, t, 0.4);
-    drawBellows(g, 0);
-    const A = SMITHY.anvil;
-    // The mould on the anvil: clay, its gate, the metal in it.
-    const mx = A.x - 14;
-    const my = A.y - 14;
-    rect(g, mx, my, 28, 14, '#8a5a3a');
-    rect(g, mx, my, 28, 1, '#b8845a');
-    rect(g, mx + 2, my + 2, 24, 10, '#3a2418');
-    const fh = Math.round(clamp(this.fill, 0, 1.2) * 10);
-    for (let y = 0; y < Math.min(10, fh); y++) rect(g, mx + 2, my + 11 - y, 24, 1, hx(heatColour(0.75 + (y === fh - 1 ? 0.15 : 0))));
-    rect(g, mx + 1, my + 2, 1, 1, '#a8f0a0');
-    rect(g, mx + 26, my + 2, 1, 1, '#a8f0a0');
-    if (this.fill > 1.02) for (let i = 0; i < 4; i++) dot(g, mx - 1 - i, my + 3 + i * 3, hx(heatColour(0.7)));
-    if (fh > 0) glow(g, A.x, my + 6, 16, '#ff9030', 0.05);
-    // The crucible, held over it in tongs, tipping.
-    const cx = A.x + 18;
-    const cy = A.y - 34;
-    const a = -this.tilt * 1.4;
-    for (let i = -6; i <= 6; i++) for (let j = -7; j <= 7; j++) {
-      const rx = cx + Math.cos(a) * i - Math.sin(a) * j;
-      const ry = cy + Math.sin(a) * i + Math.cos(a) * j;
-      const edge = Math.abs(i) === 6 || j === 7;
-      dot(g, rx, ry, edge ? '#5a4a40' : j < -4 ? hx(heatColour(0.85)) : '#7a6a5a');
-    }
-    thick(g, cx + 6, cy, cx + 40, cy - 16, 2, '#3a3a44');
-    if (this.tilt > 0.35 && !(this.poured && this.tilt < 0.4)) {
-      const lipX = cx + Math.cos(a) * -6 - Math.sin(a) * -7;
-      const lipY = cy + Math.sin(a) * -6 + Math.cos(a) * -7;
-      for (let y = Math.round(lipY); y < my + 12 - fh; y++) {
-        const wob = Math.round(Math.sin(y * 0.6 + t * 20) * 0.6);
-        dot(g, lipX + wob, y, hx(heatColour(0.9)));
-        dot(g, lipX + wob + 1, y, hx(heatColour(0.75)));
-      }
-    }
+  paint(S, t, st) {
+    fire(S, t, 0.4);
+    bellows(S, 0);
+    water(S, t);
+    st.fire = 0.4;
+    st.iron = crucible(S, this.tilt, this.fill, t);
   }
 
   paintUI(u) {
@@ -1296,7 +919,7 @@ export class ForgeWindow extends Window {
     this.sparks = new Sparks();
     this.pops = new Pops();
     this.puffs = new Puffs();
-    this.shop = SHOP[cfg.kind] || 'forge';
+    this.shop = shopOf(cfg.kind);
     this.ease = 1 + (cfg.rank || 0) * 0.06;
     this.adds = [];
     this.pattern = null;
@@ -1495,7 +1118,7 @@ export class ForgeWindow extends Window {
         this.pops.add('★', 128 - (n - 1) * 9 + (due - 1) * 18, 70, '#ffe070', 2, 0.6);
       }
     } else if (this.phase === 'intro' && this.shop === 'forge') {
-      if (Math.random() < dt * 3) this.sparks.burst(SMITHY.mouth.x + (Math.random() - 0.5) * 20, SMITHY.mouth.y - 4, 1, ['#ffb040', '#ff6020'], 18, 1.6, -22);
+      if (Math.random() < dt * 3) this.sparks.burst(FIRE_AT[0] + (Math.random() - 0.5) * 20, FIRE_AT[1] + 2, 1, ['#ffb040', '#ff6020'], 18, 1.6, -22);
     }
     this.prevTap = tapNow;
     for (const c of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS']) this.prevKeys[c] = this.held(c);
@@ -1617,26 +1240,30 @@ export class ForgeWindow extends Window {
     this.scene ||= makeBuf(FW, FH);
     this.over ||= makeBuf(UW, UH);
     if (!this.scene || !this.over) return;
-    if (!this.back) {
-      try {
-        this.back = paintWork(this.shop, (this.forge.token || 1) % 7).canvas();
-      } catch {
-        this.back = null;
-      }
-    }
     const g = this.scene.getContext('2d');
     const u = this.over.getContext('2d');
     g.imageSmoothingEnabled = false;
     u.imageSmoothingEnabled = false;
-    g.fillStyle = '#100c08';
-    g.fillRect(0, 0, FW, FH);
-    if (this.back) g.drawImage(this.back, 0, 0);
     u.clearRect(0, 0, UW, UH);
     try {
-      if (this.play && (this.phase === 'play' || this.phase === 'between' || this.phase === 'intro')) this.play.paint(g, this.t);
-      else this.paintIdle(g, this.t);
+      // The shop built once (its shadows cast), then each moment the moving
+      // things laid into it and the whole lit.
+      this.shopArt ||= new Shop(this.shop, (this.forge.token || 1) % 7);
+      const S = this.shopArt;
+      S.begin();
+      const st = { fire: 0.4 };
+      const working = this.play && (this.phase === 'play' || this.phase === 'between' || this.phase === 'intro');
+      if (working) this.play.paint(S, this.t, st);
+      else this.paintIdle(S, this.t, st);
+      S.render(g, this.t, st);
+      if (working && this.play.over) this.play.over(g, this.t);
       this.puffs.draw(g);
       this.sparks.draw(g);
+      // (The boards over it read better on a darkened scene.)
+      if (!working) {
+        g.fillStyle = 'rgba(8,6,10,0.42)';
+        g.fillRect(0, 0, FW, FH);
+      }
       if (this.phase === 'play' && this.play && this.play.paintUI) this.play.paintUI(u, this.t);
     } catch (e) {
       void e;
@@ -1659,20 +1286,17 @@ export class ForgeWindow extends Window {
   }
 
   // The shop at rest (behind the boards before and after the work).
-  paintIdle(g, t) {
+  paintIdle(S, t, st) {
     if (this.shop === 'forge') {
-      drawFire(g, t, 0.4);
-      fireLight(g, t, 0.4);
-      drawBellows(g, 0);
-      if (this.phase === 'reveal' && this.forge.reply && this.forge.reply.key) drawWater(g, t, 0);
-    } else if (this.shop === 'carve') benchLight(g, t);
+      fire(S, t, 0.4);
+      bellows(S, 0);
+      water(S, t);
+      st.fire = 0.4;
+    } else if (this.shop === 'carve') motes(S, t);
     else if (this.shop === 'bow') {
-      lamp(g, BOWYER.lamp.x, BOWYER.lamp.y, t, true);
-      paintBow(g, BOWYER.tiller.x, 30, 0, [], false);
-    } else lamp(g, TABLE.lantern.x, TABLE.lantern.y, t, false);
-    // (The boards over it read better on a darkened scene.)
-    g.fillStyle = 'rgba(8,6,10,0.45)';
-    g.fillRect(0, 0, FW, FH);
+      lamp(S, t);
+      bowOnPost(S, 0, [], false, 0, t);
+    } else lantern(S, t);
   }
 
   // The work's name and its stages along the top, done and to do.

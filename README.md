@@ -10544,6 +10544,49 @@ A smith's work never comes out of the shop with a flaw.
 
 Your gear keeps its stars. Nothing in an older world needs changing.
 
+## Round 133: The forge's workshops, rebuilt and lit
+
+The forge games' four workshops (the smithy, the carpenter's bench, the
+bowyer's and the cutting table) are rebuilt from scratch. They follow the
+practice of professional pixel art: perspective, a real light on
+everything, clustered texture and sparing dithering.
+
+- **True perspective.** Each workshop is a room seen in one-point
+  perspective. Its floor, walls and ceiling meet at a vanishing point at
+  eye height, and flagstones, floorboards and stone courses all run toward
+  it. The furniture stands solid in the room and is seen from just above:
+  - the hearth and its coal bed;
+  - the anvil, drawn out from its true profile;
+  - the stump, the tub and the bench;
+  - the tillering post and the long table.
+- **Real lighting.** Every pixel knows what it's made of, which way it
+  faces and where it stands, and the room's lights light it afresh every
+  moment:
+  - the forge fire, with what it throws back off the floor;
+  - the moon or the sun through a window;
+  - a hanging lamp or a lantern;
+  - a bar of glowing iron, which lights the anvil and the tongs as it
+    cools.
+
+  Metal catches one hard highlight where it faces between the light and
+  your eye. Edges of stones and boards are rounded, so they catch the
+  light or turn from it.
+- **Cast shadows.** Each solid thing casts its shadow from each light,
+  softened at the edge. The anvil, tub and tools throw firelight shadows
+  across the flags. The window's bars streak the sunlight on the bench.
+- **Light in the air.** Sunlight and moonlight through a window hang in
+  visible shafts.
+- **Palette and texture.** Every tone comes from a hue-shifted ramp: cool
+  and violet in the shadows, warm in the lights. Surfaces stay in flat
+  clusters of a few tones, and dithering appears only on the narrow seam
+  between two tones. Coloured light warms or cools what it falls on, in a
+  few steps.
+- **The work is lit by the room's own light.** The bellows' leather folds
+  as you pump, the billet becomes the piece on the anvil's face, the hammer
+  swings in from the right, and the piece is plunged into the tub's water.
+  The chisel, mallet and binding at the bench, the yew stave on the post,
+  and the hide under the knife are all lit by the same light.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -1037,6 +1037,12 @@ export const STEPS = [
       log.push('Arms, armour and tools are worked by hand now, at the forge, the bench, the bowyer\'s and the cutting table: their stars come of how well it\'s done, and of your Smithing. Additives and the old places\' materials lean what a piece comes out with; casts make copies. Dungeon loot is rarer and humbler, and reforging keeps a piece\'s stars as they are.');
     },
   },
+  {
+    to: '1.33.0',
+    game(game, log) {
+      log.push('The forge\'s workshops are rebuilt: rooms in true perspective, lit by the fire, the lamp and the window, every solid thing casting its shadow.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
