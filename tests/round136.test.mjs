@@ -353,7 +353,7 @@ test('every line of the new talk can be filled and read', () => {
   const rules = allRules();
   assert.ok(rules.length >= 500);
   const topics = new Set(rules.map((r) => r.topic));
-  for (const t of ['seek', 'seek_open', 'sulk', 'word', 'told', 'rumour', 'think', 'me', 'dream', 'secret', 'intro', 'mediate', 'drink', 'spar', 'teach', 'court', 'sorry', 'threat', 'group', 'rally', 'confront', 'thanks', 'advice', 'warn']) assert.ok(topics.has(t), t);
+  for (const t of ['seek', 'seek_open', 'sulk', 'word', 'told', 'rumour', 'think', 'me', 'dream', 'secret', 'intro', 'mediate', 'drink', 'spar', 'teach', 'sorry', 'threat', 'group', 'rally', 'confront', 'thanks', 'advice', 'warn']) assert.ok(topics.has(t), t);
   for (const r of rules) for (const l of r.lines) {
     for (const m of l.matchAll(/\{([A-Za-z]+)\}/g)) assert.ok(known.has(m[1][0].toLowerCase() + m[1].slice(1)), `${r.id}: {${m[1]}}`);
     assert.ok(!/[{}]/.test(parseFx(l.replace(/\{([A-Za-z]+)\}/g, 'X')).text), `${r.id}: ${l}`);
@@ -376,4 +376,38 @@ test('version 1.36.0', () => {
   assert.ok(compareVersions('1.36.0', GAME_VERSION) <= 0);
   const s = stepsFor('1.35.0').find((q) => q.to === '1.36.0');
   assert.ok(s && s.game);
+});
+
+test('a friendly bout with a guard: no "Halt!", no bell, not wanted; and no flirting with the townsfolk', () => {
+  const g = world();
+  const inp = stubInput();
+  const guard = g.npcs.find((n) => n.rec && n.rec.job === 'guard' && n.settlement && !n.dead);
+  const sid = guard.settlement.id;
+  let halted = 0;
+  const halt = g.sim.justice.halt.bind(g.sim.justice);
+  g.sim.justice.halt = (q) => {
+    halted++;
+    return halt(q);
+  };
+  g.player.x = guard.x + 1;
+  g.player.y = guard.y;
+  g.player.z = guard.z;
+  g.startDuel(guard, 0);
+  g.duelBegins();
+  // (Badly knocked about, right beside you: in a real fight, a guard calls
+  // "Halt!" here, or runs for the bell.)
+  guard.hp = Math.ceil(guard.maxHp * 0.3);
+  for (let i = 0; i < 30 && g.duel; i++) {
+    g.player.x = guard.x + 1;
+    g.player.z = guard.z;
+    g.update(0.2, inp);
+  }
+  g.sim.justice.halt = halt;
+  assert.equal(halted, 0);
+  assert.ok(!['alarm', 'retreat'].includes(guard.state), guard.state);
+  assert.equal(g.isWanted(sid), false);
+  if (g.duel) g.endDuel('fled');
+  assert.equal(guard.boutWith, null);
+  // (Courting is between the townsfolk themselves.)
+  for (const n of people(g)) assert.ok(!topicsFor(n, g).some((t) => t.id === 'so_court'));
 });

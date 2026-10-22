@@ -1667,6 +1667,9 @@ export class Game {
   startDuel(npc, wager, o = {}) {
     this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null, challenge: o.challenge ?? null };
     npc.duelReady = 3;
+    // (In a bout with you: a guard among them neither calls "Halt!" nor
+    // runs for the bell. See npc.fight.)
+    npc.boutWith = this.player;
     npc.face(this.player.x, this.player.z);
     npc.say(npc.rng.pick(o.fest ? ['Into the ring, then!', 'Nobody throws me.', 'Let\'s see you try!'] : ['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 1.4, '#ffe070');
     // (Round 129: the champion of the green, for the festival's wrestling.)
@@ -1693,6 +1696,7 @@ export class Game {
     if (d.challenge !== null && d.challenge !== undefined) this.sim.brethren?.challengeDone(d.challenge, sagaPid(this.player), result === 'won');
     const n = d.npc;
     const p = this.player;
+    n.boutWith = null;
     if (!n.dead) n.calmDown(true);
     // (Round 136) A friendly bout with one of the townsfolk (see social.js).
     sparDone(this, n, result);

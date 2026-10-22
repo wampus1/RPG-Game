@@ -248,7 +248,6 @@ R('me_helped', 'me', { meBand: ['like', 'adore'], meMem: 'helped' }, ['{g:You he
 R('me_comforted', 'me', { meBand: ['like', 'adore'], meMem: ['comforted', 'sat_with'] }, ['{@slow}{p:You were kind to me, when it counted.}']);
 R('me_drink', 'me', { meBand: ['like', 'adore'], meMem: 'drink' }, ['{w:Anyone who stands me a drink can\'t be all bad!}']);
 R('me_sparred', 'me', { meBand: ['like', 'adore', 'neutral'], meMem: 'sparred' }, ['{g:You fight well. I respect that.}']);
-R('me_sweet', 'me', { sweet: true }, ['{p:You know what I think of you.} {.}{w:Silly.}', '{p:You have to ask?}']);
 R('me_kid', 'me', { kid: true }, ['{w:You\'re funny!}', 'You\'re all right. For a grown-up.']);
 
 // ============================================================ dreams
@@ -341,10 +340,6 @@ R('te_craft', 'teach', { teachK: 'crafting' }, ['{g:Let the work tell you what i
 R('te_lore', 'teach', { teachK: 'lore' }, ['Read it once for the words, and again for what they mean.', '{w:Every book is an argument with another book.}']);
 R('te_combat', 'teach', { teachK: 'combat' }, ['{g:Keep your feet under you. Everything starts with the feet.}', 'Watch the shoulders, not the blade.']);
 R('sh_any', 'show', {}, ['{w:Oh! I never thought of doing it that way.}', '{g:Show me that again.}', 'Where did you learn that?']);
-R('co_ok', 'court', { courtOk: true }, ['{p:Oh, you!}', '{p:You\'re a charmer, {name}.}', '{p:Stop it.} {.}{w:No, don\'t stop.}', '{p:*goes pink*}']);
-R('co_now', 'court', { courtOk: true, courtNow: true }, ['{p:Are you asking what I think you\'re asking?} {.}{wp:Yes. Yes!}', '{p:I was hoping you\'d say that.}']);
-R('co_no', 'court', { courtOk: false }, ['{d:Oh! I... no. Thank you. No.}', '{d:That\'s sweet. But no.}', '{r:I don\'t think so.}']);
-R('co_sweet', 'court', { courtSweet: true }, ['{p:*squeezes your hand*}', '{p:There you are. I missed you.}', '{p:Walk with me a while?}']);
 
 // ============================================================ quarrels
 R('so_ok', 'sorry', { sorryOk: true }, ['{d:Well.} {.}Thank you for saying so.', '{@slow}I\'ll take that. {.}Don\'t do it again.', '{d:Apology accepted. Mostly.}']);
@@ -419,7 +414,6 @@ R('o_militia', 'open', { mem_militia: true, kid: false }, ['{g:I\'ve been drilli
 R('o_learned', 'open', { mem_learned: true, pride: { min: 0.1 } }, ['{g:I\'ve read every book in {town}, {name}.} {.}Some of them twice.']);
 R('o_stayed', 'open', { mem_stayed: true, kid: false }, ['I nearly left {town}, you know. {.}{w:Glad I didn\'t.}']);
 // ---- open: what's between them and you
-R('o_sweet', 'open', { sweet: true, kid: false }, ['{p:There you are!} {.}{w:I was hoping I\'d see you today.}', '{p:Hello, you.}', '{p:I was just thinking about you.} {.}{w:Honestly!}']);
 R('o_you_threatened', 'open', { memPk: 'threatened', fear: { min: 0.05 } }, ['{t:W-what do you want now?}', '{t:I don\'t want any trouble.}']);
 R('o_you_threatened_angry', 'open', { memPk: 'threatened', anger: some, brave: true }, ['{r:Back again? Going to threaten me some more?}']);
 R('o_you_liar', 'open', { memPk: 'liar', kid: false }, ['{d:Oh. You.} {.}Spreading tales again?', '{d:Heard any good lies lately, {name}?}']);
@@ -450,7 +444,6 @@ R('o_grp_shun', 'open', { grpOnYou: true }, ['{r:You\'re not welcome here, {name
 // ---- greet: in passing
 R('g_friend', 'greet', { mem_friend: true, joy: { min: 0.05 } }, ['{w:Off to see {friend}!}', 'Can\'t stop, {friend}\'s waiting!']);
 R('g_rival', 'greet', { mem_rival: true, anger: { min: 0.05 } }, ['{r:Seen {rival} about?}']);
-R('g_sweet', 'greet', { sweet: true }, ['{p:Hello, you.}', '{p:*waves shyly*}', '{p:See you tonight?}']);
 R('g_grp', 'greet', { grpSt: ['protest', 'strike'] }, ['{r:Hear us, {name}!}', '{r:Are you with us?}']);
 R('g_amb_wed', 'greet', { amb_wed: true, love: some }, ['{p:Have you seen {ambWho}?}']);
 R('g_shun', 'greet', { grpOnYou: true }, ['{r:Keep walking.}', '*looks away*']);
@@ -470,7 +463,6 @@ R('f_heartbreak', 'feel', { mem_heartbreak: true }, ['{@slow}{c:Heartsore.} {.}{
 R('f_rejected', 'feel', { mem_rejected: true }, ['{d:Foolish. I made a fool of myself.}']);
 R('f_dream_lost', 'feel', { mem_dream_lost: true }, ['{@slow}{d:Lost, a bit.} {.}What do you do when the thing you wanted is gone?']);
 R('f_dream_done', 'feel', { mem_dream_done: true }, ['{wg:Like I could fly!}', '{g:Proud. Properly proud, for once.}']);
-R('f_sweet', 'feel', { sweet: true }, ['{p:Better now you\'re here.}']);
 // ---- bark: said aloud
 R('b_amb_master', 'bark', { amb_master: true, feel: 'pride' }, ['{g:One more hour. Just one more.}', '{g:Getting there. Getting there.}']);
 R('b_amb_wed', 'bark', { amb_wed: true, feel: 'love' }, ['{p:*sighs dreamily*}', '{p:I wonder if {ambWho} is here tonight...}']);
@@ -497,6 +489,5 @@ R('p_grp_safety', 'pair', { grp_safety: true }, ['{t:Did you bar your door last 
 R('p_grp_strike', 'pair', { grpSt: 'strike' }, ['{r:Are you working today?} || {r:Not a stroke. Not till they listen.}']);
 R('p_bad_word', 'pair', { heard_bad_word: true }, ['{d:Did you know {badTeller} has it in for {badWho}?} || {t:Everyone knows. Stay out of it.}']);
 R('p_petition_won', 'pair', { mem_petition_won: true }, ['{g:We did it! They listened!} || {wg:Drinks tonight!}']);
-R('p_sweet', 'pair', { sweet: true }, ['{p:I\'m walking out with someone, you know.} || {w:Everyone knows. You never stop smiling.}']);
 
 export { RULES };

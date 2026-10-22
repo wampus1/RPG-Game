@@ -12,7 +12,6 @@
 //   Quarrels    Make peace between two at odds. Say sorry for what you did
 //               (not everything's forgiven). Threaten them: it works on the
 //               timid, and they remember.
-//   Hearts      Court someone single, and maybe walk out together.
 //   Dreams      What they want out of life (if they trust you): encourage
 //               it, help with it, or talk them out of it.
 //   Secrets     Something nobody knows, for a true friend.
@@ -124,7 +123,7 @@ export function grievanceOf(npc, game) {
   return recall(npc.rec, game.day, (m) => m.w === pk && !m.h && GRIEVANCES.has(m.k) && m.v <= -0.3, 0.15)[0] || null;
 }
 
-// What a single grown-up thinks of being courted by you.
+// A single grown-up, free to court (one of the town: see intro).
 const courtable = (r) => r.age === 'adult' && (r.partner === null || r.partner === undefined) && !r.courting && !r.visitor;
 
 // ------------------------------------------------------------ the topics
@@ -167,7 +166,6 @@ export function socialTopics(npc, game) {
     if (rec.age === 'adult' && op >= -10 && npc.hp >= npc.maxHp * 0.6 && (rec.job === 'guard' || skillOf(rec, 'combat') >= 0.3 || P(rec).bravery >= 0.6) && !game.duel) add('spar', 'Fancy a friendly bout?');
     if (e.taught !== day && teachable(npc)) add('teach', 'Could you teach me something?');
     if (e.showed !== day && showable(npc, game)) add('show', 'Let me show you a thing or two.');
-    if (courtable(rec) && op >= 20 && e.court !== day) add('court', rec.sweet === pkey(game) ? '(Take their hand)' : '(Flirt with them)');
   }
   if (grievanceOf(npc, game) && e.sorry !== day) add('sorry', 'I\'m sorry for what I did.');
   if (!kid && rec.job !== 'guard') add('threaten', '(Threaten them)');
@@ -548,40 +546,6 @@ const ANSWERS = {
     remember(rec, { k: 'shown', w: pkey(game), v: 0.5, s: 0.35, x: k }, game.day);
     game.sim.changeRep(npc, 2, 'kind');
     return { lines: [line(npc, game, 'show', { showK: k }, { what: CRAFTS[c]?.name.toLowerCase() || k }, 'Oh! I never thought of doing it that way.')] };
-  },
-
-  court(npc, game) {
-    const rec = npc.rec;
-    const e = entry(npc, game);
-    e.court = game.day;
-    const pk = pkey(game);
-    const now = game.sim.abs;
-    const op = game.sim.opinion(npc);
-    const romantic = has(rec, 'romantic') ? 0.15 : 0;
-    const ok = check(game, npc, 0.15 + romantic + feel(rec, 'love', now) * 0.3, has(rec, 'reserved') ? 0.1 : 0);
-    if (rec.sweet === pk) {
-      stir(rec, 'love', 0.15, now);
-      stir(rec, 'joy', 0.1, now);
-      warm(rec, pk, 0.04);
-      return { lines: [line(npc, game, 'court', { courtSweet: true }, {}, '*squeezes your hand*')] };
-    }
-    if (!ok) {
-      warm(rec, pk, -0.02);
-      stir(rec, 'shame', 0.05, now);
-      return { lines: [line(npc, game, 'court', { courtOk: false }, {}, 'Oh! I... no. Thank you. No.')] };
-    }
-    stir(rec, 'love', 0.18, now);
-    stir(rec, 'joy', 0.1, now);
-    warm(rec, pk, 0.07);
-    game.sim.changeRep(npc, 2, 'kind');
-    // (Walking out together, now.)
-    let now2 = false;
-    if (op >= 70 && feel(rec, 'love', now) >= 0.45 && !rec.sweet) {
-      rec.sweet = pk;
-      remember(rec, { k: 'sweetheart', w: pk, v: 0.9, s: 0.8 }, game.day);
-      now2 = true;
-    }
-    return { lines: [line(npc, game, 'court', { courtOk: true, courtNow: now2 }, {}, 'Oh, you!')] };
   },
 
   // ---- quarrels

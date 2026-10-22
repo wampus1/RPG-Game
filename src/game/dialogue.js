@@ -451,7 +451,7 @@ for (const [cat, ids] of Object.entries({
   town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   people: 'so_word so_share so_think so_me so_dream so_secret so_intro so_mediate so_spar so_teach so_show so_rumour',
-  manners: 'gift rude so_sorry so_threaten so_court so_drink',
+  manners: 'gift rude so_sorry so_threaten so_drink',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
 
 export function topicCat(o) {

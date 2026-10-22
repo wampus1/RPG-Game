@@ -171,7 +171,6 @@ export function factsFor(npc, game, leadOf = null) {
   F.grpOnYou = !!(grp && grp.k === 'player' && grp.x === pk);
   F.seekK = rec.seek && rec.seek.pk === pk ? rec.seek.k : null;
   F.friends = (rec.friends || []).length;
-  F.sweet = rec.sweet === pk;
   // ---- the words they can be filled with
   const name = game.playerName || 'friend';
   F.vars = {

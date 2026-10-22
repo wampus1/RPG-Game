@@ -10809,8 +10809,6 @@ each other, you can do with them.
   - **Friends:** introduce two people (sometimes a match), stand someone
     a drink at the tavern, have a friendly bout, or be taught their
     craft (or teach them yours).
-  - **Courting:** flirt with someone single, and maybe walk out
-    together.
   - **Quarrels:** make peace between two at odds, say sorry (not
     everything is forgiven; coin may help), or threaten them.
   - **Groups:** stand with a grievance, talk it down, give to the

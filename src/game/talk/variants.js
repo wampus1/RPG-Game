@@ -71,7 +71,6 @@ export const VARIANTS = {
   f_heartbreak: ['{@slow}{c:Like a door\'s shut that I wanted open.}'],
   f_rejected: ['{d:Embarrassed. Don\'t ask.}'],
   f_dream_lost: ['{@slow}{c:Empty.} {.}I don\'t know what to want now.'],
-  f_sweet: ['{p:Never better.} {.}{w:You know why.}'],
   // ---- skill
   s_hunting: ['Tracking and snaring. {g:I can find a hare in a hailstorm.}'],
   s_fishing: ['The water. {w:The fish just like me, I think.}'],
@@ -118,7 +117,6 @@ export const VARIANTS = {
   p_grp_strike: ['{r:How long can we hold out?} || {r:As long as it takes.}'],
   p_bad_word: ['{d:{badTeller} said the most awful things about {badWho}.} || {d:{badTeller} says awful things about everyone.}'],
   p_petition_won: ['{g:They listened!} || {g:Because we made them.}'],
-  p_sweet: ['{p:I\'ve someone special now.} || {w:About time!}'],
   // ---- coming to you
   so_confront_wronged: ['{r:You thought I\'d forget what you did?}'],
   so_thanks_fed: ['{p:My children ate because of you.} {.}Here. Please.'],

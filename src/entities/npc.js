@@ -3277,6 +3277,8 @@ export class NPC extends Entity {
     if (t && t.kind === 'player' && t.seat && game.seats && t.seat !== game.seat) return game.asPlayer(t, () => this.fight(dt));
     // Mid-swing: the blow comes (or doesn't) before anything else.
     if (this.windup && tickAttack(game, this, dt)) return;
+    // (That blow ended a bout: it's over, and no fight to carry on.)
+    if (t && this.threat !== t) return;
     if (this.hired && (this.distTo(game.player) > 14 || !t || t.kind === 'player')) {
       this.calmDown(true);
       return;
@@ -3285,7 +3287,10 @@ export class NPC extends Entity {
     const sid = this.settlement.id;
     const justice = game.sim.justice;
     const lawful = t && t.kind === 'player' && (game.isWanted(sid) || justice.exiled.has(sid));
-    const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !lawful && this.stateT > 25);
+    // (A bout agreed with you: no arrest, no alarm, and as long as the bout
+    // lasts; see Game.startDuel.)
+    const bout = !!(t && this.boutWith === t && game.duel && game.duel.npc === this);
+    const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !lawful && !bout && this.stateT > 25);
     // (One of a band: how long they've been at this fight, not how long
     // they've been out: a bandit an hour at their fire still fights. See
     // warrior.js / sagaman.js strike.)
@@ -3302,7 +3307,7 @@ export class NPC extends Entity {
     const d = this.distTo(t);
     // Badly hurt: run for the bell to raise help (if one's near), then fall
     // back to the other guards.
-    if (guard && this.hp < this.maxHp * 0.35 && !this.retreated) {
+    if (guard && !bout && this.hp < this.maxHp * 0.35 && !this.retreated) {
       if (game.alarmNeeded(this, t, 30)) return this.startAlarm(t, 'retreat');
       return this.startRetreat(t);
     }
@@ -3310,7 +3315,7 @@ export class NPC extends Entity {
     // from the herbalist or a trader: see econ.guardSupplies). Round 50.
     if (guard && this.retreated && this.patchUp(t, d)) return;
     if (this.retreated && this.hp >= this.maxHp * 0.6) this.retreated = false;
-    if (guard && t.kind === 'player' && !this.warband) {
+    if (guard && t.kind === 'player' && !this.warband && !bout) {
       // Waiting for an answer to "Halt!".
       if (this.haltT > 0) {
         this.haltT -= dt;
