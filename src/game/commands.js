@@ -12,6 +12,8 @@ import { makeCrew } from './shipcrew.js';
 import { feelings, dominant } from '../sim/mind/emotion.js';
 import { recall } from '../sim/mind/memory.js';
 import { SKILLS, talentsOf, talentHint, ensureSkills, skillWord } from '../sim/mind/talent.js';
+import { ambitionWords } from '../sim/mind/ambition.js';
+import { groupOf, CAUSES } from '../sim/mind/groups.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -40,7 +42,7 @@ export const COMMANDS = {
   ship: { args: '<sloop|brigantine|galleon|frigate> [aboard] | foe <type> | list', about: '(Round 68) Launch a ship of your own on the nearest open water (and put you aboard her, with "aboard"), with a crew and shot; "foe" sends a warship against you; "list" names the ships about.' },
   office: { args: '[town] | sit | crisis <raid|famine|fever|unrest|scandal> | leave', about: '(Round 121) Take office in a town at once (the one you\'re in, or named), as if elected; "sit" holds the council\'s morning sitting now; "crisis" brings one on; "leave" steps you down.' },
   crown: { args: '[realm] [monarchy|republic|elder|theocracy|league] | sit | crisis | leave', about: '(Round 122) Take the throne of a realm at once (the one you\'re in, or named), governed as you say; "sit" holds the crown\'s morning sitting now; "crisis" brings on a pretender; "leave" abdicates.' },
-  mind: { args: '[name]', about: '(Round 135) What\'s going on inside the nearest townsperson (or one named, in the town you\'re in): how they feel, what they\'re good at and have a gift for, what\'s on their mind, and who they think well or ill of.' },
+  mind: { args: '[name]', about: '(Round 135) What\'s going on inside the nearest townsperson (or one named, in the town you\'re in): how they feel, what they\'re good at and have a gift for, what they want out of life and who they stand with, what\'s on their mind, and who they think well or ill of.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -264,6 +266,12 @@ function mindCmd(game, words) {
     const hints = SKILLS.map((k, i) => [k, t[i]]).filter(([, v]) => talentHint(v)).map(([k, v]) => `${k}: ${talentHint(v)}`);
     out.push(`Talents: ${hints.length ? hints.join(', ') : 'nothing out of the ordinary'}`);
   }
+  // (Round 136) What they're after, and who they stand with.
+  if (rec.amb) out.push(`Wants: ${ambitionWords(rec)} (${Math.round((rec.amb.p || 0) * 100)}% along, since day ${rec.amb.d}${rec.amb.th !== undefined ? `, story #${rec.amb.th}` : ''})`);
+  const g = L ? groupOf(L, rec) : null;
+  if (g) out.push(`With: ${g.ln.split(' ')[0]} and ${g.mem.length - 1} others, over ${CAUSES[g.k].what} (${g.st}, heat ${Math.round(g.heat * 100)})${g.lead === rec.idx ? ': leading it' : ''}`);
+  if (rec.seek) out.push(`Looking for: ${rec.seek.pk} (${rec.seek.k})`);
+  if ((rec.friends || []).length && L) out.push(`Friends: ${rec.friends.map((i) => (L.npcs[i] ? L.npcs[i].name.first : '?')).join(', ')}`);
   const ms = recall(rec, day);
   if (ms.length) {
     out.push('On their mind:');

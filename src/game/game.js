@@ -83,6 +83,7 @@ import { stormFx, stormTick } from './storms.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
+import { sparDone } from './social.js';
 import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
@@ -1693,6 +1694,8 @@ export class Game {
     const n = d.npc;
     const p = this.player;
     if (!n.dead) n.calmDown(true);
+    // (Round 136) A friendly bout with one of the townsfolk (see social.js).
+    sparDone(this, n, result);
     const adv = n.adventurer;
     if (result === 'won') {
       const pay = Math.min(d.wager, n.rec.coins || 0);

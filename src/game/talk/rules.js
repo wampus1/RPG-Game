@@ -13,7 +13,12 @@
 // name things ({name}, {town}, {dead}... see facts.vars); a line whose
 // names can't all be filled isn't used. They may carry marks for how
 // they're said (see ui/textfx.js).
-import { RULES } from './lines.js';
+import { RULES as BASE } from './lines.js';
+import { RULES as SOCIAL } from './lines_social.js';
+import { VARIANTS } from './variants.js';
+
+// (Round 136: and what's said among people, and to you: see social.js.)
+const RULES = [...BASE, ...SOCIAL];
 
 const KEY_W = { kid: 0.25, met: 0.25, indoors: 0.25, op: 0.5, opBand: 0.5, elder: 0.5, partnered: 0.5, parent: 0.5, job: 0.75, feel: 0.75 };
 const FEELS = new Set(['joy', 'grief', 'fear', 'anger', 'shame', 'pride', 'love', 'strain']);
@@ -21,6 +26,11 @@ const BY_TOPIC = new Map();
 function compile() {
   if (BY_TOPIC.size) return;
   for (const r of RULES) {
+    // (More ways of saying it: see variants.js.)
+    if (VARIANTS[r.id] && !r.varied) {
+      r.lines = [...r.lines, ...VARIANTS[r.id]];
+      r.varied = true;
+    }
     const keys = Object.keys(r.when || {});
     // (How particular: a feeling, a trait or a state counts one; a memory
     // more, it's about this person; the guards that only keep a line from

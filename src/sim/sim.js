@@ -66,7 +66,7 @@ import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
 import { Saga } from './saga/core.js';
-import { Mind } from './mind/mind.js';
+import { Mind, pkey } from './mind/mind.js';
 import { packFeelings } from './mind/emotion.js';
 import { packMemories } from './mind/memory.js';
 import { skillOf } from './mind/talent.js';
@@ -990,6 +990,11 @@ export class Sim {
     if (rec.skills) m *= 1 + (skillOf(rec, 'trading') - 0.45) * 0.14;
     const fe = this.mind.feelings(rec);
     if (fe) m *= 1 - (fe.j || 0) * 0.05 + (fe.a || 0) * 0.08;
+    // (Round 136) Out to get even with you, or one of a town that's turned
+    // its back on you: dearer.
+    const pk = pkey(this.game);
+    if (rec.amb && rec.amb.k === 'revenge' && rec.amb.t === pk) m *= 1.3;
+    else if (this.mind.shunning(npc, pk)) m *= 1.2;
     let d = 1;
     const reasons = [];
     if (op >= 35) {
@@ -2555,6 +2560,8 @@ export class Sim {
       politics: this.politics.serialize(),
       war: this.war.serialize(),
       saga: this.saga.serialize(),
+      // (Round 136) What each player has been told by the townsfolk.
+      mind: this.mind.serialize(),
     };
   }
 
@@ -2572,6 +2579,9 @@ export class Sim {
       // (Round 135) How they feel, what they remember, what they think of
       // those they know (see mind/).
       emo: packFeelings(r.emo), mem: packMemories(r.mem, day), op: r.op,
+      // (Round 136) What they're after, whom they're looking for, and when
+      // they'll next set their heart on something (see mind/ambition.js).
+      amb: r.amb || undefined, seek: r.seek || undefined, ambCd: r.ambCd, strike: r.strike, friends: r.friends,
       // (A cook's own recipes: see game/cooking.js.)
       ...(r.recipes && r.recipes.length ? { recipes: r.recipes } : {}),
       // A drilled guard keeps the toughness drill gave them.
@@ -2658,6 +2668,7 @@ export class Sim {
     this.petition = data.petition || null;
     this.causes.load(data.causes);
     this.office.load(data.office);
+    this.mind.load(data.mind);
     this.crown.load(data.crown);
     for (const [id, type, base, suburbs, reach] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];

@@ -25,41 +25,44 @@
 // of the town's day is thrown with), and none of it held by a guest: the
 // world's one host works it all (multiplayer).
 import { RNG, hash4, clamp } from '../../util/rng.js';
-import { DAY, alive, setOverride, freeSlot, ledger } from '../econ.js';
+import { residents, P, nameOf, firstOf, bond, CLOSE, pkey } from './common.js';
+import { DAY, alive, setOverride, freeSlot, ledger, mayorOf } from '../econ.js';
+import { isHaven } from '../havenref.js';
+import { asSeat } from '../../game/party.js';
+import { seatOfPid } from '../saga/refs.js';
+import { socialDay, seeksFor } from './social.js';
+import { AMBITIONS, AMB_KINDS } from './ambition.js';
+import { groupsDay, groupsOf, granted, refused, CAUSES } from './groups.js';
+import { nk } from './common.js';
 import { feelings, feel, stir, dominant, workMul, focus, valence } from './emotion.js';
 import { remember, recall, prune, warm, mellow, gossip, opinionOf } from './memory.js';
 import { JOB_SKILLS, ensureSkills, practise, childDay, adultDay, skillOf, skillWord, talentOf } from './talent.js';
 
-const residents = (L) => L.npcs.filter((r) => r && alive(r) && !r.away && !r.migrated && !r.visitor);
-const P = (r) => r.personality || { bravery: 0.5, sociability: 0.5, diligence: 0.5, temper: 0.4, kindness: 0.55 };
-const nameOf = (r) => (r && r.name ? `${r.name.first} ${r.name.last}` : 'someone');
-const firstOf = (r) => (r && r.name ? r.name.first : 'someone');
-
-// Who `b` is to `a`: 'partner', 'child', 'parent', 'sibling', 'household',
-// 'friend', 'workmate', or null.
-export function bond(a, b) {
-  if (!a || !b || a === b) return null;
-  if (a.partner === b.idx || b.partner === a.idx) return 'partner';
-  if ((a.children || []).includes(b.idx) || (b.parents || []).includes(a.idx)) return 'child';
-  if ((a.parents || []).includes(b.idx)) return 'parent';
-  if ((a.parents || []).some((p) => (b.parents || []).includes(p))) return 'sibling';
-  if (a.household !== undefined && a.household !== null && a.household === b.household) return 'household';
-  if ((a.friends || []).includes(b.idx) || (b.friends || []).includes(a.idx)) return 'friend';
-  if (a.work && b.work && a.work.building !== undefined && a.work.building !== null && a.work.building === b.work.building) return 'workmate';
-  return null;
-}
-const CLOSE = { partner: 1, child: 0.95, parent: 0.85, sibling: 0.7, household: 0.6, friend: 0.5, workmate: 0.22 };
-
-// The one playing, as a memory has them ('p:host', 'p:<seat>').
-export function pkey(game) {
-  const p = game && game.player;
-  return `p:${p && p.seat && !p.seat.host ? p.seat.id : 'host'}`;
-}
+export { bond, pkey };
 
 export class Mind {
   constructor(sim) {
     this.sim = sim;
     this.game = sim.game;
+    // (Round 136) What each player has been told, by key (see game/social.js:
+    // passed on, or not): [{ k, w, n, x, v, s, d, sid, from }].
+    this.heard = {};
+  }
+
+  serialize() {
+    return { heard: this.heard };
+  }
+
+  load(d) {
+    this.heard = (d && d.heard) || {};
+  }
+
+  // Whether `npc`'s town has turned its back on the one playing (`pk`): a
+  // grudge against them that `npc` is part of.
+  shunning(npc, pk) {
+    const L = npc && (npc.homeLayout || npc.layout);
+    if (!L || !L.econ || !L.econ.groups) return false;
+    return L.econ.groups.some((g) => !g.out && g.k === 'player' && g.x === pk && g.mem.includes(npc.rec.idx));
   }
 
   now() {
@@ -430,6 +433,8 @@ export class Mind {
   // Can they put their heart into the work this hour? Grief, fear and
   // strain take some hours from them (decided by the hour, not the dice).
   canWork(rec, h) {
+    // (Round 136: tools down, with the others: see groups.js.)
+    if (rec.strike !== undefined && rec.strike >= this.day()) return false;
     if (!rec.emo) return true;
     const w = workMul(rec, this.now());
     if (w >= 1) return true;
@@ -503,6 +508,278 @@ export class Mind {
       if (b === a) continue;
       this.passOn(L, a, b, day);
     }
+    // (Round 136) Their dealings with each other, what they're after, and
+    // what they do together: each with dice of its own.
+    socialDay(L, ppl, day, now, new RNG(hash4(L.settlement.seed | 0, day, 0x50c1a)), this.sim.society);
+    const c = this.ctx(L, day, new RNG(hash4(L.settlement.seed | 0, day, 0xa3b1)), ppl, now);
+    this.ambitionsDay(c);
+    c.ppl = residents(L);
+    c.adults = c.ppl.filter((r) => r.age !== 'child');
+    groupsDay(c);
+    // Who'll come looking for whom (thanks, advice, an invitation, a
+    // warning): see npc.seekTick.
+    seeksFor(L, c.ppl, day, c.rng, this.playerKeys());
+    for (const r of c.ppl) {
+      if (r.seek && day - r.seek.d > 10) r.seek = null;
+      if (r.strike !== undefined && r.strike < day) delete r.strike;
+      // (A thief from want, fed again, gives it up.)
+      if (r.life && r.life.desperate !== undefined && !(r.hungry >= 1) && day - r.life.desperate > 3) {
+        if (r.life.vice === 'thief') r.life.vice = null;
+        delete r.life.desperate;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ (Round 136)
+  // How a town stands today, for its people's ambitions and its groups.
+  ctx(L, day, rng = new RNG(hash4(L.settlement.seed | 0, day, 0xa3b1)), ppl = residents(L), now = day * DAY + 600) {
+    const adults = ppl.filter((r) => r.age !== 'child');
+    let mood = 0;
+    let guards = 0;
+    for (const r of adults) {
+      mood += r.mood ?? 0.5;
+      if (r.job === 'guard') guards++;
+    }
+    mood = adults.length ? mood / adults.length : 0.5;
+    const books = L.buildings.some((b) => (b.type === 'academy' || b.type === 'college') && !b.underConstruction) ? 1 : L.buildings.some((b) => b.type === 'library' && !b.underConstruction) ? 0.6 : 0;
+    const open = groupsOf(L).find((g) => !g.out && CAUSES[g.k] && CAUSES[g.k].complaint);
+    const c = {
+      M: this, sim: this.sim, L, sid: L.settlement.id, day, now, rng, ppl, adults, S: this.sim.saga || null, mayor: mayorOf(L),
+      governed: !!(this.sim.office && this.sim.office.governs(L)), mood, guards, books, grievance: open ? open.k : null, society: this.sim.society || null,
+    };
+    c.end = (r, how, m = null) => this.endAmb(c, r, how, m);
+    c.threadDone = (r, a, good, test = null) => {
+      const th = c.S && a.th !== undefined ? c.S.thread(a.th) : null;
+      if (!th) return c.end(r, test && test() ? 'done' : 'let_go');
+      if (!th.done) return null;
+      const ok = test ? test() : good.includes(th.outcome);
+      return c.end(r, ok ? 'done' : th.outcome === 'faded' ? 'let_go' : 'lost');
+    };
+    return c;
+  }
+
+  // Each ambition held, a day further on; and a few new ones taken up.
+  ambitionsDay(c) {
+    let held = 0;
+    for (const r of c.adults) {
+      const a = r.amb;
+      if (!a) continue;
+      held++;
+      const A = AMBITIONS[a.k];
+      if (!A || r.migrated || r.away) {
+        if (!A) r.amb = null;
+        continue;
+      }
+      try {
+        A.day(c, r, a);
+      } catch (e) {
+        r.amb = null;
+        if (this.sim.saga) this.sim.saga.trace?.('mind', `${nameOf(r)}'s ambition failed: ${e && e.message}`);
+      }
+    }
+    if (held >= Math.ceil(c.adults.length * 0.4)) return;
+    const n = Math.max(1, Math.ceil(c.adults.length / 10));
+    for (let i = 0; i < n; i++) {
+      const r = c.adults[c.rng.int(0, c.adults.length - 1)];
+      if (!r || r.amb || (r.ambCd || 0) > c.day || r.migrated || r.away) continue;
+      // (Of what they might want, one: the stronger the likelier.)
+      const opts = [];
+      let tot = 0;
+      for (const k of AMB_KINDS) {
+        const w = AMBITIONS[k].want(c, r);
+        if (w && w.s > 0.15) {
+          opts.push({ k, ...w });
+          tot += w.s;
+        }
+      }
+      let best = null;
+      let roll = c.rng.next() * tot;
+      for (const o of opts) {
+        roll -= o.s;
+        if (roll <= 0) {
+          best = o;
+          break;
+        }
+      }
+      if (!best && opts.length) best = opts[opts.length - 1];
+      if (!best || !c.rng.chance(Math.min(0.9, best.s + 0.25))) {
+        r.ambCd = c.day + 3;
+        continue;
+      }
+      r.amb = { k: best.k, d: c.day, p: 0, st: 0 };
+      if (best.t) r.amb.t = best.t;
+      if (best.n) r.amb.n = best.n;
+      if (best.x) r.amb.x = best.x;
+      stir(r, best.k === 'revenge' ? 'anger' : best.k === 'leave' ? 'strain' : 'joy', 0.1, c.now);
+    }
+    // Rivals: two after the same heart, or the same office.
+    for (const r of c.adults) {
+      const a = r.amb;
+      if (!a || (a.k !== 'wed' && a.k !== 'office') || a.riv) continue;
+      const q = c.adults.find((o) => o !== r && o.amb && o.amb.k === a.k && (a.k === 'office' || (a.t && o.amb.t === a.t)));
+      if (!q) continue;
+      a.riv = q.idx;
+      q.amb.riv = r.idx;
+      warm(r, nk(q), -0.15);
+      warm(q, nk(r), -0.15);
+      remember(r, { k: 'rival', w: nk(q), n: q.name.first, x: a.k, v: -0.4, s: 0.4 }, c.day);
+      remember(q, { k: 'rival', w: nk(r), n: r.name.first, x: a.k, v: -0.4, s: 0.4 }, c.day);
+    }
+  }
+
+  // An ambition over: done, lost, or let go of.
+  endAmb(c, r, how, m = null) {
+    const a = r.amb;
+    if (!a) return how;
+    r.amb = null;
+    r.ambCd = c.day + 5 + c.rng.int(0, 6);
+    if (a.k === 'revenge' && r.seek && r.seek.k === 'confront') r.seek = null;
+    const k = m && m.k ? m.k : how === 'done' ? 'dream_done' : how === 'lost' ? 'dream_lost' : 'gave_up';
+    const w = m && m.w !== undefined ? m.w : a.t && !a.t.startsWith('p:') ? a.t : undefined;
+    remember(r, { k, x: m && m.x !== undefined ? m.x : a.k, w, n: m && m.n !== undefined ? m.n : a.n, v: how === 'done' ? 0.8 : how === 'lost' ? -0.6 : 0.1, s: how === 'done' ? 0.65 : how === 'lost' ? 0.55 : 0.25 }, c.day);
+    if (how === 'done') {
+      stir(r, 'joy', 0.45, c.now);
+      if (a.k !== 'revenge') stir(r, 'pride', 0.4, c.now);
+    } else if (how === 'lost') {
+      stir(r, 'grief', 0.25, c.now);
+      stir(r, 'shame', 0.2, c.now);
+    } else stir(r, 'strain', -0.2, c.now);
+    // (Those close to them glad, or sorry, for them.)
+    for (const q of c.adults) {
+      const b = q !== r ? bond(q, r) : null;
+      if (!b || (CLOSE[b] || 0) < 0.5) continue;
+      if (how === 'done') stir(q, b === 'child' ? 'pride' : 'joy', 0.15, c.now);
+      else if (how === 'lost') stir(q, 'grief', 0.08, c.now);
+    }
+    return how;
+  }
+
+  // A laid-out town near `L` that `ok` accepts, nearest first.
+  townWith(L, ok, far = 12) {
+    const s = L.settlement;
+    let best = null;
+    let bd = far;
+    for (const T of this.game.world.layouts.values()) {
+      const o = T.settlement;
+      if (!T.econ || T === L || o.deserted || o.condition === 'abandoned' || o.founding || isHaven(o)) continue;
+      const d = Math.hypot(o.cx - s.cx, o.cz - s.cz);
+      if (d < bd && ok(T)) {
+        bd = d;
+        best = T;
+      }
+    }
+    return best;
+  }
+
+  // Somewhere better than `L` to live, if there is (towns already laid
+  // out: nobody moves somewhere nobody's heard of).
+  betterTown(L) {
+    const score = (T) => {
+      const ppl = residents(T);
+      const mood = ppl.length ? ppl.reduce((n, r) => n + (r.mood ?? 0.5), 0) / ppl.length : 0.5;
+      const cond = T.settlement.condition === 'prosperous' ? 0.1 : T.settlement.condition === 'poor' ? -0.1 : 0;
+      return mood - (T.econ.tax || 0) * 2 + cond - ((T.econ.recent && T.econ.recent.raids) || 0) * 0.05 - (T.econ.famineDays || 0) * 0.03;
+    };
+    const here = score(L);
+    let best = null;
+    let bv = here + 0.05;
+    for (const T of this.game.world.layouts.values()) {
+      if (!T.econ || T === L || T.settlement.deserted || T.settlement.condition === 'abandoned' || isHaven(T.settlement)) continue;
+      if (Math.hypot(T.settlement.cx - L.settlement.cx, T.settlement.cz - L.settlement.cz) > 12) continue;
+      if (T.settlement.island && L.settlement.island && T.settlement.island !== L.settlement.island) continue;
+      const v = score(T);
+      if (v > bv) {
+        bv = v;
+        best = T;
+      }
+    }
+    return best;
+  }
+
+  // Off to another town: what they were after and who they were sizing up
+  // stays behind (see civic.relocate).
+  move(L, recs, T, why) {
+    for (const r of recs) {
+      r.amb = null;
+      r.seek = null;
+    }
+    const moved = this.sim.sendPeople(L, recs, T, why);
+    const head = recs.find((r) => r.age !== 'child') || recs[0];
+    if (head && this.sim.society) this.sim.society.gone(L, head, 'better', T.settlement.name, this.day());
+    return moved;
+  }
+
+  // Someone's grudge told about (`a`: their ambition for revenge).
+  badMouth(L, r, a, day, rng, n = 1) {
+    const ppl = residents(L).filter((q) => q !== r && q.age !== 'child' && nk(q) !== a.t);
+    if (!ppl.length) return 0;
+    const friends = ppl.filter((q) => (r.friends || []).includes(q.idx) || bond(r, q));
+    let told = 0;
+    for (let i = 0; i < n; i++) {
+      const pool = friends.length && rng.chance(0.6) ? friends : ppl;
+      const q = pool[rng.int(0, pool.length - 1)];
+      const o = `bw:${r.idx}:${a.t}`;
+      if ((q.mem || []).some((m) => m.o === o)) continue;
+      // (Believed by those who like the teller.)
+      const trust = opinionOf(q, nk(r));
+      remember(q, { k: 'bad_word', w: a.t, n: a.n, x: r.name.first, v: -0.5, s: 0.35 + Math.max(0, trust) * 0.2, h: 1, o }, day);
+      if (a.t.startsWith('p:')) {
+        this.asPk(a.t, () => {
+          const e = this.sim.repEntry(L.settlement.id, q.idx);
+          e.v = clamp(e.v - (trust > 0 ? 3 : 1), -100, 100);
+          if (this.sim.areaCache) this.sim.areaCache.delete(L.settlement.id);
+        });
+        warm(q, a.t, -0.04 - Math.max(0, trust) * 0.06);
+      } else warm(q, a.t, -0.03 - Math.max(0, trust) * 0.05);
+      told++;
+    }
+    return told;
+  }
+
+  // The nearest city with an Academy to `L`, laid out.
+  academyCity(L) {
+    return this.townWith(L, (T) => T.settlement.type === 'city' && T.buildings.some((b) => b.type === 'academy' && !b.underConstruction), 40);
+  }
+
+  // Everyone playing, as memories have them.
+  playerKeys() {
+    const g = this.game;
+    if (!g.seats || !g.seats.length) return ['p:host'];
+    return g.seats.map((q) => `p:${q.host ? 'host' : q.id}`);
+  }
+
+  // Run `fn` as the one playing whose key is `pk` (their standing with
+  // the town, theirs: multiplayer).
+  asPk(pk, fn) {
+    const g = this.game;
+    const id = String(pk).slice(2);
+    if (!g.seats || !g.seats.length) return id === 'host' ? fn() : undefined;
+    const seat = seatOfPid(g, id);
+    return seat ? asSeat(g, seat, fn) : undefined;
+  }
+
+  // A group's petition answered by someone playing who governs the town
+  // (see agenda.js, office.js ACTS.mind_group).
+  groupAnswer(L, id, yes, who = 'The council') {
+    const g = groupsOf(L).find((q) => q.id === id && !q.out);
+    if (!g) return null;
+    const c = this.ctx(L, this.day(), new RNG(hash4(L.settlement.seed | 0, this.day(), id, 0x6a2)), residents(L), this.now());
+    const mem = c.adults.filter((r) => g.mem.includes(r.idx));
+    if (yes) {
+      // (Granted: the tax or the bread, if any, done by the council's own
+      // reckoning; the rest here.)
+      if (g.k === 'tax' || g.k === 'hunger') {
+        for (const r of mem) {
+          stir(r, 'joy', 0.3, c.now);
+          stir(r, 'anger', -0.4, c.now);
+          remember(r, { k: 'petition_won', x: g.k, v: 0.7, s: 0.5 }, c.day);
+        }
+        g.out = { how: 'won', day: c.day };
+        return 'won';
+      }
+      return granted(c, g, mem, who);
+    }
+    return refused(c, g, mem);
   }
 
   // `a` tells `b` something; what's told of the one playing colours what
@@ -511,10 +788,23 @@ export class Mind {
     const m = gossip(a, b, day);
     if (!m) return null;
     if (m.w && m.w.startsWith('p:') && this.sim.repEntry) {
-      const e = this.sim.repEntry(L.settlement.id, b.idx);
-      const d = Math.round(m.v * 4);
-      if (d) e.v = clamp(e.v + d, -100, 100);
-      if (this.sim.areaCache) this.sim.areaCache.delete(L.settlement.id);
+      // (As the one it's about: each player their own standing.)
+      this.asPk(m.w, () => {
+        const e = this.sim.repEntry(L.settlement.id, b.idx);
+        const d = Math.round(m.v * 4);
+        if (d) e.v = clamp(e.v + d, -100, 100);
+        if (this.sim.areaCache) this.sim.areaCache.delete(L.settlement.id);
+      });
+      warm(b, m.w, m.v * 0.08);
+    }
+    // (Round 136) A lie told about someone, found out by the one it was
+    // about: whoever told it is remembered for it.
+    if (m.o && m.o.startsWith('rum:') && m.w === nk(b)) {
+      // ('rum:<who told it>:<about>:<day>', the teller a key of its own.)
+      const liar = m.o.split(':').slice(1, -2).join(':');
+      remember(b, { k: 'slander', w: liar, v: -0.8, s: 0.6, x: m.k }, day);
+      warm(b, liar, -0.3);
+      stir(b, 'anger', 0.35, this.now());
     }
     if (m.w && m.w.startsWith('n:')) warm(b, m.w, m.v * 0.1);
     return m;

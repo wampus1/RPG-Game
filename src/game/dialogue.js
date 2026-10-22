@@ -46,8 +46,11 @@ import { choose as chooseLine } from './talk/rules.js';
 import { dominant } from '../sim/mind/emotion.js';
 import { emote } from '../ui/textfx.js';
 import { talentsOf, SKILLS, talentHint, skillOf } from '../sim/mind/talent.js';
+import { socialTopics, socialRespond, isSocial, seekLine, rallyBark, sulking } from './social.js';
+import { pkey } from '../sim/mind/common.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
+export { seekLine, rallyBark };
 
 // (Round 135) A line written for just this moment (see talk/rules.js), if
 // one fits at least `min` particulars: { text, rule }, or null.
@@ -299,6 +302,16 @@ function openingRaw(npc, game) {
   if (kin === 'sibling' && rep > -20) return rec.age === 'child' ? pick(rng, [`${first}! Will you play with me?`, 'Mum says you have to take me with you!', 'Guess what I found today!']) : pick(rng, [`Oh, it's you, ${first}.`, `Hey, ${first}! Mum was asking after you.`, 'Borrowed my things again, have you?']);
   if (rec.job === 'guard' && game.isWanted(s.id)) return 'You\'re wanted in this town. Come quietly, or else.';
   if (sim.justice.exiled.has(s.id)) return 'You were banished! Get out before the guards see you!';
+  // (Round 136) Come looking for you, with something to say; or too angry
+  // with you to talk at all.
+  if (rec.seek && rec.seek.pk === pkey(game) && !(rec.seek.cool && sim.abs < rec.seek.cool)) {
+    const sl = ruleLine(npc, game, 'seek_open', 0);
+    if (sl) return sl.text;
+  }
+  if (sulking(npc, game)) {
+    const sl = ruleLine(npc, game, 'sulk', 0);
+    return sl ? sl.text : pick(rng, ['I\'ve nothing to say to you.', 'Go away.']);
+  }
   // (Round 135) Something written for just this moment: how they feel,
   // what's on their mind, how you look, who you are (see talk/lines.js).
   // The more particular, the likelier it's said over the usual. What's
@@ -431,11 +444,11 @@ export const TOPIC_CATS = [
 ];
 const CAT_OF = {};
 for (const [cat, ids] of Object.entries({
-  now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer',
+  now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer so_seek',
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
-  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
+  town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
-  manners: 'gift rude',
+  manners: 'gift rude so_sorry so_threaten so_court so_drink',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
 
 export function topicCat(o) {
@@ -530,6 +543,9 @@ function topicsRaw(npc, game) {
     return out;
   }
   if (rep <= -60) {
+    // (Round 136: they'll hear you out, if you've come to say sorry, or
+    // they've come to have it out with you; see social.js.)
+    out.push(...socialTopics(npc, game).filter((t) => t.id === 'so_sorry' || t.id === 'so_seek'));
     add('gift', 'Please, accept this as an apology...');
     add('bye', 'Goodbye.');
     return out;
@@ -668,19 +684,24 @@ function topicsRaw(npc, game) {
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
   if (isStar(game.hero)) add('wing', 'About my wing...');
-  add('ask', 'Can I ask you about...');
-  add('chat', rec.age === 'child' ? 'What are you up to?' : 'How are things?');
+  // (Round 136) Too angry with you to talk: an apology, a gift, or leave
+  // them be (see social.js).
+  const sulk = sulking(npc, game);
+  if (!sulk) add('ask', 'Can I ask you about...');
+  if (!sulk) add('chat', rec.age === 'child' ? 'What are you up to?' : 'How are things?');
   // (Round 135) How they really are; what they can do; a laugh.
-  if (!npc.hired) {
+  if (!npc.hired && !sulk) {
     const fd = dominant(rec, sim.abs, 0.35);
     add('howare', fd ? { grief: 'How are you holding up?', fear: 'You seem on edge. What\'s wrong?', anger: 'Something\'s eating at you.', shame: 'Are you all right?', joy: 'You look happy! What\'s happened?', pride: 'You look pleased with yourself.', love: 'You\'re in a good mood.' }[fd.kind] : 'How are you, really?');
     add('goodat', rec.age === 'child' ? 'What do you like doing best?' : 'What are you good at?');
     add('jest', '(Tell a joke)');
   }
-  if (!mine && !npc.hired && !npc.visit) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
+  // (Round 136) Everything they do with each other (see social.js).
+  out.push(...socialTopics(npc, game));
+  if (!mine && !npc.hired && !npc.visit && !sulk) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
   const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
-  add('kind', (rec.idx + game.day) % 2 ? '(Compliment them)' : '(Ask how they\'re doing)');
-  if (sky !== 'clear' || (rec.idx + game.day) % 3 === 1) add('weathertalk', '(Chat about the weather)');
+  if (!sulk) add('kind', (rec.idx + game.day) % 2 ? '(Compliment them)' : '(Ask how they\'re doing)');
+  if (!sulk && (sky !== 'clear' || (rec.idx + game.day) % 3 === 1)) add('weathertalk', '(Chat about the weather)');
   add('gift', 'I have a gift for you.');
   add('rude', '(Insult them)');
   add('bye', 'Goodbye.');
@@ -1869,6 +1890,7 @@ export function respond(npc, game, id, arg) {
 
 function respondRaw(npc, game, id, arg) {
   if (isSagaTopic(id)) return sagaRespond(npc, game, id, arg);
+  if (isSocial(id)) return socialRespond(npc, game, id, arg);
   if (id.startsWith('hv_')) {
     const hv = havenRespond(npc, game, id, arg);
     if (hv) return hv;

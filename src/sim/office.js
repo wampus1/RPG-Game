@@ -2309,6 +2309,12 @@ const cap = (t) => t[0].toUpperCase() + t.slice(1);
 // What each crisis choice does when carried out (beyond its cost and the
 // factions' favour, already applied). Returns the ledger's words.
 const ACTS = {
+  // (Round 136) A petition of the town's people, granted or refused (see
+  // mind/groups.js).
+  mind_group: (O, L, T, day, it, fx) => {
+    const r = O.sim.mind && O.sim.mind.groupAnswer(L, fx.group, !!fx.yes, whoOf(L, T));
+    return r === 'won' ? 'heard the petitioners out' : r ? 'refused the petitioners' : null;
+  },
   raid_pay: () => 'paid the raiders to leave the town be',
   raid_hire: (o, L, T, day) => raidOutcome(o, L, T, day, true),
   raid_fight: (o, L, T, day) => raidOutcome(o, L, T, day, false),

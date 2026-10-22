@@ -18,7 +18,7 @@ import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
 import { guardPlan, stepAside } from './tactics.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { dialogueLine, greetLine, feelBark } from '../game/dialogue.js';
+import { dialogueLine, greetLine, feelBark, rallyBark, seekLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
@@ -432,6 +432,10 @@ export class NPC extends Entity {
       }
       case 'pray':
         return inBuilding(buildingOf('temple'), 'pray') || target(e.target, { tag: 'pray' }) || inBuilding(home);
+      // (Round 136) With the others in the square (see sim/mind/groups.js).
+      case 'rally':
+        if (curfew()) return inBuilding(home);
+        return plazaTile();
       case 'wander': {
         if (curfew()) return inBuilding(home);
         // Busy streets and a full square in good times; folk keep to
@@ -2224,6 +2228,19 @@ export class NPC extends Entity {
     if ((act.act === 'mourn' || act.act === 'funeral' || act.act === 'event') && this.idleAnim) this.idleAnim = null;
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
+    // (Round 136) Out for how they feel (see sim/mind: an evening at the
+    // tavern, a vigil), or in the square with the others: said aloud, when
+    // there's anyone to hear it.
+    if ((act.feel || act.act === 'rally') && this.lineCd <= 0) {
+      this.lineCd = this.rng.float(act.act === 'rally' ? 10 : 16, act.act === 'rally' ? 26 : 38);
+      if (this.distTo(game.player) < 18) {
+        const b = act.act === 'rally' ? rallyBark(this, game) : this.rng.chance(0.6) ? feelBark(this, game) : null;
+        if (b) {
+          this.say(b, 3.5, act.act === 'rally' && act.feel === 'anger' ? '#ffb080' : undefined);
+          return;
+        }
+      }
+    }
     // (Round 77) A broom, a wall to lean on, a word with whoever's by.
     if (idleTick(this, act, g, dt)) return;
     if (act.act === 'adventure') return this.adventureAt(act, dt);
@@ -3488,6 +3505,44 @@ export class NPC extends Entity {
     this.react(attacker, false);
   }
 
+  // (Round 136) Over to you, and a word: see dialogue.seekLine (and what
+  // they've come about, when you talk to them: game/social.js).
+  seekTick(player, dt) {
+    const s = this.rec.seek;
+    const g = this.game;
+    if (this.state !== 'routine' || this.sleeping || player.dead || this.hired || g.talkingTo === this || (this.act === 'work' && this.atGoal && this.rec.job === 'guard')) return false;
+    const pk = `p:${player.seat && !player.seat.host ? player.seat.id : 'host'}`;
+    if (s.pk !== pk || (s.cool && g.sim.abs < s.cool)) return false;
+    const d = this.distTo(player);
+    if (d > 16) return false;
+    if (d <= 2.6) {
+      this.walkOff = null;
+      this.path = null;
+      this.face(player.x, player.z);
+      if (!s.said || g.sim.abs - s.said > 90) {
+        s.said = g.sim.abs;
+        s.wait = g.sim.abs + 45;
+        this.say(seekLine(this, g, s), 4, s.k === 'confront' || s.k === 'group' ? '#ffb080' : '#ffe8a0');
+      } else if (s.wait && g.sim.abs > s.wait) {
+        // (Ignored: they'll try again later.)
+        s.cool = g.sim.abs + 240;
+        s.wait = 0;
+        this.say(this.rng.pick(s.k === 'confront' || s.k === 'group' ? ['Fine. Walk away.', 'This isn\'t over.'] : ['Another time, then.', 'Oh. Never mind.']), 2.5);
+        return false;
+      }
+      return true;
+    }
+    this.seekT = (this.seekT || 0) - dt;
+    if (!this.walkOff || this.seekT <= 0) {
+      this.seekT = 1.2;
+      const y = g.world.findStandY(Math.round(player.x), Math.round(player.z), Math.round(player.y));
+      if (y < 0) return false;
+      this.walkOff = { x: Math.round(player.x), y, z: Math.round(player.z), t: 5 };
+      this.path = null;
+    }
+    return true;
+  }
+
   // Passing remarks: rare, and dependent on how they feel about you.
   maybeGreet(player, dt) {
     // A killer the town knows of, coming near: folk run (children first,
@@ -3501,6 +3556,9 @@ export class NPC extends Entity {
         return;
       }
     }
+    // (Round 136) Someone with something to say to you (a grudge, thanks, a
+    // question: see sim/mind) comes over to say it.
+    if (this.rec.seek && this.seekTick(player, dt)) return;
     this.greetCd -= dt;
     if (this.greetCd > 0 || this.sleeping || this.state !== 'routine' || this.bubble || player.dead) return;
     if (this.distTo(player) > 3) return;

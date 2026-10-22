@@ -116,12 +116,15 @@ export function mellow(rec) {
 // `a` tells `b` the thing on their mind most worth telling (not hearsay
 // they've already passed on, nor anything `b` already knows), if any.
 // Returns what was told (b's new memory of it), or null.
+// (Round 136: talk about someone, a rumour or a grudge, is passed on even
+// at second hand, a little weaker each time it's told.)
+const TALK = new Set(['rumour_bad', 'rumour_good', 'bad_word']);
 export function gossip(a, b, day, tellable = null) {
-  const told = recall(a, day, (m) => !m.h && (!tellable || tellable(m)) && Math.abs(m.v) >= 0.3, 0.15);
+  const told = recall(a, day, (m) => (!m.h || (TALK.has(m.k) && m.s >= 0.2)) && (!tellable || tellable(m)) && Math.abs(m.v) >= 0.3, 0.15);
   for (const m of told) {
     const o = m.o || `${m.k}:${m.w || ''}:${m.n || ''}:${m.d}`;
     if ((b.mem || []).some((q) => (q.o || `${q.k}:${q.w || ''}:${q.n || ''}:${q.d}`) === o)) continue;
-    return remember(b, { k: m.k, v: m.v * 0.5, s: m.s * 0.55, w: m.w, n: m.n, x: m.x, h: 1, o, d: m.d }, day);
+    return remember(b, { k: m.k, v: TALK.has(m.k) ? m.v * 0.8 : m.v * 0.5, s: m.s * 0.55, w: m.w, n: m.n, x: m.x, h: 1, o, d: m.d }, day);
   }
   return null;
 }

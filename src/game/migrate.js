@@ -1055,6 +1055,12 @@ export const STEPS = [
       log.push('The townsfolk have inner lives now: hidden talents and skills they learn by doing, feelings that rise and fade, memories and opinions they pass on; what they say comes of all of it. (Each starts with nothing on their mind.)');
     },
   },
+  {
+    to: '1.36.0',
+    game(game, log) {
+      log.push('The townsfolk act on their own now: they set their hearts on things and work at them, make friends and enemies of each other, come together over what troubles their town (and leave it, at last), and come looking for you. Everything they do with each other, you can do with them.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

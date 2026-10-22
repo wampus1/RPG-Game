@@ -18,6 +18,7 @@ import { FACTIONS, FACTION_IDS, BUDGET, members, factionOf, preview } from './fa
 import { CHARTERS, headTitle } from './charters.js';
 import { authority } from './realms.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
+import { groupMatters } from './mind/groups.js';
 
 export const SESSION = 600; // ten in the morning
 export const MAX_OPEN = 4; // matters tabled at once (crises aside)
@@ -237,6 +238,9 @@ export function matters(sim, L, T, day) {
       order: { feasts: { flush: 0, never: 1 } },
     });
   }
+  // --- (Round 136) The town's people, come together to ask for something
+  // (see mind/groups.js).
+  out.push(...groupMatters(L));
   // --- Building what the town lacks.
   if (budget.works >= 1) {
     const w = worksWanted(sim, L, budget.works >= 2);

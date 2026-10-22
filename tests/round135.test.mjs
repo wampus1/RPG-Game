@@ -250,7 +250,9 @@ test('a text grid carries the effects, and sends them to guests', () => {
 });
 
 test('every line written can be filled and read; the most particular line that fits is the one said', () => {
-  const known = new Set(['name', 'full', 'me', 'town', 'tw', 'trade', 'skill', 'skillWord', 'mut', 'title', 'address', 'held', 'dead', 'child', 'spouse', 'gift', 'killed', 'lost', 'kin', 'kinGift']);
+  const known = new Set(['name', 'full', 'me', 'town', 'tw', 'trade', 'skill', 'skillWord', 'mut', 'title', 'address', 'held', 'dead', 'child', 'spouse', 'gift', 'killed', 'lost', 'kin', 'kinGift',
+    // (Round 136: and what's said among people, and to you.)
+    'ambWho', 'ambWhat', 'ambTrade', 'ambBiz', 'grpLeader', 'grpAsk', 'grpWhat', 'grpDead', 'friend', 'rival', 'lostLove', 'badWho', 'badTeller', 'who', 'teller', 'what', 'subj', 'there', 'price', 'n']);
   const ids = new Set();
   const rules = allRules();
   assert.ok(rules.length >= 150);

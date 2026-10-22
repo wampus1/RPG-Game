@@ -11,6 +11,8 @@ import { pkey } from '../../sim/mind/mind.js';
 import { mutationsOf, MUTATIONS } from '../hero.js';
 import { ITEMS } from '../../world/items.js';
 import { alive } from '../../sim/econ.js';
+import { ambitionWords } from '../../sim/mind/ambition.js';
+import { groupOf, CAUSES } from '../../sim/mind/groups.js';
 
 const TIME = (m) => {
   const h = m / 60;
@@ -154,6 +156,22 @@ export function factsFor(npc, game, leadOf = null) {
   const ev = L && sim.events && sim.events.upcoming ? sim.events.upcoming(L) : [];
   F.festivalSoon = ev.some((q) => q.kind !== 'wedding' && q.day - day <= 2 && q.day >= day);
   F.weddingSoon = ev.some((q) => q.kind === 'wedding' && q.day - day <= 2 && q.day >= day);
+  // ---- (Round 136) what they're after, and who they stand with
+  const amb = rec.amb || null;
+  F.amb = amb ? amb.k : null;
+  if (amb) F[`amb_${amb.k}`] = true;
+  F.ambSt = amb ? amb.st || 0 : 0;
+  F.ambP = amb ? amb.p || 0 : 0;
+  F.ambOnYou = !!(amb && amb.t === pk);
+  const grp = L ? groupOf(L, rec) : null;
+  F.grp = grp ? grp.k : null;
+  if (grp) F[`grp_${grp.k}`] = true;
+  F.grpSt = grp ? grp.st : null;
+  F.grpLead = !!(grp && grp.lead === rec.idx);
+  F.grpOnYou = !!(grp && grp.k === 'player' && grp.x === pk);
+  F.seekK = rec.seek && rec.seek.pk === pk ? rec.seek.k : null;
+  F.friends = (rec.friends || []).length;
+  F.sweet = rec.sweet === pk;
   // ---- the words they can be filled with
   const name = game.playerName || 'friend';
   F.vars = {
@@ -177,6 +195,23 @@ export function factsFor(npc, game, leadOf = null) {
   F.vars.gift = F.mem_gift && F.mem_gift.x ? (ITEMS[F.mem_gift.x]?.name || F.mem_gift.x).toLowerCase() : null;
   F.vars.killed = n(F.memP && F.memP.k === 'killed' ? F.memP : F.heardP && F.heardP.k === 'killed' ? F.heardP : null);
   F.vars.lost = F.mem_loss ? F.mem_loss.x : null;
+  F.vars.ambWho = amb && amb.n ? amb.n : null;
+  F.vars.ambWhat = amb ? ambitionWords(rec) : null;
+  F.vars.ambTrade = amb && (amb.k === 'trade' || amb.k === 'master') ? amb.x : null;
+  F.vars.ambBiz = amb && amb.k === 'venture' && amb.x ? amb.x : null;
+  F.vars.grpLeader = grp ? (grp.lead === rec.idx ? 'me' : grp.ln.split(' ')[0]) : null;
+  F.vars.grpAsk = grp ? CAUSES[grp.k].ask : null;
+  F.vars.grpWhat = grp ? CAUSES[grp.k].what : null;
+  F.vars.grpDead = grp && grp.k === 'vigil' ? grp.x : null;
+  const fm = F.mem_friend || null;
+  F.vars.friend = fm && fm.n ? fm.n : null;
+  const rv = F.mem_rival || null;
+  F.vars.rival = rv && rv.n ? rv.n : null;
+  const hb = F.mem_heartbreak || F.mem_rejected || null;
+  F.vars.lostLove = hb && hb.n ? hb.n : null;
+  const bw = F.heard_bad_word || null;
+  F.vars.badWho = bw && bw.n ? bw.n : null;
+  F.vars.badTeller = bw && bw.x ? bw.x : null;
   // (A child's or a partner's gift or blind spot, as the proud or worried
   // would put it: see talentHint.)
   F.vars.kin = null;

@@ -130,6 +130,14 @@ function adoptAll(T, people, rng, from) {
       n.bed = bed;
       n.household = `m${from.id}:${r.household}`;
       n.friends = [];
+      // (Round 136) What they thought of the folk back there, what they were
+      // after there, and their part in its quarrels, left behind with them
+      // (their memories go with them, without the names they pointed at).
+      n.op = r.op ? Object.fromEntries(Object.entries(r.op).filter(([k]) => k.startsWith('p:'))) : undefined;
+      n.amb = undefined;
+      n.seek = undefined;
+      delete n.strike;
+      for (const m of n.mem || []) if (m.w && m.w.startsWith('n:')) delete m.w;
       n.away = false;
       n.leaving = false;
       n.override = null;
@@ -362,7 +370,9 @@ export function births(sim, L, day, rng) {
     const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
     // (Aqueducts: clean water, more children.)
     const water = (sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1) * (sim.tech ? 1 + sim.tech.fxOf(L.settlement, 'births') : 1);
-    if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
+    // (Round 136: a couple set on a child: see mind/ambition.js.)
+    const wish = (a.amb && a.amb.k === 'child') || (b.amb && b.amb.k === 'child') ? 2.5 : 1;
+    if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water * wish)) continue;
     const r = bear(sim, L, a, b, day, hash4(a.idx, b.idx, day, 0xba8e));
     ledger(L, day, `A baby, ${r.name.first}, was born to ${a.name.first} and ${b.name.first} ${a.name.last}.`);
     born.push(r);
