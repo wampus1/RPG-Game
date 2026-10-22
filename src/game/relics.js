@@ -13,6 +13,7 @@
 // circle reach further (see fitShard).
 import { ITEMS, RELICS, SHARD_MAX, SHARD_REACH, grownRelic } from '../world/items.js';
 import { B } from '../world/blocks.js';
+import { addItem } from './inventory.js';
 
 export const RELIC_R = 4;
 // How far a relic with so many shards in it reaches.
@@ -174,6 +175,25 @@ export function updateRelics(game, dt) {
       }
     }
   }
+}
+
+// (Round 139) At an anvil: a relic broken down into relic shards (three,
+// and any that were set in it back as well). { ok, why, n }.
+export const SALVAGE_SHARDS = 3;
+export function salvageRelic(game, ri, p = game.player) {
+  const s = p.inv[ri];
+  const it = s && ITEMS[s.item];
+  if (!it || it.kind !== 'relic') return { ok: false, why: 'Put a relic in the relic slot to break it down.' };
+  const n = SALVAGE_SHARDS + (it.shards || 0);
+  if (s.count > 1) s.count--;
+  else p.inv[ri] = null;
+  const left = addItem(p.inv, 'relic_shard', n);
+  if (left) game.spawnDrop?.('relic_shard', left, p.x, p.y, p.z, true);
+  game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 20 + n * 3, color: [it.color || '#ffffff', '#e0b8ff', '#ffffff'], up: 34, speed: 40, life: 0.9, glow: true, shape: 'shard', gravity: 60 });
+  game.audio?.play('clang', p);
+  game.audio?.play('ab_shatter', p);
+  game.ui.msg(`The ${it.name} breaks apart under the hammer: ${n} relic shards.`, '#e0b8ff');
+  return { ok: true, n };
 }
 
 // The item a relic block gives back when taken up.

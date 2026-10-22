@@ -7,6 +7,7 @@ import { TILE, LH } from '../config.js';
 import { humanoidSheet, frameGlow, CHAR_W, CHAR_H, SHEET_H, SPR_PAD } from './sprites.js';
 import { drawWingBurst } from './wing.js';
 import { drawAbilityFx, setCam } from './abilityfx.js';
+import { drawSpecialFx } from './specialfx.js';
 
 // ------------------------------------------------------------ flame frames
 // A little tongue of flame, four frames of flicker, in two sizes.
@@ -119,6 +120,8 @@ export function drawEffects(r, ctx, dt) {
     else if (f.type === 'ghost') drawGhost(r, ctx, f, k, ox, oy);
     else if (f.type === 'void') drawVoid(r, ctx, f, k, ox, oy, dt);
     else if (f.type === 'wingbeat') drawWingbeat(ctx, f, k, ox, oy);
+    // (Round 139: a weapon's special, see specialfx.js.)
+    else if (String(f.type).startsWith('sp_')) drawSpecialFx(r, ctx, f, k);
     // (Round 137: a forged piece's abilities, see abilityfx.js.)
     else drawAbilityFx(r, ctx, f, k, ox, oy, dt);
   }

@@ -25,7 +25,7 @@ import { hash4, RNG } from '../util/rng.js';
 import { authority, rulerTitle, shortTitle } from '../sim/realms.js';
 import { headTitle } from '../sim/charters.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
-import { countItem, removeItem } from './inventory.js';
+import { countItem, removeItem, addItem } from './inventory.js';
 import { duesIn, payDues } from './library.js';
 import { openNow as contestsOpen, CONTESTS, nearVenue as nearFestVenue, helpable as festHelpable, GIFTS as FEST_GIFTS, giftsHeld as festGiftsHeld, give as festGive, helped as festHelped, canLift, liftPurse, canSpeak, speech as festSpeech, SPEECHES as FEST_SPEECHES } from './festplay.js';
 import { segNow, segLine, festive, posterLines as festPosterLines, slotAt as festSlotAt, closeOf as festClose, SLOT_WORDS as FEST_SLOT_WORDS } from '../sim/festival.js';
@@ -35,7 +35,7 @@ import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
 import { geoTalk } from './geotalk.js';
 import { fortuneOf } from '../sim/prosperity.js';
-import { isStar, starGreeting, wingTalk } from './starfall.js';
+import { isStar, starGreeting, wingTalk, kindred, kinGreeting, kinTalk } from './starfall.js';
 import { starborn } from './combat.js';
 import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
 import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
@@ -287,12 +287,14 @@ function openingRaw(npc, game) {
       : `${name}, we need to talk. People keep coming to me about you: stealing, fighting, rudeness. As mayor I can't let it go on. Change your ways, or lose your citizenship.`;
   }
   if (game.isWanted(s.id) && rec.job !== 'guard') return pick(rng, ['I have nothing to say to the likes of you.', 'Guards! Someone help!', 'Please... just go.']);
+  // (Round 139) One with a wing of their own, meeting a fallen star: one of
+  // their own (see starfall.kindred). Always, the first time; often after.
+  if (kindred(rec, game.hero) && (!entry.met || rng.next() < 0.6)) return kinGreeting(!!entry.met, () => rng.next());
   // A fallen star: the first time, and now and then after, it's your wing
   // they talk about (some of them warily: see starfall.js).
   if (isStar(game.hero) && (!entry.met || rng.next() < 0.2)) return starGreeting(rec, s.id, () => rng.next(), game);
   // (Round 73) One of the rare few who carry a wing of their own.
   if (starborn(rec) && (!entry.met || rng.next() < 0.15)) {
-    if (isStar(game.hero)) return pick(rng, ['You too? I thought I was the only one left with one of these.', 'Another wing. Did you fall as well? I don\'t remember mine at all.', 'Well, look at us. Two odd birds.']);
     return pick(rng, ['Yes, it\'s a wing. No, I can\'t fly. Everyone asks.', 'My mother found me in a burnt field when I was small. The wing came with me.', 'Don\'t stare. It only glows when I\'m nervous.', 'Folk call me the star-child here. I was never much of a star.']);
   }
   // Your own family (if you were born here).
@@ -450,7 +452,7 @@ for (const [cat, ids] of Object.entries({
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
   town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
-  people: 'so_word so_share so_think so_me so_dream so_secret so_intro so_mediate so_spar so_teach so_show so_rumour',
+  people: 'so_word so_share so_think so_me so_dream so_secret so_intro so_mediate so_spar so_teach so_show so_rumour kin',
   manners: 'gift rude so_sorry so_threaten so_drink',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
 
@@ -687,6 +689,8 @@ function topicsRaw(npc, game) {
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
   if (isStar(game.hero)) add('wing', 'About my wing...');
+  // (Round 139) One of your own: a talk only the two of you can have.
+  if (kindred(rec, game.hero)) add('kin', (rec.kinTalk | 0) ? 'Sit with me a while, sky-sibling.' : 'You have a wing too...');
   // (Round 136) Too angry with you to talk: an apology, a gift, or leave
   // them be (see social.js).
   const sulk = sulking(npc, game);
@@ -2182,7 +2186,19 @@ function respondRaw(npc, game, id, arg) {
         return { lines: [tn === 'cold' ? `Figure it out yourself. ...Fine. It's ${dir}.` : `The ${pl.label.replace(/^The /, '')} is ${dir}.`] };
       }
       return { lines: ['Where to?'], choices: placesFor(npc, game).map((pl) => ({ id: 'directions', arg: pl.key, label: pl.label })) };
-    case 'wing': return { lines: wingTalk(rec, s.id, game) };
+    case 'wing': return kindred(rec, game.hero) ? { lines: ['You don\'t need to tell me about it. I know. Look at mine.', 'Ask me anything you like about living with one. I\'ve had mine longer.'] } : { lines: wingTalk(rec, s.id, game) };
+    case 'kin': {
+      const r = kinTalk(game, npc);
+      // (The first talk: they think the better of you for it; the last
+      // step, a keepsake pressed into your hand.)
+      if (r.first && sim.changeRep) sim.changeRep(npc, 6, 'kind');
+      if (r.gift) {
+        const left = addItem(game.player.inv, r.gift, 1);
+        if (left) game.spawnDrop?.(r.gift, left, game.player.x, game.player.y, game.player.z, true);
+        game.ui.msg(`${rec.name.first} gives you a ${(ITEMS[r.gift] && ITEMS[r.gift].name.toLowerCase()) || 'keepsake'}.`, '#c8e0ff');
+      }
+      return { lines: r.lines };
+    }
     case 'surrender': {
       if (sim.justice.jail || sim.justice.escort || game.player.restrained) return { lines: ['You\'re in our hands already.'], close: true };
       const sid = s.id;

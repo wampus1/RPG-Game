@@ -54,7 +54,7 @@ export class LockWindow extends Window {
     const L = this.lock;
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#0c0a10');
     g.box(0, 0, this.w, this.h, { bg: '#0c0a10', double: true, title: 'PICK THE LOCK' });
-    const grade = ['a plain iron', 'a sturdy brass', 'a good brass', 'a fine steel'][L.grade.tier - 1];
+    const grade = ['a plain iron', 'a sturdy brass', 'a good brass', 'a fine steel', 'a strongroom\'s steel'][L.grade.tier - 1];
     g.center(1, `${this.spec.label || 'A chest'} · ${grade} lock`.slice(0, this.w - 4), C.dim);
     // (The lock itself is drawn in pixels: see drawPixels.)
     g.center(17, this.say.text, this.say.color);
@@ -226,7 +226,7 @@ export class LockWindow extends Window {
       // The gap meeting the shear line: a glint on the line (fainter on
       // the better locks).
       if (!p.set && L.aligned(i)) {
-        ctx.globalAlpha = [0.95, 0.8, 0.55, 0.4][L.grade.tier - 1];
+        ctx.globalAlpha = [0.95, 0.8, 0.55, 0.4, 0.3][L.grade.tier - 1];
         R(x - 3, shearY - 1, 16, 2, '#fff4c0');
         R(x - 1, shearY - 3, 12, 6, 'rgba(255,240,170,0.3)');
         ctx.globalAlpha = 1;

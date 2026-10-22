@@ -17,20 +17,25 @@ import { RNG, hash4 } from '../util/rng.js';
 // Where the shear line sits, as a share of a chamber's height.
 export const SHEAR = 0.6;
 
-// How a lock of a given grade (1 a village's, to 4 a city manor's) is made.
+// How a lock of a given grade (1 a village's, to 4 a city manor's; 5 the
+// strongroom lock on a jail's evidence chest: see STRONGROOM) is made.
 export function lockGrade(tier) {
-  const t = Math.max(1, Math.min(4, tier | 0));
+  const t = Math.max(1, Math.min(5, tier | 0));
   return {
     tier: t,
-    pins: [3, 4, 5, 6][t - 1],
+    pins: [3, 4, 5, 6, 7][t - 1],
     // Half the gap's width (in chamber heights) and how hard the springs push.
-    win: [0.085, 0.07, 0.058, 0.05][t - 1],
-    spring: [2.6, 3.1, 3.6, 4.2][t - 1],
+    win: [0.085, 0.07, 0.058, 0.05, 0.042][t - 1],
+    spring: [2.6, 3.1, 3.6, 4.2, 4.8][t - 1],
     binding: t >= 2,
     spools: t >= 3 ? t - 2 : 0,
-    metal: ['iron', 'brass', 'brass', 'steel'][t - 1],
+    metal: ['iron', 'brass', 'brass', 'steel', 'steel'][t - 1],
   };
 }
+
+// (Round 139) The grade of lock the guards keep on what they take off
+// a prisoner.
+export const STRONGROOM = 5;
 
 export class Lock {
   // `seed`: the lock's own (a chest's always picks the same); `steady`:
@@ -173,6 +178,7 @@ export function chestTier(settlementType, buildingType) {
 // village's brass with spool pins, a town's or a city's steel).
 export function lockTier(s, owner) {
   const type = s && s.type;
+  if (owner && owner.kind === 'evidence') return STRONGROOM;
   if (owner && owner.b && owner.b.type === 'townhall') return type === 'village' ? 3 : 4;
   return chestTier(type, owner && owner.b && owner.b.type);
 }

@@ -1318,14 +1318,15 @@ export class MapWindow extends Window {
         // (Round 120) The badge: its tier as a numeral, I, II or III, in
         // the tier's colour, small on the top corner of its icon (the
         // outer one, away from the next square), on a dark ground.
-        // (Round 128: only when the squares are big enough for it to sit in
-        // the corner; zoomed out, it'd cover the place's own mark.)
-        if (Math.min(bw, h) < 16) return;
-        const u = Math.max(1, Math.round(Math.min(bw, h) / 10));
+        // (Round 139: it sat in the corner only when a square was 16 pixels
+        // or more, and no zoom made one that big: it never showed. Now it
+        // straddles the square's top edge, at its outer corner, clear of
+        // the place's own mark, at every zoom close enough for glyphs.)
+        const u = 1;
         const nw = (tier * 2 + 1) * u;
         const nh = 5 * u;
-        const nx = Math.round(right ? gx + bw - nw - u : gx + u);
-        const ny = Math.round(gy + u);
+        const nx = Math.round(right ? gx + bw - nw + u : gx - u);
+        const ny = Math.round(gy - Math.ceil(nh / 2));
         ctx.fillStyle = '#140e08';
         ctx.fillRect(nx - u, ny - u, nw + 2 * u, nh + 2 * u);
         ctx.fillStyle = col;
@@ -1345,13 +1346,19 @@ export class MapWindow extends Window {
           ctx.strokeRect(Math.round(q.x - 3 - k * 4) + 0.5, Math.round(q.y - 3 - k * 4) + 0.5, Math.round(6 + k * 8), Math.round(6 + k * 8));
           ctx.restore();
         }
+        // (Round 139: its tier in pips, one to three, over its mark: a lone
+        // dot was too small to see.)
+        const px0 = Math.round(q.x) - tier;
+        const py0 = Math.round(q.y) - 6;
         ctx.fillStyle = '#140e08';
-        ctx.fillRect(Math.round(q.x) + 4, Math.round(q.y) - 6, 3, 3);
+        ctx.fillRect(px0 - 1, py0 - 1, tier * 2 + 1, 4);
         ctx.fillStyle = col;
-        ctx.fillRect(Math.round(q.x) + 4, Math.round(q.y) - 6, 2, 2);
+        for (let i = 0; i < tier; i++) ctx.fillRect(px0 + i * 2, py0, 1, 2);
       }
     };
-    // Old places, found or heard of. (Grey once beaten.)
+    // Old places, found or heard of. (Grey once beaten.) (Round 139: their
+    // tier badges after them all, so the next place's mark can't cover one.)
+    const badged = [];
     for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
       if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
       const kav = d.type === 'kavorent';
@@ -1362,8 +1369,9 @@ export class MapWindow extends Window {
       // (Turned back with a time crystal: its tier. Round 61.)
       const tierTxt = ` · tier ${['', 'I', 'II', 'III'][Math.max(1, Math.min(3, d.tier || 1))]}`;
       put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : anc ? '#3a0a10' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}${anc ? ', an ancient place' : ''}) · ${what}${tierTxt}`, kav ? '#7ae0ff' : anc ? '#ff9080' : '#f0d8a0', true);
-      tierBadge(d);
+      badged.push(d);
     }
+    for (const d of badged) tierBadge(d);
     // What people have told you of: a lake, a river, the coast.
     for (const q of game.world.ow.pins || []) {
       // (Round 73: a quest's marker blinks.)

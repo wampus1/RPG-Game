@@ -285,13 +285,15 @@ test('the forge\'s window: played on a guest\'s screen, worked out at the host',
 
 test('a town\'s blacksmith takes a commission, ready the next day', () => {
   const g = world();
-  fill(g, [['coin', 2000]]);
-  const smith = (type) => ({ rec: { job: 'blacksmith', idx: 4 }, settlement: { id: 900 + type.length, type } });
-  const npc = smith('city');
+  fill(g, [['coin', 4000]]);
+  // (Round 139: how good the work is, the smith's own skill.)
+  const smith = (type, sk) => ({ rec: { job: 'blacksmith', idx: 4, skills: { crafting: sk, building: sk } }, settlement: { id: 900 + type.length, type } });
+  const npc = smith('city', 0.8);
   assert.equal(smithTopics(npc, g)[0].id, 'sm_order');
   const menu = smithRespond(npc, g, 'sm_order');
   assert.ok(menu.choices.length >= 4);
-  const pick = menu.choices[0];
+  const kinds = smithRespond(npc, g, 'sm_order', menu.choices[0].arg);
+  const pick = kinds.choices[0];
   const before = countItem(g.player.inv, 'coin');
   smithRespond(npc, g, 'sm_order', pick.arg);
   assert.ok(countItem(g.player.inv, 'coin') < before, 'paid up front');
@@ -302,16 +304,17 @@ test('a town\'s blacksmith takes a commission, ready the next day', () => {
   const got = g.player.inv.find((s) => s && s.item.startsWith(`${pick.arg}~`));
   assert.ok(got, 'collected');
   const st = ITEMS[got.item].stars;
-  assert.ok(st >= 3 && st <= 4, 'a city smith\'s work: three or four stars');
+  assert.ok(st >= 3 && st <= 4, 'a fine city smith\'s work: three or four stars');
   assert.ok(!(ITEMS[got.item].mods || []).some((m) => modOf(gearClass(ITEMS[pick.arg]), m).flaw), 'no flaws out of the shop');
   assert.equal(smithTopics(npc, g)[0].id, 'sm_order');
-  // A village smith's: two.
-  const v = smith('village');
+  // A green village smith's: no more than two.
+  const v = smith('village', 0.3);
   const m2 = smithRespond(v, g, 'sm_order');
-  smithRespond(v, g, 'sm_order', m2.choices[0].arg);
+  const k2 = smithRespond(v, g, 'sm_order', m2.choices[0].arg);
+  smithRespond(v, g, 'sm_order', k2.choices[0].arg);
   g.day += 1;
   smithRespond(v, g, 'sm_collect');
-  assert.ok(g.player.inv.some((s) => s && ITEMS[s.item] && ITEMS[s.item].stars === 2 && s.item.startsWith(`${m2.choices[0].arg}~`)));
+  assert.ok(g.player.inv.some((s) => s && ITEMS[s.item] && ITEMS[s.item].stars <= 2 && s.item.startsWith(`${k2.choices[0].arg}~`)));
 });
 
 test('version 1.32.0, and the forge\'s ways explained to an older world', () => {

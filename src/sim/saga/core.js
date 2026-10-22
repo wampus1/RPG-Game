@@ -478,7 +478,13 @@ export class Saga {
       this.fault(null, e);
     }
     for (const t of th.tasks) if (t.status === 'open') this.closeTask(t, 'void');
-    for (const a of th.actors) this.dismissActor(th, a.key);
+    for (const a of th.actors) {
+      // (Round 139) One already walking off is left to go (see walkOff:
+      // they're out of the world once there, or out of sight).
+      const e = a.walkOff ? this.actors.get(`${th.id}:${a.key}`) : null;
+      if (e && !e.dead && e.saga && e.saga.exit) this.actors.delete(`${th.id}:${a.key}`);
+      else this.dismissActor(th, a.key);
+    }
     const M = MOTIFS[th.m];
     if (M && M.ended) {
       try {
@@ -1444,6 +1450,26 @@ export class Saga {
     e.saga.exit = { x: to.x, z: to.z };
     e.saga.exitT = 0;
     e.saga.seated = false;
+  }
+
+  // (Round 139) Done talking: off on foot, away from whoever they were
+  // talking to (out through the door of wherever they are, the way they'd
+  // go), so they're seen to leave rather than vanish where they stood.
+  sendOff(th, key) {
+    const e = this.actorEnt(th, key);
+    if (!e || e.kind !== 'npc') return this.dismissActor(th, key);
+    const g = this.game;
+    const p = g.closestPlayer(e.x, e.z).p;
+    const ang = Math.atan2(e.z - p.z, e.x - p.x);
+    for (let k = 0; k < 8; k++) {
+      const a = ang + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.6;
+      const x = Math.round(e.x + Math.cos(a) * 18);
+      const z = Math.round(e.z + Math.sin(a) * 18);
+      if (!g.world.regionAt(x, z)) continue;
+      const y = g.world.findStandY(x, z, e.y);
+      if (y > 0 && !g.world.isWaterAt(x, y, z)) return this.walkOff(th, key, { x, z });
+    }
+    return this.walkOff(th, key, null);
   }
 
   actorSpec(th, key) {

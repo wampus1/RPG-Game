@@ -73,6 +73,9 @@ export const TRIGGERS = {
   oneshot: { when: 'you bring down an unhurt foe with a single blow', trait: 'deathly', rate: 'rarely', chance: 1, secs: 20, gear: ARMS },
   dawn: { when: 'day breaks (and a modifier works all day)', trait: 'of the dawn', rate: 'rarely', chance: 1, hold: 'day', gear: ANY },
   rain: { when: 'rain sets in (and a modifier works while it rains)', trait: 'storm-born', rate: 'rarely', chance: 1, hold: 'rain', gear: ANY },
+  // (Round 139) A weapon's special loosed (held, and let go: see
+  // game/specials.js).
+  special: { when: 'you loose your weapon\'s special', trait: 'flourishing', rate: 'sometimes', chance: 1, secs: 12, gear: ['blade'] },
   // Rarely.
   brink: { when: 'you fall below a fifth of your health', trait: 'last-ditch', rate: 'rarely', chance: 1, secs: 20, gear: ANY },
   streak: { when: 'you bring down three foes inside twelve seconds', trait: 'reaping', rate: 'rarely', chance: 1, secs: 20, gear: ARMS },

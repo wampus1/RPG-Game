@@ -7,6 +7,7 @@ import { seatPart } from '../game/party.js';
 import { GROUND } from '../config.js';
 import { B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
+import { CONTAINER_SIZE } from '../world/loot.js';
 import { clamp } from '../util/rng.js';
 import { jobTitle } from '../entities/npcgen.js';
 import { DAY, ledger, mayorOf, alive, st, setOverride, invAdd } from './econ.js';
@@ -58,6 +59,10 @@ const SHOUTS = {
   desertion: ['Deserter! Seize them!', 'There\'s the one who ran from the war!'],
 };
 
+// (Round 139) How many guards a town needs before it can spare one to
+// stand at the jail door while someone's in the cell.
+export const SENTRY_MIN = 3;
+
 export class Justice {
   constructor(game, sim) {
     this.game = game;
@@ -75,6 +80,7 @@ export class Justice {
     this.sightings = new Map(); // sid -> [{t, x, z, who: [idx]}]
     this.repairs = []; // jails to patch up after a breakout
     this.unsolved = []; // crimes nobody saw, waiting to be discovered
+    this.vaults = new Map(); // sid -> the evidence chest (see evidenceChest)
   }
 
   pendingIn(sid) {
@@ -347,7 +353,9 @@ export class Justice {
     game.audio?.play('select');
   }
 
-  // Weapons (and arrows) are held by the guards until you're released.
+  // Weapons (and arrows) are held by the guards until you're released:
+  // (Round 139) locked in the evidence chest (see evidenceChest), not
+  // carried off somewhere unseen.
   confiscateWeapons(sid) {
     const p = this.game.player;
     const taken = [];
@@ -367,11 +375,98 @@ export class Justice {
       p.equip.shield = null;
     }
     const prev = this.held && this.held.sid === sid ? this.held.items : this.held ? (this.stashWeapons(this.sim.layoutOf(this.held.sid)), []) : [];
-    if (taken.length || prev.length) this.held = { sid, items: [...prev, ...taken] };
+    if (!taken.length && !prev.length) return taken;
+    this.held = { sid, items: [...prev, ...taken] };
+    const at = this.lockAway(this.sim.layoutOf(sid), taken);
+    if (at) this.held.at = at;
     return taken;
   }
 
-  // Released: the guards hand your weapons back, unless you killed someone.
+  // (Round 139) Where the guards keep what they take off a prisoner: a
+  // chest of the jail's own (not the treasury's, where the jail is in the
+  // town hall), else the town hall's, else one set down for it by the
+  // cell; under a strongroom lock (see game.chestLocked), and guarded.
+  evidenceChest(L, make = true) {
+    if (!L || !L.jail || !L.settlement) return null;
+    const w = this.game.world;
+    const sid = L.settlement.id;
+    const at = this.vaults.get(sid);
+    if (at && w.regionAt(at.x, at.z) && w.getBlock(at.x, at.y, at.z) === B.chest) return at;
+    if (!make) return at || null;
+    const jb = L.buildings[L.jail.building];
+    if (!jb || !w.regionAt(jb.door.x, jb.door.z)) return null;
+    const coffers = new Set((L.treasury || []).map((t) => `${t.x},${t.z}`));
+    // (An empty one for choice: not the guards' own stores.)
+    const scan = (b, y, empty) => {
+      for (let z = b.z0; z <= b.z1; z++) {
+        for (let x = b.x0; x <= b.x1; x++) {
+          if (w.getBlock(x, y, z) !== B.chest || coffers.has(`${x},${z}`)) continue;
+          if (!empty || !w.getContainer(x, y, z).some(Boolean)) return { x, y, z };
+        }
+      }
+      return null;
+    };
+    const hall = L.buildings.find((b) => b.type === 'townhall' && !b.playerHome);
+    const hy = hall ? hall.floorY ?? L.jail.y : 0;
+    const v = scan(jb, L.jail.y, true) || this.setEvidenceChest(L) || scan(jb, L.jail.y, false) || (hall && hall !== jb ? scan(hall, hy, true) || scan(hall, hy, false) : null);
+    if (v) this.vaults.set(sid, v);
+    return v;
+  }
+
+  // A chest put down against a wall of the jail, near the cell, out of
+  // everyone's way (not the cell, its door, the spot before it, or the
+  // way in).
+  setEvidenceChest(L) {
+    const w = this.game.world;
+    const J = L.jail;
+    const b = L.buildings[J.building];
+    const skip = new Set([...J.cell, J.door, J.front].map((t) => `${t.x},${t.z}`));
+    let best = null;
+    for (let z = b.z0; z <= b.z1; z++) {
+      for (let x = b.x0; x <= b.x1; x++) {
+        if (skip.has(`${x},${z}`) || Math.abs(x - b.door.x) + Math.abs(z - b.door.z) <= 2) continue;
+        if (w.getBlock(x, J.y, z) !== B.air || w.getBlock(x, J.y + 1, z) !== B.air || !w.canStand(x, J.y, z, true)) continue;
+        // (Against a wall: a solid side not the bars of the cell.)
+        let walls = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const id = w.getBlock(x + dx, J.y, z + dz);
+          if (id !== B.air && id !== B.iron_bars && id !== B.cell_door && !skip.has(`${x + dx},${z + dz}`)) walls++;
+        }
+        if (!walls) continue;
+        const score = walls * 4 - Math.abs(x - J.front.x) - Math.abs(z - J.front.z);
+        if (!best || score > best.score) best = { x, z, score };
+      }
+    }
+    if (!best) return null;
+    w.setBlock(best.x, J.y, best.z, B.chest, 0);
+    // (Empty: nothing in it but what's taken off prisoners.)
+    w.putContainer(best.x, J.y, best.z, new Array(CONTAINER_SIZE.chest || 9).fill(null));
+    return { x: best.x, y: J.y, z: best.z };
+  }
+
+  isEvidence(x, y, z) {
+    for (const v of this.vaults.values()) if (v.x === x && v.y === y && v.z === z) return true;
+    return false;
+  }
+
+  // What's taken goes into the evidence chest, each marked as so (what
+  // won't fit the guards keep by them, as before).
+  lockAway(L, items) {
+    const at = this.evidenceChest(L);
+    const slots = at ? this.game.world.getContainer(at.x, at.y, at.z) : null;
+    if (!slots) return null;
+    for (const it of items) {
+      const i = slots.findIndex((s) => !s);
+      if (i < 0) break;
+      slots[i] = { item: it.item, count: it.count };
+      it.locked = true;
+    }
+    return at;
+  }
+
+  // Released: the guards hand your weapons back (out of the evidence
+  // chest), unless you killed someone. What's no longer in the chest (you
+  // got in and took it, say) isn't given twice.
   returnWeapons(forfeit) {
     const h = this.held;
     if (!h || !h.items.length) {
@@ -385,7 +480,18 @@ export class Justice {
       game.ui.msg('Your weapons are forfeit: murderers don\'t get them back.', '#ff9060');
       return;
     }
+    const slots = h.at && game.world.regionAt(h.at.x, h.at.z) && game.world.getBlock(h.at.x, h.at.y, h.at.z) === B.chest ? game.world.getContainer(h.at.x, h.at.y, h.at.z) : null;
+    const back = [];
     for (const it of h.items) {
+      if (it.locked) {
+        const i = slots ? slots.findIndex((s) => s && s.item === it.item) : -1;
+        if (i < 0) continue;
+        const n = Math.min(it.count, slots[i].count);
+        slots[i].count -= n;
+        if (slots[i].count <= 0) slots[i] = null;
+        it.count = n;
+      }
+      back.push(it);
       // (The off-hand blade back where it was, if that hand's still free.)
       if (it.slot === 'shield' && p.equip && !p.equip.shield) {
         p.equip.shield = it.item;
@@ -394,29 +500,21 @@ export class Justice {
       const left = p.give(it.item, it.count);
       if (left) game.spawnDrop(it.item, left, p.x, p.y, p.z, true);
     }
-    game.ui.msg(`The guard hands back your ${h.items.map((i) => ITEMS[i.item].name.toLowerCase()).slice(0, 3).join(', ')}.`, '#a0e0a0');
+    if (back.length) game.ui.msg(`The guard unlocks the evidence chest and hands back your ${back.map((i) => ITEMS[i.item].name.toLowerCase()).slice(0, 3).join(', ')}.`, '#a0e0a0');
+    else game.ui.msg('The guard opens the evidence chest: whatever of yours was in it is gone.', '#ffb080');
   }
 
-  // Escaped: your weapons stay locked in the jail building's chest.
+  // Escaped: your weapons stay locked in the evidence chest (what the
+  // guards kept by them goes in too).
   stashWeapons(L) {
     const h = this.held;
     this.held = null;
     if (!h || !h.items.length || !L || !L.jail) return;
-    const w = this.game.world;
-    const b = L.buildings[L.jail.building];
-    let slots = null;
-    for (let z = b.z0; z <= b.z1 && !slots; z++) {
-      for (let x = b.x0; x <= b.x1 && !slots; x++) {
-        const id = w.getBlock(x, L.jail.y, z);
-        if (id === B.chest || id === B.barrel || id === B.crate) slots = w.getContainer(x, L.jail.y, z);
-      }
-    }
-    for (const it of h.items) {
-      if (!slots) break;
-      const i = slots.findIndex((s) => !s);
-      if (i >= 0) slots[i] = { item: it.item, count: it.count };
-    }
-    if (slots) this.game.ui.msg(`Your weapons are locked in a chest in the ${b.name}.`, '#ffb080');
+    const loose = h.items.filter((it) => !it.locked);
+    const at = loose.length ? this.lockAway(L, loose) : h.at || this.evidenceChest(L, false);
+    if (!at) return;
+    const b = L.buildings.find((q) => at.x >= q.x0 && at.x <= q.x1 && at.z >= q.z0 && at.z <= q.z1);
+    this.game.ui.msg(`Your weapons are locked in the evidence chest${b ? ` in the ${b.name}` : ''}.`, '#ffb080');
   }
 
   confiscateStolen(L, sid) {
@@ -836,7 +934,86 @@ export class Justice {
       this.investigate();
       this.updateRepairs();
       this.patrol();
+      this.postSentries();
     }
+  }
+
+  // (Round 139) A town with guards enough (SENTRY_MIN and more) puts one
+  // on the jail's door while there's anyone in its cell: you, another
+  // player, or one of its own doing time. Stood just outside, to one side
+  // of the door, facing the street; called off once the cell's empty.
+  postSentries() {
+    const game = this.game;
+    const now = this.sim.abs;
+    for (const [sid, a] of game.active) {
+      const L = a.layout;
+      if (!L || !L.jail) continue;
+      const on = L.npcs.find((r) => r.override && r.override.act === 'watch' && r.override.post);
+      const held = this.prisonerIn(L);
+      const guards = held ? game.guardsOf(sid).filter((g) => !g.sleeping && g.state !== 'escort' && !g.rec.away) : [];
+      if (!held || guards.length < SENTRY_MIN) {
+        if (on) on.override = null;
+        if (on && on.ent && on.ent.act === 'watch') on.ent.activity = null;
+        continue;
+      }
+      const post = this.sentryPost(L);
+      if (!post) continue;
+      let g = on && on.ent && !on.ent.dead ? on.ent : null;
+      if (!g) {
+        // (Whoever's nearest and free: not the one at the cell for a
+        // hearing, or patching it up.)
+        const free = guards.filter((n) => !(n.rec.override && n.rec.override.e > now) && n.state === 'routine');
+        g = free.sort((p, q) => Math.abs(p.x - post.x) + Math.abs(p.z - post.z) - Math.abs(q.x - post.x) - Math.abs(q.z - post.z))[0];
+        if (!g) continue;
+      }
+      if (!g.rec.override || !g.rec.override.post || g.rec.override.e - now < 30) {
+        setOverride(g.rec, now, now + 120, 'watch', { target: { x: post.x, z: post.z }, place: 'jail', post: true, face: post.face });
+        if (g.activity && g.activity.entry.act !== 'watch') g.activity = null;
+      }
+    }
+  }
+
+  // (Round 139) Someone (any player) in a town's cell just now: where a
+  // visitor stands to talk to them through the bars (in the jail, before
+  // the cell door), and `has(n)`, whether a visitor's in the jail with
+  // them (not up against its outside wall). Null if they're not in a cell.
+  cellside(p) {
+    if (!p || p.dead) return null;
+    const px = Math.round(p.x);
+    const pz = Math.round(p.z);
+    const s = this.game.world.ow.settlementAt(px, pz);
+    if (!s || s.condition === 'abandoned') return null;
+    const L = this.game.world.getLayout(s);
+    const J = L && L.jail;
+    if (!J || Math.abs(p.y - J.y) > 1 || !J.cell.some((c) => c.x === px && c.z === pz)) return null;
+    const b = L.buildings[J.building];
+    // (Within its walls: not stood in its doorway.)
+    return { x: J.front.x, y: J.y, z: J.front.z, has: (n) => n.x > b.x0 && n.x < b.x1 && n.z > b.z0 && n.z < b.z1 && Math.abs(n.y - J.y) <= 1 };
+  }
+
+  // Is anyone in the cell of the town just now?
+  prisonerIn(L) {
+    const sid = L.settlement.id;
+    if (this.jailedIn(sid) && !(this.jail && this.jail.sid === sid && this.jail.cellless)) return true;
+    return L.npcs.some((r) => r.ent && !r.ent.dead && (r.ent.state === 'jailed' || r.ent.state === 'toCell'));
+  }
+
+  // Beside the jail's door, outside: a tile to one side of the step, so
+  // the way in stays clear; facing out.
+  sentryPost(L) {
+    const w = this.game.world;
+    const b = L.buildings[L.jail.building];
+    if (!b || !b.outside || !b.door) return null;
+    const ox = Math.sign(b.outside.x - b.door.x);
+    const oz = Math.sign(b.outside.z - b.door.z);
+    const face = ox > 0 ? 3 : ox < 0 ? 1 : oz > 0 ? 0 : 2;
+    for (const s of [1, -1]) {
+      const x = b.outside.x + s * Math.abs(oz);
+      const z = b.outside.z + s * Math.abs(ox);
+      const y = w.findStandY(x, z, L.jail.y);
+      if (y >= 0 && Math.abs(y - L.jail.y) <= 1 && !this.game.occupiedBySolid(x, y, z, null)) return { x, z, face };
+    }
+    return { x: b.outside.x, z: b.outside.z, face };
   }
 
   updateJail(dt) {
@@ -1369,7 +1546,7 @@ export class Justice {
   // ------------------------------------------------------------ save
   serialize() {
     const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' || this.jail.phase === 'night' ? this.jail.phase : 'gather', t: 0 } : null;
-    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings], repairs: this.repairs.map((r) => ({ sid: r.sid, at: r.at, floor: r.floor })) };
+    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings], repairs: this.repairs.map((r) => ({ sid: r.sid, at: r.at, floor: r.floor })), vaults: [...this.vaults] };
   }
 
   load(d) {
@@ -1383,6 +1560,7 @@ export class Justice {
     this.sightings = new Map(d.sightings || []);
     this.pendingEscort = d.escortSid ?? null;
     this.repairs = d.repairs || [];
+    this.vaults = new Map(d.vaults || []);
   }
 
   // The cell floor as it was when you were locked in (for repairs).

@@ -213,13 +213,14 @@ motif({
         S.asPid(pid, (p) => removeItem(p.inv, 'coin', th.vars.price));
         const av = recOf(S, th.cast.avenger);
         if (av) av.coins = (av.coins || 0) + th.vars.price;
-        S.dismissActor(th, 'avenger');
+        // (Round 139: off on foot, not gone from where they stood.)
+        S.sendOff(th, 'avenger');
         S.end(th, 'settled', `${nameOf(S, R.pl(pid))} paid ${th.names.avenger} the blood price for ${th.names.victim}.`);
         return { lines: ['Coin won\'t bring them back.', '...But it\'s something. Don\'t come near me again.'], close: true };
       }
       case 'sgv_sorry': {
         if (rng.chance(0.15 + cha * 0.08 - th.vars.temper * 0.2)) {
-          S.dismissActor(th, 'avenger');
+          S.sendOff(th, 'avenger');
           S.end(th, 'forgiven', `${th.names.avenger} heard ${nameOf(S, R.pl(pid))} out, and let it go.`);
           return { lines: ['...', 'I don\'t forgive you. But I won\'t carry this any more. Go.'], close: true };
         }
@@ -228,16 +229,17 @@ motif({
       }
       case 'sgv_threat': {
         th.vars.temper += 0.3;
-        S.dismissActor(th, 'avenger');
-        if (th.vars.temper > 0.7) {
-          const e = npc;
-          if (e && !e.dead) {
-            e.saga = null;
-            e.state = 'routine';
-            e.engage(S.game.player);
-          }
+        // (Round 139) Off on foot either way; the hot-headed go for you
+        // first (not through the bars of a cell, though), and walk off
+        // once it's over.
+        const p = playerOf(S.game, pid);
+        const caged = !p || S.game.sim.justice.cellside(p);
+        S.sendOff(th, 'avenger');
+        if (th.vars.temper > 0.7 && npc && !npc.dead && !caged) {
+          npc.engage(p);
           return { lines: ['Then I\'ll join them TRYING!'], close: true };
         }
+        if (caged && th.vars.temper > 0.7) return { lines: ['Lucky for you there\'s iron between us.', 'They can\'t keep you in there forever.'], close: true };
         return { lines: ['This isn\'t over.'], close: true };
       }
       default:

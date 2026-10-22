@@ -659,16 +659,41 @@ export const DSPRITES = {
     p.rect(7, 19, 3, 3, KAV.rune);
     return p.outline(OUT);
   },
+  // (Round 139) A relic set down: a carved pedestal of pale old stone, a
+  // stepped foot, a fluted shaft with a band of runes kindling up it, and
+  // a gilt cradle at its head. The relic itself floats over the cradle,
+  // drawn there as itself (see render/oldplaces.js relicCircles).
   relic(rot, st, f) {
     const p = spr();
-    // A short plinth of old stone, the relic floating over it.
-    p.rect(4, 19, 8, 7, STONE[1]);
-    p.rect(3, 18, 10, 2, STONE[0]);
-    p.hline(3, 12, 18, STONE[2]);
-    const h = [0, -1, -1, 0][f % 4];
-    p.ellipse(8, 12 + h, 3, 3, '#f0ecd8');
-    p.ellipse(8, 12 + h, 2, 2, '#ffffff');
-    p.set(7, 11 + h, '#ffffff');
+    const S0 = '#8a8478';
+    const S1 = '#b8b2a2';
+    const S2 = '#d8d2c0';
+    const G0 = '#8a6010';
+    const G1 = '#e0b040';
+    const G2 = '#fff0a0';
+    // The foot, in two steps.
+    p.rect(2, 24, 12, 2, S0);
+    p.hline(2, 13, 24, S1);
+    p.rect(3, 22, 10, 2, S1);
+    p.hline(3, 12, 22, S2);
+    // The shaft, fluted.
+    p.rect(5, 12, 6, 10, S1);
+    p.vline(5, 12, 21, S0);
+    p.vline(7, 12, 21, S2);
+    p.vline(10, 12, 21, S0);
+    // A band of runes round it, kindling one after another.
+    for (let i = 0; i < 4; i++) p.set(6 + i, 16, (f + i) % 4 === 0 ? '#ffffff' : (f + i) % 4 === 1 ? '#e0b8ff' : '#7a5aa8');
+    p.hline(5, 10, 15, S0);
+    p.hline(5, 10, 17, S0);
+    // The capital, gilt-rimmed, and the cradle on it.
+    p.rect(3, 10, 10, 2, S1);
+    p.hline(3, 12, 10, S2);
+    p.hline(3, 12, 11, G0);
+    p.rect(5, 8, 6, 2, G1);
+    p.hline(5, 10, 8, G2);
+    p.set(5, 9, G0);
+    p.set(10, 9, G0);
+    p.rect(6, 7, 4, 1, G0);
     return p.outline(OUT);
   },
 };

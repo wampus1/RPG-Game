@@ -42,7 +42,10 @@ export function modsOf(e) {
     }
   };
   const h = held && ITEMS[held];
-  if (h && h.mods && out[h.gear]) put(h.gear, h.mods, (m) => out[h.gear].push(m));
+  // (Round 139: only what's wielded: a breastplate held in the hand, say,
+  // does nothing there, and its modifiers aren't a weapon's. It used to
+  // throw here every frame, and the screen went black.)
+  if (h && h.mods && (h.gear === 'blade' || h.gear === 'bow' || h.gear === 'tool')) put(h.gear, h.mods, (m) => out[h.gear].push(m));
   const sh = eq.shield && ITEMS[eq.shield];
   if (sh && sh.gear === 'shield') put('shield', sh.mods, (m) => out.shield.push(m));
   for (const slot of WORN) {

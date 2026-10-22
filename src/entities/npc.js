@@ -24,6 +24,7 @@ import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weathe
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
 import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch, npcWingWatch, starborn } from '../game/combat.js';
+import { isStar, KIN_BARKS } from '../game/starfall.js';
 import { doorLocked, knock as knockDoor, answerTick } from '../game/doorlocks.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
@@ -559,6 +560,9 @@ export class NPC extends Entity {
         return rng.chance(0.5) ? plazaTile() : roadTile();
       }
       case 'watch':
+        // (Round 139: on the jail's door, a spot of their own: see
+        // justice.postSentries.)
+        if (e.post) return target(e.target, { tag: 'watch', near: 0, face: e.face });
         return target(e.target, { tag: 'watch', near: 2 });
       case 'sell':
         return target(e.target, { near: 1, tag: 'sell', sell: true });
@@ -1220,6 +1224,13 @@ export class NPC extends Entity {
       w.t -= dt;
       if (w.t <= 0 || this.state !== 'routine' || this.followPath(w, 1)) this.walkOff = null;
       else return;
+    }
+    // (Round 139) Come to say something to you, and waiting on it: stood
+    // where they are (see seekTick).
+    if (this.seekHold > 0 && this.state === 'routine') {
+      this.seekHold -= dt;
+      this.path = null;
+      return;
     }
     // (Round 87) Waiting on your answer, out after curfew (see
     // CurfewWindow): stood where they are, facing you.
@@ -1964,7 +1975,7 @@ export class NPC extends Entity {
     }
     // A guard watching over a miner goes where they go, and home with them.
     // (Keeping an eye on you after curfew is a watch of another kind.)
-    if (this.act === 'watch' && !(this.rec.override && (this.rec.override.curfew || this.rec.override.labor))) {
+    if (this.act === 'watch' && !(this.rec.override && (this.rec.override.curfew || this.rec.override.labor || this.rec.override.post))) {
       const o = this.rec.override;
       const ward = o && this.layout.npcs[o.ward];
       const we = ward && ward.ent;
@@ -2240,6 +2251,20 @@ export class NPC extends Entity {
           return;
         }
       }
+    }
+    // (Round 139) On the jail door: eyes on the street, and a word for
+    // anyone who comes close.
+    if (act.act === 'watch' && act.post) {
+      const p = game.player;
+      const d = this.distTo(p);
+      if (d <= 4 && !p.restrained) {
+        this.face(p.x, p.z);
+        if (this.lineCd <= 0) {
+          this.lineCd = this.rng.float(25, 45);
+          this.say(this.rng.pick(['Move along.', 'Nobody sees the prisoner without the captain\'s say.', 'Keep your distance from the door.', 'Business here? Didn\'t think so.', 'Eyes front, friend. Keep walking.']), 3);
+        }
+      } else if (act.face !== undefined && this.dir !== act.face && this.rng.chance(dt * 0.5)) this.dir = act.face;
+      return;
     }
     // (Round 77) A broom, a wall to lean on, a word with whoever's by.
     if (idleTick(this, act, g, dt)) return;
@@ -3520,9 +3545,15 @@ export class NPC extends Entity {
     if (s.pk !== pk || (s.cool && g.sim.abs < s.cool)) return false;
     const d = this.distTo(player);
     if (d > 16) return false;
-    if (d <= 2.6) {
+    // (Round 139) You in a cell: in through the jail's door to the bars
+    // to say it, not through its outside wall.
+    const cell = g.sim.justice.cellside(player);
+    if (cell ? cell.has(this) && d <= 3.5 : d <= 2.6) {
       this.walkOff = null;
       this.path = null;
+      // (Stood there, waiting on you: not off about their day a step at a
+      // time between words. See update.)
+      this.seekHold = 0.5;
       this.face(player.x, player.z);
       if (!s.said || g.sim.abs - s.said > 90) {
         s.said = g.sim.abs;
@@ -3540,9 +3571,10 @@ export class NPC extends Entity {
     this.seekT = (this.seekT || 0) - dt;
     if (!this.walkOff || this.seekT <= 0) {
       this.seekT = 1.2;
-      const y = g.world.findStandY(Math.round(player.x), Math.round(player.z), Math.round(player.y));
+      const to = cell || { x: Math.round(player.x), z: Math.round(player.z) };
+      const y = g.world.findStandY(to.x, to.z, cell ? cell.y : Math.round(player.y));
       if (y < 0) return false;
-      this.walkOff = { x: Math.round(player.x), y, z: Math.round(player.z), t: 5 };
+      this.walkOff = { x: to.x, y, z: to.z, t: 5 };
       this.path = null;
     }
     return true;
@@ -3564,6 +3596,18 @@ export class NPC extends Entity {
     // (Round 136) Someone with something to say to you (a grudge, thanks, a
     // question: see sim/mind) comes over to say it.
     if (this.rec.seek && this.seekTick(player, dt)) return;
+    // (Round 139) One with a wing, the first time they see a fallen star:
+    // they stop, call out, and turn to look.
+    if (!this.rec.kinSeen && !this.sleeping && this.state === 'routine' && this.distTo(player) <= 8 && starborn(this.rec)) {
+      const hero = player === this.game.player ? this.game.hero : player.seat && player.seat.hero;
+      if (isStar(hero)) {
+        this.rec.kinSeen = true;
+        this.face(player.x, player.z);
+        this.say(this.rng.pick(KIN_BARKS), 3.5, '#c8e0ff');
+        this.game.renderer?.emit(this.x, this.y + 1.4, this.z, { n: 8, color: ['#a8dcff', '#e0f4ff', '#ffffff'], up: 14, speed: 18, life: 0.8, gravity: -8, glow: true });
+        return;
+      }
+    }
     this.greetCd -= dt;
     if (this.greetCd > 0 || this.sleeping || this.state !== 'routine' || this.bubble || player.dead) return;
     if (this.distTo(player) > 3) return;

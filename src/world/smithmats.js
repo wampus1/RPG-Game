@@ -102,7 +102,7 @@ export const ADDITIVES = {
   // (Round 137) Things that were never put in a forge before.
   clay: { traits: ['tough', 'mine', 'shatter'] },
   glass: { traits: ['light', 'flawed', 'dodge'] },
-  antler: { traits: ['heavy', 'fell'] },
+  antler: { traits: ['heavy', 'fell', 'special'] },
   coral: { traits: ['vital', 'streak'] },
   relic_shard: { traits: ['pure', 'boss'] },
   // (Round 138) And more, with the new triggers and abilities in them.

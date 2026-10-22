@@ -1099,6 +1099,17 @@ export const STEPS = [
       log.push('More triggers (a heavy blow, the dead struck, eating, the last foe falling, a blow from afar or behind, a broken guard, a fish landed, a foe felled at a blow, daybreak, rain) and more abilities (a wall of flame, a geyser, ironskin, a blood pact, a chain hook, a frost lance, a swarm, a well of night, a spring bloom, a smoke veil, a spirit wolf, a gale step); every ability drawn afresh in the world\'s own pixels.');
     },
   },
+  {
+    to: '1.39.0',
+    game(game, log) {
+      // (Weapons held by a town's guards from before: kept by them as they
+      // were, handed back on release; from now on what's taken goes into an
+      // evidence chest. See justice.confiscateWeapons.)
+      const j = game.sim && game.sim.justice;
+      if (j && !(j.vaults instanceof Map)) j.vaults = new Map();
+      log.push('Every weapon has a special (hold the button, let go when it\'s ready), shown on the ground as it winds up; a new "special" trigger; relics only off masters of the old places (always off a third-tier one) and broken down into shards at an anvil; smiths priced by their skill, making anything forged; confiscated weapons locked in an evidence chest, a guard on the jail door, and visitors come into the jail to talk.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

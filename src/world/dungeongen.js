@@ -1782,10 +1782,11 @@ function dressBase(ctx, r) {
       const special = [rng.pick(['kav_blink', 'kav_mender', 'kav_bulwark', 'kav_edge', 'kav_plating', 'kav_visor', 'kav_treads', 'kav_greaves']), 1];
       chestIn(ctx, r, 3, big ? B.kav_cache : B.chest, big ? [special, ...(rng.chance(0.45) ? [['kav_core', 1]] : [])] : [['old_blueprint', 1]]);
       if (!big) {
-        const at = placeIn(ctx, r, B.relic);
-        if (at) {
-          out.relicAt = { x: b.x0 + at.x, z: at.z, kind: rng.pick(RELIC_KEYS) };
-        }
+        // (Round 139: an idol on the plinth now, not a relic: relics only
+        // come off the masters. The pick's kept, so the rest of the place
+        // comes out as it always did.)
+        const at = placeIn(ctx, r, B.idol !== undefined ? B.idol : B.relic);
+        if (at) rng.pick(RELIC_KEYS);
       }
       // (Whoever holds the key to it is somewhere on this floor.)
       const holder = ctx.plan.rooms.filter((q) => q !== r && q.kit !== 'entry' && q.kit !== 'boss' && q.kit !== 'vault');
@@ -1851,7 +1852,7 @@ function dressBase(ctx, r) {
         const at = placeIn(ctx, r, B.brazier, 0, true);
         if (at) set.push({ x: b.x0 + at.x, z: at.z });
       }
-      if (alt && set.length) out.braziers.push({ set, reward: { x: b.x0 + alt.x, z: alt.z + 1 }, relic: rng.chance(0.06) ? `relic_${rng.pick(RELIC_KEYS)}` : null });
+      if (alt && set.length) out.braziers.push({ set, reward: { x: b.x0 + alt.x, z: alt.z + 1 }, relic: rng.chance(0.06) && rng.pick(RELIC_KEYS) ? 'relic_shard' : null });
       if (rng.chance(0.5)) group(rec.type === 'crypt' ? 'wisp' : 'wight', 1, 1);
       break;
     }
@@ -3297,7 +3298,7 @@ function hiddenRoom(ctx) {
     b.set(wx, FY + 1, wz, B.weak_wall);
     b.set(wx, FY - 1, wz, T.floor);
     out.weak.push({ x: b.x0 + wx, z: wz });
-    chestIn(ctx, room, 2.2, big ? B.kav_cache : B.chest, big ? [[`shard_${rng.pick(SHARD_GEMS)}`, rng.int(2, 4)]] : rng.chance(0.05) ? [[`relic_${rng.pick(RELIC_KEYS)}`, 1]] : [['old_coin', rng.int(2, 5)]]);
+    chestIn(ctx, room, 2.2, big ? B.kav_cache : B.chest, big ? [[`shard_${rng.pick(SHARD_GEMS)}`, rng.int(2, 4)]] : rng.chance(0.05) && rng.pick(RELIC_KEYS) ? [['relic_shard', 2]] : [['old_coin', rng.int(2, 5)]]);
     if (!big) placeIn(ctx, room, B.bones);
     void rec;
     return room;

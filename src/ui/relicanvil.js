@@ -6,7 +6,7 @@
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS, SHARD_MAX } from '../world/items.js';
-import { relicReach, shardRoom, setShards } from '../game/relics.js';
+import { relicReach, shardRoom, setShards, salvageRelic, SALVAGE_SHARDS } from '../game/relics.js';
 
 export class RelicAnvilWindow extends Window {
   constructor(ui) {
@@ -30,7 +30,7 @@ export class RelicAnvilWindow extends Window {
     if (kindAt(this.relic) !== 'relic') this.relic = -1;
     if (kindAt(this.shard) !== 'relic_shard') this.shard = -1;
     g.fill(0, 0, this.w, this.h, ' ', C.fg, C.bg);
-    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · RELIC SHARDS' });
+    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · RELIC SHARDS · SALVAGE' });
     // Your pack's relics and shards: click one to put it in its slot.
     g.text(2, 1, 'Your pack (click one)', C.dim);
     const list = this.candidates(game);
@@ -93,6 +93,19 @@ export class RelicAnvilWindow extends Window {
     const hov = this.hovering(x, by, label.length, 1);
     g.text(x, by, label, can ? (hov ? C.white : C.hi) : C.faint, can ? (hov ? '#4a3a60' : '#2a2230') : undefined);
     if (can) this.hit(x, by, label.length, 1, (ck, gm) => this.set(gm || game));
+    // (Round 139) Or the relic broken down into shards.
+    if (this.relic >= 0) {
+      const it = ITEMS[inv[this.relic].item];
+      const sl = ` Salvage: ${SALVAGE_SHARDS + (it.shards || 0)} shards `;
+      const sx = x + label.length + 2;
+      const sh = this.hovering(sx, by, sl.length, 1);
+      g.text(sx, by, sl, sh ? C.white : '#ffb080', sh ? '#5a3030' : '#2a2230');
+      this.hit(sx, by, sl.length, 1, (ck, gm) => {
+        const r = salvageRelic(gm || game, this.relic);
+        if (!r.ok) return this.ui.msg(r.why, '#ffb080');
+        this.relic = -1;
+      });
+    }
     g.text(2, this.h - 2, 'Enter: set   Esc: close', C.faint);
   }
   set(game) {

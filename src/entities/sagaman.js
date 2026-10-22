@@ -425,7 +425,10 @@ function seek(n, s, dt) {
     return;
   }
   const d = n.distTo(p);
-  if (d <= 2.5) {
+  // (Round 139) You in a cell: in through the jail's door, to the bars,
+  // not up against its outside wall.
+  const cell = g.sim.justice.cellside(p);
+  if (cell ? cell.has(n) && d <= 3.5 : d <= 2.5) {
     n.path = null;
     n.face(p.x, p.z);
     if (!s.hailed) {
@@ -442,7 +445,8 @@ function seek(n, s, dt) {
     return;
   }
   if (d > 40 && catchUp(n, p, dt, d)) return;
-  goTo(n, p.x, p.z, 2);
+  if (cell) goTo(n, cell.x, cell.z, 1);
+  else goTo(n, p.x, p.z, 2);
 }
 
 // Keeping close behind someone (led home, led to safety).

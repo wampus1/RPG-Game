@@ -352,6 +352,8 @@ export class GuestNet {
     game.engines = engines;
     game.props = props;
     this.players = players;
+    // (Round 139: every one of you, for a special's warning: see specialfx.js.)
+    game.netPlayers = players;
     const me = this.ents.get(this.me);
     if (me) {
       if (game.player !== me) {

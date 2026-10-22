@@ -47,6 +47,7 @@ import { GroundFx } from './groundfx.js';
 import { steedSprite, dirAngle, easeAngle, steedSlices, steedRows } from './steeds.js';
 import { chairTable } from '../game/chairs.js';
 import { pixelsIn } from './pixels.js';
+import { drawSpecialTele } from './specialfx.js';
 
 // (Round 114) Which floors fray into their neighbours (see
 // Renderer.blendEdges): earth, stone, sand, moss and the like; not what's
@@ -4601,6 +4602,9 @@ export class Renderer {
         }
       }
     }
+    // (Round 139) A weapon's special winding up, on any of you: the ground
+    // it will cover (see specialfx.js).
+    drawSpecialTele(this, ctx, game);
   }
 
   drawOverlays(game) {

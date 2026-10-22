@@ -66,6 +66,7 @@ import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
 import { useTimeCrystal } from './timecrystal.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText, guardBlow } from './combat.js';
+import { specialOf, windSpecial, dropSpecial, doSpecial, specialTick, specialReady, heading as specHeading } from './specials.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -2537,6 +2538,7 @@ export class Game {
     if (!this.player.limbo) {
       this.player.update(dt, input, blocked);
       playerTick(this, this.player, dt, input, blocked);
+      specialTick(this, this.player, dt);
       mutationTick(this, this.player, dt);
       // The ground gone from under you (dug, blown up, burnt away): you drop.
       this.settleFall(this.player);
@@ -2551,7 +2553,12 @@ export class Game {
       this.pending = null;
       if (uiRes.clicks.some((ck) => ck.type === 'down')) sheepFilter(this, this.player, [{ code: 'Mouse' }]);
     } else if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
-    else this.mining = null;
+    else {
+      this.mining = null;
+      // (A window open over a special winding up: it's let go of.)
+      if (this.charging) this.charging = null;
+      dropSpecial(this.player);
+    }
     if (this.queuedBlow) {
       if (blocked) this.queuedBlow = null;
       else this.tickQueuedBlow(dt);
@@ -3605,20 +3612,28 @@ export class Game {
       this.pending = null;
       return;
     }
-    // Holding the button on a foe winds up a heavy blow; let go to strike
-    // (a quick click is an ordinary one).
+    // Holding the button (on a foe, or a weapon swung at the air) winds up
+    // the weapon's special; let go once it's ready to loose it, or before
+    // for the plain blow (a quick click). (Round 139: see specials.js.)
     const ch = this.charging;
     if (ch) {
-      ch.t += dt;
-      if (ch.t >= 0.45 && !ch.ready) {
-        ch.ready = true;
-        this.audio?.play('select');
-      }
-      if (!input.mouse.down || ch.target.dead) {
+      // (Which way: at them, or toward the mouse as you turn.)
+      if (!ch.target) {
+        const ang = this.aimAngle();
+        if (ang !== null) [ch.dx, ch.dz] = specHeading(Math.cos(ang), Math.sin(ang));
+      } else if (!ch.target.dead) [ch.dx, ch.dz] = specHeading(ch.target.x - p.x, ch.target.z - p.z);
+      if (ch.k && specialReady(p)) windSpecial(this, p, ch, dt);
+      else ch.t += dt;
+      // (Rolled out of it, knocked senseless, they're gone: no blow at all.)
+      const off = (ch.target && ch.target.dead) || (ch.k && !specialReady(p));
+      if (!input.mouse.down || off) {
         this.charging = null;
-        if (!ch.target.dead) this.attack(ch.target, ch.ready);
+        dropSpecial(p);
+        if (!off && ch.ready && ch.k) doSpecial(this, p, ch);
+        else if (!off && ch.target) this.attack(ch.target, false);
+        else if (!off) this.swingAt();
       }
-    }
+    } else if (p.spec) dropSpecial(p);
     for (const ck of clicks) {
       if (ck.type === 'down' && ck.button === 0) {
         // A bow (sling, crossbow) in hand: hold to draw, aim with the mouse,
@@ -3633,7 +3648,7 @@ export class Game {
         }
         if (c && c.entity) {
           const melee = !(p.heldDef() && p.heldDef().ranged) && c.entity.kind !== 'prop';
-          if (melee && p.attackCd <= 0) this.charging = { target: c.entity, t: 0, ready: false };
+          if (melee && p.attackCd <= 0) this.charging = { target: c.entity, t: 0, ready: false, k: this.specialHere(c.entity), dx: 0, dz: 1 };
           else this.attack(c.entity);
           this.pending = null;
           continue;
@@ -3662,6 +3677,9 @@ export class Game {
         // of you (doors and chests still open with a click).
         if (held && held.kind === 'weapon') {
           if (c && c.block && c.block.interact && c.inReach) this.pending = { x: c.x, y: c.y, z: c.z, t: 0 };
+          // (Round 139: held, it winds up the weapon's special; a click is
+          // the plain blow, swung as you let go.)
+          else if (p.attackCd <= 0 && !p.swing && !(p.commitT > 0) && !p.swallowed) this.charging = { target: null, t: 0, ready: false, k: this.specialHere(null), dx: 0, dz: 1 };
           else this.swingAt();
           continue;
         }
@@ -5656,6 +5674,9 @@ export class Game {
   // (see lockTier). A barrel never is. Picked, a lock stays open a couple
   // of days, till they notice and lock it again.
   chestLocked(x, y, z, owner = this.containerOwner(x, y, z)) {
+    // (Round 139) The evidence chest: always, and locked again the moment
+    // it's shut (see pickLock).
+    if (owner && owner.kind === 'evidence') return !this.dungeon;
     if (!owner || (owner.kind !== 'house' && owner.kind !== 'biz') || this.dungeon) return false;
     if (this.world.getBlock(x, y, z) !== B.chest) return false;
     const k = `${x},${y},${z}`;
@@ -5716,6 +5737,9 @@ export class Game {
   // Can anyone see you at a household's lock?
   lockWatched(owner) {
     const p = this.player;
+    // (Round 139) The evidence chest: a guard anywhere in sight of it, or
+    // anyone at all close by.
+    if (owner.kind === 'evidence') return this.sim.witnesses(owner.sid, p.x, p.z, 14, null, p.y).some((n) => n.rec.job === 'guard' || n.distTo(p) <= 6);
     return this.sim.witnesses(owner.sid, p.x, p.z, 6, null, p.y).length > 0;
   }
 
@@ -5723,6 +5747,12 @@ export class Game {
   // nobody watching. A village's iron lock is easy; a city manor's steel
   // one is not.
   pickLock(x, y, z, owner) {
+    // (Round 139) Not the evidence chest through the bars of the cell.
+    if (owner.kind === 'evidence' && this.sim.justice.cellside(this.player)) {
+      this.lockedAt(x, y, z);
+      this.ui.msg('You can\'t get at the evidence chest from in here.', '#ffb080', true);
+      return;
+    }
     if (countItem(this.player.inv, 'lockpick') <= 0) {
       // (Round 73: said over your head, with the rattle of it.)
       this.lockedAt(x, y, z);
@@ -5745,7 +5775,7 @@ export class Game {
       label: whose,
       watched: () => this.lockWatched(owner),
       onOpen: () => {
-        this.picked.set(key, this.day);
+        if (owner.kind !== 'evidence') this.picked.set(key, this.day);
         this.stats.locksPicked = (this.stats.locksPicked || 0) + 1;
         this.openContainerAt(x, y, z, owner);
       },
@@ -5765,6 +5795,9 @@ export class Game {
     if (!s || s.condition === 'abandoned' || s.deserted) return null;
     const L = this.world.getLayout(s);
     const b = buildingAt(L, x, z);
+    // (Round 139) What the guards took off a prisoner: the town's, under
+    // the strongroom lock, whoever you are.
+    if (b && this.sim.justice.isEvidence(x, y, z)) return { kind: 'evidence', id: b.id, sid: s.id, label: 'the evidence chest', b };
     // (Round 79) A rack or stand the town set out in its yards and squares
     // (not one you put up): the town's.
     if (!b) return BLOCKS[this.world.getBlock(x, y, z)]?.display && !this.myChests?.has(`${x},${y},${z}`) && townPlaced(this.world, L, x, y, z) ? { kind: 'town', id: null, sid: s.id, label: s.name } : null;
@@ -5815,12 +5848,12 @@ export class Game {
     const sid = owner.sid;
     const p = this.player;
     const wits = this.sim.witnesses(sid, p.x, p.z, 7);
-    const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : owner.kind === 'town' ? `${owner.label}'s rack` : `the ${owner.label || 'shop'}`;
-    const whose = owner.kind === 'house' ? 'house' : owner.kind === 'town' ? 'town' : 'biz';
+    const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : owner.kind === 'town' ? `${owner.label}'s rack` : owner.kind === 'evidence' ? 'the evidence chest' : `the ${owner.label || 'shop'}`;
+    const whose = owner.kind === 'house' ? 'house' : owner.kind === 'town' || owner.kind === 'evidence' ? 'town' : 'biz';
     const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
     if (!wits.length) {
       // Nobody saw. The owners will notice later...
-      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, bid: owner.id, owner: { kind: whose, id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.kind === 'town' ? `${owner.label} guard` : owner.label });
+      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, bid: owner.id, owner: { kind: whose, id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.kind === 'town' ? `${owner.label} guard` : owner.kind === 'evidence' ? 'guards' : owner.label });
       return false;
     }
     const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
@@ -7222,6 +7255,56 @@ export class Game {
     this.damage(target, Math.max(1, Math.round(dmg)), p);
     this.impact(target, 1, STYLES[weaponStyle(off)]);
     if (!target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, shove);
+    return true;
+  }
+
+  // (Round 139) The special of what's in your hand, for a foe (or the
+  // air): none against a siege engine, another player you may not fight,
+  // or while you're swallowed.
+  specialHere(target) {
+    const p = this.player;
+    if (p.swallowed || p.mount || p.raft) return null;
+    if (target && (target.kind === 'prop' || (target.kind === 'player' && !this.pvp && !boutOf(this, target, p)))) return null;
+    return specialOf(p.heldItem ? p.heldItem() : null);
+  }
+
+  // (Round 139) One struck by a weapon's special (see specials.js), as any
+  // blow lands (a guard's parry, another's shield; the gems, the forged
+  // traits; telling now and then), `mult` times as hard; then what the
+  // special does to them besides: thrown back, stunned, knocked down.
+  specialBlow(target, mult, sp, fresh, o = {}) {
+    const p = this.player;
+    if (!target || target.dead || target.down) return false;
+    const st = { ...styleOf(p), heavy: sp.weight >= 3 };
+    if (o.pierce) st.pierce = Math.max(st.pierce || 0, o.pierce);
+    let { dmg, crit } = this.blowDamage(false, fresh, st);
+    if (o.crit && !crit) {
+      crit = true;
+      dmg *= 1.8;
+    }
+    dmg = dmg * mult * bladeMult(p, target) * clawMult(p);
+    if (target.windup && !(target.isBoss || target.S?.boss)) {
+      interrupt(target, 0.8);
+      this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
+    }
+    if (target.kind === 'npc' && target.parryUpT > 0 && guardBlow(this, p, target, dmg, st) === 'parried') return false;
+    if (target.kind === 'player') {
+      const g = this.asPlayer(target, () => guardBlow(this, p, target, dmg, st));
+      if (g === 'parried') return false;
+      dmg = g.amount;
+      if (Math.round(dmg) <= 0) return true;
+    }
+    this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
+    onBladeHit(this, p, target, { dmg, heavy: st.heavy, crit });
+    onBladeMods(this, p, target);
+    this.impact(target, st.heavy || crit ? 2 : 1, st);
+    if (target.dead || target.hp <= 0) return true;
+    const boss = target.isBoss || target.S?.boss;
+    if (o.stun && !boss) {
+      target.stunT = Math.max(target.stunT || 0, target.kind === 'player' ? o.stun * 0.5 : o.stun);
+      if (o.word && !o.quiet) this.renderer.floatText(target.x, target.y + 2.6, target.z, o.word, '#ffe070');
+    } else if (o.word && !o.quiet && !boss) this.renderer.floatText(target.x, target.y + 2.6, target.z, o.word, '#ffe070');
+    if (o.knock && !target.moving && !target.sleeping) knock(this, o.from || p, target, o.knock);
     return true;
   }
 

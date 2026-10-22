@@ -590,12 +590,12 @@ motif({
     switch (id) {
       case 'sgg_take':
         deliver(th, S, false);
-        S.dismissActor(th, 'messenger');
+        S.sendOff(th, 'messenger');
         return { lines: ['There. Read it. The chief doesn\'t like waiting.', '(A sealed letter: read it [F/RMB].)'], close: true };
       case 'sgg_spurn':
         heat(th, 2);
         th.vars.takeAlive = 0.5;
-        S.dismissActor(th, 'messenger');
+        S.sendOff(th, 'messenger');
         S.note(th, `${nameOf(S, R.pl(pid))} sent the messenger back with a curse.`);
         S.go(th, 'seethe');
         return { lines: [pick(rng, ['Your funeral.', 'I\'ll tell them. They won\'t like it.', 'Brave. Stupid, but brave.'])], close: true };

@@ -440,6 +440,21 @@ export class Audio {
       case 'ab_veil': this.noise(0.8, 0.14, 700); this.noise(0.5, 0.08, 1500, 0.1); this.tone(140, 0.5, 'sine', 0.05, -40); break;
       case 'ab_spirit': this.swell(440, 0.25, 'sine', 0.06, 220); this.tone(660, 0.7, 'sine', 0.05, -260, 0.25); this.tone(990, 0.5, 'sine', 0.02, -300, 0.3); break;
       case 'ab_gale': this.noise(0.4, 0.16, 900); this.noise(0.25, 0.1, 2400, 0.05); this.swell(400, 0.2, 'sine', 0.04, 600); break;
+      // (Round 139) A weapon's special: wound up (a bright ping), and loosed.
+      case 'sp_ready': this.tone(1320, 0.06, 'square', 0.05); this.tone(1980, 0.12, 'triangle', 0.05, 0, 0.05); break;
+      case 'sp_shove': this.noise(0.12, 0.2, 500); this.tone(130, 0.14, 'square', 0.1, -60); break;
+      case 'sp_shadow': this.noise(0.3, 0.1, 900); this.swell(700, 0.15, 'sine', 0.04, -400); this.noise(0.06, 0.14, 3800, 0.18); break;
+      case 'sp_lunge': this.noise(0.18, 0.12, 2600); this.tone(1800, 0.2, 'triangle', 0.04, -900); this.noise(0.05, 0.16, 4200, 0.12); break;
+      case 'sp_flurry': for (let i = 0; i < 3; i++) this.noise(0.07, 0.13, 2400 + i * 300, i * 0.13); break;
+      case 'sp_sweep': this.noise(0.35, 0.14, 700); this.swell(300, 0.25, 'sine', 0.04, 260); break;
+      case 'sp_skewer': this.noise(0.14, 0.14, 3400); this.tone(2600, 0.16, 'triangle', 0.04, -1600); this.tone(180, 0.12, 'square', 0.07, -80, 0.1); break;
+      case 'sp_haul': this.noise(0.2, 0.08, 2800); for (let i = 0; i < 5; i++) this.tone(1400 - i * 120, 0.03, 'square', 0.03, 0, 0.2 + i * 0.05); break;
+      case 'sp_crack': this.noise(0.08, 0.22, 600); this.tone(90, 0.3, 'square', 0.14, -40); for (let i = 0; i < 3; i++) this.tone(2200 + i * 400, 0.12, 'sine', 0.025, 0, 0.12 + i * 0.07); break;
+      case 'sp_whirl': for (let i = 0; i < 4; i++) this.noise(0.12, 0.12, 1400 + i * 250, i * 0.1); this.tone(220, 0.4, 'sawtooth', 0.04, 120); break;
+      case 'sp_reap': for (let i = 0; i < 5; i++) this.tone(1500 + i * 80, 0.03, 'square', 0.03, 0, i * 0.04); this.noise(0.25, 0.16, 1100, 0.15); this.tone(110, 0.2, 'square', 0.09, -50, 0.3); break;
+      case 'sp_hew': this.noise(0.4, 0.16, 900); this.swell(180, 0.3, 'sawtooth', 0.05, 160); this.noise(0.1, 0.2, 500, 0.3); break;
+      case 'sp_cleave': this.noise(0.25, 0.08, 1200); this.swell(260, 0.25, 'sine', 0.05, 500); this.tone(60, 0.5, 'sine', 0.26, -25, 0.25); this.noise(0.35, 0.28, 300, 0.25); break;
+      case 'sp_quake': this.tone(42, 0.9, 'sine', 0.32, -15); this.noise(0.7, 0.3, 180); this.noise(0.4, 0.16, 900, 0.1); for (let i = 0; i < 4; i++) this.noise(0.05, 0.08, 1800 + i * 300, 0.3 + i * 0.12); break;
       case 'ab_seek': this.tone(1400, 0.6, 'sine', 0.07); this.tone(1400, 0.6, 'sine', 0.035, 0, 0.3); this.tone(2100, 0.5, 'sine', 0.02, 0, 0.32); break;
       // (Round 64) A shimmer of magic (a mod's sound to pick: it was silent).
       case 'magic': this.tone(784, 0.14, 'sine', 0.06, 400); this.tone(1175, 0.18, 'triangle', 0.04, 300, 0.06); this.tone(1568, 0.24, 'sine', 0.03, 500, 0.12); this.noise(0.18, 0.03, 5200, 0.02); break;

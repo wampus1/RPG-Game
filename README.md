@@ -10930,6 +10930,95 @@ carry **abilities**.
   stars, whirlwinds, shells of light, chains, bees, a pixel spirit wolf,
   and the auras worn as you move.
 
+## Round 139: Weapon specials, relics and smiths, and the jail
+
+- **Every weapon has a special.** Hold the attack button, on a foe or at
+  the air in front of you, and the weapon winds up its own move. Let go
+  once it's ready (a flash and a ping) to use it. Let go sooner and you
+  get the plain blow.
+  - **The warning.** While it winds up, the ground it will cover lights
+    up in the move's colour, filling outward as it winds. The edges march
+    while it charges and flash white once it's ready. A diamond marks
+    where you'll end up (a lunge's end, a leap's landing, the step behind
+    a foe), and a ring of pips round your feet fills up. Every player
+    sees it, so you can see each other's coming.
+  - **Light weapons** wind up quickly. Some cost less stamina than a plain
+    blow:
+    - **Bare hands, Shoulder Barge:** a shove that throws a foe two paces
+      and leaves them reeling (½ stamina; a punch costs 1).
+    - **Dagger, Shadowstep:** you step behind your foe and stab them in
+      the back, twice as hard and always a telling blow (1½; a stab
+      costs 2).
+    - **Staff, Leg Sweep:** knocks everyone round you off their feet
+      (1½; a sweep costs 2).
+    - **Sabre and short sword, Flurry:** three quick cuts across the
+      front of you (2½).
+    - **Sword, Lunge:** two paces forward in a flash, through everyone in
+      the line (3).
+  - **Middling weapons:**
+    - **Spear, Skewer:** a thrust three paces long that throws the whole
+      line back (4).
+    - **Harpoon, Haul In:** throws its line four paces and drags the first
+      foe it hits to you (3½).
+  - **Heavy weapons** are slow to wind up and cost dear, and do far more:
+    - **Club and mace, Skull Crack:** stuns the foe (4).
+    - **Axe, Whirlwind:** cuts everyone round you, through their guard
+      (5).
+    - **Flail, Chain Reap:** an arc two paces deep that goes over shields
+      (5).
+    - **Halberd, Reaping Arc:** five paces wide, and throws everyone back
+      (6).
+    - **Greatsword and battle axe, Leaping Cleave:** a leap and a blow
+      where you land, at double strength (7).
+    - **War hammer, Earthshaker:** the ground splits and everyone within
+      two paces is thrown down (8).
+  - **Looks and sound.** Each special has its own look, drawn in the
+    world's pixels, and its own sound.
+  - **The weapon's tooltip** shows its special.
+  - **A new trigger, "special",** goes off when you use one. Antler brings
+    it in the forge. Heavy specials also count as a heavy blow.
+  - **Bows** are unchanged: holding the button still draws them.
+- **Relics:**
+  - A relic now comes only from a master of an old place, and only now
+    and then. A third-tier master always drops one. Chests and braziers
+    give relic shards instead, and a vault's plinth holds an idol.
+  - The anvil's relic mode can **salvage** a relic into three relic shards,
+    plus any shards that were set in it.
+  - A relic set down now shows on a carved stone pedestal, floating over
+    it in a ring of its own light.
+- **Smiths:**
+  - The better the smith, the dearer they are (a master asks about three
+    times an apprentice's price) and the more stars their work has.
+  - A smith can make anything forged at an anvil, sorted into kinds:
+    blades, heavy arms, polearms and crossbows, armour and shields, tools.
+  - What you pay goes into the smith's own purse.
+- **Fallen stars:**
+  - The rare townsfolk with a wing of their own greet a fallen star as one
+    of their own, call out the first time they see you, and have a talk of
+    their own with you.
+  - The talk goes a step further each time: where they fell, what they
+    remember, how to spend the wing, another like you in another town.
+    At the end they give you a keepsake.
+- **The jail:**
+  - What the guards take off you goes into an **evidence chest** in the
+    jail (or the town hall), not somewhere unseen.
+  - The chest has a new strongroom lock, the hardest there is. It locks
+    again as soon as it's shut, and a guard anywhere in sight of it counts
+    as watching. You can't reach it through the bars.
+  - On release the guard hands back what's still in the chest.
+  - A town with three guards or more keeps one at the jail door while
+    anyone is in the cell.
+  - Someone coming to have a word with you while you're locked up now
+    comes in through the door to the bars, rather than talking through
+    the outside wall.
+  - Grieving kin (and a bandit messenger, and a broker of contracts) now
+    walk off when they're done with you, rather than vanishing on the
+    spot.
+- **Fixes:**
+  - Dungeon tier badges now show on the map. They were only drawn when a
+    square was 16 pixels or more, which no zoom level reached.
+  - Holding armour in your main hand no longer blacks out the screen.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

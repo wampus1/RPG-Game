@@ -40,6 +40,7 @@ import { ownerId, PATCHES } from '../game/ships3d.js';
 const FITTING_HINT = { helm: 'RMB take the wheel', ship_cannon: 'RMB man the gun', capstan: 'RMB turn the capstan: weigh or drop anchor', hatch: 'RMB go below', ship_pump: 'RMB work the pump', blueprint_table: 'RMB the blueprint table' };
 import { BlueprintWindow } from './blueprint.js';
 import { nearMates } from '../game/guilds.js';
+import { specialLine } from '../game/specials.js';
 
 // (Round 80) Who's shown down the side of the screen of your guild: those
 // within this many paces of you lately (MATE_RECENT ms: half a minute).
@@ -819,6 +820,9 @@ export class UI {
     if (d.kind === 'weapon') {
       const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? (d.ammo === 'none' ? 'no ammunition: draws stamina' : `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}`) : null;
       lines.push({ text: `${d.hands === 2 ? 'Two-handed (no shield)' : d.ranged ? 'One-handed' : 'One-handed · RMB in pack: off hand'}${ammo ? ` · ${ammo}` : ''}`, color: C.dim });
+      // (Round 139) Its special: held, then let go.
+      const sl = specialLine(slot.item);
+      if (sl) for (const [i, t] of wrap(sl, 44).entries()) lines.push({ text: i ? `  ${t}` : t, color: '#ffd890' });
     }
     if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.now ?? d.heal} HP [F/RMB]`, color: C.green });
     // A dish cooked up: what it does, when, and how long for (see

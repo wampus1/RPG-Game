@@ -29,6 +29,8 @@ import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { bossMaterials, RARITY } from '../world/smithmats.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
+// (Round 139) How often a master below the third tier keeps a relic.
+export const RELIC_DROP = 0.12;
 import { maybeWallFalls } from './wallfall.js';
 import { Creature } from '../entities/creature.js';
 import { fits, fitNear } from '../entities/footprint.js';
@@ -1560,10 +1562,14 @@ export class DungeonRun {
         if (!game.scene || game.scene.kind === 'boss_in') game.scene = bossDefeat(game, this, e);
       });
       this.endFight(true);
-      // (Every master of an old place keeps a relic about it.)
-      if (!this.kav) {
+      // (Round 139) A relic: rare off a master, and the only way to come
+      // by one; a master of the third tier always keeps one about it.
+      if (!this.kav && ((e.tier || this.rec.tier || 1) >= 3 || Math.random() < RELIC_DROP)) {
         const keys = Object.keys(RELICS);
-        game.spawnDrop(`relic_${keys[Math.floor(Math.random() * keys.length)]}`, 1, e.x, e.y, e.z, true);
+        const rk = keys[Math.floor(Math.random() * keys.length)];
+        game.spawnDrop(`relic_${rk}`, 1, e.x, e.y, e.z, true);
+        game.renderer.emit(e.x, e.y + 1.6, e.z, { n: 30, color: [RELICS[rk].color, '#ffffff', '#fff4c0'], up: 50, speed: 36, life: 1.2, glow: true, shape: 'star' });
+        this.eachHere(() => game.ui.msg(`Something of power was kept about it: the ${RELICS[rk].name}, a relic!`, RELICS[rk].color));
       }
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.

@@ -1,22 +1,48 @@
 // (Round 132) A town's blacksmith takes commissions: a piece ordered, paid
-// for, and ready the next day, made as well as a smith of that town makes
-// things (a village's, two stars; a town's, two or three; a city's three,
-// and four now and then, with steel to work). Better than most of what you'll
-// make yourself to begin with, and dearer than buying it plain; never
-// better than a master's own hand (see game/smithing.js).
+// for, and ready the next day. Better than most of what you'll make
+// yourself to begin with, and dearer than buying it plain.
+// (Round 139) Anything made at the anvil can be ordered. How good it comes
+// out, and what it costs, is down to the smith's own skill: an apprentice's
+// is cheap and plain, a master's dear and fine (a city's iron allows four
+// stars, a village's three). The coin goes into the smith's purse.
 import { ITEMS } from '../world/items.js';
 import { RECIPES } from '../world/recipes.js';
 import { forgeKind, forgePiece } from './smithing.js';
+import { gearClass } from '../world/quality.js';
 import { countItem, removeItem, addItem } from './inventory.js';
 import { hash4, RNG } from '../util/rng.js';
+import { tradeSkill } from '../sim/mind/talent.js';
 
-// What a smith will make, by the size of the place (the anvil's own work).
-const WARES = {
-  village: ['iron_sword', 'dagger', 'iron_axe', 'iron_pickaxe', 'iron_shovel', 'iron_helmet', 'iron_shield', 'hoe'],
-  town: ['iron_sword', 'short_sword', 'mace', 'spear', 'iron_axe', 'iron_pickaxe', 'iron_helmet', 'iron_shield', 'chainmail', 'iron_boots'],
-  city: ['iron_sword', 'sabre', 'greatsword', 'battle_axe', 'warhammer', 'halberd', 'iron_pickaxe', 'iron_breastplate', 'chainmail', 'iron_greaves', 'iron_shield', 'steel_sword'],
+// (Round 139) What a smith will make: everything that's worked at the
+// anvil, from a hoe to a steel sword, in its kinds. How good it comes out,
+// and what it costs, is down to the smith (their skill at their trade: see
+// sim/mind/talent.tradeSkill), and a little to the place (a city's smith
+// has better iron to hand, and dearer rent).
+const KINDS = [
+  { k: 'blades', label: 'Swords and knives', test: (it) => it.gear === 'blade' && /sword|sabre|dagger|knife|blade/.test(it.key) },
+  { k: 'heavy', label: 'Axes, maces and hammers', test: (it) => it.gear === 'blade' && /axe|mace|hammer|flail/.test(it.key) },
+  { k: 'pole', label: 'Spears, polearms and crossbows', test: (it) => it.gear === 'bow' || (it.gear === 'blade' && /spear|halberd|harpoon|pike|glaive/.test(it.key)) },
+  { k: 'armor', label: 'Armour and shields', test: (it) => it.gear === 'armor' || it.gear === 'shield' },
+  { k: 'tools', label: 'Tools', test: (it) => it.gear === 'tool' || it.kind === 'tool' },
+];
+const sizeOf = (s) => (s && ['village', 'town', 'city'].includes(s.type) ? s.type : 'village');
+// (Every piece made at the anvil, worked out once.)
+let ANVIL = null;
+function anvilWork() {
+  if (!ANVIL) {
+    ANVIL = [];
+    for (const r of RECIPES) {
+      if (forgeKind(r) !== 'forge' || ANVIL.includes(r.out) || !ITEMS[r.out]) continue;
+      ANVIL.push(r.out);
+    }
+    ANVIL.sort((a, b) => (ITEMS[a].value || 0) - (ITEMS[b].value || 0));
+  }
+  return ANVIL;
+}
+const kindOf = (k) => {
+  const it = ITEMS[k];
+  return (KINDS.find((q) => q.test({ ...it, key: k, gear: gearClass(it) })) || KINDS[KINDS.length - 1]).k;
 };
-const sizeOf = (s) => (s && WARES[s.type] ? s.type : 'village');
 
 function orders(game) {
   return ((game.stats ||= {}).smithOrders ||= []);
@@ -25,21 +51,30 @@ function orders(game) {
 export function orderWith(game, npc) {
   return orders(game).find((o) => o.sid === npc.settlement.id && o.idx === npc.rec.idx) || null;
 }
-// What this smith makes, and for how much.
-export function smithWares(game, npc) {
+// How good a smith this is (0 to 1).
+export function smithSkill(npc) {
+  return Math.max(0.05, Math.min(1, tradeSkill(npc.rec)));
+}
+// What this smith makes, and for how much (`kind`: only those of a kind).
+export function smithWares(game, npc, kind = null) {
   const size = sizeOf(npc.settlement);
-  return WARES[size].filter((k) => ITEMS[k] && RECIPES.some((r) => r.out === k && forgeKind(r))).map((k) => ({ k, name: ITEMS[k].name, price: priceOf(k, size) }));
+  const sk = smithSkill(npc);
+  return anvilWork().filter((k) => !kind || kindOf(k) === kind).map((k) => ({ k, name: ITEMS[k].name, price: priceOf(k, size, sk), kind: kindOf(k) }));
 }
-function priceOf(k, size) {
+// (The better the smith, the dearer: a master asks three times what an
+// apprentice does.)
+export function priceOf(k, size, skill = 0.4) {
   const base = (ITEMS[k] && ITEMS[k].value) || 30;
-  return Math.round(base * ({ village: 2.2, town: 2.8, city: 3.6 }[size]) + 15);
+  return Math.round(base * (1.2 + skill * 3.2) * ({ village: 0.9, town: 1, city: 1.15 }[size] || 1) + 10 + skill * 20);
 }
-// How well this smith's piece comes out: its stars.
-function starsOf(size, rng) {
-  if (size === 'city') return rng.chance(0.3) ? 4 : 3;
-  if (size === 'town') return rng.chance(0.45) ? 3 : 2;
-  return 2;
+// How well this smith's piece comes out: its stars, by their skill (and a
+// little luck), no more than the place's iron allows.
+export function smithStars(skill, size, rng) {
+  const q = skill + rng.float(-0.08, 0.08);
+  const s = q < 0.3 ? 1 : q < 0.5 ? 2 : q < 0.7 ? 3 : q < 0.88 ? 4 : 5;
+  return Math.max(1, Math.min({ village: 3, town: 4, city: 4 }[size] || 3, s));
 }
+const starWords = (skill) => (skill >= 0.8 ? 'a master' : skill >= 0.6 ? 'a fine hand' : skill >= 0.4 ? 'a fair smith' : 'still learning');
 
 export function smithTopics(npc, game) {
   if (!npc.rec || npc.rec.job !== 'blacksmith' || npc.hired || npc.visit) return [];
@@ -55,20 +90,31 @@ export function smithRespond(npc, game, id, arg) {
   const size = sizeOf(s);
   if (id === 'sm_order') {
     if (orderWith(game, npc)) return { lines: ['One thing at a time. I\'ve your last order on the anvil still.'] };
-    const wares = smithWares(game, npc);
-    if (!arg) {
+    const sk = smithSkill(npc);
+    // (First the kind of thing; then, of that kind, the piece.)
+    if (!arg || arg.startsWith('kind:')) {
+      const kind = arg ? arg.slice(5) : null;
+      if (!kind) {
+        return {
+          lines: [sk >= 0.8 ? 'Anything that can be beaten out of iron, I can make, and make well. It\'ll cost you, mind.' : sk >= 0.5 ? 'I can make most things. What\'ll it be?' : 'Simple work, but honest, and cheap with it. What do you need?', `Paid now, and ready tomorrow. (${starWords(sk)}: about ${'★'.repeat(smithStars(sk, size, { float: () => 0 }))} work.)`],
+          choices: KINDS.map((q) => ({ id: 'sm_order', arg: `kind:${q.k}`, label: `${q.label} (${smithWares(game, npc, q.k).length})` })),
+        };
+      }
+      const wares = smithWares(game, npc, kind);
       return {
-        lines: [size === 'city' ? 'Anything you like, if you\'ve the coin for it. Steel, even.' : size === 'town' ? 'I can make most things. What\'ll it be?' : 'Simple work, but honest. What do you need?', 'Paid now, and ready tomorrow.'],
-        choices: wares.slice(0, 8).map((w) => ({ id: 'sm_order', arg: w.k, label: `${w.name} (¤${w.price})` })),
+        lines: [wares.length ? 'Pick what you like.' : 'I\'ve nothing of that kind.'],
+        choices: [...wares.map((w) => ({ id: 'sm_order', arg: w.k, label: `${w.name} (¤${w.price})` })), { id: 'sm_order', arg: '', label: '(Something else.)' }],
       };
     }
-    const w = wares.find((q) => q.k === arg);
+    const w = smithWares(game, npc).find((q) => q.k === arg);
     if (!w) return { lines: ['I don\'t make those.'] };
-    if (countItem(p.inv, 'coin') < w.price) return { lines: [`¤${w.price}, and not a coin less. Iron's dear.`] };
+    if (countItem(p.inv, 'coin') < w.price) return { lines: [`¤${w.price}, and not a coin less. ${sk >= 0.7 ? 'Good work comes dear.' : 'Iron\'s dear.'}`] };
     removeItem(p.inv, 'coin', w.price);
+    // (Round 139: the coin goes to the smith, as any sale's does.)
+    npc.rec.coins = (npc.rec.coins || 0) + w.price;
     // (Its making settled now, so it's the same piece however long it waits.)
     const rng = new RNG(hash4(s.id, npc.rec.idx, game.day, w.price));
-    const stars = starsOf(size, rng);
+    const stars = smithStars(sk, size, rng);
     const piece = forgePiece(w.k, 0.5 + stars * 0.1, [], 10, rng, { stars, cap: 5 });
     // (A smith's work carries no flaws out of the shop.)
     const key = piece.flaws.length ? forgePiece(w.k, 0.9, [], 10, rng, { stars, cap: 5, mods: piece.mods }).key : piece.key;

@@ -127,7 +127,7 @@ export const LESSONS = {
     show: [
       'To parry: raise your guard (hold right mouse) just before the blow lands. Too early and it\'s only a block.',
       'Land a parry and they reel, dazed and wide open for a moment. That\'s your opening: take it.',
-      'Hold the strike before you let it go and it lands as a heavy blow. Slower, and it costs you, but it lands hard.',
+      'Hold the strike before you let it go and it becomes your weapon\'s own special: a lunge, a sweep, a whirlwind, a leap. Slower, and the heavy ones cost you, but they land hard.',
       'Rolling gets you out of the way, but it costs stamina, and so does taking blows on a shield.',
       'A shield holds the parry open a little longer than a blade does. Forgiving, for the learning.',
       'Hit the dummy and watch what it shows you: what that blow would have done, and the run of them together.',
@@ -135,7 +135,7 @@ export const LESSONS = {
     questions: [
       { q: 'How do you parry?', a: ['Raise your guard just before the blow lands', 'Raise it the moment you see them', 'Roll toward them'], why: 'Just before it lands. Early is only a block.' },
       { q: 'What does someone do when you parry them?', a: ['Reels back, dazed and open for a moment', 'Falls down dead', 'Runs away'], why: 'They\'re dazed and open: that\'s your riposte.' },
-      { q: 'How do you strike a heavy blow?', a: ['Hold the strike before letting it go', 'Strike twice quickly', 'Strike as you roll'], why: 'Hold, then release: a heavy blow.' },
+      { q: 'How do you loose your weapon\'s special?', a: ['Hold the strike before letting it go', 'Strike twice quickly', 'Strike as you roll'], why: 'Hold, then release: the special.' },
       { q: 'What does rolling cost you?', a: ['Stamina', 'Health', 'Nothing at all'], why: 'Stamina. So does a blow taken on a shield.' },
       { q: 'A shield, against a blade, for parrying?', a: ['It holds the parry open a little longer', 'It can\'t parry at all', 'It parries by itself'], why: 'A little more forgiving, a shield.' },
       { q: 'Fighting with two blades: where does the second go?', a: ['In the off hand, where a shield would', 'On your back', 'You can\'t carry two'], why: 'Right-click a one-handed blade in your pack to carry it in the off hand.' },
@@ -143,7 +143,7 @@ export const LESSONS = {
     ],
     work: {
       ask: 'On the dummies, everyone. A few good blows each, and one heavy. I\'m watching your feet.',
-      how: 'Strike a training dummy in the practice hall a few times (hold the click for a heavy blow).',
+      how: 'Strike a training dummy in the practice hall a few times (hold the click for your weapon\'s special).',
       done: 'worked the dummies',
       hits: 4,
     },

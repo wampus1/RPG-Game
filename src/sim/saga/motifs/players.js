@@ -192,11 +192,11 @@ motif({
       case 'sgk_take':
         if (!t) return { lines: ['Too late.'] };
         S.accept(t, R.pl(pid));
-        S.dismissActor(th, `offer:${pid}`);
+        S.sendOff(th, `offer:${pid}`);
         S.tell(tpid(th), 'You have the feeling someone\'s watching you.', '#c8a0a0');
         return { lines: ['Good. You know where to find them. (You may fight them wherever you meet them.)'], close: true };
       case 'sgk_no': {
-        S.dismissActor(th, `offer:${pid}`);
+        S.sendOff(th, `offer:${pid}`);
         return { lines: ['Suit yourself. Forget we spoke.'], close: true };
       }
       default:

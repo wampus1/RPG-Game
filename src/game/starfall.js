@@ -534,3 +534,98 @@ function drawScene(ctx, sc, art) {
   }
   ctx.restore();
 }
+
+// ------------------------------------------------------------ kindred
+// (Round 139) One of the rare few on the isles with a wing of their own
+// (see combat.starborn), meeting a fallen star: not wariness or wonder,
+// but recognition. They greet you as one of their own, and there's a
+// talk of your own to have with them, that goes on a little further each
+// time: where each of you came down, what you remember of the sky, how to
+// live with a wing, the folk who stare, and others like you.
+const KIN_GREET = [
+  'Your wing... Oh. Oh, you\'re one of us. I\'ve waited half my life to see another.',
+  'Stop. Let me look at you. That light at your back... it\'s the same as mine.',
+  'I felt you come down, you know. The night of the flash, my wing ached like a fresh wound.',
+  'Another star. I\'d stopped believing there were any left but me.',
+  'You fell too. I can see it in how you hold your shoulder. Come, sit a moment.',
+];
+const KIN_AGAIN = [
+  'Ah, my fellow star. How does the wing sit with you today?',
+  'You came back. Good. Few enough of us to lose touch.',
+  'Look at the two of us, glowing like lanterns. The children will talk again.',
+  'Sky-sibling. Sit, if you\'ve a moment.',
+  'Has it been aching? Mine always does before rain.',
+  'There you are. I was thinking of the sky again last night.',
+];
+// The talk itself, a step further each time ({you}: your name; {here}:
+// their town; {crater}: where you came down; {other}: another with a wing,
+// and where).
+const KIN_TALK = [
+  ['Where did you come down? I was small when I fell: they found me in a burnt field outside {here}, wrapped in my own light.', 'You came down by {crater}? Then we\'re neighbours of a kind. Same sky, same hard landing.'],
+  ['Do you remember anything from before? I only remember the cold. And a sound, like a bell rung under water.', 'Sometimes I dream I\'m still falling. I wake with the wing spread wide, lighting up the room.'],
+  ['A word, from one who\'s had longer with it: spend the wing at the last moment.', 'Roll, and when your breath gives out, roll again: the wing will carry you through the second. Then let it rest. It grows back in its own time, and fretting doesn\'t hurry it.'],
+  ['Folk here are kind, mostly, but some still cross the road from me. The old ones say we\'re ill luck.', 'Don\'t let it sour you. Be useful, be steady, and they\'ll forget to be afraid. It took me years. It might take you less.'],
+  ['{other}', 'If you pass that way, give them my greeting. We ought to know each other, the few of us.'],
+  ['Do you ever want to go back up? I used to stand on the roof on clear nights and try to remember which star was mine.', 'I don\'t, anymore. This is home. But I still look up.'],
+  ['Here. I\'ve kept this since I was found. It was in my hand when they picked me up.', 'A shard of the sky, I always thought. It should go to someone who knows what it is.'],
+];
+const KIN_AFTER = [
+  ['The wing\'s been brighter since you came. Mine, I mean. Maybe it knows.'],
+  ['When the children ask about my wing now, I tell them there\'s two of us. They like that.'],
+  ['Mind yourself out there, star. The sky dropped us once. The ground\'s not always kinder.'],
+  ['On clear nights I go up on the hill and count them. I always miss two.'],
+  ['You know what I like best? Nobody stares when we\'re standing together. They don\'t know which of us to look at.'],
+];
+
+// Is `rec` one with a wing, meeting `hero`, who fell too?
+export const kindred = (rec, hero) => !!rec && isStar(hero) && starbornRec(rec);
+// (The same test as combat.starborn, kept here so this file needs nothing of
+// combat's.)
+function starbornRec(rec) {
+  if (!rec || rec.age === 'child') return false;
+  let h = (rec.idx | 0) * 2654435761;
+  for (const ch of String((rec.name && rec.name.first) || '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return ((h >>> 0) % 1000) < 4;
+}
+
+// What they greet you with: the first time, recognition; after, warmth.
+export function kinGreeting(met, rng) {
+  const list = met ? KIN_AGAIN : KIN_GREET;
+  return list[Math.floor(rng() * list.length)];
+}
+
+// Talking with them, as one star to another: the next step of it. `game`,
+// `npc`; returns { lines, gift } (`gift`: something they press on you, the
+// once). Each step is remembered on their record.
+export function kinTalk(game, npc) {
+  const rec = npc.rec;
+  const step = rec.kinTalk | 0;
+  rec.kinTalk = step + 1;
+  const ow = game.world.ow;
+  const here = (npc.settlement && npc.settlement.name) || 'here';
+  const home = starHomeSid(game);
+  const crater = (home != null && ow.settlements.find((s) => s.id === home)) ? ow.settlements.find((s) => s.id === home).name : 'the hills';
+  // (Another with a wing, anywhere on the isles, and where.)
+  let other = null;
+  for (const [sid, L] of game.world.layouts || []) {
+    for (const r of (L && L.npcs) || []) {
+      if (r && r !== rec && r.alive !== false && !r.dead && starbornRec(r)) {
+        const s = ow.settlements[sid] || ow.settlements.find((q) => q.id === sid);
+        other = { name: `${r.name.first} ${r.name.last}`, where: s ? s.name : 'a town I\'ve never seen' };
+        break;
+      }
+    }
+    if (other) break;
+  }
+  const fill = (t) => t.replace('{here}', here).replace('{crater}', crater).replace('{other}', other
+    ? `There's another of us, did you know? ${other.name}, in ${other.where}. I've never met them; I only hear the stories.`
+    : 'I\'ve asked every trader who comes through: no one\'s heard of another with a wing. Just you and me, it seems.');
+  if (step < KIN_TALK.length) {
+    const lines = KIN_TALK[step].map(fill);
+    return { lines, gift: step === KIN_TALK.length - 1 ? 'shard_moonstone' : null, first: step === 0 };
+  }
+  return { lines: KIN_AFTER[(step - KIN_TALK.length) % KIN_AFTER.length], gift: null };
+}
+
+// The first time one of them sees you: they stop, and call out.
+export const KIN_BARKS = ['Another wing!', 'You... you fell too!', 'Wait! Your wing!', 'Sky-sibling!'];

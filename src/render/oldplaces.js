@@ -6,7 +6,8 @@
 // power.
 import { TILE, LH, WORLD_Y } from '../config.js';
 import { RELICS } from '../world/items.js';
-import { placeTag } from '../game/relics.js';
+import { placeTag, relicItem } from '../game/relics.js';
+import { itemIcon } from './sprites.js';
 import { FY } from '../world/dungeongen.js';
 import { spireDissolve } from '../game/scenes.js';
 import { drawAncientGates } from './ancientfx.js';
@@ -435,6 +436,32 @@ function relicCircles(r, ctx, game) {
     ctx.globalAlpha = 0.25 + pulse * 0.2;
     ctx.fillStyle = g;
     ctx.fillRect(cx - 14, cy - 14, 28, 28);
+    // (Round 139) The relic itself, floating over its pedestal's cradle as
+    // it is (its own picture, its shards and all), bobbing a pixel up and
+    // down, a ring of its light turning under it, sparks of it rising.
+    {
+      const icon = itemIcon(relicItem(q.kind, q.shards));
+      const bob = Math.floor(t * 3 + q.x) % 4 < 2 ? 0 : -1;
+      const ix = Math.round(cx - 8);
+      const iy = Math.round(cy - 27 + bob);
+      ctx.globalAlpha = 1;
+      // (Its light on the cradle: a ring of its colour, a pixel at a time.)
+      ctx.fillStyle = R.color;
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + Math.floor(t * 6) * 0.2;
+        ctx.globalAlpha = i % 2 ? 0.9 : 0.5;
+        ctx.fillRect(Math.round(cx + Math.cos(a) * 6), Math.round(cy - 20 + Math.sin(a) * 2), 1, 1);
+      }
+      ctx.globalAlpha = 1;
+      ctx.drawImage(icon, ix, iy);
+      // A glint off it, now and then.
+      if (Math.floor(t * 2 + q.z) % 5 === 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + 10, iy + 3, 1, 3);
+        ctx.fillRect(ix + 9, iy + 4, 3, 1);
+      }
+      if (Math.random() < 0.08) r.emit(q.x, q.y + 1.6, q.z, { n: 1, color: [R.color, '#ffffff'], up: 10, speed: 3, gravity: -8, life: 0.9, glow: true, shape: 'star' });
+    }
     // Motes rising off it.
     if (Math.random() < 0.15) r.emit(q.x + (Math.random() - 0.5) * 2 * (q.r || 4) * 0.8, q.y, q.z + (Math.random() - 0.5) * 2 * (q.r || 4) * 0.8, { n: 1, color: [R.color, '#ffffff'], up: 12, speed: 4, gravity: -10, life: 1.2, glow: true });
     ctx.restore();

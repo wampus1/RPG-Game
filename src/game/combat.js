@@ -25,7 +25,7 @@
 // You fight with stamina, counted in points: a punch costs one, a blade
 // two, heavier arms more; every roll and every blow taken on a shield
 // costs some too, and it comes back slowly when you ease off. Hold the
-// mouse on a foe for a heavy blow; hold the right button to block (a
+// mouse for your weapon's special (see specials.js); hold the right button to block (a
 // shield takes most of it, a blade a little), and raise it just as the
 // blow lands to parry: they're left reeling for a few seconds. SPACE rolls
 // you clear.

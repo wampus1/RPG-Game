@@ -804,7 +804,7 @@ motif({
           h.n++;
           if (ev.heavy) h.heavy++;
           if (h.n >= (LESSONS.dueling.work.hits || 4) && h.heavy >= 1) workDone(th, S, ev.pid, LESSONS.dueling.work.done);
-          else if (h.n === (LESSONS.dueling.work.hits || 4) && !h.heavy) S.tell(ev.pid, 'Now a heavy one: hold the strike before you let it go.', '#a0e0ff');
+          else if (h.n === (LESSONS.dueling.work.hits || 4) && !h.heavy) S.tell(ev.pid, 'Now your weapon\'s special: hold the strike, and let it go once it\'s ready.', '#a0e0ff');
         },
       },
       fade: 10,
