@@ -10587,6 +10587,64 @@ everything, clustered texture and sparing dithering.
   The chisel, mallet and binding at the bench, the yew stave on the post,
   and the hide under the knife are all lit by the same light.
 
+## Round 134: Lighter all round
+
+A pass over everything that costs time: the drawing of the world, the
+world's work out of sight, the forge's lighting, saves, sound, start-up
+and multiplayer. None of it changes what happens in the game; each change
+was checked to give the same pictures, the same roads and the same towns'
+days as before.
+
+- **The world drawn in fewer strokes.** The rows of blocks at your own
+  level and above are now kept as pictures too, as the ground below you
+  already was, and drawn again only when a block in them changes. Out of
+  doors, a frame takes about a fifth of the draw calls it did (a city
+  2124 to 283, the open country 2185 to 448, a forest 2912 to 557).
+  - Leaves stay in the pictures unless the wind could stir them. A
+    door is drawn on its own only while it swings.
+  - Shore foam is drawn from small kept sprites. A window's text is
+    kept as a picture and redrawn only when a cell of it changes.
+  - The renderer reuses its per-frame buffers instead of making new ones
+    every frame.
+- **The world's work, spread out.** The stalls that hit at certain
+  hours are gone or much shorter:
+  - **Roads.** A realm's next road has its way across country worked out
+    a little at a time beforehand, so the day it's paid for no longer
+    stalls on a tenth of a second's search. Caravans' routes are worked
+    out in smaller steps, keeping to their few milliseconds a frame.
+  - **Far towns.** A far town that's several hours behind catches up an
+    hour at a time over its next turns, not all in one frame.
+  - **Festivals.** The search for a stage and stalls looks at each square
+    once, not once for every place it's tried, and reads what's built
+    there more cheaply.
+- **The forge lit faster.** A light that stays put (the lantern, the
+  lamp behind you, the window) keeps what it does to each pixel between
+  frames; only its flicker is applied anew. Brightness comes from a
+  table instead of a calculation, falling back to the exact sum wherever
+  a pixel is on the edge of the next tone. The picture is the same to the
+  last pixel. The tailor's table now lights in under half the time.
+- **Saves.**
+  - **Region reuse.** A region's blocks are packed for a save only if
+    one's changed since the last save; the rest are reused.
+  - **No mid-fight stall.** The morning's autosave waits while you're in
+    a fight, for a minute and a half at most.
+  - **Already compressed.** Saves in the browser were already gzipped,
+    about six times smaller.
+- **Sound ready before the first click.** The sound starts up in a quiet
+  moment on the title screen, asleep, so the first click or key only
+  wakes it rather than holding the game up while it's built. Nothing is
+  heard until then, as before.
+- **Start-up over the network.** The game's server marks every file
+  with its version, so on a second visit the browser is told "unchanged"
+  instead of fetching all six hundred files again. Another machine
+  joining over the LAN gets the code gzipped, about a third the size.
+- **Multiplayer.** A guest's picture windows (a lock, a map, a face) are
+  turned into an image for sending only when they've changed, not up to
+  ten times a second regardless.
+- **A setting for a slow machine.** *Background world work* (General):
+  *Gentle* gives the world's out-of-sight work half the time a frame.
+  Everything still happens; it just finishes a little later.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

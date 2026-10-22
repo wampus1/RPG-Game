@@ -72,6 +72,10 @@ import { cutOff, isFar, FAR_CORE } from '../world/farlands.js';
 
 // How long a frame may spend laying out a far town (ms): see World.layOut.
 const LAY_MS = 4;
+// (Round 134) How long a frame a realm's next road is worked out for.
+const ROAD_MS = 3;
+// (Round 134) How long a far town's hours are caught up for, a turn.
+const BG_MS = 6;
 
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
@@ -297,6 +301,12 @@ export class Sim {
     return null;
   }
 
+  // (Round 134) How long a frame's share of the work out of sight may run:
+  // half, on a slow machine (see the settings: Background world work).
+  workMs(ms) {
+    return this.game.renderer && this.game.renderer.gentleWork ? ms / 2 : ms;
+  }
+
   // Towns you've been to keep living while you're away: one at a time, a
   // day's worth at most per step, so the world moves on without a stall.
   // Places you've never been (in lands you haven't found yet) live too:
@@ -314,7 +324,10 @@ export class Sim {
     if (this.abs - L.econ.lastAbs < 60) return;
     this.civicLater = true;
     try {
-      simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY));
+      // (Round 134: a few milliseconds of its hours at a time, an hour at
+      // least: a town far behind catches up over its next turns, not all
+      // in the one frame.)
+      simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY), false, this.game.instantWork ? Infinity : this.workMs(BG_MS));
     } finally {
       this.civicLater = false;
     }
@@ -380,6 +393,9 @@ export class Sim {
       this.nextHome();
       this.works.update();
       this.diplomacy.update();
+      // (Round 134) The realms' next roads, their ways worked out ahead of
+      // the day they're paid for (see Realms.nextRoad).
+      if (!this.game.instantWork && !this.game.world.remote) this.realms.nextRoad(this.workMs(ROAD_MS));
       this.nomads.update();
       this.camps.update(0.5, (c) => this.campers(c));
       this.adventurers.update();
@@ -404,12 +420,12 @@ export class Sim {
       this.office.update();
       this.crown.update();
     }
-    if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) {
+    if (this.laying && this.game.world.layOut(this.laying, this.workMs(LAY_MS))) {
       this.laying = null;
       this.nextLay();
     }
-    if (this.civicJob) this.civicTick(LAY_MS);
-    if (this.hereJob) this.civicTick(LAY_MS, 'hereJob');
+    if (this.civicJob) this.civicTick(this.workMs(LAY_MS));
+    if (this.hereJob) this.civicTick(this.workMs(LAY_MS), 'hereJob');
     this.war.update(dt);
     this.volcano.update(dt);
     this.saga.update(dt);

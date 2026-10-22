@@ -529,6 +529,82 @@ export function light(x, y, z, r, p, col, slot = -1) {
 const VX = 0;
 const VY = -0.3;
 const VZ = -0.95;
+// (Round 134) What a light that's stayed where it is does for each pixel,
+// kept from frame to frame: how near it is (its fall-off before its
+// strength), how square on the pixel faces it, and how much it shines
+// there; worked out again only where the pixel itself has changed (some
+// moving thing over it) or the light's moved. A flame's flicker is only
+// its strength, so the lantern on the table, the lamp behind you, the
+// day through the window are lit in a few multiplications a pixel, not a
+// square root and a dozen more. The very same sums, in the same order, so
+// the very same picture.
+const SLOTS = 6;
+function lightCache(gb, lights) {
+  let C = gb.lc;
+  if (!C || C.cam !== gb.cam) {
+    C = gb.lc = {
+      cam: gb.cam, slots: new Map(), seen: new Set(),
+      // (What each pixel was when last looked at, and how often it's changed.)
+      m: new Uint8Array(N), z: new Float32Array(N), nx: new Int8Array(N), ny: new Int8Array(N), nz: new Int8Array(N), ver: new Uint32Array(N),
+    };
+  }
+  const now = new Set();
+  const use = new Array(lights.length).fill(null);
+  for (let li = 0; li < lights.length; li++) {
+    const L = lights[li];
+    const k = `${L.x},${L.y},${L.z},${L.r}`;
+    now.add(k);
+    let S = C.slots.get(k);
+    // (Only a light that was just here last frame too: not the fire, that
+    // moves every frame.)
+    if (!S && C.seen.has(k) && C.slots.size < SLOTS) {
+      // (For each pixel: when it was worked out, and its fall-off, facing
+      // and shine side by side; a fall-off of -1, out of the light's reach
+      // or facing away.)
+      S = { at: new Uint32Array(N), v: new Float64Array(N * 3) };
+      C.slots.set(k, S);
+    }
+    if (S) S.used = true;
+    use[li] = S || null;
+  }
+  for (const [k, S] of C.slots) {
+    if (!S.used) C.slots.delete(k);
+    S.used = false;
+  }
+  C.seen = now;
+  return { C, use };
+}
+
+// (Round 134) e^-x read off a table (between its entries, a straight line
+// across): within a millionth of it, which settles which tone a pixel
+// takes but where it's on the very edge of the next one; there it's
+// worked out exactly (see shade), so the picture's the very same.
+const EXP_N = 8192;
+const EXP_MAX = 16;
+const EXP_TAB = new Float64Array(EXP_N + 2);
+for (let j = 0; j <= EXP_N + 1; j++) EXP_TAB[j] = Math.exp((-j * EXP_MAX) / EXP_N);
+const EXP_EPS = 1e-4;
+function expNeg(x) {
+  if (!(x >= 0) || x >= EXP_MAX) return Math.exp(-x);
+  const u = x * (EXP_N / EXP_MAX);
+  const j = u | 0;
+  return EXP_TAB[j] + (EXP_TAB[j + 1] - EXP_TAB[j]) * (u - j);
+}
+
+// How much a light from (lx, ly, lz) shines off a pixel facing (nx, ny,
+// nz) of material M, toward you (before its strength).
+function specOf(lx, ly, lz, nx, ny, nz, M) {
+  let hx = lx + VX;
+  let hy = ly + VY;
+  let hz = lz + VZ;
+  const hl = Math.hypot(hx, hy, hz) || 1;
+  hx /= hl;
+  hy /= hl;
+  hz /= hl;
+  const sd = nx * hx + ny * hy + nz * hz;
+  return sd > 0 ? sd ** M.gloss * M.spec : 0;
+}
+
 // The scene lit: into `out` (an ImageData's data).
 export function shade(gb, lights, amb, out) {
   const c = gb.cam;
@@ -537,6 +613,7 @@ export function shade(gb, lights, amb, out) {
   const ag = amb.c[1] / 255;
   const ab = amb.c[2] / 255;
   const nl = lights.length;
+  const { C, use } = lightCache(gb, lights);
   for (let y = 0; y < H; y++) {
     const ay = c.ay(y);
     for (let x = 0; x < W; x++) {
@@ -564,6 +641,16 @@ export function shade(gb, lights, amb, out) {
           const pz = gb.z[i];
           const px = c.ax(x) * pz;
           const py = ay * pz;
+          // (Is the pixel what it was? If not, what's kept for it is stale.)
+          if (C.m[i] !== m || C.z[i] !== pz || C.nx[i] !== gb.nx[i] || C.ny[i] !== gb.ny[i] || C.nz[i] !== gb.nz[i]) {
+            C.m[i] = m;
+            C.z[i] = pz;
+            C.nx[i] = gb.nx[i];
+            C.ny[i] = gb.ny[i];
+            C.nz[i] = gb.nz[i];
+            C.ver[i]++;
+          }
+          const ver = C.ver[i] + 1;
           let I = ak;
           let cr = ar * ak;
           let cg = ag * ak;
@@ -571,43 +658,62 @@ export function shade(gb, lights, amb, out) {
           let S = 0;
           for (let li = 0; li < nl; li++) {
             const L = lights[li];
-            const dx = L.x - px;
-            const dy = L.y - py;
-            const dz = L.z - pz;
-            const d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 >= L.r * L.r) continue;
-            const d = Math.sqrt(d2) || 1;
-            let att = 1 - d / L.r;
-            att = att * att * L.p;
+            const K = use[li];
+            let aa;
+            let lam;
+            let q;
+            if (K && K.at[i] === ver) {
+              aa = K.v[i * 3];
+              if (aa < 0) continue;
+              lam = K.v[i * 3 + 1];
+              q = K.v[i * 3 + 2];
+            } else {
+              const dx = L.x - px;
+              const dy = L.y - py;
+              const dz = L.z - pz;
+              const d2 = dx * dx + dy * dy + dz * dz;
+              aa = -1;
+              if (d2 < L.r * L.r) {
+                const d = Math.sqrt(d2) || 1;
+                const a = 1 - d / L.r;
+                const lx = dx / d;
+                const ly = dy / d;
+                const lz = dz / d;
+                lam = nx * lx + ny * ly + nz * lz;
+                lam = (lam + M.wrap) / (1 + M.wrap);
+                if (lam > 0) {
+                  aa = a * a;
+                  q = M.spec ? specOf(lx, ly, lz, nx, ny, nz, M) : 0;
+                }
+              }
+              if (K) {
+                K.at[i] = ver;
+                K.v[i * 3] = aa;
+                K.v[i * 3 + 1] = lam;
+                K.v[i * 3 + 2] = q;
+              }
+              if (aa < 0) continue;
+            }
+            let att = aa * L.p;
             if (L.slot >= 0) att *= 1 - gb.sh[o + L.slot] / 255;
             if (att < 0.002) continue;
-            const lx = dx / d;
-            const ly = dy / d;
-            const lz = dz / d;
-            let lam = nx * lx + ny * ly + nz * lz;
-            lam = (lam + M.wrap) / (1 + M.wrap);
-            if (lam <= 0) continue;
             const cl = att * lam;
             I += cl;
             cr += L.cr * cl;
             cg += L.cg * cl;
             cb += L.cb * cl;
-            if (M.spec) {
-              let hx = lx + VX;
-              let hy = ly + VY;
-              let hz = lz + VZ;
-              const hl = Math.hypot(hx, hy, hz) || 1;
-              hx /= hl;
-              hy /= hl;
-              hz /= hl;
-              const sd = nx * hx + ny * hy + nz * hz;
-              if (sd > 0) S += sd ** M.gloss * M.spec * att * 2.4;
-            }
+            if (q > 0) S += q * att * 2.4;
           }
           const bri = gb.val[i] * I + S;
-          const p = 1 - Math.exp(-bri * 1.4);
-          const f = p * (M.n - 1);
+          let f = (1 - expNeg(bri * 1.4)) * (M.n - 1);
           let k = Math.floor(f);
+          // (Read off the table; worked out exactly only where that could
+          // tip it to the next tone: see expNeg.)
+          const fr = f - k;
+          if (fr < EXP_EPS || fr > 1 - EXP_EPS || Math.abs(fr - th) < EXP_EPS) {
+            f = (1 - Math.exp(-bri * 1.4)) * (M.n - 1);
+            k = Math.floor(f);
+          }
           if (f - k > th) k++;
           const cc = M.R[Math.max(0, Math.min(M.n - 1, k))];
           // The light's own colour on it, in a few steps.

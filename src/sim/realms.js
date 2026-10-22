@@ -407,6 +407,46 @@ export class Realms {
     const spare = capL.econ.treasury - residents(capL).length * 15;
     const COST = 120;
     if (spare < COST) return null;
+    const pair = this.roadPair(civ, capL);
+    if (!pair) return null;
+    const [a, b] = pair;
+    if (!dip.startRoad(a, b)) return null;
+    capL.econ.treasury -= COST;
+    const LA = this.sim.layoutOf(a.id);
+    const LB = this.sim.layoutOf(b.id);
+    if (LA && LA.econ) dip.rel(LA, b.id).road = true;
+    if (LB && LB.econ) dip.rel(LB, a.id).road = true;
+    const who = authority(civ);
+    const Who = who[0].toUpperCase() + who.slice(1);
+    const text = `${Who} is paying for a road from ${a.name} to ${b.name}. The builders start from both ends.`;
+    ledger(capL, day, text);
+    for (const L of [LA, LB]) if (L && L.econ && L !== capL) ledger(L, day, text);
+    return { a: a.id, b: b.id };
+  }
+
+  // (Round 134) The road the realm will pay for next, its way across
+  // country worked out a little at a time beforehand (one realm's a turn,
+  // `ms` of it: see Sim.update), so the day it's begun nothing stalls.
+  nextRoad(ms) {
+    const civs = this.game.world.ow.civs.filter(Boolean);
+    if (!civs.length) return;
+    const dip = this.sim.diplomacy;
+    // (The one under way carried on; else the next realm's.)
+    let civ = this.roadPrep != null ? civs.find((c) => c.id === this.roadPrep) : null;
+    if (!civ) {
+      this.roadTurn = ((this.roadTurn ?? -1) + 1) % civs.length;
+      civ = civs[this.roadTurn];
+    }
+    const R = this.state[civ.id];
+    const capL = R && R.capital != null ? this.game.world.layouts.get(R.capital) : null;
+    const pair = capL && capL.econ && !deserted(capL.settlement) ? this.roadPair(civ, capL) : null;
+    this.roadPrep = pair && !dip.prepRoad(pair[0], pair[1], ms) ? civ.id : null;
+  }
+
+  // Which towns the realm's next road would join (see roadWorks).
+  roadPair(civ, capL) {
+    const dip = this.sim.diplomacy;
+    const mine = new Set(this.members(civ).map((s) => s.id));
     const capS = capL.settlement;
     const linked = (a, b) => dip.roads.some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id));
     const near = (a, b) => dip.dist(a, b);
@@ -439,20 +479,7 @@ export class Realms {
       }
       pair = best;
     }
-    if (!pair) return null;
-    const [a, b] = pair;
-    if (!dip.startRoad(a, b)) return null;
-    capL.econ.treasury -= COST;
-    const LA = this.sim.layoutOf(a.id);
-    const LB = this.sim.layoutOf(b.id);
-    if (LA && LA.econ) dip.rel(LA, b.id).road = true;
-    if (LB && LB.econ) dip.rel(LB, a.id).road = true;
-    const who = authority(civ);
-    const Who = who[0].toUpperCase() + who.slice(1);
-    const text = `${Who} is paying for a road from ${a.name} to ${b.name}. The builders start from both ends.`;
-    ledger(capL, day, text);
-    for (const L of [LA, LB]) if (L && L.econ && L !== capL) ledger(L, day, text);
-    return { a: a.id, b: b.id };
+    return pair;
   }
 
   // ------------------------------------------------------------ decrees

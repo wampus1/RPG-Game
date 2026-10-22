@@ -552,7 +552,7 @@ export class Events {
     }
     const map = this.laid(L);
     for (let y = GROUND; y < GROUND + h; y++) {
-      const id = map.get(`${x},${y},${z}`);
+      const id = map.get((x * 65536 + z) * 8 + (y - GROUND));
       if (id !== undefined && id !== B.air) return false;
     }
     const c = L.col && L.col(x, z);
@@ -561,12 +561,18 @@ export class Events {
 
   // What the town laid out where (for places not loaded right now), with
   // any changes still waiting to be made there. Kept for a moment.
+  // (Round 134: only the few layers off the ground a stage or a stall
+  // stands in, which is all that's asked of it (see clear); keyed by
+  // number, not by name.)
   laid(L) {
     const now = this.sim.abs;
     if (this.laidCache && this.laidCache.L === L && this.laidCache.t === now) return this.laidCache.map;
     const map = new Map();
-    for (const arr of L.placements.values()) for (let i = 0; i < arr.length; i += 5) map.set(`${arr[i]},${arr[i + 1]},${arr[i + 2]}`, arr[i + 3]);
-    for (const ops of this.sim.pending.values()) for (const [x, y, z, id] of ops) map.set(`${x},${y},${z}`, id);
+    const set = (x, y, z, id) => {
+      if (y >= GROUND && y < GROUND + 8) map.set((x * 65536 + z) * 8 + (y - GROUND), id);
+    };
+    for (const arr of L.placements.values()) for (let i = 0; i < arr.length; i += 5) set(arr[i], arr[i + 1], arr[i + 2], arr[i + 3]);
+    for (const ops of this.sim.pending.values()) for (const [x, y, z, id] of ops) set(x, y, z, id);
     this.laidCache = { L, t: now, map };
     return map;
   }
@@ -688,13 +694,21 @@ export class Events {
     const spots = new Set(L.spots.map((q) => q.x * 65536 + q.z));
     const doors = new Set();
     for (const b of L.buildings) if (b.outside) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) doors.add((b.outside.x + dx) * 65536 + b.outside.z + dz);
+    // (Round 134: each square looked at once for each height, not once for
+    // every place a stage might be tried over it.)
+    const seen = new Map();
     const okTile = (x, z, h) => {
-      if (!L.inside(x, z, 1)) return false;
-      const m = L.maskAt(x, z);
-      if (m !== M.PLAZA && m !== M.FREE && m !== M.YARD && m !== M.ROAD) return false;
       const k = x * 65536 + z;
-      if (spots.has(k) || doors.has(k)) return false;
-      return this.clear(L, x, z, h);
+      const mk = k * 4 + h;
+      let v = seen.get(mk);
+      if (v !== undefined) return v;
+      v = false;
+      if (L.inside(x, z, 1)) {
+        const m = L.maskAt(x, z);
+        if ((m === M.PLAZA || m === M.FREE || m === M.YARD || m === M.ROAD) && !spots.has(k) && !doors.has(k)) v = this.clear(L, x, z, h);
+      }
+      seen.set(mk, v);
+      return v;
     };
     for (const key of PLANS[kind]) {
       const dsn = DESIGNS[key];

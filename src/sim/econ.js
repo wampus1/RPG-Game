@@ -1497,7 +1497,9 @@ export function tickHour(sim, L, h) {
 // (`wait`: a town you're in, its day of business still being worked
 // through a little each frame: its hours wait for it, rather than it all
 // being done there and then. See Sim.dailyCivic.)
-export function simulateTo(sim, L, abs, wait = false) {
+// (Round 134: `ms`, how long it may take: an hour at least, then no more
+// once that's up, the rest left for the next time; see Sim.backgroundTick.)
+export function simulateTo(sim, L, abs, wait = false, ms = Infinity) {
   const e = L.econ;
   // A settlement's story starts on the first morning of the world.
   if (e.lastAbs === null) e.lastAbs = Math.floor(Math.min(abs - 60, DAY + 360) / 60) * 60;
@@ -1510,10 +1512,12 @@ export function simulateTo(sim, L, abs, wait = false) {
     sim.civicTick(Infinity, 'hereJob');
   }
   let n = 0;
+  const t0 = ms < Infinity ? performance.now() : 0;
   while (e.lastAbs + 60 <= abs) {
     tickHour(sim, L, e.lastAbs);
     e.lastAbs += 60;
     n++;
+    if (ms < Infinity && performance.now() - t0 > ms) break;
     // (A far town's day of business, left for the frames to come: the
     // rest of its time waits for it.)
     if (sim && ((sim.civicJob && sim.civicJob.L === L) || (sim.hereJob && sim.hereJob.L === L))) break;

@@ -177,7 +177,21 @@ export function windowPixels(w, game, canvas, now) {
   }
   ctx.restore();
   w.pxAt = now;
-  w.pxUrl = canvas.toDataURL();
+  // (Round 134: made into an image to send only if it's changed since the
+  // last: a quick sum over its pixels first, which costs a fraction of the
+  // picture's packing.)
+  let h = 2166136261 >>> 0;
+  try {
+    const px = new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
+    for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i], 16777619);
+    h = (h ^ (canvas.width * 65536 + canvas.height)) >>> 0;
+  } catch {
+    h = null;
+  }
+  if (h === null || h !== w.pxHash || !w.pxUrl) {
+    w.pxHash = h;
+    w.pxUrl = canvas.toDataURL();
+  }
   return w.pxUrl;
 }
 

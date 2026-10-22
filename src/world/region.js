@@ -29,6 +29,7 @@ export class Region {
     const i = (lz * REGION_W + lx) * WORLD_Y + y;
     this.blocks[i] = id;
     this.meta[i] = meta;
+    this.version++;
   }
 
   recomputeTops() {
@@ -50,17 +51,24 @@ export class Region {
   }
 
   // Serialize edits compactly for save games (RLE over blocks+meta).
+  // (Round 134: the runs kept from the last time, while not a block's been
+  // changed since (see version); what's in its chests, always as it is.)
   serialize() {
-    const out = [];
-    const n = this.blocks.length;
-    let i = 0;
-    while (i < n) {
-      const b = this.blocks[i];
-      const m = this.meta[i];
-      let run = 1;
-      while (i + run < n && run < 65535 && this.blocks[i + run] === b && this.meta[i + run] === m) run++;
-      out.push(run, b, m);
-      i += run;
+    let out = this.rleAt === this.version ? this.rle : null;
+    if (!out) {
+      out = [];
+      const n = this.blocks.length;
+      let i = 0;
+      while (i < n) {
+        const b = this.blocks[i];
+        const m = this.meta[i];
+        let run = 1;
+        while (i + run < n && run < 65535 && this.blocks[i + run] === b && this.meta[i + run] === m) run++;
+        out.push(run, b, m);
+        i += run;
+      }
+      this.rle = out;
+      this.rleAt = this.version;
     }
     const containers = [];
     for (const [k, v] of this.containers) containers.push([k, v]);

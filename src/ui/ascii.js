@@ -125,8 +125,57 @@ export function wrap(text, width) {
 // Draw a grid at cell offset (ox, oy). `p` in [0,1] is the reveal amount
 // (1 = fully formed). Cells below their threshold are hidden; cells near it
 // show random glyphs, giving the dissolve/reform effect.
+// (Round 134) A grid that's fully formed is drawn from a picture of its
+// cells, made again only when one of them has changed: the same pixels as
+// drawing each cell (the backgrounds and letters laid over each other the
+// same way), for one draw instead of hundreds. Its icons and pictures go
+// over it each time, as they move.
+const GRID_PICS = new WeakMap();
+function gridPicture(g) {
+  if (typeof document === 'undefined') return null;
+  let P = GRID_PICS.get(g);
+  const n = g.w * g.h;
+  if (!P || P.w !== g.w || P.h !== g.h) {
+    const c = document.createElement('canvas');
+    c.width = g.w * CHAR_W;
+    c.height = g.h * CHAR_H;
+    P = { c, w: g.w, h: g.h, ch: new Array(n), fg: new Array(n), bg: new Array(n), ok: false };
+    GRID_PICS.set(g, P);
+  }
+  let same = P.ok;
+  if (same) {
+    const { ch, fg, bg } = g;
+    for (let i = 0; i < n; i++) {
+      if (ch[i] !== P.ch[i] || bg[i] !== P.bg[i] || (ch[i] !== ' ' && fg[i] !== P.fg[i])) {
+        same = false;
+        break;
+      }
+    }
+  }
+  if (same) return P.c;
+  const pc = P.c.getContext('2d');
+  pc.clearRect(0, 0, P.c.width, P.c.height);
+  drawCells(pc, g, 0, 0, true, 0, 0, 0);
+  for (let i = 0; i < n; i++) {
+    P.ch[i] = g.ch[i];
+    P.fg[i] = g.fg[i];
+    P.bg[i] = g.bg[i];
+  }
+  P.ok = true;
+  return P.c;
+}
+
 export function drawGrid(ctx, g, ox, oy, p = 1, seed = 0, time = 0) {
   const full = p >= 1;
+  const pic = full ? gridPicture(g) : null;
+  if (pic) ctx.drawImage(pic, ox * CHAR_W, oy * CHAR_H);
+  else drawCells(ctx, g, ox, oy, full, p, seed, time);
+  drawPixels(ctx, g, ox, oy, full, p, time);
+}
+
+// The cells: their backgrounds (in runs), their letters (glitching in as
+// the grid forms).
+function drawCells(ctx, g, ox, oy, full, p, seed, time) {
   const frame = Math.floor(time * 30);
   // Backgrounds (merged into horizontal runs).
   for (let y = 0; y < g.h; y++) {
@@ -171,7 +220,10 @@ export function drawGrid(ctx, g, ox, oy, p = 1, seed = 0, time = 0) {
       drawChar(ctx, ch, (ox + x) * CHAR_W, (oy + y) * CHAR_H, fg);
     }
   }
-  // Pixel content (item icons, minimaps) appears once the cells have formed.
+}
+
+// Pixel content (item icons, minimaps) appears once the cells have formed.
+function drawPixels(ctx, g, ox, oy, full, p, time) {
   if (p > 0.82) {
     ctx.globalAlpha = full ? 1 : (p - 0.82) / 0.18;
     for (const im of g.images) ctx.drawImage(im.canvas, (ox + im.x) * CHAR_W + im.px, (oy + im.y) * CHAR_H + im.py);

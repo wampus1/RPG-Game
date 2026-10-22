@@ -2372,9 +2372,13 @@ export class Game {
     for (const c of this.sailors || []) if (!c.dead && Math.abs(c.x - p.x) < 40 && Math.abs(c.z - p.z) < 40) vis.push(c);
     if (this.cutscene && this.cutscene.actors) for (const a of this.cutscene.actors) if (!a.dead) vis.push(a);
     this.visibleEntities = vis;
-    if (this.autosaveDue && !this.cutscene && !(this.scene && this.scene.intro)) {
+    // (Round 134: the morning's held back while you're in a fight, where the
+    // moment it takes would be felt, a minute and a half at most.)
+    const holdSave = this.autosaveDue === true && this.combatT > 0 && (this.saveHeld = (this.saveHeld || 0) + dt) < 90;
+    if (this.autosaveDue && !holdSave && !this.cutscene && !(this.scene && this.scene.intro)) {
       const why = this.autosaveDue;
       this.autosaveDue = false;
+      this.saveHeld = 0;
       // (Round 77: unless it's turned off in Settings. Round 78: the reason,
       // going into a dungeon or out, or true for the morning's.)
       if (this.autosave && !(this.ui && this.ui.noAutosave)) this.autosave(typeof why === 'string' ? why : null);

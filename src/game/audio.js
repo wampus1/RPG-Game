@@ -45,32 +45,46 @@ export class Audio {
     this.groupVol = {};
     // (Where the next voice's notes go: its kind's volume, or the master.)
     this.dest = null;
-    const unlock = () => {
-      if (!this.ctx) {
-        try {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-          this.master = this.ctx.createGain();
-          this.master.gain.value = this.volume;
-          this.master.connect(this.ctx.destination);
-          this.noiseBuf = this.makeNoise();
-          // (Round 77) Each kind of sound through its own volume.
-          this.groups = {};
-          for (const k of SOUND_GROUPS) {
-            const g = this.ctx.createGain();
-            g.gain.value = this.groupVol[k] ?? 1;
-            g.connect(this.master);
-            this.groups[k] = g;
-          }
-        } catch {
-          // (Round 117: tried again on the next click or key, a few times,
-          // not given up on for the whole of the session.)
-          this.ctx = null;
-          this.failed = (this.failed || 0) + 1;
-          if (this.failed >= 5) this.enabled = false;
+    // (Round 134: `early`, made ready before anyone's touched the page; see
+    // below. A failure then isn't held against it.)
+    const build = (early = false) => {
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.volume;
+        this.master.connect(this.ctx.destination);
+        this.noiseBuf = this.makeNoise();
+        // (Round 77) Each kind of sound through its own volume.
+        this.groups = {};
+        for (const k of SOUND_GROUPS) {
+          const g = this.ctx.createGain();
+          g.gain.value = this.groupVol[k] ?? 1;
+          g.connect(this.master);
+          this.groups[k] = g;
         }
-      } else if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') this.ctx.resume?.();
+      } catch {
+        // (Round 117: tried again on the next click or key, a few times,
+        // not given up on for the whole of the session.)
+        this.ctx = null;
+        if (early) return;
+        this.failed = (this.failed || 0) + 1;
+        if (this.failed >= 5) this.enabled = false;
+      }
+    };
+    const unlock = () => {
+      if (!this.ctx) build();
+      else if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') this.ctx.resume?.();
     };
     this.unlock = unlock;
+    // (Round 134) Made ready in a quiet moment before the first click or key:
+    // the sound started up asleep (a browser lets it be heard only once
+    // someone's touched the page), so that first touch only wakes it, and
+    // isn't held up the while it's all built. Nothing's heard till then
+    // (see play: only once it's running).
+    const idle = globalThis.requestIdleCallback || ((f) => setTimeout(f, 1500));
+    idle(() => {
+      if (!this.ctx && this.enabled) build(true);
+    }, { timeout: 4000 });
     // Browsers only allow sound after the first click, tap or key press.
     for (const ev of ['mousedown', 'pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, unlock);
     // (Round 81) The desktop app lets it play from the start.

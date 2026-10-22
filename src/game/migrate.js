@@ -1043,6 +1043,12 @@ export const STEPS = [
       log.push('The forge\'s workshops are rebuilt: rooms in true perspective, lit by the fire, the lamp and the window, every solid thing casting its shadow.');
     },
   },
+  {
+    to: '1.34.0',
+    game(game, log) {
+      log.push('The game runs lighter: the world drawn in fewer strokes, the realms\' roads and far towns\' hours worked out a little at a time, the forge lit faster; nothing in the world itself changed.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

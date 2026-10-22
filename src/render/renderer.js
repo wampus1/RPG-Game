@@ -287,6 +287,7 @@ export class Renderer {
     this.wobbles = new Map();
     // (Round 82) Doors swinging, chests' lids lifted (see swing, lidOpen).
     this.swings = new Map();
+    this.leafStir = false;
     // (Round 83) Chairs being pushed in or pulled out: key -> { t, from, k }.
     this.chairs = new Map();
     this.lids = new Map();
@@ -1203,6 +1204,13 @@ export class Renderer {
     this.swayAmp = wt && !game.dungeon && !this.noEnvFx ? Math.min(2.6, breeze + ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * (0.65 + 0.35 * (wt.gust || 0))) : 0;
     // (The trees' leaves stir only once it's more than a breeze.)
     this.leafAmp = this.swayAmp > 0.8 ? this.swayAmp : 0;
+    // (Round 134) Could the gusts stir them? Then the leaves at your level
+    // and above are drawn each frame, not kept in their rows' pictures
+    // (decided with a little slack, so as not to redraw every picture as
+    // the weather hovers at the edge of it).
+    const maxSway = wt && !game.dungeon && !this.noEnvFx ? breeze + ((wt.blow || 0) * 1.7 + (wt.storm > 0.2 ? wt.storm : 0)) * Math.max(1, 0.65 + 0.35 * (wt.gust || 0)) : 0;
+    if (maxSway > 0.8) this.leafStir = true;
+    else if (maxSway < 0.7) this.leafStir = false;
     this.swayLean = wt ? wt.gust || 0 : 0;
     const atlas = this.atlas;
     const camX = this.camX;
@@ -1216,16 +1224,25 @@ export class Renderer {
     // Column cache: region + base index for every visible column. Columns
     // are laid out in view space (u across, v down); each maps to one world
     // column however the camera is turned.
-    const colR = new Array(W * nRows);
-    const colB = new Int32Array(W * nRows);
-    const colTop = new Int8Array(W * nRows);
-    const colWX = new Int32Array(W * nRows);
-    const colWZ = new Int32Array(W * nRows);
+    // (Round 134: the same buffers frame after frame, made bigger only when
+    // the view is, not thrown away for the collector sixty times a second.)
+    const nCols = W * nRows;
+    let cb = this.colBufs;
+    if (!cb || cb.n < nCols) {
+      cb = this.colBufs = { n: nCols, R: new Array(nCols), B: new Int32Array(nCols), top: new Int8Array(nCols), WX: new Int32Array(nCols), WZ: new Int32Array(nCols) };
+    }
+    const colR = cb.R;
+    const colB = cb.B;
+    const colTop = cb.top;
+    const colWX = cb.WX;
+    const colWZ = cb.WZ;
     const view = this.view;
     for (let r = 0; r < nRows; r++) {
       const v = zMin + r;
       for (let i = 0; i < W; i++) {
-        const [wx, wz] = this.toWorld(x0 + i, v);
+        const u = x0 + i;
+        const wx = view === 1 ? v : view === 2 ? -u : view === 3 ? -v : u;
+        const wz = view === 1 ? -u : view === 2 ? -v : view === 3 ? u : v;
         const reg = world.regionAt(wx, wz);
         const ci = r * W + i;
         colR[ci] = reg;
@@ -1378,6 +1395,13 @@ export class Renderer {
     // drawn over in its place, as ever. Not under a scene's veil; down in
     // the ground, not the layer at your feet (cut flat as a plan).
     const Lc = this.groundCache !== false && veil === null ? (this.underground ? pLayer - 1 : pLayer) : 0;
+    // (Round 134) And your own level and over it too, from pictures of their
+    // own, wherever they'd be drawn just the same: out of doors, or indoors
+    // below the storey cut away; not a layer you're faded through (those
+    // squares are see-through just there); not down in the ground. Their
+    // leaves (while the wind might stir them) and a door mid-swing are
+    // drawn over them square by square, as ever.
+    const upOk = Lc > 0 && !this.underground;
     this.stripBudget = STRIP_BUDGET;
     this.stripFrame = (this.stripFrame || 0) + 1;
     // (Where the drawing's got to: the row, its layer, where that is on
@@ -1643,7 +1667,8 @@ export class Renderer {
         // while their tops still show: see pieces.js.)
         if (sy < this.vh + 4 + (y === GROUND ? 68 : 0) && sy + SPR_H + LH > -4) {
           fadeLayer = fadeRow && y >= pLayer && (z > pz || y > pLayer + 1);
-          const st = y < Lc ? this.groundStrip(game, z, y, x0, x1, kAt) : null;
+          const up = y >= Lc;
+          const st = !up || (upOk && (hidden === null || y < hLevel - 1) && !(fadeLayer && sy + SPR_H > pRect.y0 && sy < pRect.y1)) ? this.groundStrip(game, z, y, x0, x1, kAt, up) : null;
           if (st) this.drawStrip(ctx, game, st, z, y, x0, x1, sy, drawAt, gfxOn);
           else for (let i = 0; i < W; i++) drawAt(i);
         }
@@ -1677,7 +1702,7 @@ export class Renderer {
   // set down) is listed, to be drawn square by square over it, in order.
   // Null if it's not to be had this frame (too many made already): the
   // layer's drawn the old way.
-  groundStrip(game, v, y, x0, x1, kAt) {
+  groundStrip(game, v, y, x0, x1, kAt, up = false) {
     const world = game.world;
     const cache = (this.strips ||= new Map());
     if (this.stripView !== this.view || this.stripAtlas !== this.atlas || this.stripWorld !== world || this.stripDungeon !== !!game.dungeon) {
@@ -1691,13 +1716,13 @@ export class Renderer {
     const key = v * 32 + y;
     let st = cache.get(key);
     const ver = this.rowVer.get(v) || 0;
-    if (st && st.ver === ver && st.kAt === kAt && st.u0 <= x0 && st.u1 >= x1 && this.stripRegions(world, st)) {
+    if (st && st.ver === ver && st.kAt === kAt && st.up === up && (!up || st.stir === this.leafStir) && st.u0 <= x0 && st.u1 >= x1 && this.stripRegions(world, st)) {
       st.used = this.stripFrame;
       return st;
     }
     if (this.stripBudget <= 0) return null;
     this.stripBudget--;
-    st = this.buildStrip(game, v, y, x0 - STRIP_REACH, x1 + STRIP_REACH, kAt, st);
+    st = this.buildStrip(game, v, y, x0 - STRIP_REACH, x1 + STRIP_REACH, kAt, st, up);
     st.ver = ver;
     st.used = this.stripFrame;
     cache.set(key, st);
@@ -1720,7 +1745,7 @@ export class Renderer {
   // last; and with it, where each top and front shown is (for the
   // pointer), the tops (for ruts in the mud), the blocks (for the pointer's
   // own outline), and the columns of what's left to draw over it.
-  buildStrip(game, v, y, u0, u1, kAt, old = null) {
+  buildStrip(game, v, y, u0, u1, kAt, old = null, up = false) {
     const world = game.world;
     const view = this.view;
     const atlas = this.atlas;
@@ -1772,7 +1797,7 @@ export class Renderer {
       const b = BLOCKS[id];
       const meta = reg.meta[lb[ci] + y];
       // (Round 116: an urchin bed, its urchins drawn over it each frame.)
-      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE))) || barIds().has(id) || id === B.gt_urchins) {
+      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE))) || barIds().has(id) || id === B.gt_urchins || (up && ((this.leafStir && LEAVES.has(id)) || (b.render === 'door' && this.swings.has(`${lwx[ci]},${y},${lwz[ci]}`))))) {
         dyn.push(u);
         continue;
       }
@@ -1792,6 +1817,8 @@ export class Renderer {
     st.u0 = u0;
     st.u1 = u1;
     st.kAt = kAt;
+    st.up = up;
+    st.stir = this.leafStir;
     st.regs = regs;
     st.dyn = dyn;
     st.faces = [];

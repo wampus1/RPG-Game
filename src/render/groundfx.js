@@ -296,7 +296,29 @@ export class GroundFx {
     ctx.fillRect(cx - 1, cy, 3, 1);
   }
 
+  // (Round 134) Foam along a shore: each edge of it a picture, made once for
+  // each way it can look (its sides, the camera's turn, its moment, its
+  // square's place in the pattern), and laid down whole; the same pixels as
+  // drawing it a stroke at a time.
   drawFoam(ctx, m, sx, sy, t, seed) {
+    if (typeof document === 'undefined') return this.drawFoamNow(ctx, m, sx, sy, t, seed);
+    const phase = (((Math.floor(t * 4 + seed) % 4) + 4) % 4);
+    const sd = ((seed % 3) + 3) % 3;
+    const key = (((this.r.view & 7) * 16 + m) * 4 + phase) * 3 + sd;
+    const pics = (this.foamPics ||= new Map());
+    let c = pics.get(key);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = 16;
+      c.height = 16;
+      // (Drawn at the same phase and pattern as the square would be.)
+      this.drawFoamNow(c.getContext('2d'), m, 0, 0, (phase - sd) / 4, sd);
+      pics.set(key, c);
+    }
+    ctx.drawImage(c, sx, sy);
+  }
+
+  drawFoamNow(ctx, m, sx, sy, t, seed) {
     const r = this.r;
     ctx.fillStyle = 'rgba(240,250,255,0.75)';
     for (let d = 0; d < 4; d++) {

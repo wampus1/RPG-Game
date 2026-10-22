@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Cam, GBuf, MATS, mat, room, box, cyl, castShadows, shade, light, W, H, N } from '../src/ui/forgelight.js';
 import { Shop, SMITHY, BENCH, BOWYER, TABLE, fire, bellows, ironBar, billet, hammer, quenchPiece, water, crucible, motes, blank, chisel, binding, lamp, bowOnPost, lantern, hide, seam } from '../src/ui/forgepaint.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 // A shop lit into a buffer of pixels (as its window does, without a page).
@@ -129,7 +129,7 @@ test('the bench, the bowyer\'s and the table: their work drawn in their light', 
 });
 
 test('version 1.33.0', () => {
-  assert.equal(GAME_VERSION, '1.33.0');
+  assert.ok(compareVersions('1.33.0', GAME_VERSION) <= 0);
   const s = stepsFor('1.32.0').find((q) => q.to === '1.33.0');
   assert.ok(s && s.game);
 });

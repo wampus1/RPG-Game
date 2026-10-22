@@ -358,17 +358,7 @@ export class Diplomacy {
   // plank bridges over water. The builders lay a stretch every day.
   startRoad(a, b) {
     if (this.roads.some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))) return null;
-    const LA = this.sim.layoutOf(a.id);
-    const LB = this.sim.layoutOf(b.id);
-    // From the end of a main street (a city's gateway), whichever faces the
-    // other town best.
-    const ends = (L, other) => {
-      const ox = (other.bounds.x0 + other.bounds.x1) / 2;
-      const oz = (other.bounds.z0 + other.bounds.z1) / 2;
-      return L.roadEnds().reduce((m, q) => (Math.hypot(q.x + q.dx * 8 - ox, q.z + q.dz * 8 - oz) < Math.hypot(m.x + m.dx * 8 - ox, m.z + m.dz * 8 - oz) ? q : m));
-    };
-    const e0 = ends(LA, b);
-    const e1 = ends(LB, a);
+    const { e0, e1, q0, q1 } = this.roadPlan(a, b);
     const t = this.game.world.terrain;
     // (Bridged in the wood of the people who build it: see planksOf.)
     const bridge = planksOf(a.style || 'vale');
@@ -401,14 +391,6 @@ export class Diplomacy {
         pz = z;
       }
     };
-    // Straight out of the gate for a stretch, then across the country, and
-    // straight in at the other end.
-    const out = (e, B0) => {
-      const n = Math.max(0, e.dx < 0 ? e.x - B0.x0 : e.dx > 0 ? B0.x1 - e.x : e.dz < 0 ? e.z - B0.z0 : B0.z1 - e.z) + 6;
-      return { x: e.x + e.dx * n, z: e.z + e.dz * n };
-    };
-    const q0 = out(e0, a.bounds);
-    const q1 = out(e1, b.bounds);
     walk(e0, q0);
     // Across country it winds: round lakes and hills, along the easier
     // ground, with a turn here and there (a stretch at a time).
@@ -420,12 +402,73 @@ export class Diplomacy {
     return road;
   }
 
+  // Where a road between towns a and b leaves each (the end of a main
+  // street, or a city's gateway, whichever faces the other town best), and
+  // where it's run straight out to before it goes across country.
+  roadPlan(a, b) {
+    const LA = this.sim.layoutOf(a.id);
+    const LB = this.sim.layoutOf(b.id);
+    const ends = (L, other) => {
+      const ox = (other.bounds.x0 + other.bounds.x1) / 2;
+      const oz = (other.bounds.z0 + other.bounds.z1) / 2;
+      return L.roadEnds().reduce((m, q) => (Math.hypot(q.x + q.dx * 8 - ox, q.z + q.dz * 8 - oz) < Math.hypot(m.x + m.dx * 8 - ox, m.z + m.dz * 8 - oz) ? q : m));
+    };
+    const e0 = ends(LA, b);
+    const e1 = ends(LB, a);
+    // Straight out of the gate for a stretch, then across the country, and
+    // straight in at the other end.
+    const out = (e, B0) => {
+      const n = Math.max(0, e.dx < 0 ? e.x - B0.x0 : e.dx > 0 ? B0.x1 - e.x : e.dz < 0 ? e.z - B0.z0 : B0.z1 - e.z) + 6;
+      return { x: e.x + e.dx * n, z: e.z + e.dz * n };
+    };
+    return { e0, e1, q0: out(e0, a.bounds), q1: out(e1, b.bounds) };
+  }
+
+  // (Round 134) The way across country for a road between a and b worked
+  // out ahead of its being paid for, `ms` of it at a time (see
+  // Realms.nextRoad), so the day it's begun doesn't stall on it. The very
+  // way it would have been worked out there and then (see route).
+  prepRoad(a, b, ms) {
+    if (this.roads.some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))) return true;
+    if (!this.game.world.layouts.has(a.id) || !this.game.world.layouts.has(b.id)) return true;
+    const { q0, q1 } = this.roadPlan(a, b);
+    const k = this.routeKey(q0, q1, [a, b], 7);
+    this.routes ||= new Map();
+    if (this.routes.has(k)) return true;
+    if (!this.routeJob || this.routeJob.k !== k) this.routeJob = { k, steps: this.routeSteps(q0, q1, [a, b], 7) };
+    const t0 = performance.now();
+    let r;
+    do r = this.routeJob.steps.next();
+    while (!r.done && performance.now() - t0 < ms);
+    if (!r.done) return false;
+    this.routeJob = null;
+    this.routes.set(k, r.value);
+    if (this.routes.size > 24) this.routes.delete(this.routes.keys().next().value);
+    return true;
+  }
+
+  // What a way across country is worked out from: its ends, the towns it's
+  // between, what water costs it, and the towns there are (another
+  // founded, it's worked out again).
+  routeKey(p0, p1, towns, wet) {
+    return `${p0.x},${p0.z}>${p1.x},${p1.z}|${towns.map((s) => s.id).join(',')}|${wet}|${this.game.world.ow.settlements.length}`;
+  }
+
   // The way across country between two points: a search over the land in
   // steps of a few paces, where water, steep ground and other towns cost
   // more, the lie of the land (a gentle noise) bends it, and every turn
   // costs a little (so it runs straight a while, then turns). Returns the
   // corners of the way, start and end included.
   route(p0, p1, towns = [], wet = 7) {
+    // (Worked out already? See prepRoad.)
+    if (this.routes && this.routes.size) {
+      const k = this.routeKey(p0, p1, towns, wet);
+      const got = this.routes.get(k);
+      if (got) {
+        this.routes.delete(k);
+        return got;
+      }
+    }
     const steps = this.routeSteps(p0, p1, towns, wet);
     let r;
     do r = steps.next();
@@ -501,7 +544,9 @@ export class Diplomacy {
     let end = null;
     let n = 0;
     while (heap.size && n++ < 40000) {
-      if (n % 300 === 0) yield null;
+      // (Round 134: a breath every 50 squares, not 300, so a few
+      // milliseconds' allowance a frame is kept to.)
+      if (n % 50 === 0) yield null;
       const [i, j, d] = heap.pop();
       const k = key(i, j, d);
       if (i === gx1 && j === gz1) {
@@ -810,7 +855,7 @@ export class Diplomacy {
   // ------------------------------------------------------------ time
   update() {
     const now = this.sim.abs;
-    this.wayMs = WAY_MS;
+    this.wayMs = this.sim.workMs ? this.sim.workMs(WAY_MS) : WAY_MS;
     for (const q of this.letters) if (q.status === 'carried' && now >= q.arrive) this.deliver(q);
     this.courier(now);
     this.buildRoads(now);

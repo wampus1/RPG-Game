@@ -40,6 +40,10 @@ export const DEFAULTS = {
   // ruts, shore foam: always; ripples, as many as the particles allow.)
   envFx: true,
   netRate: 0, // 0 smooth (20 a second), 1 light (10)
+  // (Round 134) The world's work out of sight (far towns' hours, the
+  // realms' roads worked out, towns laid out): 0 full, 1 gentle (half the
+  // time a frame). It all comes out the same, only a little later.
+  bgWork: 0,
   // (Round 77)
   autosave: true,
   questMarkers: true,
@@ -66,6 +70,7 @@ export const SETTING_TABS = ['General', 'Visuals', 'Sound', 'Controls', 'Multipl
 export const SETTING_ROWS = [
   { key: 'autosave', tab: 'General', label: 'Autosave each morning', kind: 'bool' },
   { key: 'frameCap', tab: 'General', label: 'Frame rate', kind: 'choice', opts: ['Full', '30 a second'] },
+  { key: 'bgWork', tab: 'General', label: 'Background world work', kind: 'choice', opts: ['Full', 'Gentle'] },
   { key: 'damageNumbers', tab: 'General', label: 'Damage numbers', kind: 'bool' },
   { key: 'questMarkers', tab: 'General', label: 'Quest markers', kind: 'bool' },
   { key: 'tooltips', tab: 'General', label: 'Pointer tooltips', kind: 'bool' },
@@ -154,6 +159,8 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     renderer.noFlash = !s.flashes;
     renderer.wallHint = s.wallHint !== false;
     renderer.noQuestMarks = !s.questMarkers;
+    // (Round 134: read by the sim, see Sim.workMs.)
+    renderer.gentleWork = s.bgWork === 1;
   }
   // (Playing in someone else's world: how often the host sends word.)
   if (net && net.setRate) net.setRate(s.netRate === 1 ? 10 : 20);

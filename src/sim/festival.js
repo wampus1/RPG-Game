@@ -233,7 +233,16 @@ export function placeVenues(events, L, ev, look, palette) {
   function tryPlace(id, V, alt, anchors) {
     const tall = V.blocks.some((q) => q[1] >= 2) ? 3 : 2;
     const ow = events.game.world.ow;
+    // (Round 134: each square looked at once, not once for every place the
+    // venue might be tried over it.)
+    const seen = new Map();
     const ok = (x, z) => {
+      const k = x * 65536 + z;
+      let v = seen.get(k);
+      if (v === undefined) seen.set(k, (v = okNow(x, z)));
+      return v;
+    };
+    const okNow = (x, z) => {
       if (!L.inside(x, z, 2)) return false;
       // (In the town itself, not out past its last houses.)
       if (ow.settlementAt && ow.settlementAt(x, z) !== L.settlement) return false;
