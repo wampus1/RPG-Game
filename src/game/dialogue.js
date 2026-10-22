@@ -440,6 +440,8 @@ export const TOPIC_CATS = [
   { id: 'business', label: 'Business' },
   { id: 'town', label: 'Town & realm' },
   { id: 'talk', label: 'Talk' },
+  // (Round 136) What they think, what they want, who they know (see social.js).
+  { id: 'people', label: 'People' },
   { id: 'manners', label: 'Gifts & manners' },
 ];
 const CAT_OF = {};
@@ -448,6 +450,7 @@ for (const [cat, ids] of Object.entries({
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
   town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
+  people: 'so_word so_share so_think so_me so_dream so_secret so_intro so_mediate so_spar so_teach so_show so_rumour',
   manners: 'gift rude so_sorry so_threaten so_court so_drink',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
 

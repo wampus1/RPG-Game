@@ -10734,6 +10734,102 @@ and the words themselves show how it's said.
   None of it uses the dice the rest of the town's day is thrown with.
   The host works it all out in multiplayer.
 
+## Round 136: Townsfolk who act
+
+The townsfolk now go after what they want, live among each other, and
+come together over what troubles their town. Everything they do with
+each other, you can do with them.
+
+- **Ambitions.** Now and then someone sets their heart on something,
+  out of who they are and what's happened to them. They work at it day
+  by day, and act through the same things everyone else does:
+  - **Master their trade:** the gifted and the proud, practising late.
+    The ungifted find where their gift runs out.
+  - **Take up the trade they were made for:** someone stuck in the
+    wrong work studies of an evening, then changes trade. If there's no
+    place for it in town, they go to a town that has one.
+  - **Open a business:** a venture story with them as the owner, which
+    you can invest in or stock.
+  - **Find someone:** the lonely and the romantic court whoever they've
+    grown fond of. It may end in a courtship story and a wedding, a
+    rejection, or heartbreak when someone else gets there first.
+  - **Lead the town:** the able canvass when the town is unhappy with
+    its mayor, then call an election.
+  - **Get even:** they bad-mouth whoever wronged them about town, then
+    challenge them to a duel, start a feud, or pull a low trick. If it's
+    you, they come and have it out with you.
+  - **Leave:** the frightened, the worn-down and the grieving plan it.
+    A partner who won't hear of it slows them down. Then the household
+    packs up for a better-run town.
+  - **Join the watch:** the brave drill after a raid.
+  - **Study:** for a place at an Academy.
+  - **Make up with someone:** a reconciliation story for estranged kin.
+  - **Feed the family:** odd jobs, and the desperate turn thief until
+    they're fed again.
+  - **Have a child:** a couple set on it has better odds.
+
+  Rivals for the same office or the same heart sour on each other. What
+  comes of it all is remembered and talked about, and goes in the
+  ledger when it matters.
+- **Townsfolk among themselves.** Each day some of a town's people
+  cross paths, and how they get on adds up.
+  - Those who keep getting on become friends; those who don't fall out,
+    and a falling-out between hot heads can set two households at odds.
+  - Gladness, fear and grievances rub off on others.
+  - The grieving are sat with by those close to them.
+  - Rumours and grudges spread at second hand, weaker each time.
+- **Groups.** When enough of a town share a grievance (taxes, hunger,
+  fear after a raid, the mayor, a grudge against you), and one of them
+  is the sort others follow, they come together. Left unanswered, a
+  grievance grows:
+  - **Grumbling**, then a **petition** to the mayor (or to your
+    council, if you govern the town).
+  - Refused, a **protest**: evenings shouting in the square.
+  - Then a **strike** (no work done), and at the worst a **riot** at
+    the hall.
+  - At last some **leave** for a better town, or **found a village**
+    under the one who led them, who becomes its elder.
+
+  Fear after a raid makes a militia of the brave, and hunger makes
+  neighbours share. A shared death keeps a **vigil**, and shared good
+  news makes a night at the tavern. A grudge against you starts with
+  cold shoulders and dearer prices, then the leader confronts you.
+- **Everything they do, you can do.** New things to say:
+  - **Gossip:** *Heard anything lately?* What they tell you, you can
+    pass on (*Have you heard...?*), from town to town. Tell someone who's
+    been bad-mouthing them, and they'll never forgive that person.
+  - **Rumours:** start one about someone, good or bad. It may be
+    believed or not, and if it reaches the person it's about, they'll
+    know it was you.
+  - **Opinions:** *What do you make of...?* and *What do you really
+    think of me?* The kind and the timid soften the truth; press them.
+  - **Dreams and secrets:** *What do you want out of life?* (if they
+    trust you), then encourage it, help with it, or talk them out of it.
+    *Tell me something nobody knows*, for a true friend.
+  - **Friends:** introduce two people (sometimes a match), stand someone
+    a drink at the tavern, have a friendly bout, or be taught their
+    craft (or teach them yours).
+  - **Courting:** flirt with someone single, and maybe walk out
+    together.
+  - **Quarrels:** make peace between two at odds, say sorry (not
+    everything is forgiven; coin may help), or threaten them.
+  - **Groups:** stand with a grievance, talk it down, give to the
+    hungry, or plead its case with the mayor.
+  - **Sulking:** someone too angry to talk will only hear an apology.
+- **They come to you.** An NPC with something to say walks over: to
+  thank you (with a gift), to have it out with you, to ask your advice,
+  to warn you that someone has it in for you, or to ask you for a drink.
+- **Dialogue.** About 570 rule sets and 1,265 lines, more than double
+  last round. There are new lines for every new kind of talk, and
+  alternatives for almost every rule that had just one line.
+- **Fixes.** A memory about a player now changes that player's own
+  standing in multiplayer. Feelings now show in townsfolk's speech at
+  the tavern, not just adventurers'.
+- **`mind`** now also shows what someone wants, the group they stand
+  with, who they're looking for, and their friends.
+- **Cost.** A town's whole day of inner lives takes about 1.2 ms. It all
+  runs on its own dice and on the host.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
