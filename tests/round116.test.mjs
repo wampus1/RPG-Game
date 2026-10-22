@@ -119,7 +119,7 @@ test('urchin beds drawn at every tide, their spines up through the water; no wor
   assert.ok(dry > 20 && rects > 10, `drawn dry (${dry}) and under the tide (${rects})`);
   // Over the water above a bed, and on a bed laid in the ground's picture.
   assert.ok(/world\.getBlock\(wx, y - 1, wz\) === B\.gt_urchins\) this\.drawUrchins/.test(src('render/groundfx.js')));
-  assert.ok(/barIds\(\)\.has\(id\) \|\| id === B\.gt_urchins\)/.test(src('render/renderer.js')));
+  assert.ok(/barIds\(\)\.has\(id\) \|\| id === B\.gt_urchins\b/.test(src('render/renderer.js')));
   assert.ok(!/Mind the black urchin beds/.test(src('game/grottowork.js')), 'no band-aid');
 });
 
