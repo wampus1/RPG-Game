@@ -164,11 +164,13 @@ test('additives lean what a piece comes out with, and one may work only at night
     return n;
   };
   assert.ok(count(['ember_pod'], 'searing') > count([], 'searing') * 2, 'an ember pod leans toward searing');
+  // (Round 137: of the night is a trigger now, "dusk": what it wakes works
+  // all night.)
   let night = null;
-  for (let i = 0; i < 200 && !night; i++) night = forgePiece('iron_sword', 0.95, ['grave_iron'], 10, new RNG(i), { cap: 5 }).mods.find((m) => m.endsWith('-night'));
+  for (let i = 0; i < 200 && !night; i++) night = forgePiece('iron_sword', 0.95, ['grave_iron'], 10, new RNG(i), { cap: 5 }).mods.find((m) => m.endsWith('-dusk') && !m.startsWith('shade'));
   assert.ok(night, 'grave iron gives a modifier of the night');
   const d = modOf('blade', night);
-  assert.equal(d.cond, 'night');
+  assert.equal(d.cond, 'dusk');
   assert.match(d.about, /night/);
   // It works only after dark.
   const g = world();

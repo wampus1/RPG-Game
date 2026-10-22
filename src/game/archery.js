@@ -21,6 +21,7 @@ import { aegisUp } from './kavtech.js';
 import { covers, padded, padOf } from '../entities/footprint.js';
 import { shielded } from '../entities/monsters.js';
 import { drawModMult, thriftyShot, twinShot, modsOf, catchArrow } from './mods.js';
+import { fireTrigger } from './abilities.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -132,6 +133,8 @@ export function releaseDraw(game, scale = 1) {
   if (power >= 0.98 && Math.random() < (mark ? 0.22 : 0.12)) dmg *= 1.6;
   const range = (def.range || 8) * (0.45 + 0.55 * power);
   shootAimed(game, p, aimPoint(game), { dmg: Math.max(1, Math.round(dmg)), kind, range, power });
+  // (Round 137: a forged bow's trigger, a full draw loosed.)
+  if (power >= 0.98) fireTrigger(game, p, 'draw', {});
   p.attackCd = (def.cooldown || 0.8) * 0.35 * cooldownMult(game.hero) / (1 + buffOf(game, 'haste'));
   p.doAction(0.3);
   return true;

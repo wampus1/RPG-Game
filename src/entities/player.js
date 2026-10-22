@@ -15,6 +15,7 @@ import { turnMount, mountStep } from '../game/riding.js';
 import { deckUpdate, tryBoardStep } from '../game/ships3d.js';
 import { stepModMult, gearHp, lanternLight, landArmorTick } from '../game/mods.js';
 import { rule } from '../mod/rules.js';
+import { tickAbilities } from '../game/abilities.js';
 
 const BASE_HP = 20;
 
@@ -325,6 +326,9 @@ export class Player extends Entity {
     }
     // Dishes eaten, working through you (see game/cooking.js).
     tickDishes(this.game, this, dt);
+    // (Round 137) A forged piece's triggers and abilities (see
+    // game/abilities.js).
+    tickAbilities(this.game, this, dt);
     // (Round 68) Jade-set armour mending you; Rune-cut armour's ward.
     landArmorTick(this.game, this, dt);
     // (Hale armour put on or taken off, however it was: health with it.)

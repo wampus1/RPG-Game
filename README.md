@@ -10828,6 +10828,67 @@ each other, you can do with them.
 - **Cost.** A town's whole day of inner lives takes about 1.2 ms. It all
   runs on its own dice and on the host.
 
+## Round 137: Triggers and abilities
+
+Forged pieces no longer have modifiers that work "only at night" or "only
+in the deep". Those conditions are now **triggers**, and a piece can also
+carry **abilities**.
+
+- **Triggers** are things that happen to you or that you do. Each trigger
+  on a piece sets off one thing:
+  - **One of the piece's own modifiers**, which then works for a while (a
+    Brutal edge for twelve seconds after you're struck). Night and the old
+    places still keep their modifiers working while they last.
+  - **One of its abilities.**
+
+  How often each one comes up varies:
+  - **Often:** when you're struck, land a blow, roll, block or loose a
+    full draw; a tool when it breaks a block.
+  - **Now and then:** a telling blow, a kill, the first blow on an unhurt
+    foe, an arrow from eight paces, being set alight or poisoned, being
+    mended, running out of breath, striking a master, ore, felling a tree.
+  - **Seldom:** a perfect parry, rolling clear of a blow, falling below
+    half health, five blows in a row unhurt, three foes about you, a long
+    fall, going into water.
+  - **Rarely:** falling below a fifth of your health, three kills in
+    twelve seconds, nightfall, going down into an old place, and a blow
+    that would have killed you (you live at one heart, once every five
+    minutes).
+- **Abilities**, 26 of them, each with its own effects and sound:
+  - **Support:** Healing Aura, Aegis (a shell of light), Rallying Light,
+    Quickening, Bloodrage, Bramble Mantle, Whirling Blades.
+  - **Damage:** Flame Nova, Glacial Spikes, Chain Lightning, Meteor,
+    Starfall, Sunlance, Earthsplitter.
+  - **Control:** Grasping Roots, Cyclone, Time Slip, Thunderclap, Plague
+    Cloud, Soul Siphon, Spirit Wisps.
+  - **Melee:** Shadow Step, Phantom Blade.
+  - **Tools only:** Shatterstrike, Golden Touch, Seeker's Light.
+
+  A sigil flares under you as one is cast. Lasting ones stay drawn on you
+  as you move: the golden ring, circling blades, the shell, a red rage,
+  thorns and after-images. Everyone playing sees and hears them. An
+  ability that needs a foe does nothing, and costs no wait, when there's
+  none about. A piece's stars make its abilities stronger.
+- **Where they come from.** Each material and additive brings its own:
+  - Living Amber gives a healing aura when you're struck.
+  - Drake Scale calls a meteor when you bring a foe down.
+  - Phoenix Ash makes a flame nova at the brink.
+  - Clay, glass, antler, coral and relic shards can go into the work now
+    too.
+
+  An ability with no trigger in the work comes with its own. A trigger
+  with no ability wakes one of the piece's modifiers. Hovering over an
+  additive at the forge spells out what it brings. Fine pieces from the
+  old places carry an ability now and then.
+- **Changing them round.** At the anvil, choose a piece and then *Change
+  round its triggers*. Pick two triggers and they trade what they set off.
+  It costs a little of what the piece is made of (an iron ingot, a
+  string, a hide) and some coin. What the piece has is never added to or
+  taken away, only moved around.
+- **Old saves.** A modifier "of the night" now wakes at nightfall and
+  works all night, as before. "Desperate" now comes below half health,
+  "of the deep" in the old places, and so on.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

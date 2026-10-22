@@ -1398,9 +1398,10 @@ export class ForgeWindow extends Window {
     this.flashNeed = Math.max(0, (this.flashNeed || 0) - 1 / 60);
     yy += 12;
     const list = f.adds || [];
-    const per = Math.max(1, Math.floor((y + ph - 34 - yy) / 17));
+    const per = Math.max(1, Math.floor((y + ph - 58 - yy) / 17));
     this.scroll = Math.min(this.scroll, Math.max(0, list.length - per));
     if (!list.length) text(u, f.mode === 'temper' ? 'YOU HAVEN\'T A RARE MATERIAL ABOUT YOU.' : 'NOTHING ABOUT YOU THAT WOULD GO IN.', x + 18, yy + 2, '#7a6a58');
+    let hovDetail = '';
     list.slice(this.scroll, this.scroll + per).forEach((a, k) => {
       const ry = yy + k * 17;
       const on = this.adds.includes(a.k);
@@ -1419,7 +1420,10 @@ export class ForgeWindow extends Window {
       text(u, `×${a.n}`, x + 176, ry + 4, '#a89878');
       text(u, a.traits === '?' ? '? (NOT YET WORKED)' : String(a.traits).slice(0, 26), x + 200, ry + 4, a.traits === '?' ? '#7a6a58' : '#a8d8a0');
       if (!this.pattern) this.btns.push({ ...b, fn: () => this.toggleAdd(a.k) });
+      // (Round 137) Its trigger and its ability, spelled out, under the mouse.
+      if (hov && a.detail) hovDetail = a.detail;
     });
+    if (hovDetail) wrap(hovDetail, 70).slice(0, 2).forEach((l, j) => text(u, l, x + 14, y + ph - 56 + j * 10, '#ffb0f0'));
     if (list.length > per) text(u, `${this.scroll + 1}-${Math.min(list.length, this.scroll + per)} OF ${list.length} (WHEEL)`, x + pw - 14, y + ph - 44, '#7a6a58', { align: 'right' });
     const bw = 120;
     this.button(u, { x: UW / 2 - bw - 6, y: y + ph - 26, w: bw, h: 16, fn: () => this.prepGo() }, f.mode === 'reforge' ? 'REFORGE IT' : f.mode === 'temper' ? 'TEMPER IT' : 'BEGIN THE WORK', { hi: true, on: f.mode !== 'temper' || list.length > 0 });
@@ -1499,8 +1503,8 @@ export class ForgeWindow extends Window {
         yy += 11;
       });
       for (const m of r.mods || []) {
-        const col = m.flaw ? '#f08060' : m.cond ? '#90c8f8' : '#f0c070';
-        const ln = `${m.flaw ? '× ' : '◆ '}${m.name}${m.about ? `: ${m.about}` : ''}`;
+        const col = m.color || (m.flaw ? '#f08060' : m.cond ? '#90c8f8' : '#f0c070');
+        const ln = m.line || `${m.flaw ? '× ' : '◆ '}${m.name}${m.about ? `: ${m.about}` : ''}`;
         wrap(ln, 60).slice(0, 2).forEach((l, j) => {
           text(u, j ? `  ${l}` : l, x + 16, yy, col);
           yy += 10;

@@ -22,6 +22,7 @@ import { stockPantry, PANTRY } from './cooking.js';
 import { cookDish, parseDish } from '../world/dishes.js';
 import { invAdd, invCount, kitchenOf, alive, traderOf } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
+import { parseStar, starKey } from '../world/quality.js';
 import { B } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { restamp } from '../world/sites.js';
@@ -1059,6 +1060,37 @@ export const STEPS = [
     to: '1.36.0',
     game(game, log) {
       log.push('The townsfolk act on their own now: they set their hearts on things and work at them, make friends and enemies of each other, come together over what troubles their town (and leave it, at last), and come looking for you. Everything they do with each other, you can do with them.');
+    },
+  },
+  {
+    to: '1.37.0',
+    game(game, log) {
+      // (A piece's modifier that worked only at some times reads as one a
+      // trigger wakes, of itself: "keen-night" works all night as it did.
+      // See world/triggers.js. Your own pack and what you wear: written
+      // the new way.)
+      const p = game.player;
+      const fix = (k) => {
+        const sp = k && parseStar(k);
+        return sp ? starKey(sp.plain, sp.stars, sp.origin, sp.roll, sp.mods) : k;
+      };
+      let n = 0;
+      for (const s of p ? p.inv : []) {
+        if (!s) continue;
+        const k = fix(s.item);
+        if (k !== s.item) {
+          s.item = k;
+          n++;
+        }
+      }
+      for (const slot of Object.keys((p && p.equip) || {})) {
+        const k = fix(p.equip[slot]);
+        if (k !== p.equip[slot]) {
+          p.equip[slot] = k;
+          n++;
+        }
+      }
+      log.push(`Forged pieces carry triggers now (when you're struck, when you bring a foe down, when night falls...) and abilities (a healing aura, a meteor, chain lightning...), each trigger setting off one of its modifiers or its abilities; at an anvil what each sets off can be changed round.${n ? ` ${n} of your pieces had a modifier of the night, the deep and so on: it's woken by a trigger now.` : ''}`);
     },
   },
 ];

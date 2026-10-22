@@ -19,6 +19,7 @@ import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting, skyLight } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpikes, drawShields } from './fx.js';
+import { drawAuras } from './abilityfx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawStormSea, drawStormCover } from './stormfx.js';
@@ -3125,6 +3126,8 @@ export class Renderer {
       const tall = e.kind !== 'creature' || e.species === 'horse';
       if (e.burnT > 0) drawBurning(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
       if (e.stunT > 0 || e.slowT > 0 || e.frozenT > 0 || e.bleedT > 0 || e.markT > 0) drawStatus(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
+      // (Round 137) A forged piece's ability still working on them.
+      if (e.abOn) drawAuras(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
     }
     // Under the mouse? (The last thing drawn there is what you point at.)
     const m = this.mouse;

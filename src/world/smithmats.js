@@ -4,13 +4,17 @@
 // is by cooking with it), and the old places' own materials, rarer the
 // deeper and off the greater masters.
 //   A trait leans what a piece comes out with toward some modifiers (a
-// fiery thing toward searing blades and fire-tipped arrows), or makes one
-// of its modifiers work only at certain times (`cond`: "at night"), or
-// changes the work itself (`pure`: the work goes better; `flawed`: worse,
-// and flaws likelier; `tough`: flaws less likely). A material of rare
+// fiery thing toward searing blades and fire-tipped arrows), or changes
+// the work itself (`pure`: the work goes better; `flawed`: worse, and
+// flaws likelier; `tough`: flaws less likely). (Round 137) Or it's a
+// trigger (`trig`: "battle-born", when you're struck), that sets off one
+// of the piece's modifiers or its ability; or an ability (`ab`:
+// "radiant", a healing aura). See world/triggers.js. A material of rare
 // quality or better lets a piece reach five stars.
 //   (Plain data: items.js makes items of the materials; nothing here knows
 // of it.)
+
+import { TRIGGERS, ABILITIES } from './triggers.js';
 
 // How rare a material is: its name and colour.
 export const RARITY = {
@@ -40,34 +44,30 @@ export const TRAITS = {
   pure: { name: 'pure', work: 0.08 },
   flawed: { name: 'brittle', work: -0.08, flaw: 0.25 },
   tough: { name: 'tough', flaw: -0.5 },
-  // When its modifier works (see game/cooking.js COND_TEST).
-  night: { name: 'of the night', cond: 'night' },
-  hurt: { name: 'desperate', cond: 'hurt' },
-  deep: { name: 'of the deep', cond: 'deep' },
-  wild: { name: 'wild', cond: 'wild' },
-  water: { name: 'of the water', cond: 'water' },
-  fight: { name: 'battle-born', cond: 'fight' },
 };
+// (Round 137) The triggers and the abilities, each a trait of its own.
+for (const [k, T] of Object.entries(TRIGGERS)) TRAITS[k] = { name: T.trait, trig: k };
+for (const [k, A] of Object.entries(ABILITIES)) TRAITS[k] = { name: A.trait, ab: k };
 
 // The old places' own materials (items of their own: see items.js), and
 // how rare each is.
 export const MATERIALS = {
   // Uncommon: off the lesser masters, and the middle floors.
-  grave_iron: { name: 'Grave Iron', rarity: 'uncommon', value: 30, color: '#6a7080', traits: ['cruel', 'night'], about: 'Iron dug out of a barrow, black and cold to the touch. It takes an edge that bites deep, and darker after dark.' },
-  cave_silver: { name: 'Cave Silver', rarity: 'uncommon', value: 32, color: '#d8e0e8', traits: ['pure', 'deft'], about: 'Bright silver from far underground, so pure it flows under the hammer.' },
-  beast_sinew: { name: 'Beast Sinew', rarity: 'uncommon', value: 26, color: '#c8a070', traits: ['far', 'tough'], about: 'Dried sinew off some great beast of the deep: a bowyer\'s treasure, and it binds anything.' },
-  ironbark: { name: 'Ironbark', rarity: 'uncommon', value: 28, color: '#5a4030', traits: ['heavy', 'tough'], about: 'Wood from a tree that grew in the dark, hard as iron and twice as heavy.' },
-  bog_resin: { name: 'Bog Resin', rarity: 'uncommon', value: 24, color: '#8a7a2a', traits: ['venomous', 'water'], about: 'Sticky amber resin from a drowned place, bitter and poisonous.' },
+  grave_iron: { name: 'Grave Iron', rarity: 'uncommon', value: 30, color: '#6a7080', traits: ['cruel', 'dusk', 'shade'], about: 'Iron dug out of a barrow, black and cold to the touch. It takes an edge that bites deep, and darker after dark.' },
+  cave_silver: { name: 'Cave Silver', rarity: 'uncommon', value: 32, color: '#d8e0e8', traits: ['pure', 'deft', 'parry'], about: 'Bright silver from far underground, so pure it flows under the hammer.' },
+  beast_sinew: { name: 'Beast Sinew', rarity: 'uncommon', value: 26, color: '#c8a070', traits: ['far', 'tough', 'shot'], about: 'Dried sinew off some great beast of the deep: a bowyer\'s treasure, and it binds anything.' },
+  ironbark: { name: 'Ironbark', rarity: 'uncommon', value: 28, color: '#5a4030', traits: ['heavy', 'tough', 'roots'], about: 'Wood from a tree that grew in the dark, hard as iron and twice as heavy.' },
+  bog_resin: { name: 'Bog Resin', rarity: 'uncommon', value: 24, color: '#8a7a2a', traits: ['venomous', 'soak', 'plague'], about: 'Sticky amber resin from a drowned place, bitter and poisonous.' },
   // Rare: off the greater masters, and deep down now and then.
-  star_iron: { name: 'Star Iron', rarity: 'rare', value: 90, color: '#a8b8f0', traits: ['pure', 'keen', 'light'], about: 'Iron that fell from the sky long ago, shot through with silver threads. A smith works with it once in a lifetime.' },
-  drake_scale: { name: 'Drake Scale', rarity: 'rare', value: 85, color: '#c84a2a', traits: ['fiery', 'heavy'], about: 'A scale as big as your hand, still warm, from something that should not exist.' },
-  living_amber: { name: 'Living Amber', rarity: 'rare', value: 80, color: '#f0a830', traits: ['vital', 'lucky'], about: 'Amber with something moving in it. It mends, they say, whatever it\'s set into.' },
-  wraith_silk: { name: 'Wraith Silk', rarity: 'rare', value: 80, color: '#c8d8e8', traits: ['light', 'hurt'], about: 'Grey thread spun of nothing at all, cold, and weightless.' },
-  rime_heart: { name: 'Rime Heart', rarity: 'rare', value: 85, color: '#a8e8f8', traits: ['frosty', 'tireless'], about: 'A lump of ice that never melts, beating faintly.' },
+  star_iron: { name: 'Star Iron', rarity: 'rare', value: 90, color: '#a8b8f0', traits: ['pure', 'keen', 'light', 'starfall'], about: 'Iron that fell from the sky long ago, shot through with silver threads. A smith works with it once in a lifetime.' },
+  drake_scale: { name: 'Drake Scale', rarity: 'rare', value: 85, color: '#c84a2a', traits: ['fiery', 'heavy', 'kill', 'meteor'], about: 'A scale as big as your hand, still warm, from something that should not exist.' },
+  living_amber: { name: 'Living Amber', rarity: 'rare', value: 80, color: '#f0a830', traits: ['vital', 'lucky', 'struck', 'halo'], about: 'Amber with something moving in it. It mends, they say, whatever it\'s set into.' },
+  wraith_silk: { name: 'Wraith Silk', rarity: 'rare', value: 80, color: '#c8d8e8', traits: ['light', 'bloodied', 'phantom'], about: 'Grey thread spun of nothing at all, cold, and weightless.' },
+  rime_heart: { name: 'Rime Heart', rarity: 'rare', value: 85, color: '#a8e8f8', traits: ['frosty', 'tireless', 'glacier'], about: 'A lump of ice that never melts, beating faintly.' },
   // Very rare: off the greatest masters, and hardly ever else.
-  heartstone: { name: 'Heartstone', rarity: 'vrare', value: 260, color: '#e83a5a', traits: ['pure', 'vital', 'heavy'], about: 'A red stone the size of a heart, warm and slow-beating. A blank cast can be made of it; few things else are worthy.' },
-  void_glass: { name: 'Void Glass', rarity: 'vrare', value: 280, color: '#3a2a5a', traits: ['pure', 'keen', 'deep'], about: 'Glass as black as the space between stars. It cuts what it touches, even light.' },
-  phoenix_ash: { name: 'Phoenix Ash', rarity: 'vrare', value: 270, color: '#ff9030', traits: ['pure', 'fiery', 'vital'], about: 'Ash that will not stay cold. Breathe on it and it glows.' },
+  heartstone: { name: 'Heartstone', rarity: 'vrare', value: 260, color: '#e83a5a', traits: ['pure', 'vital', 'deathblow', 'beacon'], about: 'A red stone the size of a heart, warm and slow-beating. A blank cast can be made of it; few things else are worthy.' },
+  void_glass: { name: 'Void Glass', rarity: 'vrare', value: 280, color: '#3a2a5a', traits: ['pure', 'keen', 'delve', 'stasis'], about: 'Glass as black as the space between stars. It cuts what it touches, even light.' },
+  phoenix_ash: { name: 'Phoenix Ash', rarity: 'vrare', value: 270, color: '#ff9030', traits: ['pure', 'fiery', 'brink', 'nova'], about: 'Ash that will not stay cold. Breathe on it and it glows.' },
 };
 export const MATERIAL_KEYS = Object.keys(MATERIALS);
 const BY_RARITY = { uncommon: [], rare: [], vrare: [] };
@@ -75,30 +75,36 @@ for (const [k, m] of Object.entries(MATERIALS)) BY_RARITY[m.rarity].push(k);
 
 // What the smith's everyday additives are, as the forge knows them.
 export const ADDITIVES = {
-  coal: { traits: ['heavy'] },
-  bone: { traits: ['light'] },
-  ash: { traits: ['tough'] },
-  salt: { traits: ['tough', 'water'] },
-  feather: { traits: ['far', 'light'] },
-  ember_pod: { traits: ['fiery'] },
-  sulfur: { traits: ['fiery', 'flawed'] },
-  frost_crystal: { traits: ['frosty'] },
-  slime_gel: { traits: ['venomous'] },
-  obsidian_shard: { traits: ['keen', 'flawed'] },
-  kav_scrap: { traits: ['light', 'pure'] },
-  herb: { traits: ['vital'] },
-  glowcap: { traits: ['vital', 'night'] },
-  gold_ingot: { traits: ['lucky', 'pure'] },
-  pearl: { traits: ['deft', 'water'] },
-  old_coin: { traits: ['lucky'] },
-  shard_ruby: { traits: ['fiery', 'pure'] },
-  shard_sapphire: { traits: ['frosty', 'pure'] },
-  shard_emerald: { traits: ['vital'] },
-  shard_topaz: { traits: ['lucky'] },
-  shard_amethyst: { traits: ['deft'] },
-  shard_onyx: { traits: ['cruel', 'night'] },
-  shard_moonstone: { traits: ['tireless', 'night'] },
-  shard_bloodstone: { traits: ['cruel', 'hurt'] },
+  coal: { traits: ['heavy', 'block'] },
+  bone: { traits: ['light', 'tumble'] },
+  ash: { traits: ['tough', 'fall'] },
+  salt: { traits: ['tough', 'soak'] },
+  feather: { traits: ['far', 'light', 'draw'] },
+  ember_pod: { traits: ['fiery', 'crit'] },
+  sulfur: { traits: ['fiery', 'flawed', 'thunder'] },
+  frost_crystal: { traits: ['frosty', 'afflicted'] },
+  slime_gel: { traits: ['venomous', 'siphon'] },
+  obsidian_shard: { traits: ['keen', 'flawed', 'first', 'rend'] },
+  kav_scrap: { traits: ['light', 'pure', 'chain'] },
+  herb: { traits: ['vital', 'mend'] },
+  glowcap: { traits: ['vital', 'dusk', 'wisps'] },
+  gold_ingot: { traits: ['lucky', 'pure', 'midas'] },
+  pearl: { traits: ['deft', 'soak', 'aegis'] },
+  old_coin: { traits: ['lucky', 'ore'] },
+  shard_ruby: { traits: ['fiery', 'pure', 'smite'] },
+  shard_sapphire: { traits: ['frosty', 'pure', 'winded'] },
+  shard_emerald: { traits: ['vital', 'bramble'] },
+  shard_topaz: { traits: ['lucky', 'quicken', 'seek'] },
+  shard_amethyst: { traits: ['deft', 'combo', 'blades'] },
+  shard_onyx: { traits: ['cruel', 'mob', 'cyclone'] },
+  shard_moonstone: { traits: ['tireless', 'dusk', 'hit'] },
+  shard_bloodstone: { traits: ['cruel', 'bloodied', 'rage'] },
+  // (Round 137) Things that were never put in a forge before.
+  clay: { traits: ['tough', 'mine', 'shatter'] },
+  glass: { traits: ['light', 'flawed', 'dodge'] },
+  antler: { traits: ['heavy', 'fell'] },
+  coral: { traits: ['vital', 'streak'] },
+  relic_shard: { traits: ['pure', 'boss'] },
 };
 for (const [k, m] of Object.entries(MATERIALS)) ADDITIVES[k] = { traits: m.traits, rarity: m.rarity };
 

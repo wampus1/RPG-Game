@@ -5,8 +5,10 @@ import { ITEMS } from '../world/items.js';
 import { B, BLOCKS, LOGS } from '../world/blocks.js';
 import { burn, chill, mend, stun, knockBack, bleed } from './gems.js';
 import { has as heroHas } from './hero.js';
-import { dishFx, COND_TEST } from './cooking.js';
+import { dishFx } from './cooking.js';
+import { trigLive, abSwingMult } from './abilities.js';
 import { splitMod } from '../world/quality.js';
+import { ABILITIES } from '../world/triggers.js';
 
 const WORN = ['head', 'body', 'legs', 'feet'];
 const EMPTY = Object.freeze({ blade: [], bow: [], shield: [], tool: [], armor: {}, cond: [] });
@@ -29,12 +31,14 @@ export function modsOf(e) {
   if (e._modsKey === key) return e._mods;
   const out = { blade: [], bow: [], shield: [], tool: [], armor: {}, cond: [] };
   // (Round 132) A modifier that works only at some times ("keen-night"):
-  // kept apart, and looked at as it's asked for (see hasMod).
+  // kept apart, and looked at as it's asked for (see hasMod). (Round 137:
+  // one a trigger sets off, "keen-struck": working a while after. An
+  // ability's no modifier: see abilities.js.)
   const put = (cls, mods, into) => {
     for (const m of mods) {
       const sp = splitMod(m);
       if (sp.cond) out.cond.push({ cls, m: sp.m, cond: sp.cond });
-      else into(sp.m);
+      else if (!ABILITIES[sp.m]) into(sp.m);
     }
   };
   const h = held && ITEMS[held];
@@ -55,8 +59,7 @@ export function hasMod(e, kind, m) {
   const ms = modsOf(e);
   let n = kind === 'armor' ? ms.armor[m] || 0 : ms[kind].includes(m) ? 1 : 0;
   if (ms.cond.length) {
-    const g = e.game;
-    for (const q of ms.cond) if (q.cls === kind && q.m === m && g && COND_TEST[q.cond] && COND_TEST[q.cond](g, e)) n++;
+    for (const q of ms.cond) if (q.cls === kind && q.m === m && trigLive(e, q.cls, q.m, q.cond)) n++;
   }
   return kind === 'armor' ? n : n > 0;
 }
@@ -79,7 +82,7 @@ export function bladeMult(e, t) {
 
 // Swung quicker.
 export function swingModMult(e) {
-  return (hasMod(e, 'blade', 'swift') ? 0.8 : 1) * (hasMod(e, 'blade', 'heavy') ? 1.17 : 1);
+  return (hasMod(e, 'blade', 'swift') ? 0.8 : 1) * (hasMod(e, 'blade', 'heavy') ? 1.17 : 1) * abSwingMult(e);
 }
 
 // A blow of yours has landed.

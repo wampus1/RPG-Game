@@ -13,7 +13,7 @@ import { DungeonMapWindow } from './dungeonmap.js';
 import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
 import { relicReach } from '../game/relics.js';
 import { gemText } from '../game/gems.js';
-import { STAR_MAX, modOf } from '../world/quality.js';
+import { STAR_MAX, modOf, modLine } from '../world/quality.js';
 import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
@@ -835,7 +835,10 @@ export class UI {
       const md = modOf(d.gear, m);
       // (Round 132: a flaw in red, a modifier that works only at times in
       // blue.)
-      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}${md.land ? ` (only from ${LAND_NAME[md.land] || md.land}'s old places)` : ''}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `${md.flaw ? '×' : md.land ? '✦' : '◆'} ${t}`, color: md.flaw ? '#f08060' : md.land ? '#80e8d0' : md.cond ? '#90c8f8' : '#f0c070' });
+      // (Round 137: a modifier a trigger sets off, ♦ in blue; an ability, ☼
+      // in rose, and what sets it off.)
+      const ml = md && modLine(d.gear, m);
+      if (ml) for (const [i, t] of wrap(`${ml.text}${md.land ? ` (only from ${LAND_NAME[md.land] || md.land}'s old places)` : ''}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `${ml.glyph} ${t}`, color: ml.color });
     }
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {

@@ -36,6 +36,7 @@ import { dishFx } from './cooking.js';
 import { dishTrigger } from './dishacts.js';
 import { has as heroHas, staminaBonus, mutationsOf } from './hero.js';
 import { relicBreath } from './relics.js';
+import { fireTrigger } from './abilities.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 import { onTiles, apart, fits } from '../entities/footprint.js';
 import { shakeSpores } from './afflict.js';
@@ -479,6 +480,7 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
     if (!(v.guardBroken > 0)) {
       onBlock(game, v, a, false, before - amount);
       game.modBlocked?.(v, a);
+      if (v.kind === 'player' && sh) fireTrigger(game, v, 'block', { source: a });
     }
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
@@ -502,6 +504,7 @@ export function resolveHit(game, a, v, st, opts = null) {
   if (v.rollT > 0) {
     text('dodged', '#c8e8ff');
     onDodge(game, v);
+    if (v.kind === 'player') fireTrigger(game, v, 'dodge', { source: a });
     game.renderer.emit(v.x, v.y + 0.3, v.z, { n: 5, color: ['#c8e8ff', '#ffffff'], up: 10, speed: 30, life: 0.3 });
     return 'dodged';
   }
@@ -583,6 +586,7 @@ export function parried(game, v, a) {
   a.S?.onParried?.(game, a, v);
   onBlock(game, v, a, true);
   game.modBlocked?.(v, a);
+  if (v.kind === 'player') fireTrigger(game, v, 'parry', { source: a });
   a.windup = null;
   a.attackCd = Math.max(a.attackCd || 0, 1.2);
   knock(game, v, a, 1);
@@ -892,6 +896,8 @@ export function roll(game, p, dirv = null) {
   game.renderer.emit(p.x, p.y, p.z, { n: 8, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
   // (Round 53: a dish that answers a roll: see dishacts.js.)
   if (p.kind === 'player') dishTrigger(game, p, 'roll', {});
+  // (Round 137: a forged piece's trigger.)
+  if (p.kind === 'player') fireTrigger(game, p, 'tumble', {});
   if (land) {
     // Fast: twice a run's pace, quickest at the start.
     p.startMove(land.x, land.y, land.z, 0.075 * land.n + (from ? 0.04 : 0));

@@ -14,6 +14,7 @@
 // definition's made up from the plain piece's the first time it's looked
 // up (see items.js).
 import { ITEMS } from './items.js';
+import { ABILITIES, ABILITY_KEYS, TRIGGERS, RATES, splitTok, triggerFits, abilityFits, triggerText, fallbackTrigger } from './triggers.js';
 
 export const STAR_MAX = 5;
 
@@ -159,14 +160,12 @@ export const FLAWS = {
     dull: { name: 'Blunt', about: 'blunt: it works a sixth slower', flaw: true },
   },
 };
-// (Round 132) A modifier that works only at certain times ("keen-night"):
-// its own name, and the time (see game/cooking.js COND_TEST).
-export const COND_WORDS = {
-  night: 'at night', hurt: 'while you\'re below half health', deep: 'down in the old places', wild: 'out in the wilds', water: 'in or beside water', fight: 'in a fight', day: 'by day',
-};
+// (Round 132) A modifier that works only at certain times ("keen-night").
+// (Round 137: those times are triggers now, "keen-struck": a modifier that
+// works for a while after something sets it off. See world/triggers.js.)
 export function splitMod(m) {
-  const i = String(m).indexOf('-');
-  return i < 0 ? { m, cond: null } : { m: m.slice(0, i), cond: m.slice(i + 1) };
+  const sp = splitTok(m);
+  return { m: sp.p, cond: sp.t };
 }
 // (Those that change what the piece is outright, worked out once: they
 // can't be made to work only at some times.)
@@ -177,12 +176,36 @@ export const LAND_MOD_DEFS = {};
 for (const cls of Object.keys(MODS)) LAND_MOD_DEFS[cls] = {};
 for (const [k, L] of Object.entries(LAND_MODS)) for (const cls of Object.keys(MODS)) if (L[cls]) LAND_MOD_DEFS[cls][k] = { name: L.name, about: L[cls], land: L.land };
 // A modifier of a kind of gear, an ordinary one or a far land's.
+// (Round 137) Or one a trigger sets off ("keen-struck": `trig`), or an
+// ability ("halo-struck": `ability`, `trig`), if it fits that kind of gear.
 export function modOf(cls, m) {
-  const sp = splitMod(m);
-  const base = (MODS[cls] && MODS[cls][sp.m]) || (LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][sp.m]) || (FLAWS[cls] && FLAWS[cls][sp.m]) || null;
-  if (!base || !sp.cond) return base;
-  if (!COND_WORDS[sp.cond] || base.flaw || base.land || (STATIC_MODS[cls] || []).includes(sp.m)) return null;
-  return { ...base, cond: sp.cond, about: `${base.about}, ${COND_WORDS[sp.cond]}` };
+  const sp = splitTok(m);
+  if (sp.ab) {
+    if (!abilityFits(sp.p, cls) || (sp.t && !triggerFits(sp.t, cls))) return null;
+    const A = ABILITIES[sp.p];
+    return { name: A.name, about: A.about, ability: sp.p, trig: sp.t, cond: sp.t, word: A.trait[0].toUpperCase() + A.trait.slice(1) };
+  }
+  const base = (MODS[cls] && MODS[cls][sp.p]) || (LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][sp.p]) || (FLAWS[cls] && FLAWS[cls][sp.p]) || null;
+  if (!base || !sp.t) return base;
+  if (!triggerFits(sp.t, cls) || base.flaw || base.land || (STATIC_MODS[cls] || []).includes(sp.p)) return null;
+  const T = TRIGGERS[sp.t];
+  return { ...base, trig: sp.t, cond: sp.t, about: `${base.about}; ${T.hold ? 'it wakes' : `for ${T.secs} seconds`} ${triggerText(sp.t)}` };
+}
+// Can modifier `m` (plain) be set off by a trigger on `cls` at all?
+export function triggerable(cls, m) {
+  const d = (MODS[cls] && MODS[cls][m]) || null;
+  return !!d && !(STATIC_MODS[cls] || []).includes(m);
+}
+// A piece's modifier (or ability) as a line for a tooltip: { glyph, text,
+// color, rate }.
+export function modLine(cls, m) {
+  const d = modOf(cls, m);
+  if (!d) return null;
+  const T = d.trig && TRIGGERS[d.trig];
+  const rate = T ? RATES[T.rate] : null;
+  if (d.ability) return { glyph: '☼', name: d.name, text: `${d.name} ${T ? triggerText(d.trig) : '(set off by nothing)'}${rate ? `, ${rate.name}` : ''}: ${d.about}`, color: '#ffb0f0', rate };
+  if (T) return { glyph: '♦', name: d.name, text: `${d.name}: ${d.about}${rate ? ` (${rate.name})` : ''}`, color: '#90c8f8', rate };
+  return { glyph: d.flaw ? '×' : d.land ? '✦' : '◆', name: d.name, text: `${d.name}: ${d.about}`, color: d.flaw ? '#f08060' : d.land ? '#80e8d0' : '#f0c070', rate: null };
 }
 // Each far land's own (its key in LAND_MODS).
 export const LAND_MOD_OF = Object.fromEntries(Object.entries(LAND_MODS).map(([k, L]) => [L.land, k]));
@@ -211,6 +234,11 @@ export function starable(key) {
 // dug out the block above every time, Sawing left you no logs), read as
 // their replacements in pieces from older saves.
 const RENAMED = { wide: 'clean', sawing: 'lumber' };
+// (Round 137: an old save's "keen-night" read as "keen-dusk".)
+function normTok(q) {
+  const sp = splitTok(RENAMED[q] || q);
+  return sp.t ? `${RENAMED[sp.p] || sp.p}-${sp.t}` : sp.p;
+}
 const KEY = /^(.+)~([1-5])([dc])([0-9a-z]{2})((?:\.[a-z]+(?:-[a-z]+)?)*)$/;
 const ROLLS = 36 * 36;
 
@@ -223,7 +251,7 @@ export function starKey(plain, stars, origin, roll, mods = []) {
 export function parseStar(key) {
   const m = typeof key === 'string' && KEY.exec(key);
   if (!m) return null;
-  return { plain: m[1], stars: +m[2], origin: m[3], roll: parseInt(m[4], 36), mods: m[5] ? m[5].slice(1).split('.').map((q) => RENAMED[q] || q) : [] };
+  return { plain: m[1], stars: +m[2], origin: m[3], roll: parseInt(m[4], 36), mods: m[5] ? m[5].slice(1).split('.').map(normTok) : [] };
 }
 
 // The piece with its stars taken off (the key itself, for a plain one).
@@ -287,8 +315,12 @@ export function deriveStarred(key) {
   const good = mods.filter((m) => !modOf(cls, m).flaw);
   const bad = mods.filter((m) => modOf(cls, m).flaw);
   d.flaws = bad;
-  d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * good.length - 8 * bad.length);
-  d.name = good.length ? `${modOf(cls, good[0]).name} ${base.name}` : bad.length ? `${modOf(cls, bad[0]).name} ${base.name}` : base.name;
+  // (Round 137: an ability's worth more; the piece is named for its first
+  // modifier, or else for the nature of its first ability: "Radiant".)
+  const abil = good.filter((m) => modOf(cls, m).ability);
+  d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * good.length + 20 * abil.length - 8 * bad.length);
+  const lead = good.find((m) => !modOf(cls, m).ability) || good[0];
+  d.name = lead ? `${modOf(cls, lead).word || modOf(cls, lead).name} ${base.name}` : bad.length ? `${modOf(cls, bad[0]).name} ${base.name}` : base.name;
   return d;
 }
 
@@ -345,6 +377,15 @@ export function rollMods(cls, stars, rng = LOOSE, base = null, land = null) {
   if (own && LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][own] && rng.chance(stars >= 3 ? 0.65 : 0.35)) out.push(own);
   const want = Math.max(n, out.length);
   while (out.length < want && pool.length) out.push(pool.splice(rng.int(0, pool.length - 1), 1)[0]);
+  // (Round 137) A fine piece, now and then, with an ability in it, bound to
+  // its own trigger.
+  if (stars >= 3 && rng.chance(0.08 + 0.05 * (stars - 3))) {
+    const abs = ABILITY_KEYS.filter((a) => abilityFits(a, cls));
+    if (abs.length) {
+      const a = abs[rng.int(0, abs.length - 1)];
+      out.push(`${a}-${fallbackTrigger(a, cls)}`);
+    }
+  }
   return out;
 }
 

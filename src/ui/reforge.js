@@ -8,7 +8,9 @@
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
-import { parseStar, modOf, gearClass, starText } from '../world/quality.js';
+import { parseStar, modOf, gearClass, starText, modLine } from '../world/quality.js';
+import { bindings, rebindable, rebindCost, rebind } from '../game/rebind.js';
+import { TRIGGERS } from '../world/triggers.js';
 import { countItem } from '../game/inventory.js';
 import { workable, moveCost, movable, moveMod } from '../game/reforge.js';
 import { reforgeCostOf, pressCast, recipeFor, masteryCap } from '../game/smithing.js';
@@ -24,6 +26,8 @@ export class ReforgeWindow extends Window {
     this.target = -1;
     this.mod = null;
     this.scroll = 0;
+    this.view = null;
+    this.bindSel = -1;
   }
   pieces(game) {
     const inv = game.player.inv;
@@ -36,7 +40,7 @@ export class ReforgeWindow extends Window {
   draw(g, game) {
     const inv = game.player.inv;
     g.fill(0, 0, this.w, this.h, ' ', C.fg, C.bg);
-    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · REFORGE · TEMPER · CASTS · MOVE A MODIFIER' });
+    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'THE ANVIL · REFORGE · TEMPER · CASTS · MOVE · TRIGGERS' });
     const list = this.pieces(game);
     if (!list.includes(this.sel)) this.sel = -1;
     if (!list.includes(this.target) || this.target === this.sel) this.target = -1;
@@ -62,6 +66,8 @@ export class ReforgeWindow extends Window {
           this.sel = i === this.sel ? -1 : i;
           this.target = -1;
           this.mod = null;
+          this.view = null;
+          this.bindSel = -1;
         }
         this.ui.audio?.play('select');
       });
@@ -71,6 +77,7 @@ export class ReforgeWindow extends Window {
       wrap('Pick a piece on the left to reforge it at the forge (its modifiers beaten out afresh, its stars kept, any far land\'s mark kept), or to temper it (a rare material worked in, for a star more).', 33).forEach((l, k) => g.text(x, 2 + k, l, C.dim));
       wrap('Or pick the piece a modifier\'s on, then the piece of the same kind it\'s to go onto: the first is used up in the doing.', 33).forEach((l, k) => g.text(x, 9 + k, l, C.dim));
       wrap('A piece you forged yourself can be pressed into a blank cast; a cast, poured again and again.', 33).forEach((l, k) => g.text(x, 14 + k, l, C.dim));
+      wrap('A piece with triggers can have them change round what each sets off.', 33).forEach((l, k) => g.text(x, 18 + k, l, C.dim));
       return;
     }
     const s = inv[this.sel];
@@ -80,11 +87,16 @@ export class ReforgeWindow extends Window {
     const cls = gearClass(it.stars ? ITEMS[it.plain] : it);
     g.text(x, 2, it.name.slice(0, 34), C.hi);
     g.text(x, 3, p ? starText(p.stars) : 'No stars yet', p ? '#ffd060' : C.faint);
+    // (Round 137) Its triggers, and what each sets off.
+    if (this.view === 'bind' && this.target < 0) return this.drawBind(g, game, s, x);
     let y = 4;
+    // (One line each: what each does is in the piece's own description.)
     for (const m of p ? p.mods : []) {
+      const l = modLine(cls, m);
+      if (!l) continue;
       const d = modOf(cls, m);
-      if (!d) continue;
-      for (const [j, l] of wrap(`${d.flaw ? '×' : d.land ? '✦' : '◆'} ${d.name}: ${d.about}`, 34).entries()) g.text(x, y++, j ? `  ${l}` : l, d.flaw ? '#f08060' : d.land ? '#80e8d0' : d.cond ? '#90c8f8' : '#f0c070');
+      const t = d.trig && TRIGGERS[d.trig];
+      g.text(x, y++, `${l.glyph} ${l.name}${t ? ` ← ${TRIGGERS[d.trig].trait}` : ''}`.slice(0, 35), l.color);
     }
     y++;
     const coins = countItem(inv, 'coin');
@@ -125,6 +137,15 @@ export class ReforgeWindow extends Window {
         });
         y++;
       }
+      // (Round 137) What its triggers set off, changed round.
+      if (rebindable(s.item)) {
+        button(y++, ' Change round its triggers ', true, () => {
+          this.view = 'bind';
+          this.bindSel = -1;
+          this.ui.audio?.play('select');
+        });
+        y++;
+      }
       if (p && p.mods.length) wrap('To move one of its modifiers, pick the piece it\'s to go onto (green when it can).', 34).forEach((l) => g.text(x, y++, l, C.faint));
       return;
     }
@@ -154,6 +175,53 @@ export class ReforgeWindow extends Window {
       this.sel = gm.player.inv.findIndex((q) => q && q.item === r.key);
       this.target = -1;
       this.mod = null;
+    });
+  }
+  // (Round 137) A piece's triggers, each with what it sets off: pick two,
+  // and they trade (for a little of what the piece is made of, and coin).
+  drawBind(g, game, s, x) {
+    const it = ITEMS[s.item];
+    const inv = game.player.inv;
+    const list = bindings(s.item);
+    g.text(x, 2, it.name.slice(0, 34), C.hi);
+    g.text(x, 3, 'What each trigger sets off:', C.dim);
+    let y = 5;
+    list.forEach((b, k) => {
+      const on = this.bindSel === b.i;
+      const hov = this.hovering(x, y, 35, 2);
+      g.fill(x, y, 35, 2, ' ', C.fg, on ? '#3a3050' : hov ? '#2a2236' : undefined);
+      g.text(x, y, `${k + 1}. ${b.when}`.slice(0, 35), on ? C.white : b.rate.color);
+      g.text(x + 3, y + 1, `→ ${b.ab ? '☼' : '♦'} ${b.name}`.slice(0, 32), b.ab ? '#ffb0f0' : '#90c8f8');
+      this.hit(x, y, 35, 2, (ck, gm) => {
+        const game2 = gm || game;
+        if (!(this.bindSel >= 0) || this.bindSel === b.i) {
+          this.bindSel = this.bindSel === b.i ? -1 : b.i;
+          this.ui.audio?.play('select');
+          return;
+        }
+        const slot = game2.player.inv.findIndex((q) => q && q.item === s.item);
+        const r = rebind(game2, slot, this.bindSel, b.i);
+        this.bindSel = -1;
+        if (!r.ok) return this.ui.msg(r.why, '#ffb080');
+        this.sel = game2.player.inv.findIndex((q) => q && q.item === r.key);
+        this.ui.msg('The marks on it are beaten round: its triggers set off one another\'s now.', '#90c8f8');
+      });
+      y += 2;
+    });
+    y++;
+    const c = rebindCost(s.item);
+    const src = craftSources(game);
+    const can = countItem(inv, 'coin') >= c.coin && countFrom(src, c.item) >= c.n;
+    g.text(x, y++, `Each change: ¤${c.coin} and ${c.n} ${c.name}${c.n > 1 ? 's' : ''}`.slice(0, 35), can ? C.fg : C.red);
+    wrap(!(this.bindSel >= 0) ? 'Pick a trigger, then another: they trade what they set off. Nothing is added or taken away.' : 'Now pick the trigger it\'s to trade with.', 34).forEach((l) => g.text(x, y++, l, C.faint));
+    y++;
+    const label = ' Back ';
+    const hov = this.hovering(x, y, label.length, 1);
+    g.text(x, y, label, hov ? C.white : C.hi, hov ? '#4a3a60' : '#2a2230');
+    this.hit(x, y, label.length, 1, () => {
+      this.view = null;
+      this.bindSel = -1;
+      this.ui.audio?.play('select');
     });
   }
   // (Round 132) A cast: poured as many times as you like, for its
@@ -215,6 +283,11 @@ export class ReforgeWindow extends Window {
     this.scroll += d;
   }
   onKey(k) {
+    if (k.code === 'Escape' && this.view) {
+      this.view = null;
+      this.bindSel = -1;
+      return true;
+    }
     if (k.code === 'Escape') {
       this.close();
       return true;

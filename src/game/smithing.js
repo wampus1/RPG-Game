@@ -14,8 +14,11 @@
 //     and the rest four; five only with a rare material in it).
 //   - Its modifiers: as many as its stars bring (as ever), leaning toward
 //     what its additives are (a fiery thing, searing; a light one, swift);
-//     one of them, now and then, working only at some times if something
-//     in it is of the night, of the deep, desperate...; botched, flaws.
+//     botched, flaws. (Round 137) An ability in what went into it (a
+//     radiant thing, a healing aura), and a trigger (battle-born: when
+//     you're struck): the one bound to the other; a trigger with no
+//     ability to set off sets off one of its modifiers instead. See
+//     world/triggers.js.
 //   - A pattern: a piece worth making again written down, its modifiers
 //     and additives with it (the stars are your own work every time).
 //   - A cast: a piece pressed into a blank cast (a mould with a very rare
@@ -27,8 +30,9 @@
 // What's done at the forge is worked out here, at the host (a guest plays
 // the forge's games on their own screen: see ui/forgewin.js).
 import { ITEMS, patternKey, parsePattern } from '../world/items.js';
-import { MODS, FLAWS, STATIC_MODS, gearClass, parseStar, starKey, starable, splitMod, modOf } from '../world/quality.js';
+import { MODS, FLAWS, gearClass, parseStar, starKey, starable, splitMod, modOf, triggerable, modLine } from '../world/quality.js';
 import { ADDITIVES, TRAITS, MATERIALS, RARITY, lifts, rarityOf } from '../world/smithmats.js';
+import { ABILITIES, triggerFits, abilityFits, fallbackTrigger, triggerText } from '../world/triggers.js';
 import { mastery, gainMastery } from './mastery.js';
 import { craftSources, countFrom, takeFrom } from './invtools.js';
 import { addItem, countItem, removeItem } from './inventory.js';
@@ -118,7 +122,14 @@ export function traitWords(game, k) {
   const A = ADDITIVES[k];
   if (!A) return '';
   if (!knowsAdd(game, k)) return '?';
-  return A.traits.map((t) => TRAITS[t].name).join(', ');
+  return A.traits.map((t) => `${TRAITS[t].trig ? '♦' : TRAITS[t].ab ? '☼' : ''}${TRAITS[t].name}`).join(', ');
+}
+// (Round 137) What its trigger and ability are, known: "♦ battle-born:
+// when you're struck ☼ radiant: Healing Aura" (or '').
+export function traitDetail(game, k) {
+  const A = ADDITIVES[k];
+  if (!A || !knowsAdd(game, k)) return '';
+  return A.traits.map((t) => TRAITS[t]).filter((T) => T && (T.trig || T.ab)).map((T) => (T.trig ? `♦ ${T.name}: ${triggerText(T.trig)}` : `☼ ${T.name}: ${ABILITIES[T.ab].name}`)).join('   ');
 }
 // What there is in your pack (and the chests by you) that could go in.
 export function additivesAt(game) {
@@ -126,7 +137,7 @@ export function additivesAt(game) {
   const out = [];
   for (const k of Object.keys(ADDITIVES)) {
     const n = countFrom(src, k);
-    if (n > 0 && ITEMS[k]) out.push({ k, n, name: ITEMS[k].name, traits: traitWords(game, k), rarity: rarityOf(k) });
+    if (n > 0 && ITEMS[k]) out.push({ k, n, name: ITEMS[k].name, traits: traitWords(game, k), detail: traitDetail(game, k), rarity: rarityOf(k) });
   }
   return out.sort((a, b) => RARITY[b.rarity].n - RARITY[a.rarity].n || a.name.localeCompare(b.name));
 }
@@ -157,17 +168,34 @@ function leanMods(cls, base, n, traits, rng) {
   }
   return out;
 }
-function condOf(traits) {
-  for (const t of traits) if (TRAITS[t] && TRAITS[t].cond) return TRAITS[t].cond;
-  return null;
+// (Three modifiers at most, and two abilities.)
+export function capToks(cls, toks) {
+  const ab = toks.filter((m) => modOf(cls, m)?.ability);
+  return toks.filter((m) => !ab.includes(m)).slice(0, 3).concat(ab.slice(0, 2));
 }
-function withCond(cls, mods, cond, rng) {
-  if (!cond || !mods.length) return mods;
-  const ok = mods.map((m, i) => [m, i]).filter(([m]) => !(STATIC_MODS[cls] || []).includes(m) && !modOf(cls, m)?.land);
-  if (!ok.length) return mods;
-  const [m, i] = ok[rng.int(0, ok.length - 1)];
+
+// (Round 137) Its triggers and abilities, out of what went into it: each
+// ability bound to one of the triggers (or, with none, to its own: see
+// ABILITIES), likelier to take the better the work; each trigger left
+// over setting off one of its modifiers. Two abilities at most.
+export function bindTriggers(cls, mods, traits, q, rng) {
+  const uniq = (a) => [...new Set(a)];
+  const trigs = uniq(traits.map((t) => TRAITS[t] && TRAITS[t].trig).filter((t) => t && triggerFits(t, cls)));
+  const abs = uniq(traits.map((t) => TRAITS[t] && TRAITS[t].ab).filter((a) => a && abilityFits(a, cls)));
   const out = mods.slice();
-  out[i] = `${m}-${cond}`;
+  let took = 0;
+  for (const a of abs) {
+    if (took >= 2 || !rng.chance(0.45 + 0.55 * q)) continue;
+    const t = trigs.length ? trigs.splice(rng.int(0, trigs.length - 1), 1)[0] : fallbackTrigger(a, cls);
+    out.push(`${a}-${t}`);
+    took++;
+  }
+  for (const t of trigs) {
+    const ok = out.map((m, i) => [m, i]).filter(([m]) => !m.includes('-') && triggerable(cls, m));
+    if (!ok.length) break;
+    const [m, i] = ok[rng.int(0, ok.length - 1)];
+    out[i] = `${m}-${t}`;
+  }
   return out;
 }
 
@@ -188,7 +216,7 @@ export function forgePiece(plain, q, adds = [], rank = 1, rng = LOOSE, o = {}) {
   if (o.mods) mods = o.mods.filter((m) => modOf(cls, m) && !modOf(cls, m).flaw);
   else {
     const n = Math.min(3, Math.floor(stars / 2) + (rng.chance(0.3 + qq * 0.2) ? 1 : 0));
-    mods = withCond(cls, leanMods(cls, base, n, traits, rng), condOf(traits), rng);
+    mods = bindTriggers(cls, leanMods(cls, base, n, traits, rng), traits, qq, rng);
   }
   // Botched: a flaw, now and then (a brittle thing in it, likelier; a
   // tough one, less).
@@ -301,7 +329,7 @@ export function forgeResult(game, cfg, msg = {}, rng = LOOSE) {
       const fresh = forgePiece(sp.plain, q, adds, 10, rng, { stars: sp.stars });
       // (Done well, its flaws beaten out; badly, perhaps new ones.)
       const flaws = q >= 0.5 ? [] : fresh.flaws;
-      key = starKey(sp.plain, sp.stars, sp.origin, rng.int(0, 36 * 36 - 1), [...land, ...fresh.mods.filter((x) => !land.includes(splitMod(x).m))].slice(0, 3).concat(flaws));
+      key = starKey(sp.plain, sp.stars, sp.origin, rng.int(0, 36 * 36 - 1), capToks(cls, [...land, ...fresh.mods.filter((x) => !land.includes(splitMod(x).m))]).concat(flaws));
       gainMastery(game, 'smithing', 0.5);
     }
     const s = p.inv[i];
@@ -332,7 +360,8 @@ export function describe(key) {
     name: it.name, stars: it.stars || 0,
     mods: (it.mods || []).map((m) => {
       const d = modOf(cls, m) || {};
-      return { name: d.name || m, about: d.about || '', flaw: !!d.flaw, cond: d.cond || null };
+      const l = modLine(cls, m);
+      return { name: d.name || m, about: d.about || '', flaw: !!d.flaw, cond: d.cond || null, ability: d.ability || null, line: l ? `${l.glyph} ${l.text}` : m, color: l ? l.color : null };
     }),
   };
 }

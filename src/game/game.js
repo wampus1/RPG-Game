@@ -119,6 +119,7 @@ import { Guilds, guildMates } from './guilds.js';
 import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult, runeWard } from './mods.js';
+import { fireTrigger, abSoak, abOutgoing, abBlow, abKill, takeAbCrit } from './abilities.js';
 import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas, mutationsOf } from './hero.js';
@@ -2621,6 +2622,8 @@ export class Game {
         this.damage(p, Math.max(1, Math.round((drop - 3) * 2 * rule('fall'))), null);
         if (!p.dead) this.ui.msg(`You fall ${drop} blocks and land hard.`, '#ffb080', true);
       }
+      // (Round 137: a forged piece's trigger.)
+      if (drop >= 4 && !p.dead) fireTrigger(this, p, 'fall', {});
       return true;
     }
     return false;
@@ -4223,6 +4226,7 @@ export class Game {
       if (LOGS.has(id) && this.isTreeLog(x, y, z)) {
         this.fellTree(x, y, z, drops);
         if (byPlayer) this.checkFelling(x, z);
+        if (byPlayer) fireTrigger(this, this.player, 'fell', { at: { x, y, z } });
       } else {
         const meta = w.getMeta(x, y, z);
         w.setBlock(x, y, z, B.air);
@@ -4264,6 +4268,9 @@ export class Game {
       this.checkCropTheft(x, z, id, drops);
       // (Round 53: a dish that answers a block broken: see dishacts.js.)
       dishTrigger(this, this.player, 'break', { at: { x, y, z } });
+      // (Round 137) A forged tool's triggers: a block broken, ore.
+      fireTrigger(this, this.player, 'mine', { at: { x, y, z }, id });
+      if (/_ore$/.test(b.name)) fireTrigger(this, this.player, 'ore', { at: { x, y, z }, id });
       // (Round 130) Dug where a captain's treasure map's X is: the chest.
       if (b.tool === 'shovel') this.sim.havens?.dig(x, y, z, this.player);
     }
@@ -7144,7 +7151,8 @@ export class Game {
       p.rollStrike = 0;
       this.renderer.floatText(target.x, target.y + 2.4, target.z, 'out of the roll!', '#fff8a0');
     }
-    const crit = riposte || fromRoll || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1) + critBonus(p);
+    // (Round 137: out of a shadow step, a telling blow.)
+    const crit = riposte || fromRoll || takeAbCrit(p) || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1) + critBonus(p);
     if (crit) dmg *= riposte ? 2.2 : 1.8;
     // (A merciless blade: half as hard again on a foe worn low.)
     dmg *= bladeMult(p, target);
@@ -7289,6 +7297,8 @@ export class Game {
     amount = relicDamage(this, target, source, amount);
     // (Round 124) An outworlder's blow: a dense frame's, a sun-dazzled one's.
     if (source && source.kind === 'player' && source !== target && !this.dotHit) amount = mutOutgoing(this, source, amount);
+    // (Round 137) In a bloodrage (a forged piece's ability): harder.
+    if (source && source.kind === 'player' && source !== target && target.kind !== 'player' && !this.dotHit) amount = abOutgoing(source, amount);
     // Marked by moonlight: every blow a third harder.
     if (target.markT > 0) amount = Math.round(amount * 1.33);
     const duel = this.duel;
@@ -7398,6 +7408,13 @@ export class Game {
     amount = clawSoak(target, amount);
     // (Round 124) An outworlder's second heart.
     if (target.kind === 'player') amount = mutLastBlow(this, target, amount);
+    // (Round 137) An aegis about you, or a piece that won't let you die
+    // (see abilities.js).
+    if (target.kind === 'player' && amount > 0) {
+      amount = abSoak(this, target, source, amount);
+      if (amount <= 0) return;
+    }
+    const wasFull = target.hp >= (target.maxHp || target.hp);
     target.hp -= amount;
     // (Round 53) A dish that answers a blow taken, or one landed, or your
     // falling below half (see dishacts.js).
@@ -7407,6 +7424,9 @@ export class Game {
         if (target.hp < target.maxHp / 2 && target.hp + amount >= target.maxHp / 2) dishTrigger(this, target, 'low', { source });
       }
       if (source && source.kind === 'player' && target !== source && target.kind !== 'player') dishTrigger(this, source, 'strike', { target });
+      // (Round 137) A forged piece's triggers: struck, a blow landed, a
+      // telling one, the first on a foe, falling low (see abilities.js).
+      abBlow(this, target, source, amount, crit, wasFull);
     }
     // (An island master with its own way with a blow that lands: see
     // afflict.js.)
@@ -7615,6 +7635,8 @@ export class Game {
     this.sagaKill(e, source);
     // (A dish that answers a kill: see dishacts.js.)
     if (source && source.kind === 'player' && e.kind !== 'player' && e.kind !== 'item') dishTrigger(this, source, 'kill', { target: e });
+    // (Round 137: and a forged piece's.)
+    if (source && source.kind === 'player') abKill(this, source, e);
     // (Down an old place: its own reckoning, as one of you down there.)
     const run = e.inst ? this.runAt(e.x) : null;
     if (run) {

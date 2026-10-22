@@ -386,6 +386,48 @@ export class Audio {
       case 'gulp': this.tone(240, 0.08, 'sine', 0.1, -120); this.noise(0.05, 0.05, 500, 0.02); this.tone(220, 0.09, 'sine', 0.1, -110, 0.2); this.noise(0.05, 0.05, 450, 0.22); break;
       // Mended: a soft rising chime.
       case 'heal': this.tone(660, 0.18, 'sine', 0.05, 220); this.tone(990, 0.25, 'sine', 0.035, 330, 0.08); break;
+      // (Round 137) A forged piece's abilities, each its own (see
+      // game/abilities.js); and a modifier woken by a trigger.
+      case 'ab_surge': this.tone(660, 0.18, 'triangle', 0.06, 660); this.tone(1320, 0.25, 'sine', 0.04, 0, 0.08); this.noise(0.12, 0.02, 6000, 0.04); break;
+      case 'ab_halo':
+        for (const [f, d] of [[523, 0], [659, 0.04], [784, 0.08], [1047, 0.14]]) this.swell(f, 0.32, 'sine', 0.045, 0, d);
+        for (const [f, d] of [[2093, 0.3], [2637, 0.38], [3136, 0.46]]) this.tone(f, 0.3, 'sine', 0.02, 0, d);
+        break;
+      case 'ab_nova': this.noise(0.5, 0.22, 500); this.noise(0.25, 0.15, 2400, 0.05); this.tone(140, 0.45, 'sawtooth', 0.1, -80); this.tone(90, 0.5, 'sine', 0.16, -40); break;
+      case 'ab_glacier':
+        for (const [f, d] of [[2093, 0], [2637, 0.05], [3136, 0.1], [2349, 0.16], [3520, 0.22]]) this.tone(f, 0.22, 'triangle', 0.045, 0, d);
+        this.noise(0.4, 0.1, 6500); this.noise(0.08, 0.18, 1800, 0.02);
+        break;
+      case 'ab_chain':
+        for (let i = 0; i < 4; i++) {
+          this.tone(1100 - i * 120, 0.09, 'square', 0.06, -700, i * 0.07);
+          this.noise(0.06, 0.12, 4200, i * 0.07);
+        }
+        break;
+      case 'ab_meteor': this.swell(1800, 0.55, 'sine', 0.06, -1400); this.noise(0.6, 0.05, 900); break;
+      case 'ab_impact': this.tone(70, 0.7, 'sine', 0.3, -40); this.noise(0.7, 0.3, 220); this.noise(0.2, 0.2, 1400); this.tone(140, 0.3, 'sawtooth', 0.08, -90); break;
+      case 'ab_blades': for (let i = 0; i < 3; i++) { this.tone(1500 + i * 200, 0.16, 'triangle', 0.06, 500, i * 0.06); this.noise(0.05, 0.08, 7000, i * 0.06); } break;
+      case 'ab_aegis': this.swell(330, 0.3, 'triangle', 0.08, 330); this.tone(990, 0.5, 'sine', 0.05, 0, 0.25); this.tone(1485, 0.4, 'sine', 0.03, 0, 0.3); this.noise(0.3, 0.03, 3200, 0.2); break;
+      case 'ab_shade': this.swell(220, 0.2, 'sine', 0.08, 500); this.noise(0.22, 0.12, 1700); this.tone(180, 0.25, 'triangle', 0.08, -120, 0.2); break;
+      case 'ab_rend': this.noise(0.6, 0.28, 140); this.noise(0.22, 0.18, 650, 0.05); this.tone(70, 0.5, 'sawtooth', 0.12, -30); this.noise(0.1, 0.15, 2500, 0.15); break;
+      case 'ab_roots': this.tone(90, 0.35, 'sawtooth', 0.08, 40); for (let i = 0; i < 4; i++) this.noise(0.06, 0.1, 700 + i * 300, i * 0.08); break;
+      case 'ab_siphon': this.swell(420, 0.45, 'sine', 0.07, -220); this.tone(630, 0.5, 'triangle', 0.04, -320, 0.05); this.noise(0.45, 0.03, 2600); break;
+      case 'ab_wisps': this.tone(1200, 0.45, 'sine', 0.05, 320); this.tone(1500, 0.45, 'sine', 0.04, -320, 0.12); this.tone(2400, 0.3, 'sine', 0.02, 0, 0.2); break;
+      case 'ab_smite': this.swell(880, 0.22, 'sine', 0.06); this.tone(1760, 0.6, 'triangle', 0.06, 0, 0.22); this.tone(2637, 0.5, 'sine', 0.03, 0, 0.24); this.noise(0.18, 0.18, 5200, 0.22); this.tone(110, 0.3, 'square', 0.06, -50, 0.22); break;
+      case 'ab_quicken': for (const [f, d] of [[523, 0], [659, 0.04], [784, 0.08], [1047, 0.12], [1319, 0.16]]) this.tone(f, 0.08, 'square', 0.045, 0, d); this.noise(0.2, 0.06, 3000, 0.1); break;
+      case 'ab_rage': this.tone(82, 0.4, 'sawtooth', 0.12, -22); this.noise(0.35, 0.14, 300); this.tone(55, 0.45, 'sine', 0.2, -10); this.tone(165, 0.3, 'square', 0.04, -40, 0.08); break;
+      case 'ab_bramble': for (let i = 0; i < 5; i++) this.noise(0.05, 0.08, 2200 + i * 300, i * 0.05); this.tone(300, 0.3, 'sawtooth', 0.05, -120); break;
+      case 'ab_cyclone': for (let i = 0; i < 6; i++) this.noise(0.18, 0.08, 400 + i * 250, i * 0.07); this.tone(300, 0.6, 'sine', 0.05, 300); break;
+      case 'ab_plague': for (let i = 0; i < 6; i++) this.tone(200 + Math.random() * 220, 0.08, 'sine', 0.06, 120, i * 0.07); this.noise(0.5, 0.06, 800); break;
+      case 'ab_stasis': for (let i = 0; i < 4; i++) this.tone(i % 2 ? 900 : 1200, 0.03, 'square', 0.05, 0, i * 0.13); this.swell(700, 0.6, 'sine', 0.06, -450); this.tone(350, 0.8, 'triangle', 0.04, -150, 0.5); break;
+      case 'ab_starfall': for (let i = 0; i < 6; i++) this.tone(2000 + Math.random() * 1200, 0.18, 'sine', 0.035, 0, i * 0.08); this.noise(0.4, 0.03, 7000); break;
+      case 'ab_star': this.tone(2400 + Math.random() * 600, 0.15, 'sine', 0.04, -900); this.noise(0.12, 0.1, 1800, 0.05); break;
+      case 'ab_phantom': this.noise(0.14, 0.14, 3200); this.tone(900, 0.25, 'triangle', 0.07, -520); this.tone(1800, 0.3, 'sine', 0.03, -600, 0.03); break;
+      case 'ab_thunder': this.noise(0.9, 0.34, 120); this.noise(0.12, 0.28, 2600); this.tone(50, 0.6, 'sine', 0.24, -20); this.noise(0.4, 0.12, 400, 0.12); break;
+      case 'ab_beacon': this.swell(220, 0.35, 'sawtooth', 0.06); this.tone(330, 0.45, 'sawtooth', 0.05, 0, 0.3); this.tone(440, 0.6, 'sawtooth', 0.05, 0, 0.55); this.tone(880, 0.6, 'sine', 0.03, 0, 0.55); break;
+      case 'ab_shatter': this.noise(0.16, 0.22, 4200); for (let i = 0; i < 4; i++) this.tone(1500 + Math.random() * 1500, 0.1, 'triangle', 0.04, -300, 0.02 + i * 0.04); this.noise(0.25, 0.14, 500, 0.03); break;
+      case 'ab_midas': for (const [f, d] of [[988, 0], [1318, 0.06], [1568, 0.12], [1976, 0.2], [1318, 0.28]]) this.tone(f, 0.12, 'square', 0.05, 0, d); break;
+      case 'ab_seek': this.tone(1400, 0.6, 'sine', 0.07); this.tone(1400, 0.6, 'sine', 0.035, 0, 0.3); this.tone(2100, 0.5, 'sine', 0.02, 0, 0.32); break;
       // (Round 64) A shimmer of magic (a mod's sound to pick: it was silent).
       case 'magic': this.tone(784, 0.14, 'sine', 0.06, 400); this.tone(1175, 0.18, 'triangle', 0.04, 300, 0.06); this.tone(1568, 0.24, 'sine', 0.03, 500, 0.12); this.noise(0.18, 0.03, 5200, 0.02); break;
       // Close to death: your heart in your ears.
