@@ -1,4 +1,5 @@
 // Player settings: volumes and visuals, kept in the browser between games.
+import { TEXT_FX } from '../ui/textfx.js';
 export const SETTINGS_KEY = 'tessera-settings';
 
 // (Round 80) Particles and effects a frame, by the setting (fxCap): new
@@ -25,6 +26,9 @@ export const DEFAULTS = {
   shake: true,
   damageNumbers: true,
   windowAnim: true,
+  // (Round 135) Words that shake, tremble or dance with how they're said
+  // (off: their colours only; see ui/textfx.js).
+  textMotion: true,
   // (Round 57) For a slow machine, or playing in someone else's world over
   // a slow line: a lower frame rate, lighting worked out less often, fewer
   // sparks and puffs, no rain or snow falling, the host's word less often.
@@ -85,6 +89,7 @@ export const SETTING_ROWS = [
   { key: 'shake', tab: 'Visuals', label: 'Screen shake', kind: 'bool' },
   { key: 'flashes', tab: 'Visuals', label: 'Screen flashes', kind: 'bool' },
   { key: 'windowAnim', tab: 'Visuals', label: 'Window animations', kind: 'bool' },
+  { key: 'textMotion', tab: 'Visuals', label: 'Moving text in speech', kind: 'bool' },
   { key: 'crt', tab: 'Visuals', label: 'CRT screen effect', kind: 'bool' },
   { key: 'curve', tab: 'Visuals', label: 'Screen curvature', kind: 'range', max: 10 },
   { key: 'glow', tab: 'Visuals', label: 'Screen glow', kind: 'range', max: 10 },
@@ -164,6 +169,7 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
   }
   // (Playing in someone else's world: how often the host sends word.)
   if (net && net.setRate) net.setRate(s.netRate === 1 ? 10 : 20);
+  TEXT_FX.motion = s.textMotion !== false;
   if (ui) {
     ui.instantWindows = !s.windowAnim;
     ui.noTooltips = !s.tooltips;

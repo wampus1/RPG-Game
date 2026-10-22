@@ -14,6 +14,7 @@ import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } 
 import './farpieces.js';
 import { humanoidSheet, humanoidPose, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, WAGON_SEAT, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
+import { parseFx, fxOffset, fxColor } from '../ui/textfx.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting, skyLight } from './lighting.js';
@@ -3498,7 +3499,9 @@ export class Renderer {
   // whoever's saying it.
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
     color ||= '#f4ecd8';
-    const lines = bubbleLines(String(text));
+    // (Round 135) Said with feeling: the marks read off (see ui/textfx.js).
+    const said = parseFx(String(text));
+    const lines = bubbleLines(said.text);
     const w = Math.max(...lines.map((l) => textWidth(l))) + 4;
     const h = lines.length * 8 + 2;
     const vw = this.vw || ctx.canvas.width;
@@ -3515,7 +3518,27 @@ export class Renderer {
     ctx.fillRect(t - 1, y + h, 3, 2);
     ctx.fillStyle = '#f4ecd8';
     ctx.fillRect(t, y + h + 1, 1, 2);
-    lines.forEach((l, i) => drawText(ctx, l, x + 2, y + 1 + i * 8, color));
+    if (!said.fx) {
+      lines.forEach((l, i) => drawText(ctx, l, x + 2, y + 1 + i * 8, color));
+      return;
+    }
+    let at = 0;
+    lines.forEach((l, i) => {
+      const clean = l.endsWith('…') ? l.slice(0, -1) : l;
+      const k = said.text.indexOf(clean, at);
+      const from = k >= 0 ? k : at;
+      at = from + clean.length;
+      for (let j = 0; j < l.length; j++) {
+        const f = j < clean.length ? said.fx[from + j] || 0 : 0;
+        const px = x + 2 + j * 6;
+        const py = y + 1 + i * 8;
+        if (!f) drawText(ctx, l[j], px, py, color);
+        else {
+          const [dx, dy] = fxOffset(f, from + j, this.time || 0);
+          drawText(ctx, l[j], px + dx, py + dy, fxColor(f, color));
+        }
+      }
+    });
   }
 
   headFor(e) {

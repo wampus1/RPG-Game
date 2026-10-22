@@ -18,7 +18,7 @@ import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
 import { guardPlan, stepAside } from './tactics.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { dialogueLine, greetLine } from '../game/dialogue.js';
+import { dialogueLine, greetLine, feelBark } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
@@ -653,6 +653,15 @@ export class NPC extends Entity {
     }
     if (act.place === 'tavern' && this.lineCd <= 0) {
       this.lineCd = this.rng.float(18, 40);
+      // (Round 135) Someone who came here for how they feel (see mind.js:
+      // evening) says so, to the room.
+      if (act.feel && this.rng.chance(0.6)) {
+        const b = feelBark(this, game);
+        if (b) {
+          this.say(b, 3.5);
+          return;
+        }
+      }
       const near = game.npcs.filter((n) => !n.dead && n !== this && n.layout === this.layout && n.state === 'routine' && !n.sleeping && n.distTo(this) <= 4);
       if (near.length) {
         this.say(this.rng.pick(['...and then the whole pack turned on us!', 'You should see the mountains past the border.', 'Three days in the swamp, and not a dry boot.', 'Biggest wolf I ever saw. Nearly had my arm.', 'The capital? All banners and bad ale.']), 3.5);

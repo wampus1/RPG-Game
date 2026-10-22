@@ -41,8 +41,53 @@ import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
 import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
 import { INN_NIGHTS, innFor, innPrice, stayAt, rentRoom, stayLeft } from '../sim/inns.js';
 import { coreWorth } from '../world/farlands.js';
+import { factsFor, SKILL_TALK } from './talk/facts.js';
+import { choose as chooseLine } from './talk/rules.js';
+import { dominant } from '../sim/mind/emotion.js';
+import { emote } from '../ui/textfx.js';
+import { talentsOf, SKILLS, talentHint, skillOf } from '../sim/mind/talent.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
+
+// (Round 135) A line written for just this moment (see talk/rules.js), if
+// one fits at least `min` particulars: { text, rule }, or null.
+export function ruleLine(npc, game, topic, min = 2) {
+  if (!npc || !npc.rec || !npc.settlement || !game || !game.sim) return null;
+  const sim = game.sim;
+  const F = factsFor(npc, game, leaderOf);
+  const said = sim.repEntry(sim.repSidOf(npc), npc.rec.idx);
+  return chooseLine(topic, F, npc.rng || new RNG(hash4(npc.rec.idx, game.day)), said, min);
+}
+
+// (Round 135) Something said to nobody in particular, as they feel (see
+// npc.js: in the tavern, or about town of an evening), or null.
+export function feelBark(npc, game) {
+  const d = npc && npc.rec ? dominant(npc.rec, game.sim.abs, 0.35) : null;
+  if (!d) return null;
+  const r = ruleLine(npc, game, 'bark', 1);
+  return r ? r.text : null;
+}
+
+// (Round 135) Two of them talking, of what's on the first one's mind
+// (see chatter.js): [opener, reply], or null.
+export function pairLines(a, game) {
+  const r = ruleLine(a, game, 'pair', 1);
+  if (!r) return null;
+  const [x, y] = r.text.split(' || ');
+  return y ? [x, y] : null;
+}
+
+// (Round 135) Your jokes (what you say, in a word).
+const JOKES = [
+  'a goat that ran for mayor, and won',
+  'a tax collector who fell down a well and charged it rent',
+  'two bandits who robbed each other in the dark',
+  'a fisher who caught a fish that complained about the bait',
+  'a priest, a smith and a very confused chicken',
+  'the guard who arrested their own shadow',
+  'a dragon that was afraid of mice',
+  'why the baker\'s bread always rises to the occasion',
+];
 const sagaPid = (game) => sagaPidOf(game.player);
 
 function pick(rng, arr) {
@@ -92,7 +137,8 @@ const up = (t) => t[0].toUpperCase() + t.slice(1);
 
 // A short remark as the player walks past.
 export function greetLine(npc, game, rep, citizen) {
-  return speak(npc.rec, greetRaw(npc, game, rep, citizen), { first: true, warm: rep >= 35, cold: rep <= -25 });
+  // (Round 135: said as they feel just now, see ui/textfx.js.)
+  return emote(speak(npc.rec, greetRaw(npc, game, rep, citizen), { first: true, warm: rep >= 35, cold: rep <= -25 }), game.sim ? dominant(npc.rec, game.sim.abs, 0.35) : null);
 }
 
 function greetRaw(npc, game, rep, citizen) {
@@ -101,6 +147,9 @@ function greetRaw(npc, game, rep, citizen) {
   const tw = timeWord(game.minute);
   const name = game.playerName;
   if (game.isWanted(npc.settlement.id)) return pick(rng, ['Stay away from me!', 'Criminal...', 'The guards are after you!', '...']);
+  // (Round 135) As they feel, and what they make of you (see talk/lines.js).
+  const rg = rng.chance(0.55) ? ruleLine(npc, game, 'greet', 2) : null;
+  if (rg) return rg.text;
   const g = griefOf(npc.rec);
   if (g) return pick(rng, ['...', `*sigh*`, `I keep thinking about ${g.first}...`]);
   // (Round 77) What you did to them, good or bad, not forgotten.
@@ -248,6 +297,14 @@ function openingRaw(npc, game) {
   if (kin === 'sibling' && rep > -20) return rec.age === 'child' ? pick(rng, [`${first}! Will you play with me?`, 'Mum says you have to take me with you!', 'Guess what I found today!']) : pick(rng, [`Oh, it's you, ${first}.`, `Hey, ${first}! Mum was asking after you.`, 'Borrowed my things again, have you?']);
   if (rec.job === 'guard' && game.isWanted(s.id)) return 'You\'re wanted in this town. Come quietly, or else.';
   if (sim.justice.exiled.has(s.id)) return 'You were banished! Get out before the guards see you!';
+  // (Round 135) Something written for just this moment: how they feel,
+  // what's on their mind, how you look, who you are (see talk/lines.js).
+  // The more particular, the likelier it's said over the usual.
+  const rl = ruleLine(npc, game, 'open', 2);
+  if (rl) {
+    const dv = dominant(rec, sim.abs, 0);
+    if (rng.chance(Math.min(0.95, 0.3 + rl.rule.spec * 0.13 + (dv ? dv.v * 0.35 : 0)))) return rl.text;
+  }
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
@@ -361,7 +418,7 @@ for (const [cat, ids] of Object.entries({
   now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer',
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
   town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
-  talk: 'ask chat kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
+  talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   manners: 'gift rude',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
 
@@ -597,6 +654,13 @@ function topicsRaw(npc, game) {
   if (isStar(game.hero)) add('wing', 'About my wing...');
   add('ask', 'Can I ask you about...');
   add('chat', rec.age === 'child' ? 'What are you up to?' : 'How are things?');
+  // (Round 135) How they really are; what they can do; a laugh.
+  if (!npc.hired) {
+    const fd = dominant(rec, sim.abs, 0.35);
+    add('howare', fd ? { grief: 'How are you holding up?', fear: 'You seem on edge. What\'s wrong?', anger: 'Something\'s eating at you.', shame: 'Are you all right?', joy: 'You look happy! What\'s happened?', pride: 'You look pleased with yourself.', love: 'You\'re in a good mood.' }[fd.kind] : 'How are you, really?');
+    add('goodat', rec.age === 'child' ? 'What do you like doing best?' : 'What are you good at?');
+    add('jest', '(Tell a joke)');
+  }
   if (!mine && !npc.hired && !npc.visit) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
   const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
   add('kind', (rec.idx + game.day) % 2 ? '(Compliment them)' : '(Ask how they\'re doing)');
@@ -1982,6 +2046,60 @@ function respondRaw(npc, game, id, arg) {
         return { lines: [first, q.q], choices: q.choices, back: '(Say nothing)' };
       }
       return { lines: [first, `(${lvl.label})`] };
+    }
+    // (Round 135) How they really are (see talk/lines.js: feel).
+    case 'howare': {
+      const F = factsFor(npc, game, leaderOf);
+      const said = sim.repEntry(sim.repSidOf(npc), rec.idx);
+      const c = chooseLine('feel', F, rng, said, 0);
+      const lines = [c ? c.text : pick(rng, ['Well enough.', 'Getting by.'])];
+      const low = ['grief', 'fear', 'shame'].includes(F.feel) || F.strain >= 0.4;
+      return { lines, choices: low && said.comfort !== game.day ? [{ id: 'comfort', label: F.feel === 'grief' ? '(Sit with them a while)' : '(Reassure them)' }] : null, back: 'Take care of yourself.' };
+    }
+    case 'comfort': {
+      const said = sim.repEntry(sim.repSidOf(npc), rec.idx);
+      if (said.comfort === game.day) return { lines: ['You\'ve been kind enough already today.'] };
+      said.comfort = game.day;
+      const d = dominant(rec, sim.abs, 0.2);
+      sim.mind.words(npc, 'kind');
+      sim.changeRep(npc, Math.round(3 + p.sociability * 2), 'kind');
+      const k = d ? d.kind : 'calm';
+      const lines = {
+        grief: ['{@slow}{c:...Thank you.} {.}It helps, having someone just... be here.', '{@slow}{c:You don\'t have to say anything. Just stay a minute.}', '{@slow}{c:{dead} would have liked you, I think.}'],
+        fear: ['{t:You really think so?} {.}All right. All right. I feel a little steadier.', 'Thank you. {.}I needed someone to say it.'],
+        shame: ['{d:You\'re kind.} {.}Maybe it isn\'t as bad as I think.', '{d:Thank you. Truly.}'],
+      }[k] || ['Thank you. That does help.', 'You\'re a good sort, {name}.'];
+      const F = factsFor(npc, game, leaderOf);
+      const raw = pick(rng, lines);
+      return { lines: [raw.replace(/\{(dead|name)\}/g, (a, key) => F.vars[key] || (key === 'dead' ? 'they' : 'friend'))] };
+    }
+    // (Round 135) What they can do (and, between you, what they might).
+    case 'goodat': {
+      const F = factsFor(npc, game, leaderOf);
+      const said = sim.repEntry(sim.repSidOf(npc), rec.idx);
+      const c = chooseLine('skill', F, rng, said, 0);
+      const lines = [c ? c.text : 'Oh, a bit of this, a bit of that.'];
+      const Lh = npc.homeLayout || L;
+      if (Lh && rec.age !== 'child' && rec.skills) {
+        const t = talentsOf(Lh, rec);
+        let bi = 0;
+        for (let i = 1; i < t.length; i++) if (t[i] > t[bi]) bi = i;
+        const key = SKILLS[bi];
+        if (talentHint(t[bi]) && t[bi] >= 0.68 && skillOf(rec, key) < 0.5 && key !== F.bestSkill) lines.push(pick(rng, [`Between you and me, I always thought I'd have had a feel for ${SKILL_TALK[key]}, if life had gone another way.`, `Funny thing: whenever I've tried my hand at ${SKILL_TALK[key]}, it comes easy. Never had the time to follow it.`]));
+      }
+      return { lines };
+    }
+    // (Round 135) A joke: it lands, or it doesn't (see mind.words).
+    case 'jest': {
+      const said = sim.repEntry(sim.repSidOf(npc), rec.idx);
+      if (said.jest === game.day) return { lines: [pick(rng, ['You told me one already. Save some for tomorrow.', 'Ha. Heard it.'])] };
+      said.jest = game.day;
+      const joke = JOKES[(rec.idx + game.day) % JOKES.length];
+      const lands = sim.mind.words(npc, 'jest');
+      if (lands) sim.changeRep(npc, 2);
+      const F = factsFor(npc, game, leaderOf);
+      const c = chooseLine(lands ? 'jest' : 'jest_flat', F, rng, said, 0);
+      return { lines: [`(You tell the one about ${joke}.)`, c ? c.text : lands ? 'Ha!' : '...'] };
     }
     case 'weathertalk': {
       const d = sim.chat(npc, 'kind');

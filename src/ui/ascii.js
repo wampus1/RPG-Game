@@ -6,6 +6,7 @@ import { CHAR_W, CHAR_H } from '../config.js';
 import { drawChar, drawText } from '../render/font.js';
 import { itemIcon, drawJewelled } from '../render/sprites.js';
 import { hash4 } from '../util/rng.js';
+import { fxOffset, fxColor, fxMoves, FX_BOLD, TEXT_FX } from './textfx.js';
 
 export const C = {
   fg: '#e8d8b0',
@@ -36,6 +37,8 @@ export class Grid {
     this.ch = new Array(w * h);
     this.fg = new Array(w * h);
     this.bg = new Array(w * h);
+    // (Round 135) How each letter's said: see ui/textfx.js.
+    this.fx = new Uint8Array(w * h);
     this.icons = [];
     this.images = [];
     this.clear();
@@ -45,6 +48,7 @@ export class Grid {
     this.ch.fill(' ');
     this.fg.fill(C.fg);
     this.bg.fill(bg);
+    this.fx.fill(0);
     this.icons.length = 0;
     this.images.length = 0;
   }
@@ -53,8 +57,21 @@ export class Grid {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = y * this.w + x;
     this.ch[i] = ch;
+    this.fx[i] = 0;
     if (fg) this.fg[i] = fg;
     if (bg !== undefined) this.bg[i] = bg;
+  }
+
+  // (Round 135) Words with their effects (`fx`, one a letter, from
+  // `from` on: see ui/textfx.js).
+  textFx(x, y, str, fg, fx, from = 0, maxW = 999) {
+    const n = this.text(x, y, str, fg, undefined, maxW);
+    if (!fx || y < 0 || y >= this.h) return n;
+    for (let i = 0; i < n; i++) {
+      const cx = x + i;
+      if (cx >= 0 && cx < this.w) this.fx[y * this.w + cx] = fx[from + i] || 0;
+    }
+    return n;
   }
 
   text(x, y, str, fg = C.fg, bg = undefined, maxW = 999) {
@@ -139,14 +156,14 @@ function gridPicture(g) {
     const c = document.createElement('canvas');
     c.width = g.w * CHAR_W;
     c.height = g.h * CHAR_H;
-    P = { c, w: g.w, h: g.h, ch: new Array(n), fg: new Array(n), bg: new Array(n), ok: false };
+    P = { c, w: g.w, h: g.h, ch: new Array(n), fg: new Array(n), bg: new Array(n), fx: new Uint8Array(n), ok: false };
     GRID_PICS.set(g, P);
   }
   let same = P.ok;
   if (same) {
     const { ch, fg, bg } = g;
     for (let i = 0; i < n; i++) {
-      if (ch[i] !== P.ch[i] || bg[i] !== P.bg[i] || (ch[i] !== ' ' && fg[i] !== P.fg[i])) {
+      if (ch[i] !== P.ch[i] || bg[i] !== P.bg[i] || (ch[i] !== ' ' && (fg[i] !== P.fg[i] || (g.fx && g.fx[i] !== P.fx[i])))) {
         same = false;
         break;
       }
@@ -155,12 +172,17 @@ function gridPicture(g) {
   if (same) return P.c;
   const pc = P.c.getContext('2d');
   pc.clearRect(0, 0, P.c.width, P.c.height);
-  drawCells(pc, g, 0, 0, true, 0, 0, 0);
+  drawCells(pc, g, 0, 0, true, 0, 0, 0, true);
+  let moving = false;
   for (let i = 0; i < n; i++) {
     P.ch[i] = g.ch[i];
     P.fg[i] = g.fg[i];
     P.bg[i] = g.bg[i];
+    const f = g.fx ? g.fx[i] : 0;
+    P.fx[i] = f;
+    if (f && fxMoves(f) && g.ch[i] !== ' ') moving = true;
   }
+  P.moving = moving;
   P.ok = true;
   return P.c;
 }
@@ -168,14 +190,38 @@ function gridPicture(g) {
 export function drawGrid(ctx, g, ox, oy, p = 1, seed = 0, time = 0) {
   const full = p >= 1;
   const pic = full ? gridPicture(g) : null;
-  if (pic) ctx.drawImage(pic, ox * CHAR_W, oy * CHAR_H);
-  else drawCells(ctx, g, ox, oy, full, p, seed, time);
+  if (pic) {
+    ctx.drawImage(pic, ox * CHAR_W, oy * CHAR_H);
+    // (Round 135) Its moving letters, over it, where they are just now.
+    if (GRID_PICS.get(g).moving) drawMoving(ctx, g, ox, oy, time);
+  } else drawCells(ctx, g, ox, oy, full, p, seed, time);
   drawPixels(ctx, g, ox, oy, full, p, time);
 }
 
+// (Round 135) The letters that move, drawn where they are at `time`.
+function drawMoving(ctx, g, ox, oy, time) {
+  if (!g.fx) return;
+  const t = TEXT_FX.motion ? time : 0;
+  for (let i = 0; i < g.fx.length; i++) {
+    const f = g.fx[i];
+    if (!f || !fxMoves(f) || g.ch[i] === ' ') continue;
+    const x = i % g.w;
+    const y = (i - x) / g.w;
+    drawFxChar(ctx, g.ch[i], (ox + x) * CHAR_W, (oy + y) * CHAR_H, g.fg[i], f, x + y * 7, t);
+  }
+}
+
+function drawFxChar(ctx, ch, px, py, fg, f, i, time) {
+  const [dx, dy] = fxOffset(f, i, time);
+  const col = fxColor(f, fg);
+  if (f & FX_BOLD) drawChar(ctx, ch, px + dx + 1, py + dy, col);
+  drawChar(ctx, ch, px + dx, py + dy, col);
+}
+
 // The cells: their backgrounds (in runs), their letters (glitching in as
-// the grid forms).
-function drawCells(ctx, g, ox, oy, full, p, seed, time) {
+// the grid forms). (`still`: for the grid's picture: the letters that
+// move are left out, drawn over it each frame instead: see drawMoving.)
+function drawCells(ctx, g, ox, oy, full, p, seed, time, still = false) {
   const frame = Math.floor(time * 30);
   // Backgrounds (merged into horizontal runs).
   for (let y = 0; y < g.h; y++) {
@@ -217,6 +263,12 @@ function drawCells(ctx, g, ox, oy, full, p, seed, time) {
         }
       }
       if (ch === ' ') continue;
+      const f = g.fx ? g.fx[i] : 0;
+      if (f) {
+        if (still && fxMoves(f)) continue;
+        drawFxChar(ctx, ch, (ox + x) * CHAR_W, (oy + y) * CHAR_H, fg, f, x + y * 7, time);
+        continue;
+      }
       drawChar(ctx, ch, (ox + x) * CHAR_W, (oy + y) * CHAR_H, fg);
     }
   }

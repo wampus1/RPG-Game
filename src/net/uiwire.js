@@ -32,7 +32,18 @@ export function packGrid(g) {
     fg += idx(g.fg[i]);
     bg += idx(g.bg[i]);
   }
+  // (Round 135) How each letter's said (see ui/textfx.js), only if any is.
+  let fx = null;
+  if (g.fx) {
+    for (let i = 0; i < g.fx.length; i++) {
+      if (!g.fx[i]) continue;
+      fx = '';
+      for (let j = 0; j < g.fx.length; j++) fx += String.fromCharCode(48 + g.fx[j]);
+      break;
+    }
+  }
   return {
+    ...(fx ? { fx } : {}),
     w: g.w,
     h: g.h,
     ch: g.ch.join(''),
@@ -55,6 +66,10 @@ export function unpackGrid(p, g = new Grid(p.w, p.h), image = null) {
     const b = p.pal[p.bg.charCodeAt(i) - 48];
     g.fg[i] = f || '#e8d8b0';
     g.bg[i] = b === '' || b === undefined ? null : b;
+  }
+  if (g.fx) {
+    if (p.fx) for (let i = 0; i < n; i++) g.fx[i] = (p.fx.charCodeAt(i) - 48) || 0;
+    else g.fx.fill(0);
   }
   g.icons.length = 0;
   for (const [x, y, key, count, px, py] of p.icons || []) g.icons.push({ x, y, key, count, px, py });

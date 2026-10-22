@@ -8,9 +8,11 @@ import { relationTo } from '../sim/favors.js';
 import { HOBBIES } from '../entities/npcgen.js';
 import { LAWS, lawList, stance } from '../sim/laws.js';
 import { speak } from './voice.js';
+import { emote } from '../ui/textfx.js';
+import { dominant } from '../sim/mind/emotion.js';
 import { TRIP_TALK_DAYS } from '../sim/outings.js';
 import { smallTalk } from './markov.js';
-import { talkContext, leaderOf } from './dialogue.js';
+import { talkContext, leaderOf, pairLines } from './dialogue.js';
 import { bookInfo } from '../world/bookreg.js';
 
 const CHATTY = new Set(['social', 'hobby', 'wander', 'eat', 'home', 'play', 'work', 'visit']);
@@ -31,6 +33,12 @@ export function exchangeFor(a, b, game) {
   const Aname = ra.name.first;
   const rel = relationTo(ra, rb);
   const af = affinity(ra, rb);
+  // (Round 135) What's on their mind just now, first (see talk/lines.js:
+  // pair): the raid, a loss, a new baby, what they've heard of you.
+  if (ra.age !== 'child' && rng.chance(0.5)) {
+    const pl = pairLines(a, game);
+    if (pl) return pl;
+  }
   const opts = [];
   const h = game.minute / 60;
   const tw = h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
@@ -213,7 +221,8 @@ export function ambientChatter(game, dt) {
     }
     n.face(q.to.x, q.to.z);
     // In their own voice (their greeting habits for the first line).
-    n.say(speak(n.rec, q.text, { first: q.first }), 3.2);
+    // (Round 135: as they feel just now, see ui/textfx.js.)
+    n.say(emote(speak(n.rec, q.text, { first: q.first }), dominant(n.rec, game.sim.abs, 0.35)), 3.2);
   }
   c.queue = c.queue.filter((q) => !q.done);
   c.t -= dt;

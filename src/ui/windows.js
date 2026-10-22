@@ -5,6 +5,8 @@ import { GUILD_NAMES } from '../world/havenkit.js';
 import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
+import { parseFx, emote } from './textfx.js';
+import { dominant, FEEL_WORDS, FEEL_COLOR } from '../sim/mind/emotion.js';
 import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandLight, offhandOk } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
@@ -142,6 +144,26 @@ export function slotClick(ui, slots, i, ck, quickTarget) {
 }
 
 // ---------------------------------------------------------------- inventory
+// (Round 135) Where each row of a line wrapped to `width` starts and ends
+// in it ([from, to] pairs), words kept whole where they can be.
+function wrapAt(text, width) {
+  const rows = [];
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    while (i < n && text[i] === ' ') i++;
+    if (i >= n) break;
+    let end = Math.min(n, i + width);
+    if (end < n) {
+      const sp = text.lastIndexOf(' ', end);
+      if (sp > i) end = sp;
+    }
+    rows.push([i, end]);
+    i = end;
+  }
+  return rows;
+}
+
 export class InventoryWindow extends Window {
   constructor(ui) {
     super(ui, 76, 20, { kind: 'inventory' });
@@ -604,12 +626,36 @@ export class DialogueWindow extends Window {
     if (game) game.talkingTo = npc;
   }
   say(lines) {
-    this.queue = [...lines];
+    this.queue = lines.map((l) => this.feeling(l));
     this.next();
   }
   next() {
     this.line = this.queue && this.queue.length ? this.queue.shift() : this.line;
+    this.read = parseFx(this.line);
     this.chars = 0;
+  }
+  // (Round 135) A line in their voice as they feel just now (see
+  // ui/textfx.js: emote), unless it's marked already.
+  feeling(l) {
+    const rec = this.npc && this.npc.rec;
+    const game = this.game;
+    if (!rec || !game || !game.sim || this.npc.kind !== 'npc') return l;
+    const d = dominant(rec, game.sim.abs, 0.3);
+    const act = this.npc.activity && this.npc.activity.entry;
+    const drunk = !!(act && act.place === 'tavern' && game.minute >= 21 * 60 && ((rec.hobbies || []).includes('drinking') || act.feel === 'anger' || act.feel === 'strain'));
+    return emote(l, d, { drunk });
+  }
+  // How fast the words come: the line's own pace, and a breath at the end
+  // of each sentence (a short one at a comma).
+  typeRate() {
+    const r = this.read || parseFx(this.line);
+    const i = Math.floor(this.chars);
+    const prev = r.text[i - 1];
+    let k = r.pace;
+    if (r.pauses && r.pauses.has(i)) k *= 0.08;
+    else if (prev === '.' || prev === '!' || prev === '?') k *= r.text[i] === ' ' ? 0.14 : 1;
+    else if (prev === ',' || prev === ';') k *= 0.4;
+    return 60 * k;
   }
   allOptions(game) {
     if (this.choices) return this.back === null ? this.choices : [...this.choices, { id: 'back', label: this.back || '(Never mind)' }];
@@ -723,17 +769,31 @@ export class DialogueWindow extends Window {
     g.text(15, 4, '■'.repeat(bars) + '□'.repeat(10 - bars), lvl.color);
     g.text(26, 4, `${lvl.label} (${op > 0 ? '+' : ''}${op})`, lvl.color);
     const mood = rec.mood ?? 0.5;
-    g.text(46, 4, mood > 0.7 ? 'Mood: cheerful' : mood < 0.3 ? 'Mood: miserable' : mood < 0.45 ? 'Mood: low' : 'Mood: fine', C.faint);
+    // (Round 135) How they seem just now, if it shows.
+    const fe = dominant(rec, game.sim.abs, 0.35);
+    if (fe && FEEL_WORDS[fe.kind]) g.text(46, 4, `Seems: ${FEEL_WORDS[fe.kind][rec.idx % FEEL_WORDS[fe.kind].length]}`.slice(0, 28), FEEL_COLOR[fe.kind]);
+    else g.text(46, 4, mood > 0.7 ? 'Mood: cheerful' : mood < 0.3 ? 'Mood: miserable' : mood < 0.45 ? 'Mood: low' : 'Mood: fine', C.faint);
     if (n.activity) g.text(7, 5, `Now: ${describeActivity(n.activity.entry)}`.slice(0, 40), C.faint);
     if (rec.hungry >= 1) g.text(46, 5, rec.hungry >= 2 ? 'Starving' : 'Hungry', C.orange);
   }
   // What they're saying, and what you can say back.
   body(g, game) {
     // Current line, typed out.
-    const line = this.line || '...';
-    const shown = line.slice(0, Math.floor(this.chars));
-    const wl = wrap(shown, this.w - 6);
-    wl.slice(0, 3).forEach((l, k) => g.text(3, 7 + k, (k === 0 ? '"' : ' ') + l + (k === wl.length - 1 && this.chars >= line.length ? '"' : ''), C.white));
+    // (Round 135) Said as they say it: see ui/textfx.js.
+    const said = this.read || parseFx(this.line || '...');
+    const line = said.text || '...';
+    const n = Math.floor(this.chars);
+    const rows = wrapAt(line, this.w - 6);
+    let k = 0;
+    for (const [a, b] of rows) {
+      if (k >= 3 || a >= n) break;
+      const end = Math.min(b, n);
+      const part = line.slice(a, end);
+      g.put(3, 7 + k, k === 0 ? '"' : ' ', C.white);
+      g.textFx(4, 7 + k, part, C.white, said.fx, a);
+      if (end === b && b >= line.length && this.chars >= line.length) g.put(4 + part.length, 7 + k, '"', C.white);
+      k++;
+    }
     if (this.queue && this.queue.length && this.chars >= line.length) g.text(this.w - 4, 10, '►', Math.floor(this.ui.time * 3) % 2 ? C.hi : C.dim);
     g.text(2, 11, '─'.repeat(this.w - 4), C.faint);
     const opts = this.options(game);
@@ -794,7 +854,7 @@ export class DialogueWindow extends Window {
     ctx.drawImage(sheet, 0, 0, 16, SHEET_H, this.portraitPos.x, this.portraitPos.y - SPR_PAD, 16, SHEET_H);
   }
   update(dt, game) {
-    this.chars += dt * 60;
+    this.chars += dt * this.typeRate();
     if (this.closing !== undefined) {
       this.closing -= dt;
       if (this.closing <= 0) {
@@ -808,7 +868,8 @@ export class DialogueWindow extends Window {
   }
   onKey(k, game) {
     if (k.code === 'Space' || k.code === 'Enter') {
-      if (this.chars < this.line.length) this.chars = this.line.length;
+      const len = (this.read || parseFx(this.line)).text.length;
+      if (this.chars < len) this.chars = len;
       else if (this.queue && this.queue.length) this.next();
       return true;
     }
@@ -3540,7 +3601,7 @@ export class SailorDialogueWindow extends DialogueWindow {
     if (game && game.talkingTo === this.npc) game.talkingTo = null;
   }
   update(dt, game) {
-    this.chars += dt * 60;
+    this.chars += dt * this.typeRate();
     if (this.closing !== undefined) {
       this.closing -= dt;
       if (this.closing <= 0) {
