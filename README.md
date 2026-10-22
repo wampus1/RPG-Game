@@ -10889,6 +10889,47 @@ carry **abilities**.
   works all night, as before. "Desperate" now comes below half health,
   "of the deep" in the old places, and so on.
 
+## Round 138: More triggers and abilities, drawn in the world's own style
+
+- **11 more triggers.**
+  - **Now and then:** a heavy blow, striking one of the dead, eating, the
+    last foe about you falling, being struck from three paces or more.
+  - **Seldom:** being struck from behind, your guard breaking, landing a
+    fish.
+  - **Rarely:** felling an unhurt foe with a single blow, daybreak (a
+    modifier then works all day), and rain setting in (a modifier then
+    works while it rains).
+- **12 more abilities:**
+  - **Wall of Flame:** fire across the ground before you for four
+    seconds.
+  - **Geyser:** throws a foe off its feet.
+  - **Ironskin:** every blow a third lighter for eight seconds.
+  - **Blood Pact:** each blow you land mends you.
+  - **Chain Hook:** drags the furthest foe to you.
+  - **Frost Lance:** freezes a foe solid.
+  - **Swarm:** bees harry a foe for five seconds.
+  - **Well of Night:** pulls foes in and snaps shut.
+  - **Spring Bloom:** clears burning, poison, chill and bleeding, and
+    mends.
+  - **Smoke Veil:** foes lose you, and half their blows go astray.
+  - **Spirit Wolf:** runs a foe down and bites three times.
+  - **Gale Step:** a four-pace dash that cuts whatever you pass.
+
+  Honeycomb, tiger pelt, scorpion sting, fish oil, moth dust, sun seed
+  and more go into the forge to bring them.
+- **Every ability redrawn** the way the world itself is drawn:
+  - whole pixels on the world's grid, with no soft blurs or glows;
+  - each kind of light in five shades from dark to bright, dark at the
+    edges;
+  - fades done with a stipple of pixels;
+  - moving a frame at a time, as the people and beasts do.
+
+  This covers the sigils, shockwaves, ice shards, the meteor's burning
+  stone and its streak of fire, molten fissures, curling roots, the
+  banded Sunlance, wisps, clouds of rot, the clock of Time Slip, falling
+  stars, whirlwinds, shells of light, chains, bees, a pixel spirit wolf,
+  and the auras worn as you move.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

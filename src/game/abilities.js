@@ -73,6 +73,8 @@ export function trigLive(e, cls, m, t) {
   const g = e.game;
   if (T.hold === 'night') return !!g && !!g.isDay && !g.isDay();
   if (T.hold === 'deep') return !!g && !!g.dungeon;
+  if (T.hold === 'day') return !!g && !!g.isDay && !!g.isDay();
+  if (T.hold === 'rain') return raining(g);
   const st = e._ab;
   return !!st && (st.surge[`${cls}.${m}.${t}`] || 0) > st.t;
 }
@@ -145,7 +147,7 @@ export function cast(game, p, a, ctx = {}, pow = 1) {
   }
   if (did) {
     const A = ABILITIES[a];
-    game.renderer.effect?.({ type: 'sigil', wx: p.x, wy: p.y, wz: p.z, color: [A.color, '#ffffff'], life: 0.9, oy: 4 });
+    game.renderer.effect?.({ type: 'sigil', wx: p.x, wy: p.y, wz: p.z, pal: A.pal, life: 0.9, oy: 4 });
     game.renderer.floatText(p.x, p.y + 3, p.z, A.name, A.color);
   }
   return did;
@@ -209,6 +211,18 @@ function behind(game, p, f) {
     return { x, y, z };
   }
   return null;
+}
+const raining = (g) => !!(g && g.weather && /rain|storm/.test(g.weather.kind || ''));
+const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+// Toward the nearest foe within `r`, or the way `p` faces: [dx, dz].
+function aimOf(game, p, r) {
+  const f = foesNear(game, p, r)[0];
+  if (f) {
+    const dx = f.x - p.x;
+    const dz = f.z - p.z;
+    return Math.abs(dx) >= Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
+  }
+  return DIRS[p.dir] || [0, 1];
 }
 const DIR_OF = (dx, dz) => (Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 3 : 1) : dz > 0 ? 0 : 2);
 
@@ -453,8 +467,8 @@ export const CAST = {
   },
   bramble(game, p, ctx, pow, st) {
     turnOn(p, 'bramble', 8, st, pow);
-    fx(game, { type: 'roots', wx: p.x, wy: p.y, wz: p.z, life: 0.9, oy: 6 });
-    emit(game, p.x, p.y + 0.5, p.z, { n: 14, color: ['#3a6a20', '#70b040', '#c8e8a0'], up: 20, speed: 40, life: 0.6, gravity: 60 });
+    fx(game, { type: 'shock', wx: p.x, wy: p.y, wz: p.z, pal: 'green', r1: 24, life: 0.45, oy: 4 });
+    emit(game, p.x, p.y + 0.5, p.z, { n: 14, color: ['#3a6a20', '#70b040', '#c8e8a0'], up: 20, speed: 40, life: 0.6, gravity: 60, shape: 'shard' });
     game.audio?.play('ab_bramble', p);
     return true;
   },
@@ -493,7 +507,7 @@ export const CAST = {
     const foes = foesNear(game, p, 6);
     if (!foes.length) return false;
     turnOn(p, 'stasis', 5, st, pow);
-    fx(game, { type: 'clock', wx: p.x, wy: p.y, wz: p.z, color: ['#c0a0ff', '#ffffff'], r1: 92, life: 5, oy: 4 });
+    fx(game, { type: 'clock', wx: p.x, wy: p.y, wz: p.z, pal: 'violet', r1: 60, life: 5, oy: 4 });
     game.renderer.flashScreen?.('#c0a0ff', 0.08);
     game.audio?.play('ab_stasis', p);
     for (const e of foes) {
@@ -624,12 +638,214 @@ export const CAST = {
   },
 };
 
+// (Round 138) More abilities.
+Object.assign(CAST, {
+  firewall(game, p, ctx, pow, st) {
+    const [dx, dz] = aimOf(game, p, 6);
+    const cx = p.x + dx * 2;
+    const cz = p.z + dz * 2;
+    const tiles = [];
+    for (let i = -2; i <= 2; i++) tiles.push([cx + (dz ? i : 0), cz + (dx ? i : 0)]);
+    st.zones.push({ k: 'fire', tiles, y: p.y, until: st.t + 4, pow });
+    const [a, b] = [tiles[0], tiles[tiles.length - 1]];
+    fx(game, { type: 'firewall', wx: a[0], wy: p.y, wz: a[1], tx: b[0], ty: p.y, tz: b[1], life: 4, oy: 6 });
+    emit(game, cx, p.y + 0.5, cz, { n: 18, color: ['#ff6030', '#ffb040', '#fff0a0'], up: 40, speed: 50, life: 0.6, glow: true });
+    game.audio?.play('ab_firewall', p);
+    game.audio?.play('crackle', p);
+    return true;
+  },
+  geyser(game, p, ctx, pow) {
+    const f = foeFor(game, p, 6, ctx);
+    if (!f) return false;
+    fx(game, { type: 'geyser', wx: f.x, wy: f.y, wz: f.z, life: 1.2, oy: 6 });
+    fx(game, { type: 'shock', wx: f.x, wy: f.y, wz: f.z, pal: 'water', r1: 26, life: 0.45, oy: 4 });
+    emit(game, f.x, f.y + 1.5, f.z, { n: 20, color: ['#a0d4ff', '#ffffff', '#4c98dc'], up: 70, speed: 40, life: 0.8, gravity: 160, shape: 'drop' });
+    game.audio?.play('ab_geyser', f);
+    quiet(game, p, () => {
+      hurt(game, f, 5 * pow, p);
+      stun(f, 1.5);
+      if (f.burnT > 0) f.burnT = 0;
+    });
+    return true;
+  },
+  ironskin(game, p, ctx, pow, st) {
+    turnOn(p, 'ironskin', 8, st, pow);
+    fx(game, { type: 'shock', wx: p.x, wy: p.y, wz: p.z, pal: 'steel', r1: 26, life: 0.45, oy: 4 });
+    emit(game, p.x, p.y + 1, p.z, { n: 12, color: ['#c4ccd8', '#ffffff', '#8490a2'], up: 30, speed: 50, life: 0.4, shape: 'shard', gravity: 100 });
+    game.audio?.play('ab_ironskin', p);
+    return true;
+  },
+  pact(game, p, ctx, pow, st) {
+    turnOn(p, 'pact', 8, st, pow);
+    fx(game, { type: 'shock', wx: p.x, wy: p.y, wz: p.z, pal: 'blood', r1: 28, life: 0.5, oy: 4 });
+    emit(game, p.x, p.y + 1.2, p.z, { n: 12, color: ['#c82830', '#ff6858', '#7a1020'], up: 20, speed: 30, life: 0.7, gravity: 120, shape: 'drop' });
+    game.audio?.play('ab_pact', p);
+    return true;
+  },
+  hook(game, p, ctx, pow, st) {
+    const foes = foesNear(game, p, 7).filter((e) => cheb(e, p.x, p.z) >= 2);
+    const f = ctx.source && foes.includes(ctx.source) ? ctx.source : foes[foes.length - 1];
+    if (!f) return false;
+    fx(game, { type: 'chain', wx: p.x, wy: p.y + 0.6, wz: p.z, tx: f.x, ty: f.y + 0.6, tz: f.z, life: 0.6, oy: -6 });
+    game.audio?.play('ab_hook', p);
+    later(st, 0.28, () => {
+      if (f.dead) return;
+      const n = cheb(f, p.x, p.z) - 1;
+      if (n > 0) knockBack(game, { x: 2 * f.x - p.x, z: 2 * f.z - p.z }, f, n);
+      emit(game, f.x, f.y + 1, f.z, { n: 8, color: ['#c4ccd8', '#ffffff'], up: 20, speed: 40, life: 0.3 });
+      game.audio?.play('clang', f);
+      quiet(game, p, () => {
+        hurt(game, f, 2 * pow, p);
+        stun(f, 1.2);
+      });
+    });
+    return true;
+  },
+  lance(game, p, ctx, pow, st) {
+    const f = foeFor(game, p, 8, ctx);
+    if (!f) return false;
+    fx(game, { type: 'lance', wx: p.x, wy: p.y + 0.8, wz: p.z, tx: f.x, ty: f.y + 0.8, tz: f.z, life: 0.32, oy: -6 });
+    game.audio?.play('ab_lance', p);
+    later(st, 0.3, () => {
+      if (f.dead) return;
+      fx(game, { type: 'spikes', wx: f.x, wy: f.y, wz: f.z, r1: 9, n: 5, life: 0.9, oy: 6 });
+      game.audio?.play('freeze', f);
+      quiet(game, p, () => {
+        hurt(game, f, 5 * pow, p);
+        freeze(game, f, 1.5);
+      });
+    });
+    return true;
+  },
+  swarm(game, p, ctx, pow, st) {
+    const f = foeFor(game, p, 6, ctx);
+    if (!f) return false;
+    game.audio?.play('ab_swarm', f);
+    for (let i = 0; i < 10; i++) {
+      later(st, i * 0.5, () => {
+        if (f.dead) return;
+        fx(game, { type: 'swarm', wx: f.x, wy: f.y, wz: f.z, life: 0.55, oy: 2 });
+        if (i % 4 === 3) game.audio?.play('ab_swarm', f);
+        quiet(game, p, () => hurt(game, f, pow, p));
+      });
+    }
+    return true;
+  },
+  well(game, p, ctx, pow, st) {
+    const f = foeFor(game, p, 6, ctx);
+    if (!f) return false;
+    const at = { x: f.x, y: f.y, z: f.z };
+    fx(game, { type: 'well', wx: at.x, wy: at.y, wz: at.z, life: 2.2, oy: 4 });
+    game.audio?.play('ab_well', at);
+    for (const t of [0.5, 1, 1.5]) {
+      later(st, t, () => {
+        for (const e of foesNear(game, p, 14, at.x, at.z)) if (cheb(e, at.x, at.z) <= 4 && cheb(e, at.x, at.z) > 0) knockBack(game, { x: 2 * e.x - at.x, z: 2 * e.z - at.z }, e, 1);
+      });
+    }
+    later(st, 2, () => {
+      fx(game, { type: 'shock', wx: at.x, wy: at.y, wz: at.z, pal: 'violet', r1: 40, life: 0.5, oy: 4 });
+      emit(game, at.x, at.y + 0.6, at.z, { n: 20, color: ['#cab4ff', '#8a64d8', '#ffffff'], up: 40, speed: 80, life: 0.5, shape: 'star', glow: true });
+      game.renderer.flashScreen?.('#8a64d8', 0.08);
+      game.shake = Math.min(1.3, (game.shake || 0) + 0.5);
+      game.audio?.play('ab_impact', at);
+      quiet(game, p, () => {
+        for (const e of foesNear(game, p, 14, at.x, at.z)) {
+          if (cheb(e, at.x, at.z) > 2) continue;
+          hurt(game, e, 6 * pow, p);
+          stun(e, 1);
+        }
+      });
+    });
+    return true;
+  },
+  renew(game, p, ctx, pow) {
+    for (const k of ['burnT', 'poisonT', 'bleedT', 'frozenT', 'slowT']) if (p[k] > 0) p[k] = 0;
+    p.bleedN = 0;
+    const was = p.hp;
+    mend(game, p, Math.round(3 * pow));
+    if (p.hp > was) game.renderer.floatText(p.x, p.y + 2.4, p.z, `+${p.hp - was} ♥`, '#a0d860');
+    fx(game, { type: 'bloom', wx: p.x, wy: p.y, wz: p.z, life: 1.6, oy: 4 });
+    emit(game, p.x, p.y + 1, p.z, { n: 14, color: ['#ff7090', '#a0c8ff', '#ffffff', '#c890ff', '#a0d860'], up: 20, speed: 30, life: 1, gravity: 20, shape: 'star' });
+    game.audio?.play('ab_renew', p);
+    return true;
+  },
+  veil(game, p, ctx, pow, st) {
+    turnOn(p, 'veil', 5, st, pow);
+    fx(game, { type: 'smoke', wx: p.x, wy: p.y, wz: p.z, r1: 34, life: 5, oy: 4 });
+    game.audio?.play('ab_veil', p);
+    for (const e of foesNear(game, p, 5)) {
+      if (e.target === p) e.target = null;
+      stun(e, 0.8);
+    }
+    return true;
+  },
+  spirit(game, p, ctx, pow, st) {
+    const f = foeFor(game, p, 8, ctx);
+    if (!f) return false;
+    fx(game, { type: 'spirit', wx: p.x, wy: p.y, wz: p.z, tx: f.x, ty: f.y, tz: f.z, life: 1.4, oy: 6 });
+    game.audio?.play('ab_spirit', p);
+    for (const t of [0.6, 0.9, 1.2]) {
+      later(st, t, () => {
+        if (f.dead) return;
+        fx(game, { type: 'bite', wx: f.x, wy: f.y, wz: f.z, life: 0.3, oy: 4 });
+        emit(game, f.x, f.y + 1, f.z, { n: 6, color: ['#a0ffe4', '#ffffff'], up: 20, speed: 40, life: 0.3, glow: true });
+        game.audio?.play('bite', f);
+        quiet(game, p, () => hurt(game, f, 3 * pow, p));
+      });
+    }
+    return true;
+  },
+  gale(game, p, ctx, pow) {
+    const [dx, dz] = aimOf(game, p, 6);
+    const w = game.world;
+    let x = p.x;
+    let y = p.y;
+    let z = p.z;
+    let land = null;
+    const passed = new Set();
+    for (let i = 0; i < 5; i++) {
+      const ny = w.stepTarget(x, y, z, x + dx, z + dz, false);
+      if (ny < 0 || (w.isWaterAt && w.isWaterAt(x + dx, ny, z + dz))) break;
+      x += dx;
+      z += dz;
+      y = ny;
+      for (const e of foesNear(game, p, 8)) if (cheb(e, x, z) <= 1) passed.add(e);
+      if (!(game.occupiedBySolid && game.occupiedBySolid(x, y, z, p))) land = { x, y, z };
+      if (i >= 3 && land && land.x === x && land.z === z) break;
+    }
+    if (!land) return false;
+    const from = { x: p.x, y: p.y, z: p.z };
+    fx(game, { type: 'gust', wx: from.x, wy: from.y, wz: from.z, tx: land.x, ty: land.y, tz: land.z, life: 0.6, oy: 4 });
+    if (p.look) fx(game, { type: 'ghost', wx: from.x, wy: from.y, wz: from.z, look: p.look, dir: p.dir, life: 0.4, oy: -6, filter: 'brightness(1.4) sepia(1) hue-rotate(120deg) saturate(1.5)', glow: '#e0f4ee' });
+    game.teleportPlayer(land.x, land.y, land.z);
+    game.audio?.play('ab_gale', p);
+    quiet(game, p, () => {
+      for (const e of passed) {
+        hurt(game, e, 3 * pow, p);
+        stun(e, 0.5);
+        emit(game, e.x, e.y + 1, e.z, { n: 6, color: ['#e0f4ee', '#ffffff'], up: 20, speed: 50, life: 0.3 });
+      }
+    });
+    return true;
+  },
+});
+
 // ------------------------------------------------------------ in a fight
 // A blow on `p` turned by an aegis, or one that would have killed them
 // held off (once in five minutes, by an undying piece): what's left of it.
 export function abSoak(game, p, source, amount) {
   const st = p._ab;
   if (!st || amount <= 0) return amount;
+  // (Round 138) Lost in the smoke; skin like iron.
+  if (abilityOn(p, 'veil') && source && source !== p && Math.random() < 0.5) {
+    game.renderer.floatText(p.x, p.y + 2.2, p.z, 'lost in the smoke', '#c0c0c8');
+    return 0;
+  }
+  if (abilityOn(p, 'ironskin')) {
+    const was = amount;
+    amount = Math.max(1, Math.round(amount * 0.67));
+    if (amount < was) emit(game, p.x, p.y + 1, p.z, { n: 4, color: ['#c4ccd8', '#ffffff'], up: 20, speed: 40, life: 0.25, glow: true });
+  }
   if (abilityOn(p, 'aegis') && st.shield > 0) {
     const s = Math.min(st.shield, amount);
     st.shield -= s;
@@ -685,6 +901,10 @@ export function abBlow(game, target, source, amount, crit = false, full = false)
       if (armedOf(target).length) {
         fireTrigger(game, target, 'struck', { source });
         if (foesNear(game, target, 4).length >= 3) fireTrigger(game, target, 'mob', { source });
+        // (Round 138) From afar; from behind.
+        if (Math.hypot(source.x - target.x, source.z - target.z) >= 3) fireTrigger(game, target, 'shotat', { source });
+        const [fx0, fz0] = DIRS[target.dir] || [0, 1];
+        if ((source.x - target.x) * fx0 + (source.z - target.z) * fz0 < 0) fireTrigger(game, target, 'back', { source });
       }
     }
     const max = target.maxHp || 1;
@@ -694,12 +914,22 @@ export function abBlow(game, target, source, amount, crit = false, full = false)
   }
   if (source && source.kind === 'player' && source !== target && target.kind !== 'player' && !source.dead) {
     const st = abState(source);
-    if (st.firing || !armedOf(source).length) return;
+    if (st.firing) return;
+    if (abilityOn(source, 'pact') && source.hp < source.maxHp && !((st.pactT || 0) > st.t)) {
+      st.pactT = st.t + 0.4;
+      mend(game, source, 1);
+      fx(game, { type: 'siphon', wx: target.x, wy: target.y + 0.8, wz: target.z, tx: source.x, ty: source.y + 0.8, tz: source.z, life: 0.5, oy: -8, n: 8, color: ['#c82830', '#ff6858'], amp: 3 });
+    }
+    if (!armedOf(source).length) return;
     const ctx = { target };
     fireTrigger(game, source, 'hit', ctx);
     if (crit) fireTrigger(game, source, 'crit', ctx);
     if (full) fireTrigger(game, source, 'first', ctx);
     if (target.isBoss || target.S?.boss) fireTrigger(game, source, 'boss', ctx);
+    // (Round 138) One of the dead; an unhurt foe felled at a blow; a blood
+    // pact's mending.
+    if (target.S?.undead) fireTrigger(game, source, 'undead', ctx);
+    if (full && target.hp <= 0) fireTrigger(game, source, 'oneshot', ctx);
     const held = source.heldDef ? source.heldDef() : null;
     if (held && held.ranged && Math.hypot(target.x - source.x, target.z - source.z) >= 8) fireTrigger(game, source, 'shot', ctx);
     if (!held || !held.ranged) {
@@ -719,6 +949,8 @@ export function abKill(game, p, e) {
   const st = abState(p);
   if (st.firing || !armedOf(p).length) return;
   fireTrigger(game, p, 'kill', { target: e });
+  // (Round 138) The last of them.
+  if (!foesNear(game, p, 10).some((q) => q !== e)) fireTrigger(game, p, 'victory', { target: e });
   st.kills = st.kills.filter((t) => st.t - t <= 12);
   st.kills.push(st.t);
   if (st.kills.length >= 3) {
@@ -744,6 +976,7 @@ export function tickAbilities(game, p, dt) {
     st.sta = p.stamina;
     st.night = null;
     st.deep = null;
+    st.rain = null;
     return;
   }
   if (p.dead) return;
@@ -751,7 +984,11 @@ export function tickAbilities(game, p, dt) {
   if (armed.length) {
     const night = game.isDay ? !game.isDay() : false;
     if (st.night === false && night) fireTrigger(game, p, 'dusk', {});
+    if (st.night === true && !night) fireTrigger(game, p, 'dawn', {});
     st.night = night;
+    const rain = raining(game);
+    if (st.rain === false && rain) fireTrigger(game, p, 'rain', {});
+    st.rain = rain;
     const deep = !!game.dungeon;
     if (st.deep === false && deep) fireTrigger(game, p, 'delve', {});
     st.deep = deep;
@@ -826,6 +1063,18 @@ export function tickAbilities(game, p, dt) {
       st.zoneT = 0.5;
       st.zones = st.zones.filter((z) => z.until > st.t);
       for (const z of st.zones) {
+        // (Round 138) A wall of fire: whatever's on it, burning.
+        if (z.k === 'fire') {
+          const [cx, cz] = z.tiles[2];
+          quiet(game, p, () => {
+            for (const e of foesNear(game, p, 16, cx, cz)) {
+              if (!z.tiles.some(([tx, tz]) => cheb(e, tx, tz) === 0)) continue;
+              burn(game, e, p, 2);
+              hurt(game, e, z.pow || 1, p);
+            }
+          });
+          continue;
+        }
         for (const e of foesNear(game, p, 14, z.x, z.z)) {
           if (cheb(e, z.x, z.z) > 2) continue;
           e.poisonT = Math.max(e.poisonT || 0, 3);

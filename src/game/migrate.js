@@ -1093,6 +1093,12 @@ export const STEPS = [
       log.push(`Forged pieces carry triggers now (when you're struck, when you bring a foe down, when night falls...) and abilities (a healing aura, a meteor, chain lightning...), each trigger setting off one of its modifiers or its abilities; at an anvil what each sets off can be changed round.${n ? ` ${n} of your pieces had a modifier of the night, the deep and so on: it's woken by a trigger now.` : ''}`);
     },
   },
+  {
+    to: '1.38.0',
+    game(game, log) {
+      log.push('More triggers (a heavy blow, the dead struck, eating, the last foe falling, a blow from afar or behind, a broken guard, a fish landed, a foe felled at a blow, daybreak, rain) and more abilities (a wall of flame, a geyser, ironskin, a blood pact, a chain hook, a frost lance, a swarm, a well of night, a spring bloom, a smoke veil, a spirit wolf, a gale step); every ability drawn afresh in the world\'s own pixels.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

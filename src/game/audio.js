@@ -427,6 +427,19 @@ export class Audio {
       case 'ab_beacon': this.swell(220, 0.35, 'sawtooth', 0.06); this.tone(330, 0.45, 'sawtooth', 0.05, 0, 0.3); this.tone(440, 0.6, 'sawtooth', 0.05, 0, 0.55); this.tone(880, 0.6, 'sine', 0.03, 0, 0.55); break;
       case 'ab_shatter': this.noise(0.16, 0.22, 4200); for (let i = 0; i < 4; i++) this.tone(1500 + Math.random() * 1500, 0.1, 'triangle', 0.04, -300, 0.02 + i * 0.04); this.noise(0.25, 0.14, 500, 0.03); break;
       case 'ab_midas': for (const [f, d] of [[988, 0], [1318, 0.06], [1568, 0.12], [1976, 0.2], [1318, 0.28]]) this.tone(f, 0.12, 'square', 0.05, 0, d); break;
+      // (Round 138) And the newer ones.
+      case 'ab_firewall': this.noise(0.7, 0.2, 380); this.noise(0.4, 0.12, 1800, 0.08); this.tone(110, 0.6, 'sawtooth', 0.07, 60); for (let i = 0; i < 4; i++) this.noise(0.05, 0.1, 2600 + i * 400, 0.1 + i * 0.09); break;
+      case 'ab_geyser': this.noise(0.15, 0.2, 260); this.swell(300, 0.3, 'sine', 0.08, 700, 0.05); this.noise(0.6, 0.16, 1100, 0.15); for (let i = 0; i < 5; i++) this.tone(600 + Math.random() * 500, 0.06, 'sine', 0.04, -200, 0.4 + i * 0.07); break;
+      case 'ab_ironskin': this.tone(220, 0.4, 'square', 0.06, -40); this.tone(1320, 0.5, 'triangle', 0.05, 0, 0.05); this.tone(1980, 0.4, 'triangle', 0.03, 0, 0.08); this.noise(0.08, 0.15, 3800); break;
+      case 'ab_pact': this.tone(98, 0.5, 'sawtooth', 0.09, -20); this.swell(392, 0.3, 'sine', 0.05, -120, 0.1); this.tone(55, 0.6, 'sine', 0.16, 0, 0.1); this.tone(55, 0.3, 'sine', 0.12, 0, 0.45); break;
+      case 'ab_hook': for (let i = 0; i < 6; i++) this.tone(1600 + i * 90, 0.03, 'square', 0.035, 0, i * 0.035); this.noise(0.2, 0.08, 2400); this.tone(160, 0.2, 'triangle', 0.08, -80, 0.25); break;
+      case 'ab_lance': this.noise(0.25, 0.12, 5000); this.tone(2400, 0.25, 'triangle', 0.05, -1400); this.tone(3136, 0.2, 'sine', 0.03, 0, 0.22); break;
+      case 'ab_swarm': for (let i = 0; i < 8; i++) this.tone(210 + Math.random() * 60, 0.09, 'sawtooth', 0.025, 20, i * 0.05); break;
+      case 'ab_well': this.swell(160, 0.6, 'sine', 0.12, -110); this.tone(80, 1.2, 'sawtooth', 0.05, -30, 0.2); this.noise(0.9, 0.05, 300, 0.1); break;
+      case 'ab_renew': for (const [f, d] of [[784, 0], [988, 0.07], [1175, 0.14], [1568, 0.21]]) this.tone(f, 0.3, 'sine', 0.045, 0, d); this.noise(0.3, 0.03, 4000, 0.1); break;
+      case 'ab_veil': this.noise(0.8, 0.14, 700); this.noise(0.5, 0.08, 1500, 0.1); this.tone(140, 0.5, 'sine', 0.05, -40); break;
+      case 'ab_spirit': this.swell(440, 0.25, 'sine', 0.06, 220); this.tone(660, 0.7, 'sine', 0.05, -260, 0.25); this.tone(990, 0.5, 'sine', 0.02, -300, 0.3); break;
+      case 'ab_gale': this.noise(0.4, 0.16, 900); this.noise(0.25, 0.1, 2400, 0.05); this.swell(400, 0.2, 'sine', 0.04, 600); break;
       case 'ab_seek': this.tone(1400, 0.6, 'sine', 0.07); this.tone(1400, 0.6, 'sine', 0.035, 0, 0.3); this.tone(2100, 0.5, 'sine', 0.02, 0, 0.32); break;
       // (Round 64) A shimmer of magic (a mod's sound to pick: it was silent).
       case 'magic': this.tone(784, 0.14, 'sine', 0.06, 400); this.tone(1175, 0.18, 'triangle', 0.04, 300, 0.06); this.tone(1568, 0.24, 'sine', 0.03, 500, 0.12); this.noise(0.18, 0.03, 5200, 0.02); break;

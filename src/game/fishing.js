@@ -16,6 +16,7 @@ import { has as heroHas } from './hero.js';
 import { mastery, gainMastery } from './mastery.js';
 import { dishFx } from './cooking.js';
 import { dishTrigger } from './dishacts.js';
+import { fireTrigger } from './abilities.js';
 import { pidOf } from '../sim/saga/refs.js';
 
 const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
@@ -338,6 +339,8 @@ function land(game, f) {
   game.fishing = null;
   // (Round 53: a dish that answers a catch: see dishacts.js.)
   dishTrigger(game, p, 'fish', {});
+  // (Round 138: a forged piece's trigger.)
+  fireTrigger(game, p, 'fish', {});
   // (Round 54: the stories hear of it: a legend of the lake, landed.)
   game.sim?.saga?.emit('fish_caught', { pid: pidOf(p), kind: f.kind, big: !!f.big, item, x: Math.round(f.x), z: Math.round(f.z) });
 }

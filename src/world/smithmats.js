@@ -105,6 +105,21 @@ export const ADDITIVES = {
   antler: { traits: ['heavy', 'fell'] },
   coral: { traits: ['vital', 'streak'] },
   relic_shard: { traits: ['pure', 'boss'] },
+  // (Round 138) And more, with the new triggers and abilities in them.
+  tiger_pelt: { traits: ['heavy', 'back', 'spirit'] },
+  scorpion_sting: { traits: ['venomous', 'oneshot', 'lance'] },
+  honeycomb: { traits: ['vital', 'eat', 'swarm'] },
+  fish_oil: { traits: ['fiery', 'fish', 'firewall'] },
+  moth_dust: { traits: ['light', 'veil'] },
+  mangrove_pod: { traits: ['tough', 'rain', 'geyser'] },
+  sun_seed: { traits: ['vital', 'dawn', 'renew'] },
+  pink_feather: { traits: ['far', 'gale'] },
+  peat_turf: { traits: ['heavy', 'ironskin'] },
+  ambergris: { traits: ['lucky', 'victory'] },
+  mothers_tear: { traits: ['pure', 'smash', 'pact'] },
+  reeds: { traits: ['far', 'shotat', 'hook'] },
+  lantern_pod: { traits: ['vital', 'guardbreak', 'well'] },
+  prayer_beads: { traits: ['pure', 'undead'] },
 };
 for (const [k, m] of Object.entries(MATERIALS)) ADDITIVES[k] = { traits: m.traits, rarity: m.rarity };
 

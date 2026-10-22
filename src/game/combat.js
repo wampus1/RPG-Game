@@ -466,6 +466,7 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
         v.guardBroken = 1.0;
         amount *= 0.75;
         text('guard broken!', '#ff9060');
+        fireTrigger(game, v, 'guardbreak', { source: a });
         game.shake = Math.min(1.2, (game.shake || 0) + 0.4);
       }
     } else {

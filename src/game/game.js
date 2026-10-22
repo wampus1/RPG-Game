@@ -6618,6 +6618,8 @@ export class Game {
     }
     // (Round 53: a dish that answers your eating, this one too.)
     if (!sick) dishTrigger(this, p, 'eat', { item: slot.item });
+    // (Round 138: a forged piece's trigger.)
+    if (!sick) fireTrigger(this, p, 'eat', {});
     // (Round 62) A mod's: what it does besides.
     if (!sick && def.mod) modEaten(this, p, def);
     // (Not everywhere eats everything: see culture.js.)
@@ -7185,6 +7187,8 @@ export class Game {
     clawRend(this, p, target, dmg);
     onBladeHit(this, p, target, { dmg, heavy, crit });
     onBladeMods(this, p, target);
+    // (Round 138: a heavy blow, a forged blade's trigger.)
+    if (heavy) fireTrigger(this, p, 'smash', { target });
     this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
     // Knockback (two paces for a heavy blow); with a second blade coming,
     // after that one.

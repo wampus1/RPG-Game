@@ -161,7 +161,7 @@ test('every ability does what it says, seen and heard', () => {
     assert.ok(fx.length >= 2, `${a}: its own look`);
     assert.ok(snd.includes(`ab_${a}`), `${a}: its own sound`);
     const hurt = foes.some((f, i) => f.dead || f.hp < hp0[i] || f.slowT > 0 || f.stunT > 0 || f.poisonT > 0);
-    const self = ['halo', 'blades', 'aegis', 'shade', 'quicken', 'rage', 'bramble', 'beacon'].includes(a);
+    const self = ['halo', 'blades', 'aegis', 'shade', 'quicken', 'rage', 'bramble', 'beacon', 'firewall', 'ironskin', 'pact', 'renew', 'veil', 'gale'].includes(a);
     assert.ok(hurt || self, `${a}: it did something`);
   }
 });
