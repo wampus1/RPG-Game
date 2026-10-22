@@ -9,6 +9,9 @@ import { MODS } from '../mod/state.js';
 import { addShip, shipsOf, waterSpot, boardAt, ownerId } from './ships3d.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { makeCrew } from './shipcrew.js';
+import { feelings, dominant } from '../sim/mind/emotion.js';
+import { recall } from '../sim/mind/memory.js';
+import { SKILLS, talentsOf, talentHint, ensureSkills, skillWord } from '../sim/mind/talent.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -37,6 +40,7 @@ export const COMMANDS = {
   ship: { args: '<sloop|brigantine|galleon|frigate> [aboard] | foe <type> | list', about: '(Round 68) Launch a ship of your own on the nearest open water (and put you aboard her, with "aboard"), with a crew and shot; "foe" sends a warship against you; "list" names the ships about.' },
   office: { args: '[town] | sit | crisis <raid|famine|fever|unrest|scandal> | leave', about: '(Round 121) Take office in a town at once (the one you\'re in, or named), as if elected; "sit" holds the council\'s morning sitting now; "crisis" brings one on; "leave" steps you down.' },
   crown: { args: '[realm] [monarchy|republic|elder|theocracy|league] | sit | crisis | leave', about: '(Round 122) Take the throne of a realm at once (the one you\'re in, or named), governed as you say; "sit" holds the crown\'s morning sitting now; "crisis" brings on a pretender; "leave" abdicates.' },
+  mind: { args: '[name]', about: '(Round 135) What\'s going on inside the nearest townsperson (or one named, in the town you\'re in): how they feel, what they\'re good at and have a gift for, what\'s on their mind, and who they think well or ill of.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -211,6 +215,69 @@ function eventCmd(game, kind, words) {
   return [`${kind === 'feast' ? 'A feast day' : 'A celebration'} in ${s.name}: day ${ev.day}, from ${hod(ev.s % DAY)}.`];
 }
 
+// (Round 135) An inner life laid bare: the nearest townsperson's (or one
+// named, in the town about you).
+function mindCmd(game, words) {
+  const sim = game.sim;
+  const p = game.player;
+  const q = words.join(' ').toLowerCase();
+  let rec = null;
+  let L = null;
+  let sid = null;
+  if (q) {
+    const s = game.currentSettlement || game.world.ow.settlementAt(p.x, p.z);
+    L = s ? sim.layoutOf(s.id) : null;
+    sid = s ? s.id : null;
+    rec = L ? L.npcs.find((r) => r && alive(r) && `${r.name.first} ${r.name.last}`.toLowerCase().includes(q)) : null;
+    if (!rec) return [`Nobody called "${q}" here.`];
+  } else {
+    let best = null;
+    let bd = 1e9;
+    for (const n of game.npcs || []) {
+      if (!n.rec || n.dead) continue;
+      const d = Math.hypot(n.x - p.x, n.z - p.z);
+      if (d < bd) {
+        bd = d;
+        best = n;
+      }
+    }
+    if (!best || bd > 24) return ['There\'s nobody near enough (or name someone in this town: "mind <name>").'];
+    rec = best.rec;
+    L = best.homeLayout || best.layout;
+    sid = sim.repSidOf(best);
+  }
+  const now = sim.abs;
+  const day = game.day;
+  const pc = (v) => `${Math.round(v * 100)}`;
+  const out = [`${rec.name.first} ${rec.name.last}, ${rec.age} ${rec.job || ''}: mood ${pc(rec.mood ?? 0.5)}`];
+  const e = feelings(rec, now);
+  const NM = { j: 'joy', g: 'grief', f: 'fear', a: 'anger', s: 'shame', p: 'pride', l: 'love', x: 'strain' };
+  const fl = e ? Object.keys(NM).filter((k) => e[k]).map((k) => `${NM[k]} ${pc(e[k])}`) : [];
+  const d = dominant(rec, now);
+  out.push(`Feels: ${fl.length ? fl.join(', ') : 'nothing in particular'}${d ? ` (shows ${d.kind})` : ''}`);
+  if (L) ensureSkills(L, rec);
+  const sk = Object.entries(rec.skills || {}).sort((a, b) => b[1] - a[1]);
+  out.push(`Skills: ${sk.map(([k, v]) => `${k} ${pc(v)}`).join(', ')}`);
+  if (sk.length) out.push(`(Best at ${sk[0][0]}: ${skillWord(sk[0][1])}.)`);
+  if (L) {
+    const t = talentsOf(L, rec);
+    const hints = SKILLS.map((k, i) => [k, t[i]]).filter(([, v]) => talentHint(v)).map(([k, v]) => `${k}: ${talentHint(v)}`);
+    out.push(`Talents: ${hints.length ? hints.join(', ') : 'nothing out of the ordinary'}`);
+  }
+  const ms = recall(rec, day);
+  if (ms.length) {
+    out.push('On their mind:');
+    for (const m of ms.slice(0, 6)) out.push(`  ${m.h ? '(heard) ' : ''}${m.k}${m.n ? ` - ${m.n}` : ''}${m.x ? ` (${m.x})` : ''}${m.w ? ` [${m.w}]` : ''}, day ${m.d}, ${m.v >= 0 ? '+' : ''}${m.v} x${m.s}`);
+  } else out.push('On their mind: nothing much.');
+  const op = Object.entries(rec.op || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (op.length && L) {
+    const who = (k) => (k.startsWith('n:') ? (L.npcs[+k.slice(2)] ? L.npcs[+k.slice(2)].name.first : k) : k);
+    out.push(`Thinks of: ${op.slice(0, 6).map(([k, v]) => `${who(k)} ${v >= 0 ? '+' : ''}${v}`).join(', ')}`);
+  }
+  if (sid !== null && sid !== undefined) out.push(`Of you: ${Math.round(sim.opinion({ rec, repSid: sid }))}`);
+  return out;
+}
+
 // Run one line typed at the console; returns what it has to say.
 export function runCommand(game, text) {
   const words = String(text || '').trim().replace(/^\//, '').split(/\s+/).filter(Boolean);
@@ -261,6 +328,8 @@ export function runCommand(game, text) {
       if (!got.includes(id)) return [`Couldn't learn ${TECHS[id].name}: something it needs is barred.`];
       return [`The ${civ.name.replace(/^The /, '')} has learned ${got.map((k) => TECHS[k].name).join(', ')}.`, TECHS[id].desc];
     }
+    case 'mind':
+      return mindCmd(game, words);
     case 'mod':
       return modCommand(game, words);
     case 'debugger':

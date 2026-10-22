@@ -421,6 +421,103 @@ R('o_kin_gift', 'open', { kinGifted: true, kid: false, parent: true, op: { min: 
   'My {kin}\'s got a real knack for {kinGift}. {w:I don\'t know where it comes from. Not me!}',
 ]);
 
+// ---- their own trade, and what you bring to it
+R('o_farmer_rain', 'open', { job: ['farmer', 'herbalist', 'miller'], weather: 'rain', kid: false }, [
+  '{w:Rain at last!} The fields have been gasping for it.',
+  'Wet enough for you? {w:The barley\'s drinking it up.}',
+]);
+R('o_farmer_famine', 'open', { job: ['farmer', 'miller'], mem_famine: true, kid: false }, [
+  '{@slow}{d:I\'ve worked this ground since I could walk.} {.}It\'s never given so little.',
+  'Folk look at me like I\'m hiding the harvest. {r:There is no harvest.}',
+]);
+R('o_fisher_fog', 'open', { job: ['fisher', 'pearldiver'], weather: 'fog', kid: false }, [
+  'No going out in this. {t:You can lose the shore in ten strokes.}',
+  'Fog like milk. {d:The fish can wait, and so can I.}',
+]);
+R('o_smith_blade', 'open', { job: 'blacksmith', armed: true, kid: false }, [
+  'Let me see that. {.}Hm. The edge has rolled. Bring it by the forge and I\'ll put it right.',
+  'Whoever made that blade knew their trade. {d:Nearly as well as me.}',
+]);
+R('o_smith_master_blade', 'open', { job: 'blacksmith', armed: true, master: true }, [
+  '{g:Mine\'d hold an edge twice as long.} Just saying, {name}.',
+]);
+R('o_cook_food', 'open', { job: ['cook', 'baker', 'innkeeper'], holdingFood: true, kid: false }, [
+  'What\'s that you\'re eating? {.}Not one of mine, I can tell from here.',
+  'You call that food? Come back when you want a proper meal.',
+]);
+R('o_healer_hurt', 'open', { job: ['herbalist', 'priest'], hurt: true, dying: false }, [
+  '{@fast}You\'re bleeding, {name}. Sit down. Sit! Let me look at that.',
+  'That wants cleaning before it festers. {d:Hold still.}',
+]);
+R('o_merchant_broke', 'open', { job: 'merchant', broke: true, kid: false }, [
+  'Browsing, are we? {d:Browsing\'s free. Just about the only thing that is.}',
+  'Come back when your purse is heavier, {name}. {.}I\'ll still be here.',
+]);
+R('o_tailor_ragged', 'open', { job: 'tailor', ragged: true, kid: false }, [
+  'Gods, {name}, those rags. {.}Come by the shop. I\'ll do you a fair price, out of pity.',
+  'You\'re not walking about {town} dressed like that? {d:People will talk.}',
+]);
+R('o_tailor_fine', 'open', { job: 'tailor', fine: true, kid: false }, [
+  '{g:Now that\'s a fine cut.} Who made it? {.}I want a word with them.',
+]);
+R('o_innkeeper_wet', 'open', { job: ['innkeeper', 'barkeep'], wet: true, indoors: true }, [
+  'You\'re dripping on my floor! {w:Come by the fire and dry off.}',
+  'Soaked through. Here, sit near the hearth. {.}First cup\'s for the rain.',
+]);
+R('o_innkeeper_late', 'open', { job: ['innkeeper', 'barkeep'], late: true, kid: false }, [
+  'Last orders, {name}. {d:Well, nearly last.}',
+  'Still standing? You\'re hardier than most of my customers.',
+]);
+R('o_scholar_night', 'open', { job: ['scholar', 'researcher'], night: true, kid: false }, [
+  'Can\'t sleep either? {.}The best thinking\'s done after dark, I find.',
+]);
+R('o_priest_mutated', 'open', { job: 'priest', mutated: true, kid: false, op: { min: -20 } }, [
+  'The gods made you stranger than most, {name}. {.}But they made you all the same.',
+  'Some here whisper about your {mut}. {d:Pay them no mind. I don\'t.}',
+]);
+R('o_guard_night', 'open', { job: 'guard', night: true, wanted: false, kid: false }, [
+  'Late to be wandering, {name}. {d:Keep to the lit streets.}',
+  'Quiet night. {.}I prefer them quiet.',
+]);
+R('o_trapper_snow', 'open', { job: ['trapper', 'handler'], snowy: true }, [
+  'Fresh snow. {w:Every track in the hills is written out plain today.}',
+]);
+R('o_builder_raid', 'open', { job: ['builder', 'carpenter', 'laborer'], mem_raid: true, kid: false }, [
+  'Rebuilding again. {.}{r:They burn it, we build it. Over and over.}',
+  'Half my work this month is mending what the raiders broke.',
+]);
+R('o_miner_quake', 'open', { job: 'miner', mem_eruption: true }, [
+  '{t:The deep shafts shook for an hour.} I\'m not going down again till it\'s quiet.',
+]);
+R('o_lumber_snow', 'open', { job: 'lumberjack', snowy: true }, [
+  'Cold work, felling in the snow. {.}But the wood\'s dry and the sap\'s down.',
+]);
+R('o_beggar_rich', 'open', { job: 'beggar', rich: true, op: { min: 0 } }, [
+  'A coin, {name}? {.}{d:You\'d not miss it, from the sound of that purse.}',
+]);
+// ---- the town's ways
+R('o_civ_sea_storm', 'open', { civ_seafaring: true, weather: ['storm', 'fog'], kid: false }, [
+  '{@slow}{d:Weather like this, there\'s always someone watching the harbour.} Pray the boats made it in.',
+]);
+R('o_civ_scholar_book', 'open', { civ_scholarly: true, holdingBook: true }, [
+  'Is that a book? {w:What is it? Who wrote it? May I see?}',
+]);
+R('o_civ_pious_mut', 'open', { civ_pious: true, mutated: true, devout: true, op: { max: 20 } }, [
+  '{d:Your {mut}...} {.}Forgive me. It\'s not a thing we see, here.',
+]);
+R('o_civ_merchant_rich', 'open', { civ_mercantile: true, rich: true, kid: false }, [
+  'Well now, {name}. {g:A purse like that\'s welcome in {town}.}',
+]);
+R('o_civ_farm_rain', 'open', { civ_agrarian: true, weather: 'rain', kid: false, job: (j) => !['farmer', 'herbalist', 'miller'].includes(j) }, [
+  'Good rain. The whole of {town} will eat better for it.',
+]);
+R('o_civ_artisan_fine', 'open', { civ_artisan: true, fine: true }, [
+  'That\'s good work you\'re wearing. {.}We know good work, in {town}.',
+]);
+R('o_civ_martial_armed', 'open', { civ_martial: true, armed: true, kid: false, wanted: false }, [
+  'A blade on your hip and a fighter\'s walk. {g:You\'d do well here.}',
+]);
+
 // ============================================================ greet
 R('g_grief', 'greet', { feel: 'grief', grief: strong }, ['{@slow}{c:...}', '{c:*stares at nothing*}', '{@slow}{c:Not today, {name}.}']);
 R('g_fear', 'greet', { feel: 'fear', fear: strong }, ['{t:*jumps*} Oh! It\'s you.', '{@fast}{t:Keep moving, keep moving.}', '{t:Did you hear that?}']);
@@ -554,6 +651,50 @@ R('s_green', 'skill', { green: true, kid: false }, [
 R('s_kin', 'skill', { kinGifted: true, kid: false }, [
   'Me? Nothing special. But my {kin} has a gift for {kinGift}. {g:That one\'ll go far.}',
   'Ask about my {kin}. {kinGift} comes to that child like breathing.',
+], { bonus: 1 });
+
+// (What they're best at, said their way.)
+const goodAt = { min: 0.55, max: 0.88 };
+R('s_combat', 'skill', { bestSkill: 'combat', bestV: goodAt, kid: false }, [
+  'A fight. {.}Not that I go looking for one. {g:But I finish them.}',
+  'Ask anyone who\'s sparred with me. {d:They\'ll tell you, once the bruises fade.}',
+]);
+R('s_cooking', 'skill', { bestSkill: 'cooking', bestV: goodAt, kid: false }, [
+  'Cooking! {w:Give me a pot, a fire and whatever\'s in season.}',
+  'My stew\'s talked about in three villages. {g:Talked about kindly.}',
+]);
+R('s_hunting', 'skill', { bestSkill: 'hunting', bestV: goodAt, kid: false }, [
+  'Tracking. I can tell you what passed this way, and when, and how hungry it was.',
+]);
+R('s_fishing', 'skill', { bestSkill: 'fishing', bestV: goodAt, kid: false }, [
+  'Fishing. {.}It\'s patience, mostly. And knowing where they sulk.',
+]);
+R('s_farming', 'skill', { bestSkill: 'farming', bestV: goodAt, kid: false }, [
+  'Growing things. {w:I could get a carrot out of a cobblestone.}',
+]);
+R('s_trading', 'skill', { bestSkill: 'trading', bestV: goodAt, kid: false }, [
+  'Trade. I know what a thing\'s worth, and what someone will pay for it. {d:They\'re rarely the same.}',
+]);
+R('s_building', 'skill', { bestSkill: 'building', bestV: goodAt, kid: false }, [
+  'Building. Half the walls on this street are mine. {g:Still standing, too.}',
+]);
+R('s_crafting', 'skill', { bestSkill: 'crafting', bestV: goodAt, kid: false }, [
+  'Making things. Give me tools and a quiet afternoon. {.}That\'s all I ask.',
+]);
+R('s_lore', 'skill', { bestSkill: 'lore', bestV: goodAt, kid: false }, [
+  'Books. I\'ve read everything in {town} twice. {d:Some of it three times, by accident.}',
+]);
+R('s_healing', 'skill', { bestSkill: 'healing', bestV: goodAt, kid: false }, [
+  'Mending folk. {.}Cuts, fevers, broken hearts. {d:The last are the hardest.}',
+]);
+R('s_leadership', 'skill', { bestSkill: 'leadership', bestV: goodAt, kid: false }, [
+  'Getting folk to pull the same way. {.}Harder than it sounds, in {town}.',
+]);
+R('s_charm', 'skill', { bestSkill: 'charm', bestV: goodAt, kid: false }, [
+  '{w:People!} I can talk to anyone. {.}Getting them to stop talking, that\'s the trick.',
+]);
+R('s_untrained', 'skill', { kid: false, bestV: { max: 0.45 }, lazy: true }, [
+  'Good at? {d:Sitting. I\'m very good at sitting.}',
 ]);
 
 // ============================================================ jest
@@ -564,6 +705,13 @@ R('j_strain', 'jest', { strain: some }, ['{w:Ha!} Thanks. I needed that today.',
 R('j_any', 'jest', {}, ['{w:Ha! Good one.}', 'Heh. You\'re a funny one, {name}.', '{w:Hahaha!} Where do you get them?']);
 R('jf_grief', 'jest_flat', { grief: some }, ['{@slow}{c:I\'m not in the mood for jokes, {name}.}', '{r:Do you think this is funny?}']);
 R('jf_gruff', 'jest_flat', { gruff: true }, ['...', 'Was that meant to be funny?', 'Don\'t give up your day work.']);
+R('j_elder', 'jest', { elder: true }, ['{w:Heh heh.} I heard that one when I was a child. {.}Still funny.', 'Ha! My old grandmother used to tell it better. {w:But not by much.}']);
+R('j_hot', 'jest', { hot: true }, ['{w:HA!} {b:Ha!} Oh, that\'s wicked.']);
+R('j_kind', 'jest', { kind: true }, ['{w:Oh, that\'s lovely.} Thank you, {name}.']);
+R('j_joy', 'jest', { joy: some }, ['{wg:Ha! What a day this is turning out to be!}']);
+R('jf_anger', 'jest_flat', { anger: some }, ['{r:Do I look like I\'m laughing?}', '{r:Not now.}']);
+R('jf_elder', 'jest_flat', { elder: true }, ['In my day jokes had an ending.', 'Hm? {d:Speak up.}']);
+R('jf_kid', 'jest_flat', { kid: true }, ['That\'s not funny. {.}{w:Do the goat one again!}']);
 R('jf_any', 'jest_flat', {}, ['Hm. I don\'t get it.', '*polite smile*', 'Ah. Yes. Very... yes.']);
 
 // ============================================================ bark
@@ -588,6 +736,13 @@ R('b_grief', 'bark', { feel: 'grief', grief: some }, ['{@slow}{c:*quietly* Rest 
 R('b_grief_pray', 'bark', { feel: 'grief', grief: some, devout: true }, ['{@slow}{c:Keep {dead} safe, wherever they are.}']);
 R('b_fear', 'bark', { feel: 'fear', fear: some }, ['{t:Did you hear something?}', '{t:Bar the door. Just in case.}', '{@fast}{t:Who\'s there?!}']);
 R('b_shame', 'bark', { feel: 'shame', shame: some }, ['{d:*keeps to the corner*}', '{d:Stupid. Stupid.}']);
+R('b_hungry', 'bark', { hungry: true, kid: false }, ['{d:*stomach growls*}', '{d:When did I last eat? Yesterday?}']);
+R('b_hungry_kid', 'bark', { hungry: true, kid: true }, ['{d:I\'m hungry...}']);
+R('b_joy', 'bark', { feel: 'joy', joy: strong }, ['{w:*whistling*}', '{wg:What a day!}']);
+R('b_pride_master', 'bark', { feel: 'pride', master: true }, ['{g:Nobody does it like me. Nobody.}']);
+R('b_anger_hot', 'bark', { feel: 'anger', anger: strong, hot: true }, ['{sr:I\'ll show them. I\'ll show all of them!}', '{r:*kicks a bucket*}']);
+R('b_fear_night', 'bark', { feel: 'fear', fear: some, night: true }, ['{t:Who\'s out there?}', '{t:I\'ll not sleep tonight.}']);
+R('b_festival', 'bark', { festivalSoon: true, joy: { min: 0.05 } }, ['{w:Not long now!}', '{w:*practising a dance step*}']);
 R('b_love', 'bark', { feel: 'love', love: some }, ['{p:*humming a love song*}']);
 
 // ============================================================ pair

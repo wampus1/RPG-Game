@@ -1049,6 +1049,12 @@ export const STEPS = [
       log.push('The game runs lighter: the world drawn in fewer strokes, the realms\' roads and far towns\' hours worked out a little at a time, the forge lit faster; nothing in the world itself changed.');
     },
   },
+  {
+    to: '1.35.0',
+    game(game, log) {
+      log.push('The townsfolk have inner lives now: hidden talents and skills they learn by doing, feelings that rise and fade, memories and opinions they pass on; what they say comes of all of it. (Each starts with nothing on their mind.)');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

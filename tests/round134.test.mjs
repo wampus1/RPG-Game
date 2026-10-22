@@ -11,7 +11,7 @@ import { GBuf, shade, N } from '../src/ui/forgelight.js';
 import { Shop, fire, bellows, ironBar, lantern, hide, motes, blank } from '../src/ui/forgepaint.js';
 import { Region } from '../src/world/region.js';
 import { DEFAULTS, SETTING_ROWS, applySettings } from '../src/game/settings.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { WORLD_Y } from '../src/config.js';
 import { stepsFor } from '../src/game/migrate.js';
 
@@ -168,7 +168,7 @@ test('background world work, gentle: half the time a frame', () => {
 });
 
 test('version 1.34.0', () => {
-  assert.equal(GAME_VERSION, '1.34.0');
+  assert.ok(compareVersions('1.34.0', GAME_VERSION) <= 0);
   const s = stepsFor('1.33.0').find((q) => q.to === '1.34.0');
   assert.ok(s && s.game);
 });

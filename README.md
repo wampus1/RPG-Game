@@ -10645,6 +10645,95 @@ days as before.
   *Gentle* gives the world's out-of-sight work half the time a frame.
   Everything still happens; it just finishes a little later.
 
+## Round 135: Townsfolk with inner lives
+
+The people of every town now have hidden talents, skills they learn by
+doing, feelings that rise and fade with what happens to them, memories,
+and opinions of the folk they know. What they say comes of all of it,
+and the words themselves show how it's said.
+
+- **Talents.** Everyone has a hidden gift (or blind spot) for each of
+  twelve skills: cooking, hunting, fishing, farming, trading, building,
+  making things, fighting, books, healing, leading and people. A child's
+  talents lean toward their parents'. Talent sets how fast someone learns
+  and how far they can go: the ungifted level off well short of mastery.
+  Nobody knows the numbers. A parent or neighbour might say a child "has
+  a gift" or "two left hands".
+- **Skills, learnt by doing.**
+  - **Children** pick up their parents' trades a little each day, and
+    learn from playing, from the priest's lessons, from the town's books
+    (a library, more from an Academy or college) and from their hobbies.
+    Coming of age, they take up a trade they're suited to when there is
+    one.
+  - **Grown-ups** get better at their trade every hour they work, faster
+    beside a better hand at the same workplace. Crossing into good, very
+    good or masterful is something they're proud of and remember. A new
+    master is written up on the notice board.
+  - **What skill does.** A skilled smith or tailor turns out more goods.
+    A sharp trader drives a harder bargain both ways. A trained guard
+    hits harder. Good builders put up buildings faster. Towns choose
+    mayors who can lead and talk to people, and a quick-witted
+    persuader is harder to talk round.
+- **Feelings.** Joy, grief, fear, anger, shame, pride and love, and
+  underneath them strain (worry, hunger, overwork).
+  - **Each person takes things their own way.** A death grieves the
+    dead person's family and friends and barely touches strangers. A
+    violent death angers them too, and if you did it they remember you
+    for it. A raid frightens the timid and angers the brave. The same
+    goes for war and peace, famine, riots, the mountain erupting, a
+    robbery, a wedding, a birth, coming of age, being chosen mayor, a
+    festival (the better it went, the gladder the town), being wounded
+    or rescued, and how you treat them: a gift, a kind or rude word, a
+    joke.
+  - **Feelings fade at their own pace.** Joy lasts a day or so, grief
+    more than a week. They move a person's long mood as they come and go.
+  - **Feelings change what people do.**
+    - Grief, fear and strain take hours from the work.
+    - In the evening, the frightened and the ashamed stay in, the
+      grieving go to pray, and the glad, the angry and the proud go to
+      the tavern.
+    - A happy trader is more generous; an angry one isn't.
+- **Memories and opinions.** Each person keeps a handful of memories,
+  how much each mattered to them, and who it was about. Small things
+  are forgotten in a few weeks; a child's death or a wedding day never
+  quite. Friends and neighbours pass on what's on their minds as
+  gossip, so word of what you did spreads, and changes what people think
+  of you, even among those who never saw it. Each person's opinions of
+  the people they know mellow over time. In multiplayer, each player is
+  remembered as themselves.
+- **What they say.** Over 230 sets of lines (more than 450 lines) are
+  each written for a particular moment. Who's talking matters: their
+  trade, temper, feelings, memories and what they think of you. So does
+  how you are: where you're from, your mutations, whether you're hurt,
+  soaked, armed, in rags or finery, rich or broke, wanted or holding
+  office. So do the hour, the weather and how things stand in the town.
+  - The most particular line that fits is the one said. A widow speaks
+    of the one they lost by name, a raid's survivor jumps at footsteps,
+    a new parent can't stop talking about the baby, a smith eyes your
+    blade.
+  - Lines said to you lately aren't said again soon.
+  - The same choice runs greetings as you pass, people talking among
+    themselves and things said aloud in the tavern.
+  - **New things to ask:** *How are you?* (comfort them, once a day,
+    when they're low), *What are you good at?*, and *Tell a joke* (it
+    lands, or it doesn't, by their humour and their mood).
+- **Words that show how they're said.**
+  - Rage shakes, fear trembles and stammers ("W-what was that?"), and
+    glee dances.
+  - Grief is slow and cold blue, shame dim, pride gold, love rose.
+  - Speech slows at commas and pauses mid-sentence.
+  - Lines with no marks of their own take them from how the speaker
+    feels; the drunk slur.
+  - This applies in the dialogue window and in speech bubbles, and
+    guests see it too.
+  - *Moving text in speech* (Visuals) turns the motion off and keeps the
+    colours.
+- **`mind [name]`** (console) shows what's going on inside the nearest
+  townsperson, or one named in your town.
+- **Cost.** A town's day of inner lives takes well under a millisecond.
+  None of it uses the dice the rest of the town's day is thrown with.
+  The host works it all out in multiplayer.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
