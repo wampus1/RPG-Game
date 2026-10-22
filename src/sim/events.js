@@ -1141,6 +1141,8 @@ export class Events {
     const [a, b] = ev.couple.map((i) => L.npcs[i]);
     if (!a || !b || !alive(a) || !alive(b)) return;
     marry(L, a, b);
+    // (Round 135) The happiest day: felt by them, and those close to them.
+    this.sim.mind?.wedding(L, a, b);
     const came = this.cameCount(L, ev);
     ledger(L, ev.day, `${name(a)} and ${name(b)} were married by the square; ${came} came to wish them well.`);
     L.econ.lastWedding = ev.day;
@@ -1163,6 +1165,8 @@ export class Events {
       r.fed = 1;
       r.hungry = 0;
     }
+    // (Round 135) A good day, felt the more the more came.
+    if (ev.kind !== 'wedding') this.sim.mind?.festival(L, Math.min(1, 0.3 + came / Math.max(8, L.npcs.length * 0.6)));
     if (ev.kind !== 'wedding') {
       L.econ.lastFeast = ev.day;
       ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `${cap(this.title(L, ev))} by the square drew ${came} people.`);

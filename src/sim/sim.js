@@ -66,6 +66,10 @@ import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
 import { Saga } from './saga/core.js';
+import { Mind } from './mind/mind.js';
+import { packFeelings } from './mind/emotion.js';
+import { packMemories } from './mind/memory.js';
+import { skillOf } from './mind/talent.js';
 import './saga/motifs/index.js';
 import { innBedAt, stayAt } from './inns.js';
 import { cutOff, isFar, FAR_CORE } from '../world/farlands.js';
@@ -204,6 +208,8 @@ export class Sim {
     this.volcano = new Volcano(game, this);
     // The world's stories (round 52: see saga/core.js).
     this.saga = new Saga(game, this);
+    // (Round 135) The townsfolk's inner lives (see mind/mind.js).
+    this.mind = new Mind(this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -592,6 +598,8 @@ export class Sim {
       r.mem ||= [];
       r.mem.push({ d: delta, day: this.game.day, ...w });
       if (r.mem.length > 4) r.mem.shift();
+      // (Round 135) A life saved: felt, and remembered.
+      if (w.why === 'saved' && delta > 0) this.mind.saved(rec);
     }
     this.areaCache.delete(sid);
     const e = npc.emoteShow ? npc : rec.ent;
@@ -730,6 +738,8 @@ export class Sim {
     if (r.gift === day && score > 0) score *= 0.35;
     r.gift = day;
     const gained = this.changeRep(npc, Math.round(score), score >= 3 ? { why: 'gift', item } : score < 0 ? 'insult' : null);
+    // (Round 135) And how it made them feel.
+    this.mind.gift(npc, item, reaction, score);
     // The gift goes into their inventory (food gets eaten when needed).
     if (item === 'coin') rec.coins += 1;
     else invAdd(rec.inv, item, 1);
@@ -750,12 +760,14 @@ export class Sim {
       r.chat = day;
       const d = Math.round(2 + p.sociability * 3 + p.kindness * 2);
       this.changeRep(npc, d, d >= 5 ? 'kind' : null);
+      this.mind.words(npc, 'kind');
       return d;
     }
     if (kind === 'rude') {
       const d = -Math.round(6 + p.temper * 6);
       r.insult = day;
       this.changeRep(npc, d, 'insult');
+      this.mind.words(npc, 'rude');
       return d;
     }
     return 0;
@@ -973,6 +985,11 @@ export class Sim {
     }
     const op = this.opinion(npc);
     if (op <= -25) m *= 1.25;
+    // (Round 135) A sharp trader asks more, a green one less; someone glad
+    // lets a little go, someone sore won't.
+    if (rec.skills) m *= 1 + (skillOf(rec, 'trading') - 0.45) * 0.14;
+    const fe = this.mind.feelings(rec);
+    if (fe) m *= 1 - (fe.j || 0) * 0.05 + (fe.a || 0) * 0.08;
     let d = 1;
     const reasons = [];
     if (op >= 35) {
@@ -1007,7 +1024,9 @@ export class Sim {
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * rule('sell') * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
+    // (Round 135: a sharp trader pays less for it.)
+    const sharp = npc.rec && npc.rec.skills ? 1 - (skillOf(npc.rec, 'trading') - 0.45) * 0.12 : 1;
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * rule('sell') * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * sharp * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
     // (Round 131) A haven's fence, of the Fences' Ring: pays more.
     const fs = npc.layout && npc.layout.settlement;
     const fence = fs && fs.haven && this.tech && sh && sh.kind === 'general' ? 1 + this.tech.fxOf(fs, 'fence') : 1;
@@ -1367,6 +1386,9 @@ export class Sim {
     comingOfAge(this, L, day);
     raids(this, L, day, rng);
     this.hardship.daily(L, day);
+    yield;
+    // (Round 135) What they learn, feel, remember and pass on today.
+    this.mind.townDay(L, day);
     yield;
     this.realms.daily(L, day, rng);
     yield;
@@ -2537,6 +2559,7 @@ export class Sim {
   }
 
   serializeSettlement(L) {
+    const day = this.today();
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, roadwork: r.roadwork || null, readEdition: r.readEdition, doneKey: r.doneKey,
@@ -2546,6 +2569,9 @@ export class Sim {
       drafted: r.drafted, raid: r.raid, soldier: r.soldier, captive: r.captive, walkHome: r.walkHome,
       // Ranks, vices, feuds, affairs, time in the cells, fortunes sought.
       life: r.life,
+      // (Round 135) How they feel, what they remember, what they think of
+      // those they know (see mind/).
+      emo: packFeelings(r.emo), mem: packMemories(r.mem, day), op: r.op,
       // (A cook's own recipes: see game/cooking.js.)
       ...(r.recipes && r.recipes.length ? { recipes: r.recipes } : {}),
       // A drilled guard keeps the toughness drill gave them.
@@ -2561,7 +2587,7 @@ export class Sim {
       econ: L.econ,
       recs: L.npcs.slice(0, L.baseN ?? L.npcs.length).map(pickRec),
       // People who moved here from elsewhere: whole records.
-      extra: L.npcs.slice(L.baseN ?? L.npcs.length).map(({ ent, ...r }) => (void ent, r)),
+      extra: L.npcs.slice(L.baseN ?? L.npcs.length).map(({ ent, ...r }) => (void ent, { ...r, emo: packFeelings(r.emo), mem: packMemories(r.mem, day) })),
       graves: L.graveyard ? { rows: L.graveyard.rows, slots: L.graveyard.slots.map((s) => s.grave) } : null,
       // (Round 84) A city's other graveyards.
       ...(L.graveyards && L.graveyards.length > 1 ? { graves2: L.graveyards.filter((g) => g !== L.graveyard).map((g) => ({ rows: g.rows, slots: g.slots.map((q) => q.grave) })) } : {}),

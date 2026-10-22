@@ -411,7 +411,15 @@ export class Works {
   // site who count (none there yet: barely anything happens); elsewhere the
   // town's crew is assumed to put in its hours.
   crewRate(L, onJob, cap, away = false) {
+    // (Round 135) A skilled crew builds faster, a green one slower.
     const crew = this.sim.builders(L);
+    let sk = 0;
+    for (const r of crew) sk += r.skills && r.skills.building !== undefined ? r.skills.building : 0.45;
+    const hand = crew.length ? 0.75 + (sk / crew.length) * 0.55 : 1;
+    return this.crewRate0(L, onJob, cap, away, crew) * hand;
+  }
+
+  crewRate0(L, onJob, cap, away, crew) {
     if (this.game.active.has(L.settlement.id) && !away) {
       const near = (r) => {
         const o = r.override;

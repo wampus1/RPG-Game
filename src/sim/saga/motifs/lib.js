@@ -241,7 +241,13 @@ export function persuade(S, npc, rng, base = 0.3, against = 0) {
   const g = S.game;
   const cha = (g.hero && g.hero.stats ? g.hero.stats.cha : 2) || 2;
   const op = npc && npc.rec && S.sim.opinion ? S.sim.opinion(npc) : 0;
-  return rng.chance(Math.max(0.05, Math.min(0.95, base + cha * 0.07 + op / 220 - against)));
+  // (Round 135) How they feel just now: a glad heart's easier won, an
+  // angry one harder, a frightened one easier pushed; and the sharp-witted
+  // (and the charming) are harder to talk round.
+  const fe = npc && npc.rec && S.sim.mind ? S.sim.mind.feelings(npc.rec) : null;
+  const mood = fe ? (fe.j || 0) * 0.12 + (fe.f || 0) * 0.06 - (fe.a || 0) * 0.15 - (fe.g || 0) * 0.05 : 0;
+  const wit = npc && npc.rec && npc.rec.skills ? ((npc.rec.skills.lore ?? 0.3) + (npc.rec.skills.charm ?? 0.3) - 0.6) * 0.12 : 0;
+  return rng.chance(Math.max(0.05, Math.min(0.95, base + cha * 0.07 + op / 220 - against + mood - wit)));
 }
 
 // A townsperson's standing with someone playing, changed (spawned or not).

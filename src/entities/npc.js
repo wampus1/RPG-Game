@@ -260,7 +260,9 @@ export class NPC extends Entity {
   attackDamage(ranged = false) {
     const w = ranged ? this.weapon() : this.meleeWeapon();
     const base = w ? ITEMS[w].damage : 1.5;
-    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? (this.rec.drilled ? 1.55 : 1.35) : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1) * (this.warband ? warBonus(this) : 1)));
+    // (Round 135) How well they fight: their skill at it (see mind/talent.js).
+    const cb = this.rec.skills && this.rec.skills.combat !== undefined ? 0.8 + this.rec.skills.combat * 0.4 : 1;
+    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? (this.rec.drilled ? 1.55 : 1.35) : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1) * (this.warband ? warBonus(this) : 1) * cb));
   }
 
   canShoot() {
@@ -3466,6 +3468,8 @@ export class NPC extends Entity {
   }
 
   onHurt(attacker) {
+    // (Round 135) Felt (not in a bout both agreed to).
+    if (attacker && attacker.kind === 'player' && this.rec && !(this.game.duel && this.game.duel.npc === this)) this.game.sim.mind?.hurt(this.rec, true);
     if (this.hired && attacker && attacker.kind === 'player') {
       this.game.sim.careers.endEscort('You turn on ME? We\'re done!');
       this.hired = null;

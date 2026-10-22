@@ -5,6 +5,7 @@
 import { alive, ledger, CHILDHOOD, ADULTHOOD } from './econ.js';
 import { retrain, growUp, growOld } from '../entities/npcgen.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { skillOf, fitFor, SKILL_TRADES, bestSkill } from './mind/talent.js';
 
 const residents = (L) => L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
 
@@ -45,13 +46,15 @@ export function electMayor(sim, L, day) {
   if (day - e.mayorless < 2) return null;
   const cands = residents(L).filter((r) => r.age !== 'child' && r.job !== 'guard' && !(r.hired));
   if (!cands.length) return null;
-  const score = (r) => r.personality.kindness + r.personality.sociability * 0.6 + (r.skills?.trading || 0) + (r.age === 'elder' ? 0.5 : 0) + (r.job === 'noble' ? 0.8 : r.job === 'priest' ? 0.3 : 0);
+  // (Round 135: and who can lead, and win folk over: see mind/talent.js.)
+  const score = (r) => r.personality.kindness + r.personality.sociability * 0.6 + (r.skills?.trading || 0) * 0.6 + skillOf(r, 'leadership') * 0.9 + skillOf(r, 'charm') * 0.4 + (r.age === 'elder' ? 0.5 : 0) + (r.job === 'noble' ? 0.8 : r.job === 'priest' ? 0.3 : 0);
   const best = cands.sort((a, b) => score(b) - score(a))[0];
   const old = best.job;
   retrain(L, best, 'mayor', new RNG(hash4(best.idx, day, 0xe1ec)));
   syncEnt(best);
   e.mayorless = null;
   ledger(L, day, `${best.name.first} ${best.name.last}${old && old !== 'retired' ? `, once a ${old},` : ''} was chosen as the new ${s.type === 'village' ? 'elder' : 'mayor'} of ${s.name}.`);
+  sim.mind?.chosen(L, best);
   return best;
 }
 
@@ -100,12 +103,21 @@ export function comingOfAge(sim, L, day) {
     const family = r.parents.map((i) => L.npcs[i]).filter((p) => p && alive(p)).map((p) => p.job)
       .filter((j) => !['mayor', 'guard', 'noble', 'retired', 'merchant', 'child', 'beggar', 'priest'].includes(j) && L.hasWorkplaceFor(j));
     const pickHash = hash4(s.seed, r.idx, 0x7ade) % 10;
+    // (Round 135) What they've a gift for, and what they've learnt at a
+    // parent's side: a trade the town has room for that suits them, if
+    // one suits them well (see mind/talent.js); the family trade otherwise.
+    const [bk] = bestSkill(r) || [null];
+    const apt = [...new Set([...family, ...(SKILL_TRADES[bk] || [])])].filter((j) => L.hasWorkplaceFor(j));
+    apt.sort((a, b) => fitFor(L, r, b) - fitFor(L, r, a));
+    const suited = apt.length && fitFor(L, r, apt[0]) >= 0.42 ? apt[0] : null;
     const job = trades.find((j) => !has(j)) || (L.econ.hands && L.hasWorkplaceFor(L.econ.hands) ? L.econ.hands : null)
+      || suited
       || (family.length && pickHash < 7 ? family[pickHash % family.length] : null)
       || (['farmer', 'lumberjack', 'fisher', 'laborer'].filter((j) => L.hasWorkplaceFor(j))[pickHash % 4] ?? null) || 'laborer';
     growUp(L, r, job, new RNG(hash4(r.idx, day, 0x9a0)));
     syncEnt(r, 'child');
-    ledger(L, day, `${r.name.first} ${r.name.last} has come of age and started work as a ${job}.`);
+    ledger(L, day, `${r.name.first} ${r.name.last} has come of age and started work as a ${job}${suited === job ? `, having ${(r.skills?.[bk] ?? 0) >= 0.3 ? 'learnt' : 'a knack for'} the trade young` : ''}.`);
+    sim.mind?.grownUp(L, r, job);
     return r;
   }
   return null;

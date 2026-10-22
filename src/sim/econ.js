@@ -286,7 +286,9 @@ export function skillsFor(rec, rng) {
   for (const [k, jobs] of Object.entries(SKILL_JOBS)) {
     const r = jobs[rec.job];
     let v = r ? rng.float(r[0], r[1]) : rng.float(0.05, 0.4);
-    if (rec.age === 'child') v *= 0.4;
+    // (Round 135) A child has next to none of any of it yet (see
+    // mind/talent.js: they learn it day by day).
+    if (rec.age === 'child') v *= 0.12;
     if (rec.age === 'elder') v = Math.min(1, v * 1.15);
     out[k] = Math.round(v * 100) / 100;
   }
@@ -774,14 +776,12 @@ function produce(L, rec, rng) {
       if (rng.chance(0.4 * (0.5 + sk.hunting) * game)) invAdd(rec.inv, 'raw_meat', rng.int(1, 3));
       if (rng.chance(0.08)) invAdd(rec.inv, 'leather', 1);
       if (rng.chance(0.05)) invAdd(rec.inv, 'feather', 1);
-      sk.hunting = Math.min(1, sk.hunting + 0.001);
       return;
     }
     case 'fisher': {
       // (Half as much again for fishers who know the tides: tide charts.)
       const tides = L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'tide_charts') ? 1.5 : 1;
       if (rng.chance(Math.min(0.95, 0.45 * (0.5 + sk.fishing) * tides))) invAdd(rec.inv, 'fish', rng.int(1, 3));
-      sk.fishing = Math.min(1, sk.fishing + 0.001);
       return;
     }
     case 'farmer':
@@ -819,7 +819,6 @@ function produce(L, rec, rng) {
         if (forbiddenFood(L.settlement, meal)) meal = forbiddenFood(L.settlement, hot) ? 'stew' : hot;
         // A pot of stew feeds several people.
         st.add(k.store, meal, (raw === 'raw_meat' ? 3 : raw ? 2 : 1) + (raw && veg ? 1 : 0));
-        sk.cooking = Math.min(1, sk.cooking + 0.002);
       }
       // (Round 50) And now and then a dish of the cook's own, of whatever's
       // in: one of their recipes, or something new (see cooking.js).
@@ -874,7 +873,8 @@ function produce(L, rec, rng) {
     // The islands' own trades: a day's grinding, blowing, growing and diving
     // for their shelves (twice the work where the realm knows how).
     case 'miller': case 'glassblower': case 'sporewright': case 'pearldiver': {
-      if (biz && rng.chance(0.25)) for (const item of tradeOutput(L, rec.job, rng)) if (ITEMS[item] && st.count(biz.store, item) < 6) st.add(biz.store, item, 1);
+      // (Round 135: the better the hand, the more comes of the day.)
+      if (biz && rng.chance(0.25 * (0.6 + (sk.crafting ?? 0.5) * 0.8))) for (const item of tradeOutput(L, rec.job, rng)) if (ITEMS[item] && st.count(biz.store, item) < 6) st.add(biz.store, item, 1);
       else if (!biz && rng.chance(0.1)) invAdd(rec.inv, rng.pick(TRADE_GOODS[rec.job]), 1);
       // (And what the town pays for it: flour for the ovens, glass for the
       // windows, caps for the pot, pearls for the dealers.)
@@ -887,7 +887,8 @@ function produce(L, rec, rng) {
       if (SELLS.has(rec.job)) {
         if (!biz && rec.job === 'merchant') restockStall(rec, rng);
         const g = GOODS[rec.job] || STOCK[traderOf(rec)] || [];
-        if (biz && g.length && rng.chance(0.25)) {
+        // (Round 135: a skilled maker turns out more.)
+        if (biz && g.length && rng.chance(0.25 * (0.6 + (sk.crafting ?? 0.5) * 0.8))) {
           const item = rng.pick(g);
           if (ITEMS[item] && st.count(biz.store, item) < 6) st.add(biz.store, item, 1);
         }
@@ -1468,7 +1469,12 @@ export function tickHour(sim, L, h) {
       rec.override = null;
     }
     const mid = activityFor(rec, day, hm + 30);
-    if (mid.entry.act === 'work') produce(L, rec, rng);
+    // (Round 135) Grief, fear and strain take some hours from the work; each
+    // hour worked, they get a little better at it (see mind/mind.js).
+    if (mid.entry.act === 'work' && (!sim || !sim.mind || sim.mind.canWork(rec, h))) {
+      produce(L, rec, rng);
+      if (sim && sim.mind) sim.mind.worked(L, rec);
+    }
   }
   if (hod >= 7 && hod <= 20) market(L, rng);
   if (hod === 5) {

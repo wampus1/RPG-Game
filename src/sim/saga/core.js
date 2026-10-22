@@ -233,6 +233,12 @@ export class Saga {
   }
 
   handle(ev) {
+    // (Round 135) Felt by the townsfolk it touches (see mind/mind.js).
+    try {
+      this.sim.mind?.hear(ev);
+    } catch (e) {
+      this.fault(null, e);
+    }
     // (Round 79) Weighed by the director (see director.js).
     try {
       this.director.observe(ev);

@@ -387,6 +387,8 @@ export function bear(sim, L, a, b, day, seed) {
   b.children.push(r.idx);
   a.mood = Math.min(1, (a.mood ?? 0.5) + 0.2);
   b.mood = Math.min(1, (b.mood ?? 0.5) + 0.2);
+  // (Round 135) Felt, and remembered for life.
+  sim.mind?.birth(L, r, a, b);
   sim.game.spawnBorn?.(L, r, [a, b]);
   return r;
 }
