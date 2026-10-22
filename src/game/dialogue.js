@@ -51,12 +51,12 @@ const MOTIFS_OF = (S, th) => MOTIFS[th.m];
 
 // (Round 135) A line written for just this moment (see talk/rules.js), if
 // one fits at least `min` particulars: { text, rule }, or null.
-export function ruleLine(npc, game, topic, min = 2) {
+export function ruleLine(npc, game, topic, min = 2, defer = false) {
   if (!npc || !npc.rec || !npc.settlement || !game || !game.sim) return null;
   const sim = game.sim;
   const F = factsFor(npc, game, leaderOf);
   const said = sim.repEntry(sim.repSidOf(npc), npc.rec.idx);
-  return chooseLine(topic, F, npc.rng || new RNG(hash4(npc.rec.idx, game.day)), said, min);
+  return chooseLine(topic, F, npc.rng || new RNG(hash4(npc.rec.idx, game.day)), said, min, defer);
 }
 
 // (Round 135) Something said to nobody in particular, as they feel (see
@@ -76,6 +76,8 @@ export function pairLines(a, game) {
   const [x, y] = r.text.split(' || ');
   return y ? [x, y] : null;
 }
+
+const FEEL_KEYS = new Set(['joy', 'grief', 'fear', 'anger', 'shame', 'pride', 'love', 'strain', 'feel']);
 
 // (Round 135) Your jokes (what you say, in a word).
 const JOKES = [
@@ -299,11 +301,20 @@ function openingRaw(npc, game) {
   if (sim.justice.exiled.has(s.id)) return 'You were banished! Get out before the guards see you!';
   // (Round 135) Something written for just this moment: how they feel,
   // what's on their mind, how you look, who you are (see talk/lines.js).
-  // The more particular, the likelier it's said over the usual.
-  const rl = ruleLine(npc, game, 'open', 2);
+  // The more particular, the likelier it's said over the usual. What's
+  // pressing (a strong feeling, a memory, what you did to them) comes
+  // first; the rest waits behind what's always been said first (your
+  // office, your work for them, your name in the town: see below).
+  let rl = ruleLine(npc, game, 'open', 2, true);
   if (rl) {
     const dv = dominant(rec, sim.abs, 0);
-    if (rng.chance(Math.min(0.95, 0.3 + rl.rule.spec * 0.13 + (dv ? dv.v * 0.35 : 0)))) return rl.text;
+    const keys = rl.rule.keys;
+    const pressing = keys.includes('dying') || keys.some((k) => /^(memP|heardP|mem_|heard_)/.test(k)) || (dv && dv.v >= 0.4 && keys.some((k) => FEEL_KEYS.has(k)));
+    if (!rng.chance(Math.min(0.95, 0.3 + rl.rule.spec * 0.13 + (dv ? dv.v * 0.35 : 0)))) rl = null;
+    else if (pressing) {
+      rl.commit();
+      return rl.text;
+    }
   }
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
@@ -378,6 +389,11 @@ function openingRaw(npc, game) {
       return pick(rng, [`You must be ${name}, the ${renown} of ${s.name}! ${hero ? 'It\'s an honour.' : 'Welcome!'}`, `${name}! Everyone's talking about what you did for us.`]);
     }
     if (rng.chance(hero ? 0.45 : 0.3)) return pick(rng, hero ? [`Our hero! Good ${tw}, ${name}.`, `The ${renown} of ${s.name}, in person! Hello!`, `${name}! The whole town owes you.`] : [`Good ${tw}, friend of ${s.name}!`, `Ah, ${name}. Always welcome here.`]);
+  }
+  if (rl) {
+    rl.commit();
+    entry.met = true;
+    return rl.text;
   }
   if (!entry.met) {
     entry.met = true;

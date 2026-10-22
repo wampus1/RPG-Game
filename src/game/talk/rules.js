@@ -64,8 +64,10 @@ export function fill(line, vars) {
 // What they'd say, for `topic` (or null if nothing written fits well
 // enough): `min`, how particular a line must be to be worth saying over
 // the usual (see dialogue.js); `rng` the speaker's own; `said`, where
-// what's been said to you is kept (the player's record with them).
-export function choose(topic, F, rng, said = null, min = 1) {
+// what's been said to you is kept (the player's record with them);
+// `defer`: not kept as said until the one asking says so (the result's
+// `commit`), for a line that may yet not be used.
+export function choose(topic, F, rng, said = null, min = 1, defer = false) {
   compile();
   const list = BY_TOPIC.get(topic);
   if (!list) return null;
@@ -105,12 +107,14 @@ export function choose(topic, F, rng, said = null, min = 1) {
     const i = Math.floor(rng.next() * opts.length);
     const text = fill(opts[i], F.vars);
     if (text) {
-      if (said) {
+      const commit = () => {
+        if (!said) return;
         said.lines = (said.lines || []).filter((q) => q[0] !== pick.id && day - q[1] < 30);
         said.lines.push([pick.id, day]);
         if (said.lines.length > 12) said.lines.shift();
-      }
-      return { text, rule: pick };
+      };
+      if (!defer) commit();
+      return { text, rule: pick, commit };
     }
     opts.splice(i, 1);
   }
