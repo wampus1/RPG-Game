@@ -11019,6 +11019,65 @@ carry **abilities**.
     square was 16 pixels or more, which no zoom level reached.
   - Holding armour in your main hand no longer blacks out the screen.
 
+## Round 140: Citizens and pardons
+
+- **Making citizens.** The head of a town can make others its citizens.
+  Open the council (N), go to the People page and pick **Citizens and
+  pardons**.
+  - **The others playing.** Each is listed with where they stand with the
+    town: a citizen, a citizen elsewhere, wanted, charged, exiled or in
+    the cell. **Make a citizen** sends them an offer, which they accept
+    or decline. It shows on their HUD ("CITIZENSHIP OFFERED · N") and
+    opens when they press N.
+    - Accepting makes them a citizen, lodging with a family until their
+      own home is built. It ends any citizenship elsewhere (and the
+      offer says so, and that heading another town would go with it).
+    - Someone the town has charges against, or has exiled, has to be
+      pardoned first.
+  - **Newcomers.** Those staying in town who aren't its own are listed
+    too: a family of nomads camped outside, an adventurer between roads,
+    a travelling merchant. **Make a citizen** takes them in there and
+    then: a bed where there's one, work the town is short of, their
+    names in its ledger. One you can see becomes a townsperson where
+    they stand.
+    - A merchant from another town leaves it for yours.
+    - Folk only on a day's trip from their own town aren't listed.
+  - You can also ask them face to face: talking to one of them as the
+    town's head, there's a new topic under Town & realm ("Settle here:
+    I'd make you a citizen"). Someone who thinks badly of you turns you
+    down.
+- **Pardons.** On the same page, **Pardon** clears another player with
+  the town: the charges dropped, the watch called off, any exile lifted,
+  the record wiped clean. If they're in the cell or being led to it, they
+  are let go with their weapons back.
+  - The pardoned player gets a notice saying who pardoned them and what
+    was lifted. The town's ledger notes it.
+  - What folk saw them do isn't forgotten: a killer is still feared.
+  - A realm's ruler can pardon throughout the realm: **Realm pardon** on
+    the same page, or the crown's Court page, **Pardons**. That covers
+    every town of the realm, and desertion from its war.
+- **Fixes:**
+  - **A matter sent to the council seemed stuck.** A town's hours are
+    worked out as each one ends, so the ten o'clock sitting really
+    happened at eleven. For that hour a matter you had decided away from
+    the hall still read "sent: voted on at 10:00". A town a player
+    governs now sits on the stroke of ten, and what was sent is voted on
+    then.
+  - **A guest's HUD went missing in a town.** For a guest who was a
+    citizen lodging with a family, the HUD's status line looked up the
+    family's house. A guest's screen has no town laid out, so the lookup
+    failed every frame and took the whole HUD with it, for as long as
+    they were in that town. The host now sends the family's name (and,
+    for a guest who governs where they stand, their title). The status
+    lines and the minimap's picture are also drawn on their own, so a
+    fault in one leaves the hearts and belt up.
+  - The minimap now reads the map at whole squares. Off a whole square
+    (a guest's position between the host's updates) it could find no
+    block and fail.
+  - The lodging line now shows the family's whole name ("Citizen ·
+    Najjars' guest") instead of cutting it off after a letter.
+- **Version 1.40.0.** Worlds from 1.39 load as before.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

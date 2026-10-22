@@ -482,6 +482,12 @@ export class GuestNet {
     sim.justice.escort = o.escort ? {} : null;
     sim.justice.exiled = new Set(o.exiled || []);
     sim.citizen = o.citizen;
+    // (Round 140) Whose house you lodge in, and what you are where you
+    // stand if you govern it: the host's to say (no town is laid out
+    // here, and no office kept: see Sim.hostName, dialogue.leaderOf).
+    const hn = o.hn || null;
+    sim.hostName = () => hn;
+    game.leaderHere = o.ld || null;
     this.hud = o.hud || [];
     sim.careers.hudLines = () => this.hud;
     game.stormSea = o.storm || null;

@@ -1948,7 +1948,9 @@ export class Sim {
     const c = this.citizen;
     if (!c || c.host === null) return null;
     const L = this.layoutOf(c.sid);
-    return L.buildings[c.host]?.family || null;
+    // (Round 140: a town not laid out here (on a guest's screen, never),
+    // no name, rather than an error that took the whole HUD with it.)
+    return (L && L.buildings[c.host]?.family) || null;
   }
 
   // Who may sleep where: your own home, your host's guest bed, your jail cell.

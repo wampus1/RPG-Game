@@ -166,7 +166,7 @@ export class UI {
       if (w && w.sid === data.sid) w.say('The council has voted.', '#a0e8ff');
       return w;
     }
-    if (['oath', 'charter', 'fallen', 'free', 'founding', 'offer', 'crowned', 'style', 'realmform'].includes(kind)) return this.open(new BannerWindow(this, kind, data));
+    if (['oath', 'charter', 'fallen', 'free', 'founding', 'offer', 'crowned', 'style', 'realmform', 'citizenship', 'pardoned'].includes(kind)) return this.open(new BannerWindow(this, kind, data));
     return null;
   }
 
@@ -178,6 +178,9 @@ export class UI {
     const pid = o.pid();
     const offer = o.offerFor(pid);
     if (offer) return this.open(new BannerWindow(this, 'offer', offer));
+    // (Round 140) Citizenship someone's offered you, waiting on your word.
+    const cit = o.citOfferFor(pid);
+    if (cit) return this.open(new BannerWindow(this, 'citizenship', { sid: cit.sid }));
     const T = o.councilOf(pid);
     // (Round 122) The realm you rule: its crown, unless the town you
     // govern has the more pressing business.
@@ -475,6 +478,21 @@ export class UI {
       fails.set(name, now);
     } finally {
       ctx.restore();
+    }
+  }
+
+  // (Round 140) The same, for a piece of the HUD's own (its status lines,
+  // the minimap's picture): gone wrong, it's left out, and the rest of the
+  // HUD (your hearts, your belt) still drawn.
+  quiet(name, fn) {
+    try {
+      return fn();
+    } catch (e) {
+      const now = performance.now();
+      const fails = (this.fails ||= new Map());
+      if (!(now - (fails.get(name) || -1e9) < 5000)) console.error(`drawing ${name}:`, e);
+      fails.set(name, now);
+      return undefined;
     }
   }
 
@@ -955,51 +973,58 @@ export class UI {
     g.text(1, 3, loc.slice(0, 23), dg ? (dg.kav ? '#7ae0ff' : '#d8b878') : s ? C.cyan : C.green);
     const sim = game.sim;
     if (sim) {
-      const j = sim.justice.jail;
-      const cz = sim.citizen;
       let status = null;
       let col = C.dim;
-      if (sim.justice.escort) {
-        status = 'RESTRAINED · led to jail';
-        col = C.orange;
-      } else if (j) {
-        if (j.pow) status = 'PRISONER OF WAR';
-        else if (j.phase === 'serving') {
-          const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
-          status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
-        } else status = j.phase === 'night' ? 'IN JAIL · hearing at dawn' : 'IN JAIL · hearing soon';
-        col = C.orange;
-      } else if (s && sim.justice.exiled.has(s.id)) {
-        status = 'EXILED FROM HERE';
-        col = C.red;
-      } else if (s && sim.war.isDeserter(s.civ)) {
-        status = 'DESERTER · WANTED HERE';
-        col = C.red;
-      } else if (game.player.down) {
-        status = 'KNOCKED OUT';
-        col = C.orange;
-      } else if (s && leaderOf(game, s)) {
-        // (Round 128) Whoever governs here is that first, not a citizen.
-        const ld = leaderOf(game, s);
-        status = ld.scope === 'town' ? `${ld.title} of ${s.name}` : `${ld.title} · in your realm`;
-        col = C.hi;
-      } else if (cz && s && cz.sid === s.id) {
-        status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : cz.host !== null ? `Citizen · guest of the ${sim.hostName() || ''}s`.slice(0, 24) : 'Citizen';
-        col = C.green;
-      }
+      // (Round 140) Worked out on its own: gone wrong, there's no line,
+      // and the rest of the HUD's still drawn (see quiet).
+      this.quiet('status line', () => {
+        const j = sim.justice.jail;
+        const cz = sim.citizen;
+        if (sim.justice.escort) {
+          status = 'RESTRAINED · led to jail';
+          col = C.orange;
+        } else if (j) {
+          if (j.pow) status = 'PRISONER OF WAR';
+          else if (j.phase === 'serving') {
+            const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
+            status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
+          } else status = j.phase === 'night' ? 'IN JAIL · hearing at dawn' : 'IN JAIL · hearing soon';
+          col = C.orange;
+        } else if (s && sim.justice.exiled.has(s.id)) {
+          status = 'EXILED FROM HERE';
+          col = C.red;
+        } else if (s && sim.war.isDeserter(s.civ)) {
+          status = 'DESERTER · WANTED HERE';
+          col = C.red;
+        } else if (game.player.down) {
+          status = 'KNOCKED OUT';
+          col = C.orange;
+        } else if (s && leaderOf(game, s)) {
+          // (Round 128) Whoever governs here is that first, not a citizen.
+          const ld = leaderOf(game, s);
+          status = ld.scope === 'town' ? `${ld.title} of ${s.name}` : `${ld.title} · in your realm`;
+          col = C.hi;
+        } else if (cz && s && cz.sid === s.id) {
+          // (Round 140: the family's name whole, not cut off after a letter.)
+          const lodging = cz.host !== null && cz.host !== undefined;
+          const fam = lodging ? sim.hostName() : null;
+          status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : lodging ? (!fam ? 'Citizen · lodging' : `Citizen · guest of the ${fam}s`.length <= 24 ? `Citizen · guest of the ${fam}s` : `Citizen · ${fam}s' guest`.slice(0, 24)) : 'Citizen';
+          col = C.green;
+        }
+      });
       // (A town's taxes and laws are on its notice board, not up here.)
       let y = buffs.length ? 7 : 4;
       if (status) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, status.slice(0, 24), col);
       }
-      for (const l of sim.careers.hudLines()) {
+      for (const l of this.quiet('hud lines', () => sim.careers.hudLines()) || []) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
       }
       // (Round 121) The town you govern: its matters, a crisis.
       // (Round 122) And the realm you rule.
-      const offLines = sim.office && !game.remote ? [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : []), ...(sim.events && sim.events.hudLines ? sim.events.hudLines() : [])] : [];
+      const offLines = (sim.office && !game.remote ? this.quiet('office lines', () => [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : []), ...(sim.events && sim.events.hudLines ? sim.events.hudLines() : [])]) : null) || [];
       for (const l of offLines) {
         g.fill(0, y, 25, 1, ' ', C.fg, l.blink && Math.floor(this.time * 3) % 2 ? 'rgba(120,20,20,0.85)' : 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
@@ -1039,7 +1064,7 @@ export class UI {
     this.minimapT -= game.dt;
     if (this.minimapT <= 0) {
       this.minimapT = 0.35;
-      this.renderMinimap(game);
+      this.quiet('minimap picture', () => this.renderMinimap(game));
     }
     this.minimapPos = { x: (bx + 1) * CHAR_W, y: 2 * CHAR_H };
     // (Round 55) The quest log, a click away: under the map, with how many
@@ -1476,8 +1501,11 @@ export class UI {
     for (let y = 0; y < cv.height; y++) {
       for (let x = 0; x < cv.width; x++) {
         const [ox, oz] = turn(x - W2, y - H2);
-        const wx = p.x + ox;
-        const wz = p.z + oz;
+        // (Round 140: on whole tiles. Off them (a guest's screen, between
+        // the host's words), there's no block at all to look up, and the
+        // HUD went with it.)
+        const wx = Math.floor(p.x) + ox;
+        const wz = Math.floor(p.z) + oz;
         const top = w.topAt(wx, wz);
         const i = (y * cv.width + x) * 4;
         if (top <= 0) {

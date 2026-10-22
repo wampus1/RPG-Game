@@ -11,7 +11,8 @@
 //     the heads of its towns, fellow players among them (raise one to a
 //     lordship, depose them, offer a town no one governs to a player).
 //   4 Court: the realm's form of government (reform it), your title, your
-//     heir, the chancellor's standing orders, the chronicle.
+//     heir, the chancellor's standing orders, pardons (round 140: the
+//     others playing, pardoned in every town of the realm), the chronicle.
 //   5 Realms: its neighbours: war, peace, alliances.
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
@@ -589,9 +590,44 @@ export class CrownWindow extends Window {
   }
 
   // ------------------------------------------------------------ 4 court
+  // (Round 140) The others playing, and what the realm's towns hold against
+  // them: pardoned, by your word, in every one (desertion from the realm's
+  // war too).
+  drawPardons(g, civ) {
+    const sim = this.game.sim;
+    const o = sim.office;
+    const mine = sim.crown.isRuler(civ, o.pid());
+    const towns = this.game.world.ow.settlements;
+    let y = BODY + 3;
+    g.text(2, y++, 'The others playing, and the realm\'s law', C.hi);
+    y++;
+    const others = o.others();
+    if (!others.length) for (const l of wrap('No one else is playing in this world just now. Any who join and fall foul of the realm\'s towns can be pardoned here, in every town of the realm at once.', W - 4)) g.text(2, y++, l, C.dim);
+    for (const { pid, name } of others.slice(0, 8)) {
+      const st = o.realmStanding(pid, civ);
+      if (!st) continue;
+      g.text(2, y, name.slice(0, 20), C.white);
+      const bits = [];
+      if (st.towns.length) bits.push(`in trouble in ${st.towns.length === 1 && towns[st.towns[0]] ? towns[st.towns[0]].name : `${st.towns.length} towns`}`);
+      if (st.exiled) bits.push(`exiled from ${st.exiled}`);
+      if (st.deserter) bits.push('a deserter');
+      g.text(24, y, (bits.join(', ') || 'nothing against them').slice(0, 38), bits.length ? '#ffa050' : C.faint);
+      if (mine) button(this, g, W - 12, y, ' Pardon ', '#ffd070', () => {
+        const cap = sim.realms.capitalOf(civ);
+        const L = cap && sim.layoutOf(cap.id);
+        const r = L ? o.pardon(L, pid, true) : { ok: false, why: 'The realm has no capital.' };
+        this.say(r.ok ? `${r.name} is pardoned throughout the realm.` : r.why, r.ok ? '#a0e8ff' : '#ffb080');
+      }, !!(bits.length));
+      y += 2;
+    }
+    wrap('A pardon drops the charges, wipes the record clean and lifts any exile, in every town of the realm. (To make someone a citizen, open the council of a town you head: its People page.)', W - 4).slice(0, 3).forEach((l, i) => g.text(2, H - 6 + i, l, C.faint));
+    return null;
+  }
+
   drawCourt(g, civ, R, C0, F) {
-    const view = this.subtabs(g, [['form', 'Government'], ['heir', 'Title and heir'], ['orders', 'Standing orders'], ['chron', 'Chronicle']], 'court', 'form');
+    const view = this.subtabs(g, [['form', 'Government'], ['heir', 'Title and heir'], ['orders', 'Standing orders'], ['pardons', 'Pardons'], ['chron', 'Chronicle']], 'court', 'form');
     if (view === 'heir') return this.drawHeir(g, civ, R, C0, F);
+    if (view === 'pardons') return this.drawPardons(g, civ);
     if (view === 'orders') return this.drawOrders(g, civ, R, C0);
     if (view === 'chron') return this.drawChronicle(g, civ, R, C0);
     const sim = this.game.sim;

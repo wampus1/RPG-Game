@@ -1780,7 +1780,20 @@ export class Game {
 
   // The band settles: the travellers become townsfolk on the spot.
   nomadsSettle(L, ents, recs) {
+    const a = this.settleEnts(L, ents, recs, 'nomads', ['We\'ll stay! This feels like home.', 'This is the place. We\'re staying.']);
+    if (a) this.ui.msg(`The ${recs[0]?.name.last || ''} family of nomads has settled in ${L.settlement.name}.`, '#a0e0a0');
+  }
+
+  // (Round 140) Those who've just become the town's own: the figure you
+  // see, a stranger a moment ago, is the townsman now (where they stood).
+  // Whether the town's in view.
+  settleEnts(L, ents, recs, kind = null, says = null) {
     const a = this.active.get(L.settlement.id);
+    const lines = says || {
+      nomads: ['A home, at last. Thank you!', 'We\'ll make you proud of us.'],
+      adventurer: ['Hang up my sword? ...Aye. Why not. This is a good place.', 'A roof that stays put. I could get used to that.'],
+      visitor: ['A citizen! Wait till they hear back home.', 'I\'ll fetch my things. This is home now.'],
+    }[kind] || null;
     ents.forEach((n, i) => {
       const rec = recs[i];
       const pos = n && !n.dead ? { x: n.x, y: n.y, z: n.z } : null;
@@ -1791,9 +1804,9 @@ export class Game {
       rec.ent = m;
       a.npcs.push(m);
       this.npcs.push(m);
-      if (i === 0) m.say(m.rng.pick(['We\'ll stay! This feels like home.', 'This is the place. We\'re staying.']), 4, '#a0e0a0');
+      if (i === 0 && lines) m.say(m.rng.pick(lines), 4, '#a0e0a0');
     });
-    if (a) this.ui.msg(`The ${recs[0]?.name.last || ''} family of nomads has settled in ${L.settlement.name}.`, '#a0e0a0');
+    return !!a;
   }
 
   nomadsLeave(ents) {

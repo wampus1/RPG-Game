@@ -126,6 +126,10 @@ function adoptAll(T, people, rng, from) {
       void ent;
       const n = JSON.parse(JSON.stringify(data));
       n.idx = T.npcs.length;
+      // (Round 140: theirs now, by the new town's reckoning, as every other
+      // way in has it: it was left as the old town's.)
+      n.sid = T.settlement.id;
+      n.id = `${T.settlement.id}:${n.idx}`;
       n.home = house ? house.id : null;
       n.bed = bed;
       n.household = `m${from.id}:${r.household}`;

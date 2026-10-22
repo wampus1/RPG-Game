@@ -298,6 +298,48 @@ export class Justice {
     }
   }
 
+  // (Round 140) Pardoned, by the head of the town (or the realm's ruler):
+  // the charges dropped, the record wiped clean, an exile lifted, the guards
+  // called off, the cell door opened. (What folk saw you do isn't forgotten:
+  // see dreadIn.) What was lifted: ['charges', 'wanted', 'exile', 'cell',
+  // 'record'], or [] if there was nothing to.
+  pardon(sid) {
+    const game = this.game;
+    const p = game.player;
+    const out = [];
+    if (this.pendingIn(sid).length) out.push('charges');
+    if (game.wanted.has(sid)) out.push('wanted');
+    if (this.exiled.has(sid)) out.push('exile');
+    const r = this.record.get(sid);
+    if (r && (r.convictions || r.minor || r.moderate || r.severe)) out.push('record');
+    this.pending.delete(sid);
+    game.wanted.delete(sid);
+    this.exiled.delete(sid);
+    this.resisted.delete(sid);
+    this.sightings.delete(sid);
+    this.unsolved = this.unsolved.filter((u) => u.sid !== sid);
+    if (r) Object.assign(r, { minor: 0, moderate: 0, severe: 0, convictions: 0 });
+    // Being led to the cell: the guard lets go of the rope.
+    const e = this.escort;
+    if (e && e.sid === sid) {
+      this.escort = null;
+      p.restrained = false;
+      if (e.guard && !e.guard.dead) {
+        e.guard.calmDown(true);
+        e.guard.say?.('A pardon? ...Very well. Off you go.', 3);
+      }
+      this.returnWeapons(false);
+      out.push('cell');
+    }
+    // In it: let out.
+    if (this.jail && this.jail.sid === sid && !this.jail.pow) {
+      this.release('pardoned');
+      out.push('cell');
+    }
+    for (const g of game.guardsOf ? game.guardsOf(sid) : []) if (g.threat === p) g.calmDown(true);
+    return [...new Set(out)];
+  }
+
   // Crimes lapse for the petty stuff when the guards lose interest.
   forgetMinor(sid) {
     const list = this.pendingIn(sid).filter((c) => SEV_RANK[c.sev] >= 2);
@@ -1203,7 +1245,7 @@ export class Justice {
     this.dismissParty(L);
     this.setCellDoor(L, true);
     const guard = j.guard !== null && j.guard !== undefined ? L.npcs[j.guard] : null;
-    if (guard && guard.ent && !guard.ent.dead) guard.ent.say(why === 'acquitted' ? 'Off you go, then.' : 'You\'re free to go. Behave yourself.', 3);
+    if (guard && guard.ent && !guard.ent.dead) guard.ent.say(why === 'acquitted' ? 'Off you go, then.' : why === 'pardoned' ? 'Pardoned, eh? Friends in high places. Out you go.' : 'You\'re free to go. Behave yourself.', 3);
     this.returnWeapons(this.forfeit);
     this.forfeit = false;
     // A prisoner of war: let go, traded back, or freed by the peace.
@@ -1212,7 +1254,7 @@ export class Justice {
       this.jail = null;
       return { released: true };
     }
-    game.ui.msg(why === 'acquitted' ? 'Nothing could be proven. You are free to go.' : why === 'paid' ? 'Fine paid. You are free to go.' : 'Your time is served. You are free.', '#80e070');
+    game.ui.msg(why === 'acquitted' ? 'Nothing could be proven. You are free to go.' : why === 'paid' ? 'Fine paid. You are free to go.' : why === 'pardoned' ? 'Pardoned: the cell door opens. You are free.' : 'Your time is served. You are free.', '#80e070');
     this.jail = null;
     return { released: true };
   }

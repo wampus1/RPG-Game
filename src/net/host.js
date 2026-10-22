@@ -22,6 +22,7 @@ import { runCommand } from '../game/commands.js';
 import { packShip, shipById } from '../game/ships3d.js';
 import { REACH } from '../config.js';
 import { bookInfo, bookIdOf } from '../world/bookreg.js';
+import { leaderOf } from '../game/dialogue.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -89,6 +90,14 @@ function booksHeld(p) {
     if (b) out[id] = { id, title: b.title, by: b.by, year: b.year, genre: b.genre, novel: !!b.novel, town: b.town ?? null, pop: b.pop || 0 };
   }
   return out;
+}
+
+// (Round 140) What a player is in the place they stand, if they govern it
+// (its head, or the realm's ruler): for the line under their hearts.
+function leaderHere(game) {
+  const s = game.dungeon ? null : game.currentSettlement;
+  const ld = s ? leaderOf(game, s) : null;
+  return ld ? { sid: s.id, scope: ld.scope, title: ld.title, address: ld.address } : null;
 }
 
 const regionKeyOf = (x, z) => `${Math.floor(x / REGION_W)},${Math.floor(z / REGION_D)}`;
@@ -891,6 +900,11 @@ export class HostNet {
       escort: !!sim.justice.escort,
       exiled: [...sim.justice.exiled],
       citizen: enc(sim.citizen, 3),
+      // (Round 140) Whose house they lodge in, and what they are where
+      // they stand, if they govern it: the HUD's line for them (their own
+      // screen has no town laid out, and no office, to work it out from).
+      hn: sim.citizen && sim.citizen.host !== null && sim.citizen.host !== undefined ? sim.hostName() : null,
+      ld: leaderHere(game),
       hud,
       ops: g.ops,
       qm: g.qms || [],

@@ -70,8 +70,9 @@ export class Nomads {
   }
 
   // They settle: records, homes (families together where there's room),
-  // and work the town is short of.
-  settle(L, b) {
+  // and work the town is short of. (`quiet`: the ledger's told otherwise:
+  // made citizens by the town's head, see newcomers.js.)
+  settle(L, b, quiet = false) {
     const own = b.houseBid !== undefined ? L.buildings[b.houseBid] : null;
     const s = L.settlement;
     const day = this.game.day;
@@ -114,8 +115,8 @@ export class Nomads {
       s.deserted = false;
       delete L.econ.deserted;
       this.sim.deserted.delete(s.id);
-      ledger(L, day, `The ${b.family} family, nomads, made a home in the empty town. ${s.name} lives again.`);
-    } else ledger(L, day, `A band of nomads, the ${b.family} family, decided to settle in ${s.name}.`);
+      if (!quiet) ledger(L, day, `The ${b.family} family, nomads, made a home in the empty town. ${s.name} lives again.`);
+    } else if (!quiet) ledger(L, day, `A band of nomads, the ${b.family} family, decided to settle in ${s.name}.`);
     return recs;
   }
 

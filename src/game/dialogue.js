@@ -48,6 +48,7 @@ import { emote } from '../ui/textfx.js';
 import { talentsOf, SKILLS, talentHint, skillOf } from '../sim/mind/talent.js';
 import { socialTopics, socialRespond, isSocial, seekLine, rallyBark, sulking } from './social.js';
 import { pkey } from '../sim/mind/common.js';
+import { newcomerKey } from '../sim/newcomers.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
 export { seekLine, rallyBark };
@@ -122,6 +123,8 @@ export function griefOf(rec) {
 const ADDRESS = { King: 'Your Majesty', Queen: 'Your Majesty', Monarch: 'Your Majesty', Hierarch: 'Your Holiness', Doge: 'Your Serenity', Lord: 'my lord', Lady: 'my lady', Liege: 'my liege', 'High Elder': 'Elder' };
 export function leaderOf(game, s) {
   const sim = game && game.sim;
+  // (Round 140) In someone else's world: as the host said (see net/host.js).
+  if (game && (game.remote || game.remoteCopy)) return s && game.leaderHere && game.leaderHere.sid === s.id ? game.leaderHere : null;
   if (!sim || !sim.office || !s) return null;
   const o = sim.office;
   const pid = o.pid();
@@ -450,7 +453,7 @@ const CAT_OF = {};
 for (const [cat, ids] of Object.entries({
   now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host office offer so_seek',
   business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay sm_order sm_collect',
-  town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
+  town: 'so_group so_plead towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen naturalise profession petition sign cause_ask cause_sway cause_join cause_fund stand campaign seize lead sound',
   talk: 'ask chat howare goodat jest kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   people: 'so_word so_share so_think so_me so_dream so_secret so_intro so_mediate so_spar so_teach so_show so_rumour kin',
   manners: 'gift rude so_sorry so_threaten so_drink',
@@ -499,6 +502,8 @@ function topicsRaw(npc, game) {
       add('adv_duel', 'Fancy a friendly bout?');
       add('adv_tip', 'Know anywhere worth a look?');
     }
+    // (Round 140) The town's head may ask them to stay, as one of its own.
+    if (sim.office.isHolder(s.id)) add('naturalise', `Settle in ${s.name}: I'd make you a citizen.`);
     add('who', 'Who are you?');
     add('gift', 'I have a gift for you.');
     add('bye', 'Goodbye.');
@@ -516,6 +521,7 @@ function topicsRaw(npc, game) {
   }
   if (npc.nomad) {
     add('nomad', 'Are you thinking of settling here?');
+    if (sim.office.isHolder(s.id)) add('naturalise', `Stay: I'll make your family citizens of ${s.name}.`);
     add('who', 'Where do you come from?');
     add('kind', '(Chat about the road)');
     add('gift', 'I have a gift for you.');
@@ -523,6 +529,8 @@ function topicsRaw(npc, game) {
     return out;
   }
   const trader = npc.visit ? !npc.visit.guest : JOBS[rec.job]?.trader || rec.job === 'cook';
+  // (Round 140) A merchant passing through, asked by the town's head to stay.
+  if (npc.visit && newcomerKey(npc) && sim.office.isHolder(s.id)) add('naturalise', `Settle here: I'd make you a citizen of ${s.name}.`);
   // A trip they're planning, and asking you on.
   const trip = rec.visitor ? null : sim.outings.tripOf(rec, s.id);
   if (trip && trip.phase === 'planned' && trip.lead === rec.idx && (trip.player === 'ask' || trip.asked) && trip.player !== 'joined' && trip.player !== 'declined') {
@@ -2376,6 +2384,25 @@ function respondRaw(npc, game, id, arg) {
         choices: b.vouchedBy || !sim.isCitizen(s.id) ? null : [{ id: 'nomad', arg: 'vouch', label: `You should stay! ${s.name} is a good place.` }],
         back: 'Good luck, whatever you choose.',
       };
+    }
+    case 'naturalise': {
+      // (Round 140) Made a citizen by the town's head (see sim/newcomers.js).
+      const key = newcomerKey(npc);
+      if (!key || !sim.office.isHolder(s.id)) return { lines: ['...'] };
+      const fam = !!npc.nomad;
+      if (arg !== 'yes') {
+        return {
+          lines: [fam ? `All of us? Citizens of ${s.name}?` : `Me? A citizen of ${s.name}?`, fam ? 'We\'ve been on the road so long... a roof, and work, and neighbours.' : npc.adventurer ? 'A roof that stays put, and work that doesn\'t try to kill me. Hm.' : 'I\'d be giving up the road, and my old town with it.'],
+          choices: [{ id: 'naturalise', arg: 'yes', label: `Yes: ${s.name} would be glad of ${fam ? 'you all' : 'you'}.` }],
+          back: 'Think it over.',
+        };
+      }
+      // (Not from someone they've no time for.)
+      if (sim.opinion(npc) < -20) return { lines: [pick(rng, ['From you? I\'d sooner sleep in a ditch.', 'Not while you\'re the one asking.'])] };
+      const r = sim.office.welcome(npc.layout, key);
+      if (!r.ok) return { lines: [r.why] };
+      game.ui.msg(`${r.names.join(', ').replace(/^the /, 'The ')} ${r.recs.length > 1 ? 'are citizens' : 'is a citizen'} of ${s.name} now.`, '#a0e8a0');
+      return { lines: [fam ? 'Then we stay! Thank you.' : 'Then I stay. Thank you.'], close: true };
     }
     case 'donate': return donateTalk(npc, game, arg);
     case 'towns': {

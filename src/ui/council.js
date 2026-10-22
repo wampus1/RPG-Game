@@ -12,7 +12,9 @@
 //     (the drafted ones only a governor can put forward among them).
 //   4 The people: the seven factions, how well each thinks of you and why,
 //     what each wants, the promises you made them; the town's mood over the
-//     last three weeks.
+//     last three weeks. (Round 140) And citizens and pardons: the others
+//     playing, made citizens or pardoned; newcomers staying in town, made
+//     its own.
 //   5 Officers: the steward, captain, treasurer and magistrate; the
 //     council's seats (fellow players can sit on them); standing orders.
 //   6 The charter: how the town is governed, and the other ways it could
@@ -951,6 +953,12 @@ export class CouncilWindow extends Window {
 
   // ------------------------------------------------------------ 4 people
   drawPeople(g, L, T) {
+    // (Round 140) The factions; or citizens and pardons.
+    const view = this.subtabs(g, [['factions', 'Factions'], ['folk', 'Citizens and pardons']], 'pview', 'factions');
+    if (view === 'folk') {
+      this.moodArea = null;
+      return this.drawFolk(g, L, T);
+    }
     const M = members(L);
     const stances = factionStances(L, M, this.game.day);
     const state = townState(L, T);
@@ -958,7 +966,7 @@ export class CouncilWindow extends Window {
     const prev = T.hist.length > 1 ? T.hist[T.hist.length - 2].by : null;
     const ids = FACTION_IDS.filter((f) => M[f].length);
     if (!this.facSel || !ids.includes(this.facSel)) this.facSel = ids[0];
-    let y = BODY;
+    let y = BODY + 3;
     for (const f of ids) {
       const F = FACTIONS[f];
       const v = A.by[f].v;
@@ -980,11 +988,11 @@ export class CouncilWindow extends Window {
     // The town over the last weeks, below.
     this.moodArea = { x: 2, y: y + 2, w: 44, h: Math.min(9, H - 6 - y - 2) };
     g.text(2, y + 1, 'Approval, sitting by sitting', C.faint);
-    for (let j = BODY; j < H - 3; j++) g.put(48, j, '│', '#3a3040');
+    for (let j = BODY + 2; j < H - 3; j++) g.put(48, j, '│', '#3a3040');
     // The faction looked at: what they want, and why they think as they do.
     const f = this.facSel;
     const x = 50;
-    let ry = BODY;
+    let ry = BODY + 3;
     const F = FACTIONS[f];
     g.text(x, ry++, `${F.glyph} ${F.name}`, F.color);
     for (const l of wrap(F.about, W - x - 2)) g.text(x, ry++, l, C.dim);
@@ -1009,6 +1017,76 @@ export class CouncilWindow extends Window {
         g.text(x + 22, ry++, p.state === 'open' ? `by day ${p.due}` : p.state, p.state === 'kept' ? '#80e070' : p.state === 'broken' ? '#ff7060' : '#e8d060');
       }
     }
+  }
+
+  // (Round 140) Citizens and pardons: the others playing, where each
+  // stands with the town (a citizen? charges, an exile, the cell?), made
+  // citizens or pardoned from here; the newcomers staying in town (a family
+  // of nomads, an adventurer, a merchant), made its own.
+  drawFolk(g, L, T) {
+    const mine = this.mine();
+    const o = this.office;
+    const s = L.settlement;
+    const sim = this.game.sim;
+    const ruler = !!(s.civ && sim.crown && sim.crown.isRuler(s.civ, o.pid()));
+    const towns = this.game.world.ow.settlements;
+    let y = BODY + 3;
+    g.text(2, y++, 'The others playing', C.hi);
+    y++;
+    const others = o.others();
+    if (!others.length) for (const l of wrap('No one else is playing in this world just now. Those who join can be made citizens here, or pardoned.', 44)) g.text(2, y++, l, C.dim);
+    for (const { pid, name } of others.slice(0, 6)) {
+      const st = o.standing(pid, s.id);
+      if (!st) continue;
+      const [tag, col] = st.jailed ? ['in the cell', '#ffa050'] : st.exiled ? ['EXILED', '#ff6050'] : st.wanted ? ['WANTED', '#ff6050'] : st.charges ? [`${st.charges} charge${st.charges > 1 ? 's' : ''}`, '#ffa050'] : st.citizen ? ['a citizen', '#80e070'] : st.elsewhere !== null && towns[st.elsewhere] ? [`citizen of ${towns[st.elsewhere].name}`, C.dim] : ['not a citizen', C.faint];
+      g.text(2, y, name.slice(0, 18), C.white);
+      g.text(22, y, tag.slice(0, 25), col);
+      y++;
+      let x = 3;
+      const clean = !(st.charges || st.wanted || st.exiled || st.jailed);
+      if (mine) {
+        x = button(this, g, x, y, st.citizen ? ' A citizen ' : st.offered ? ' Offered ' : ' Make a citizen ', '#a0e8a0', () => this.offerCit(L, pid), !st.citizen && !st.offered && clean);
+        x = button(this, g, x, y, ' Pardon ', '#a0e8ff', () => this.pardonIt(L, pid, false), o.pardonable(st));
+      }
+      if (ruler) button(this, g, x, y, ' Realm pardon ', '#ffd070', () => this.pardonIt(L, pid, true), true);
+      y += 2;
+    }
+    for (let j = BODY + 2; j < H - 3; j++) g.put(48, j, '│', '#3a3040');
+    // Those staying who aren't the town's own.
+    const x0 = 50;
+    let ry = BODY + 3;
+    g.text(x0, ry++, 'Newcomers in town', C.hi);
+    ry++;
+    const list = o.newcomers(L);
+    if (!list.length) for (const l of wrap('No one\'s staying who isn\'t the town\'s own just now. Nomads, adventurers and travelling merchants come and go.', W - x0 - 2)) g.text(x0, ry++, l, C.dim);
+    for (const nc of list.slice(0, 6)) {
+      g.text(x0, ry, nc.name.slice(0, W - x0 - 2), C.white);
+      ry++;
+      g.text(x0 + 1, ry, nc.what.slice(0, 18), C.dim);
+      const lb = nc.n > 1 ? ' Make them citizens ' : ' Make a citizen ';
+      if (mine) button(this, g, W - 2 - lb.length, ry, lb, '#a0e8a0', () => this.welcomeIt(L, nc.key), true);
+      ry += 2;
+    }
+    const foot = 'A citizen lodges with a family till their own home is built, and pays the town\'s taxes. A pardon drops the charges, wipes the record clean and lifts any exile.';
+    wrap(foot, W - 4).slice(0, 2).forEach((l, i) => g.text(2, H - 5 + i, l, C.faint));
+  }
+
+  offerCit(L, pid) {
+    const r = this.office.offerCitizen(L, pid);
+    this.say(r.ok ? `Citizenship offered to ${r.name}: theirs to accept.` : r.why, r.ok ? '#a0e8a0' : '#ffb080');
+    this.ui.audio?.play(r.ok ? 'select' : 'error');
+  }
+
+  pardonIt(L, pid, realm) {
+    const r = this.office.pardon(L, pid, realm);
+    this.say(r.ok ? `${r.name} is pardoned${realm ? ` in ${r.towns} town${r.towns === 1 ? '' : 's'} of the realm` : ''}.` : r.why, r.ok ? '#a0e8ff' : '#ffb080');
+    this.ui.audio?.play(r.ok ? 'select' : 'error');
+  }
+
+  welcomeIt(L, key) {
+    const r = this.office.welcome(L, key);
+    this.say(r.ok ? `${r.names.join(', ').replace(/^the /, 'The ')} ${r.recs.length > 1 ? 'are citizens' : 'is a citizen'} of ${L.settlement.name} now.` : r.why, r.ok ? '#a0e8a0' : '#ffb080');
+    this.ui.audio?.play(r.ok ? 'select' : 'error');
   }
 
   drawMoodChart(ctx) {

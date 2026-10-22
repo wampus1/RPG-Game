@@ -23,16 +23,17 @@
 // its council, and (if the town will follow you) break away from it. In a
 // shared world, other players who are citizens can sit on your council and
 // vote, and stand against you when the term is up.
-import { alive, ledger, mayorOf, kitchenOf, DAY } from './econ.js';
+import { alive, ledger, mayorOf, kitchenOf, simulateTo, DAY } from './econ.js';
 import { isHaven } from './havenref.js';
 import { LAWS, LAW_IDS, lawFits, lawOn, byDecree, stance } from './laws.js';
 import { FACTIONS, FACTION_IDS, BUDGET, BUDGET_USUAL, approvals, members, factionOf, preview } from './factions.js';
 import { CHARTERS, CHARTER_IDS, defaultCharter, headTitle, charterFits } from './charters.js';
+import { newcomers, naturalise } from './newcomers.js';
 import { matters, crisisFor, scandal, ultimatum, uprising, stated, feedHungry, nextSession, whoOf, sums, raidOdds, overOf, forChange, SESSION, MAX_OPEN, WORKS_COST, full } from './agenda.js';
-import { authority, formOf } from './realms.js';
+import { authority, formOf, shortTitle } from './realms.js';
 import { retrain } from '../entities/npcgen.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
-import { pidOf, playerOf } from './saga/refs.js';
+import { pidOf, playerOf, playerName } from './saga/refs.js';
 import { countItem, removeItem, addItem } from '../game/inventory.js';
 import { isOutworlder } from '../game/hero.js';
 import { traitsOf, hasTrait, suits, OTRAITS } from './officertraits.js';
@@ -95,6 +96,9 @@ export class Office {
     this.sim = sim;
     this.towns = {}; // sid -> the town's office (see town())
     this.offers = []; // { pid, sid, how, from, text, until }
+    // (Round 140) Citizenship offered to another player, waiting on their
+    // answer: { pid, sid, by, title, until }.
+    this.citOffers = [];
     this.shows = []; // windows to open for a player: { pid, kind, data }
     this.notes = []; // (Round 125) small notes in the corner for a player: { pid, text, color }
     this.realmVotes = {}; // civ id -> { change, day, votes, text }
@@ -582,6 +586,162 @@ export class Office {
     return true;
   }
 
+  // ------------------------------------------------------------ (Round 140)
+  // Citizens and pardons: the head of a town makes others its citizens
+  // (another player, if they'll have it; a newcomer staying in town), and
+  // pardons other players (the realm's ruler, in every town of the realm).
+
+  // The others playing, in the world now: [{ pid, name }].
+  others() {
+    const me = this.pid();
+    return (this.game.seats || []).map((q) => (q.host ? 'host' : String(q.id))).filter((pid) => pid !== me && this.online(pid)).map((pid) => ({ pid, name: playerName(this.game, pid) }));
+  }
+
+  // Where another player stands with a town (null if they're not here):
+  // a citizen of it (or of where), charges, wanted, exiled, in its cell, a
+  // record, the town they head.
+  standing(pid, sid) {
+    return this.asPid(pid, () => {
+      const sim = this.sim;
+      const j = sim.justice;
+      const cz = sim.citizen;
+      const r = j.record.get(sid);
+      const heads = Object.values(this.towns).find((T) => T.holder && T.holder.pid === pid);
+      return {
+        name: this.game.playerName,
+        citizen: !!cz && cz.sid === sid,
+        elsewhere: cz && cz.sid !== sid ? cz.sid : null,
+        heads: heads ? heads.sid : null,
+        charges: j.pendingIn(sid).length,
+        wanted: this.game.wanted.has(sid),
+        exiled: j.exiled.has(sid),
+        jailed: !!((j.jail && j.jail.sid === sid && !j.jail.pow) || (j.escort && j.escort.sid === sid)),
+        record: r ? (r.convictions || 0) + (r.minor || 0) + (r.moderate || 0) + (r.severe || 0) : 0,
+        offered: !!this.citOfferFor(pid, sid),
+      };
+    });
+  }
+
+  // Where another player stands with the realm's towns: { name, towns
+  // (those with something against them), deserter } (null if not here).
+  realmStanding(pid, civ) {
+    const sids = this.sim.realms.members(civ).map((q) => q.id);
+    return this.asPid(pid, () => {
+      const j = this.sim.justice;
+      const towns = sids.filter((sid) => {
+        const r = j.record.get(sid);
+        return j.pendingIn(sid).length || this.game.wanted.has(sid) || j.exiled.has(sid) || (j.jail && j.jail.sid === sid && !j.jail.pow) || (j.escort && j.escort.sid === sid) || (r && (r.convictions || r.minor || r.moderate || r.severe));
+      });
+      return { name: this.game.playerName, towns, exiled: towns.filter((sid) => j.exiled.has(sid)).length, deserter: this.sim.war.isDeserter(civ) };
+    });
+  }
+
+  // Anything a pardon would lift.
+  pardonable(st) {
+    return !!st && !!(st.charges || st.wanted || st.exiled || st.jailed || st.record);
+  }
+
+  // Offer another player citizenship of the town you head: theirs to take
+  // (it brings the town's taxes, and ends any citizenship elsewhere).
+  offerCitizen(L, pid) {
+    const s = L.settlement;
+    const T = this.of(s.id);
+    if (!T || !T.holder || T.holder.pid !== this.pid()) return { ok: false, why: 'Only the town\'s head can.' };
+    const st = this.standing(pid, s.id);
+    if (!st) return { ok: false, why: 'They aren\'t in the world just now.' };
+    if (st.citizen) return { ok: false, why: `${st.name} is a citizen already.` };
+    if (st.charges || st.wanted || st.exiled || st.jailed) return { ok: false, why: `The town has something against ${st.name}: pardon them first.` };
+    if (st.offered) return { ok: false, why: `It's offered: it's up to ${st.name} now.` };
+    const title = this.title(L, T);
+    this.citOffers.push({ pid, sid: s.id, by: T.holder.name, title, until: this.sim.abs + 2 * DAY });
+    this.show(pid, 'citizenship', { sid: s.id });
+    this.note(pid, `${s.name} · ${title} ${T.holder.name} offers you citizenship (N).`, '#a0e8a0');
+    return { ok: true, name: st.name };
+  }
+
+  citOfferFor(pid = this.pid(), sid = null) {
+    const now = this.sim.abs;
+    return this.citOffers.find((q) => q.pid === pid && q.until > now && (sid === null || q.sid === sid)) || null;
+  }
+
+  // The answer, from the one it was offered to.
+  answerCitizen(sid, yes) {
+    const pid = this.pid();
+    const q = this.citOfferFor(pid, sid);
+    if (!q) return { ok: false, why: 'The offer has lapsed.' };
+    this.citOffers = this.citOffers.filter((o) => o !== q);
+    const L = this.sim.layoutOf(sid);
+    const T = this.of(sid);
+    const name = this.game.playerName;
+    if (!L || !L.econ) return { ok: false, why: 'The town is gone.' };
+    const s = L.settlement;
+    if (!yes) {
+      if (T && T.holder) this.note(T.holder.pid, `${s.name} · ${name} declined its citizenship.`, '#ffb080');
+      return { ok: true, declined: true };
+    }
+    // (Charges brought since it was offered: the law comes first.)
+    if (this.sim.justice.exiled.has(sid) || this.sim.justice.pendingIn(sid).length) return { ok: false, why: `${s.name} has charges against you now.` };
+    this.grantCitizen(L, this.game.day);
+    const fam = this.sim.hostName();
+    this.tell(pid, `You are a citizen of ${s.name}${fam ? `, lodging with the ${fam}s until you've a home of your own` : ''}.`, '#a0e8a0');
+    if (T && T.holder) this.note(T.holder.pid, `${s.name} · ${name} accepted: a citizen of ${s.name} now.`, '#a0e8a0');
+    return { ok: true };
+  }
+
+  // Pardon another player: in the town you head, or (`realm`, as its
+  // ruler) in every town of the realm, desertion from its war too.
+  // { ok, why, name, what: [...] }.
+  pardon(L, pid, realm = false) {
+    const s = L.settlement;
+    const me = this.pid();
+    const T = this.of(s.id);
+    const civ = s.civ;
+    const crown = this.sim.crown;
+    const ruler = !!(realm && civ && crown && crown.isRuler(civ, me));
+    if (!ruler && (!T || !T.holder || T.holder.pid !== me)) return { ok: false, why: realm ? 'Only the realm\'s ruler can.' : 'Only the town\'s head can.' };
+    if (pid === me) return { ok: false, why: 'No one can pardon themselves.' };
+    const by = ruler ? `${shortTitle(civ)} ${crown.rec(civ).holder.name}` : `${this.title(L, T)} ${T.holder.name}`;
+    const sids = ruler ? this.sim.realms.members(civ).map((q) => q.id) : [s.id];
+    const done = this.asPid(pid, () => {
+      const what = new Set();
+      const towns = [];
+      for (const sid of sids) {
+        const w = this.sim.justice.pardon(sid);
+        if (!w.length) continue;
+        towns.push(sid);
+        for (const k of w) what.add(k);
+      }
+      if (ruler && this.sim.war.isDeserter(civ)) {
+        this.sim.war.pardonDesertion(civ);
+        what.add('desertion');
+      }
+      return { name: this.game.playerName, what: [...what], towns };
+    });
+    if (!done) return { ok: false, why: 'They aren\'t in the world just now.' };
+    if (!done.what.length) return { ok: false, why: `${done.name} has nothing to be pardoned for${ruler ? ' in the realm' : ` in ${s.name}`}.` };
+    const day = this.game.day;
+    for (const sid of done.towns) {
+      const TL = this.sim.layoutOf(sid);
+      if (TL && TL.econ) ledger(TL, day, `${by} pardoned ${done.name}.`);
+    }
+    this.show(pid, 'pardoned', { sid: s.id, by, realm: ruler ? civ.name : null, what: done.what, towns: done.towns.length });
+    return { ok: true, name: done.name, what: done.what, towns: done.towns.length };
+  }
+
+  // The newcomers staying in a town you head, and making them its own.
+  newcomers(L) {
+    return newcomers(this.sim, L);
+  }
+
+  welcome(L, key) {
+    const T = this.of(L.settlement.id);
+    if (!T || !T.holder || T.holder.pid !== this.pid()) return { ok: false, why: 'Only the town\'s head can.' };
+    const r = naturalise(this.sim, L, key, `${this.title(L, T)} ${T.holder.name}`);
+    // (A town that takes newcomers in is the better thought of for it.)
+    if (r.ok) this.sim.addRenown(L.settlement.id, 1, 'welcoming newcomers');
+    return r;
+  }
+
   // Revoked, renounced: you can't govern a town you're no citizen of.
   onRevoke(sid) {
     const T = this.of(sid);
@@ -691,16 +851,51 @@ export class Office {
     this.lawsDaily(L, day);
     this.paths(L, day, rng);
     const T = this.of(L.settlement.id);
+    // (Round 140: held already, on the stroke of ten: see sitOnTime.)
+    if (T && (T.lastSession ?? -1) >= day) return true;
     if (!T || !T.holder) return false;
-    // (Round 125: the sitting's own day, whatever the clock says: a town
-    // caught up after a long sleep or a long wait sits each day it missed.)
+    this.sit(L, T, day, rng);
+    return true;
+  }
+
+  // (Round 125: the sitting's own day, whatever the clock says: a town
+  // caught up after a long sleep or a long wait sits each day it missed.)
+  sit(L, T, day, rng) {
     this.dayNow = day;
     try {
       this.session(L, T, day, rng);
     } finally {
       this.dayNow = null;
     }
-    return true;
+  }
+
+  // (Round 140) A town's hours are worked as each one ends, so the
+  // business of ten o'clock waited for eleven, and what you'd sent to the
+  // council sat an hour past the time its window gave. A town a player
+  // governs sits on the stroke of ten: a far one's last hours are brought
+  // up to it first (if it isn't far behind; if it is, its hours hold the
+  // sitting as they're caught up, as before).
+  sitOnTime(now) {
+    const day = Math.floor((now - SESSION) / DAY);
+    if (day < 0) return;
+    const at = day * DAY + SESSION;
+    for (const T of Object.values(this.towns)) {
+      if (!T.holder || (T.lastSession ?? -1) >= day) continue;
+      const L = this.laid(T);
+      const e = L && L.econ;
+      if (!e || e.lastAbs === null || e.lastAbs > at) continue;
+      const sim = this.sim;
+      if (e.lastAbs < at && at - e.lastAbs <= 180 && !(this.game.active && this.game.active.has(L.settlement.id)) && !(sim.civicJob && sim.civicJob.L === L)) {
+        sim.civicLater = true;
+        try {
+          simulateTo(sim, L, at, false, this.game.instantWork ? Infinity : 4);
+        } finally {
+          sim.civicLater = false;
+        }
+      }
+      if (e.lastAbs !== at || !T.holder) continue;
+      this.sit(L, T, day, new RNG(hash4(L.settlement.seed, day, 10, 0x5e55)));
+    }
   }
 
   session(L, T, day, rng) {
@@ -2211,6 +2406,7 @@ export class Office {
   // ------------------------------------------------------------ each frame
   update() {
     const now = this.sim.abs;
+    this.sitOnTime(now);
     // Crises that weren't decided in time: the steward decides.
     for (const T of Object.values(this.towns)) {
       if (!T.holder || !T.agenda.length) continue;
@@ -2226,6 +2422,7 @@ export class Office {
       T.agenda = T.agenda.filter((q) => !q.done);
     }
     this.offers = this.offers.filter((o) => o.until > now);
+    this.citOffers = this.citOffers.filter((o) => o.until > now);
     // Windows to open for whoever they're for (if they're here, with a
     // screen to show them on).
     for (const sh of this.shows.slice()) {
@@ -2263,6 +2460,8 @@ export class Office {
     const out = [];
     const o = this.offerFor(pid);
     if (o) out.push({ text: o.how === 'acclaim' ? 'ACCLAIMED · N: ANSWER' : 'OFFER OF OFFICE · N', color: Math.floor(this.sim.abs) % 2 ? '#ffe070' : '#ffd040' });
+    // (Round 140) Citizenship offered you.
+    if (this.citOfferFor(pid)) out.push({ text: 'CITIZENSHIP OFFERED · N', color: Math.floor(this.sim.abs) % 2 ? '#a0e8a0' : '#80d080' });
     if (!T || !T.holder) return out;
     const L = this.laid(T);
     if (!L) return out;
@@ -2280,13 +2479,14 @@ export class Office {
 
   // ------------------------------------------------------------ kept
   serialize() {
-    return { towns: this.towns, offers: this.offers, realmVotes: Object.fromEntries(Object.entries(this.realmVotes).map(([k, v]) => [k, { ...v, change: { key: v.change.key, title: v.change.title, text: v.change.text, redo: v.change.redo || null } }])), opCache: this.opCache || {} };
+    return { towns: this.towns, offers: this.offers, citOffers: this.citOffers, realmVotes: Object.fromEntries(Object.entries(this.realmVotes).map(([k, v]) => [k, { ...v, change: { key: v.change.key, title: v.change.title, text: v.change.text, redo: v.change.redo || null } }])), opCache: this.opCache || {} };
   }
 
   load(d) {
     if (!d) return;
     this.towns = d.towns || {};
     this.offers = d.offers || [];
+    this.citOffers = d.citOffers || [];
     this.opCache = d.opCache || {};
     // (A realm vote under way: the change is the ruler's to propose again.)
     this.realmVotes = {};

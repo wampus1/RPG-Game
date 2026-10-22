@@ -1110,6 +1110,16 @@ export const STEPS = [
       log.push('Every weapon has a special (hold the button, let go when it\'s ready), shown on the ground as it winds up; a new "special" trigger; relics only off masters of the old places (always off a third-tier one) and broken down into shards at an anvil; smiths priced by their skill, making anything forged; confiscated weapons locked in an evidence chest, a guard on the jail door, and visitors come into the jail to talk.');
     },
   },
+  {
+    to: '1.40.0',
+    game(game, log) {
+      // (Citizenship offered to other players: none waiting yet. See
+      // Office.offerCitizen.)
+      const o = game.sim && game.sim.office;
+      if (o && !Array.isArray(o.citOffers)) o.citOffers = [];
+      log.push('A town\'s head can make others its citizens (the others playing, if they accept; nomads, adventurers and merchants staying in town) and pardon the others playing (a realm\'s ruler, in every town of the realm); the council sits at ten o\'clock sharp, and what was sent to it is voted on then; a guest\'s HUD no longer disappears in a town where they lodge.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

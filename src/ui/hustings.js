@@ -449,6 +449,31 @@ const BANNER = {
     title: 'A LORDSHIP', head: L.settlement.name, color: CHARTERS.lordship.color, lines: [`${L.settlement.name} is yours by right now.`, 'How will you be styled?'],
     choices: d.styles.map((st) => ({ label: st, fn: (w) => game.sim.office.setStyle(L, st) && w.close() })),
   }),
+  // (Round 140) Citizenship offered by a town's head; a pardon.
+  citizenship: (d, L, game) => {
+    const o = game.sim.office;
+    const q = o.citOfferFor(o.pid(), d.sid);
+    const s = L.settlement;
+    const cz = game.sim.citizen;
+    const was = cz && cz.sid !== s.id ? game.world.ow.settlements[cz.sid] : null;
+    const heads = was && o.isHolder(was.id);
+    const lines = [q ? `${q.title} ${q.by} would make you a citizen of ${s.name}.` : 'The offer has lapsed.', 'A citizen lodges with a family till their own home is built, pays the town\'s taxes, and may stand for its council.'];
+    if (was) lines.push(`You'd give up your citizenship of ${was.name}${heads ? ', and with it your office there' : ''}.`);
+    const answer = (w, yes) => {
+      const r = o.answerCitizen(s.id, yes);
+      w.close();
+      if (!r.ok && r.why) w.ui.msg?.(r.why, '#ffb080');
+    };
+    return {
+      title: 'CITIZENSHIP OFFERED', head: s.name, color: '#a0e8a0', lines,
+      choices: q ? [{ label: 'Accept', fn: (w) => answer(w, true) }, { label: 'Decline', fn: (w) => answer(w, false) }] : null,
+    };
+  },
+  pardoned: (d, L) => {
+    const said = { charges: 'The charges against you are dropped.', wanted: 'The watch is no longer after you.', exile: 'Your exile is lifted: you may go back.', cell: 'The cell door is opened for you.', record: 'Your record is wiped clean.', desertion: 'Your desertion from the realm\'s war is forgiven.' };
+    const lines = [`${d.by} has pardoned you${d.realm ? `, throughout the ${d.realm.replace(/^The /, '')}` : ''}.`, ...(d.what || []).filter((k) => said[k]).map((k) => said[k])];
+    return { title: 'PARDONED', head: d.realm ? d.realm : L.settlement.name, color: '#a0e8ff', lines };
+  },
   realmform: (d, L, game) => {
     const civ = game.world.ow.civs[d.civ];
     const F = REALM_FORMS[d.form];
