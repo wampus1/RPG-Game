@@ -1785,7 +1785,7 @@ function dressBase(ctx, r) {
         // (Round 139: an idol on the plinth now, not a relic: relics only
         // come off the masters. The pick's kept, so the rest of the place
         // comes out as it always did.)
-        const at = placeIn(ctx, r, B.idol !== undefined ? B.idol : B.relic);
+        const at = placeIn(ctx, r, B.idol, META_STATE);
         if (at) rng.pick(RELIC_KEYS);
       }
       // (Whoever holds the key to it is somewhere on this floor.)

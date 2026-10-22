@@ -108,10 +108,15 @@ test('a weapon in hand swings when you click, and never digs', () => {
   game.cursor = { x, y, z, block: BLOCKS[id], inReach: true, face: 'top' };
   const held = { mouse: { down: true } };
   game.handleMouse(0.05, [{ type: 'down', button: 0 }], held);
-  assert.ok(p.swing || p.attackCd > 0, 'it swings');
+  // (Round 139: held, it winds up the weapon's special; it's swung as you
+  // let go.)
+  assert.ok(game.charging || p.swing || p.attackCd > 0, 'it swings (or winds up to)');
   for (let i = 0; i < 60; i++) game.handleMouse(0.05, [], held);
   assert.equal(game.mining, null, 'no digging');
   assert.equal(game.world.getBlock(x, y, z), id, 'the ground is untouched');
+  game.handleMouse(0.05, [{ type: 'up', button: 0 }], { mouse: { down: false } });
+  assert.ok(p.swing || p.attackCd > 0, 'let go: it swings');
+  assert.equal(game.world.getBlock(x, y, z), id, 'and the ground is still untouched');
   // An empty hand still digs.
   p.inv[p.selected] = null;
   game.cursor = { x, y, z, block: BLOCKS[id], inReach: true, face: 'top' };
