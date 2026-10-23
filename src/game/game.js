@@ -933,7 +933,9 @@ export class Game {
   // turned)? Anything that appears or vanishes should do it out of sight.
   // In sight of any of you playing.
   inSight(x, z, margin = 0) {
-    for (const p of this.everyone()) if (Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= 18 + margin) return true;
+    // (Round 144: as far as the camera's drawn back, in a battle.)
+    const r = 18 * (this.sightK || 1) + margin;
+    for (const p of this.everyone()) if (Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= r) return true;
     return false;
   }
 
@@ -2377,7 +2379,11 @@ export class Game {
     this.helmFocus = helm ? helm.focus : null;
     // (Round 86) A spyglass to your eye: where it's looking.
     this.spyFocus = spyTick(this, input, dt);
-    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1);
+    // (Round 144) A big battle, or a town stormed, near you: drawn back to
+    // take it in (see War.battleZoom; and inSight, which sees as far).
+    const bz = this.sim.war && !this.dungeon ? this.sim.war.battleZoom(this.player) : 1;
+    this.sightK = Math.max(1, bz, this.renderer.zoom || 1);
+    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1, bz);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
     this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
     if (this.audio) this.audio.listener = this.player;
@@ -2386,8 +2392,10 @@ export class Game {
     // (Not anyone still watching their opening: they're not here yet.)
     const vis = p.limbo ? [] : [p];
     // (Square, so turning the camera never leaves anyone out.)
-    for (const q of this.everyone()) if (q !== p && !q.limbo && Math.abs(q.x - p.x) < 26 && Math.abs(q.z - p.z) < 26) vis.push(q);
-    for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < 26 && Math.abs(n.z - p.z) < 26) vis.push(n);
+    // (Drawn back for a battle: as far again as it shows.)
+    const vr = 26 * Math.max(1, this.renderer.zoom || 1, this.renderer.zoomGoal || 1);
+    for (const q of this.everyone()) if (q !== p && !q.limbo && Math.abs(q.x - p.x) < vr && Math.abs(q.z - p.z) < vr) vis.push(q);
+    for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < vr && Math.abs(n.z - p.z) < vr) vis.push(n);
     for (const c of this.creatures) if (Math.abs(c.x - p.x) < 26 && Math.abs(c.z - p.z) < 26) vis.push(c);
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
     for (const q of this.props.values()) if (Math.abs(q.x - p.x) < 28 && Math.abs(q.z - p.z) < 28) vis.push(q);
@@ -4935,6 +4943,12 @@ export class Game {
     const by = w.getBlock(x, y, z) === B.city_gate_top ? y - 1 : y;
     const open = w.getState(x, by, z);
     if (open) return this.setGate(x, z, false);
+    // (Round 144) Barred against a siege.
+    if (this.sim.war && this.sim.war.sieges && this.sim.war.sieges.barred(x, z)) {
+      this.ui.msg('The gate is barred and braced with timbers: the town is under siege.', '#ffb080', true);
+      this.audio?.play('error');
+      return false;
+    }
     if (!this.isNight()) return this.setGate(x, z, true);
     const g = this.gateGuard(x, z);
     const s = this.world.ow.settlementAt(x, z);
@@ -5009,6 +5023,8 @@ export class Game {
         const held = now - opened < 5;
         // Someone in the gateway itself: wait for them to be through.
         const busy = [...this.everyone(), ...this.npcs].some((e) => !e.dead && tiles.some((t) => e.x === t.x && e.z === t.z));
+        // (Round 144) Barred against a siege: shut, day and night.
+        if (L.barred) continue;
         if (!night && !open) this.setGate(g.x, g.z, true);
         else if (night && open && !held && !busy) {
           const guard = this.gateGuard(g.x, g.z, 16);
@@ -6416,6 +6432,8 @@ export class Game {
     this.renderer.emit(x + 0.5, y + 0.3, z + 0.5, { n: 18, color: ['#8a8a8a', '#6a5a48', '#a89878', '#5a4a3a'], up: 34, speed: 44, life: 0.9, gravity: 40 });
     this.audio?.play('impact', { x, y, z });
     if (this.inSight(x, z, 0)) this.shake = Math.min(1.3, (this.shake || 0) + 0.3);
+    // (Round 144) Where it was meant for (a besieged town's wall).
+    if (a.onLand) a.onLand(this, x, z, y);
   }
 
   updateProjectiles(dt) {
@@ -7425,6 +7443,9 @@ export class Game {
     if (source && source.kind === 'player' && source !== target && target.kind !== 'player' && !this.dotHit) amount = abOutgoing(source, amount);
     // Marked by moonlight: every blow a third harder.
     if (target.markT > 0) amount = Math.round(amount * 1.33);
+    // (Round 144) Soldier on soldier in a battle: helmed, mailed, in ranks,
+    // a long hard fight (see sim/bands.js warHit for a charge's first blow).
+    if (source && source.warband && target.warband && source.warband.band !== undefined && target.warband.band !== undefined && !this.dotHit) amount = Math.max(1, Math.round(amount * this.sim.war.warHit(source, target)));
     const duel = this.duel;
     const inDuel = !!(duel && duel.npc && !duel.npc.dead && ((target === duel.npc && source === this.player) || (target === this.player && source === duel.npc)));
     let armored = false;

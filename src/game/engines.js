@@ -261,6 +261,18 @@ export function workEngines(war, live, dt) {
         g.renderer.emit(e.wall.x + 0.5, GROUND + 1, e.wall.z + 0.5, { n: 8, color: ['#8a8a8a', '#6a625a', '#b8b0a0'], up: 20, speed: 24, life: 0.6, gravity: 40 });
         g.audio?.play('impact', { x: e.wall.x, y: GROUND, z: e.wall.z });
         if (g.inSight(e.wall.x, e.wall.z, 2)) g.shake = Math.min(1.3, (g.shake || 0) + 0.18);
+        // (Round 144) At a besieged town's gate: through it, the leaves
+        // smashed (see game/siegeground.js).
+        const S0 = e.gateOf !== undefined ? war.siegeById(e.gateOf) : null;
+        if (S0 && S0.gate && !S0.gate.broken) {
+          S0.gate.hp = Math.max(0, S0.gate.hp - 18);
+          if (S0.gate.hp > 0) continue;
+          const DL = g.world.layouts.get(e.town);
+          if (DL) war.sieges.breakGate(S0, DL);
+          e.phase = 'breached';
+          e.done = true;
+          continue;
+        }
         if (e.hits >= 5) {
           const DL = g.world.layouts.get(e.town);
           if (DL && DL.econ) {

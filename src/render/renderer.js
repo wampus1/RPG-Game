@@ -57,6 +57,18 @@ import { drawSpecialTele } from './specialfx.js';
 // most often (it's the plain one), the last, least (the one with a pebble
 // in it, a bone, a flower): half, a quarter, and the rest between the two.
 const VAR_PICK = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3];
+// (Round 144) A colour lightened or darkened (`k` over 1, or under it).
+const SHADES = new Map();
+function shadeHex(hex, k) {
+  const key = `${hex}:${k}`;
+  let v = SHADES.get(key);
+  if (v) return v;
+  const n = parseInt(String(hex).slice(1), 16) || 0;
+  const c = (x) => Math.max(0, Math.min(255, Math.round(x * k))).toString(16).padStart(2, '0');
+  v = `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
+  SHADES.set(key, v);
+  return v;
+}
 export const variantAt = (x, y, z) => VAR_PICK[hash4(x, y, z) % VAR_PICK.length] % VARIANTS;
 const NO_FRAY = /rug|carpet|plank|board|deck|bridge|lid|trim|tile|glazed|inlay|mosaic|sectile|runner|grate|stair|abyss|door|seal|gilt|marble|rubedo|albedo|nigredo/;
 const FRAYS = new Map();
@@ -3103,6 +3115,8 @@ export class Renderer {
         if (raised) this.drawRaisedShield(ctx, e, raised, dir, sx, top);
         if (held && !(raised && dir !== 0) && !heldBehind) this.drawHeld(ctx, held, e, sx, top, false, guard);
         if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, guard);
+        // (Round 144) A band's colours, carried high over its ranks.
+        if (e.warband && e.warband.bearer && !rolling) this.drawBanner(ctx, e.warband.bearer.color, sx, top, dir, e.id || 0);
         if (shade) ctx.globalAlpha = a0;
         sx = sx0;
         // ...and a glint of it now and then.
@@ -3303,6 +3317,39 @@ export class Renderer {
   // on the hand pixel of the sprite for the way they're facing.
   // What someone holds, at full size (the item's own picture, not the
   // little one dropped items use), its grip in their hand.
+  // (Round 144) A war banner on its pole: up over the bearer's head, the
+  // cloth in the realm's colour, a darker hem and a pale charge on it,
+  // stirring in the wind; the finial at the top catching the light.
+  drawBanner(ctx, color, sx, top, dir, seed = 0) {
+    const t = this.time * 3.2 + seed * 0.7;
+    const px = sx + (dir === 1 ? 4 : dir === 3 ? 11 : 12);
+    const py = top - 20;
+    // The pole.
+    ctx.fillStyle = '#5a3c20';
+    ctx.fillRect(px, py, 1, 32);
+    ctx.fillStyle = '#7a5430';
+    ctx.fillRect(px + 1, py + 1, 1, 30);
+    ctx.fillStyle = '#e8d070';
+    ctx.fillRect(px, py - 2, 2, 2);
+    // The cloth: eight columns, each a little lower as it waves.
+    const away = dir === 1 ? -1 : 1;
+    const dark = shadeHex(color, 0.62);
+    const pale = shadeHex(color, 1.45);
+    for (let i = 0; i < 9; i++) {
+      const wave = Math.round(Math.sin(t - i * 0.55) * 1.2 + i * 0.12);
+      const x = px + (away > 0 ? 2 + i : -1 - i);
+      const h = 8 - Math.floor(i / 4);
+      ctx.fillStyle = i === 8 ? dark : color;
+      ctx.fillRect(x, py + 1 + wave, 1, h);
+      ctx.fillStyle = dark;
+      ctx.fillRect(x, py + 1 + wave + h, 1, 1);
+      if (i >= 3 && i <= 5) {
+        ctx.fillStyle = pale;
+        ctx.fillRect(x, py + 3 + wave, 1, 3);
+      }
+    }
+  }
+
   drawHeld(ctx, key, e, sx, top, off = false, guard = false) {
     if (!key) return;
     // (Round 66: a mod's piece held its own way: see mod/gear.js.)

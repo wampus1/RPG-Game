@@ -29,6 +29,9 @@ import { REGION_W, REGION_D, GROUND, SURFACE } from '../config.js';
 import { B } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { fieldEngines, workEngines, endEngines, ramming } from '../game/engines.js';
+import { formBands, bandsTick, slotAt, bandUp, credit, hitMult } from './bands.js';
+import { SiegeGround } from '../game/siegeground.js';
+import { siegeFor, startSiege, siegeDay, siegeTick, endSiege, reliefFought, sackTown, siegeMarker, siegeLines } from './siege.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
 import { cutOff } from '../world/farlands.js';
@@ -52,9 +55,6 @@ const MATCH = {
   feint: { line: 1.25, flank: 1.15, pincer: 1.25, hold: 0.8, works: 0.8, feint: 1, retreat: 1 },
   retreat: { line: 0.8, flank: 0.75, pincer: 0.7, hold: 0.9, works: 0.9, feint: 0.85, retreat: 1 },
 };
-// How many a side brings onto the field when you're there to see it (the
-// rest fight on, counted, out of sight).
-const LIVE_MAX = 16;
 // Who's never called up in a levy (the realm can't spare them).
 const LEVY_EXEMPT = new Set(['mayor', 'noble', 'priest', 'researcher', 'herbalist', 'innkeeper', 'barkeep', 'blacksmith', 'merchant', 'scholar', 'child', 'retired', 'beggar']);
 const WOODED = new Set(['forest', 'taiga', 'jungle', 'swamp']);
@@ -107,6 +107,8 @@ export class War {
     this.columns = new Map(); // war id -> { w, ents } (an army on the march, near you)
     this.syncT = 0;
     this.liveT = 0;
+    // (Round 144) Sieges where you are (see game/siegeground.js).
+    this.sieges = new SiegeGround(this);
   }
 
   get ow() {
@@ -188,6 +190,9 @@ export class War {
     const now = this.sim.abs;
     for (const r of this.raids.slice()) if (r.state === 'march' && now >= r.at) this.strike(r);
     for (const w of this.wars.slice()) if (w.plan && now >= w.plan.at && !w.plan.live) this.battle(w, w.plan);
+    // (Round 144) An assault on a besieged town, when it's due.
+    for (const w of this.wars.slice()) if (w.siege) siegeTick(this, w);
+    if (this.sieges) this.sieges.update(dt);
     // Called up: a word when it's close (if you're nowhere near the field).
     for (const w of this.wars) {
       if (!w.plan || now < w.plan.at - 90) continue;
@@ -612,8 +617,11 @@ export class War {
     for (const id of [...w.a, ...w.b]) w.weary[id] = (w.weary[id] || 0) + 0.012;
     // Hard feelings deepen while it lasts.
     for (const x of side('a')) for (const y of side('b')) this.realms.shift(x, y, -0.6, null);
+    // (Round 144) A siege under way: its day (a relief army may march from
+    // it); no other battle meanwhile.
+    if (w.siege) siegeDay(this, w, day, rng);
     // The next battle: announced a day ahead, near the front.
-    if (!w.plan && day >= w.next) this.planBattle(w, day, rng);
+    else if (!w.plan && day >= w.next) this.planBattle(w, day, rng);
     if (day % 7 === 6) {
       this.betrayals(w, day, rng);
       this.gates(w, day, rng);
@@ -669,7 +677,20 @@ export class War {
     const naval = !via && (!sameIsle(atk, def) || (best.d > 14 && wet(atk) && wet(def)));
     w.plan = { at, depart: Math.max(now, at - march), site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id, naval, via: via ? via.s.id : undefined };
     const when = whenText(at, now);
-    const text = naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders ${when}.`
+    // (Round 144) A walled town that can't face them in the field shuts its
+    // gates and waits for them behind its walls.
+    const DL0 = this.game.world.layouts.get(def.id);
+    if (DL0 && DL0.walled && !naval) {
+      const dside = attacker === 'a' ? 'b' : 'a';
+      const pa = this.armyPower(this.pool(w, attacker, w.plan), attacker, w, w.plan);
+      const pd = this.armyPower(this.pool(w, dside, w.plan), dside, w, w.plan);
+      if (pd < pa * 0.45) {
+        w.plan.shut = true;
+        w.plan.name = `the Siege of ${def.name}`;
+      }
+    }
+    const text = w.plan.shut ? `The ${plain(ac)} are marching on ${def.name}, too strong for its defenders to meet in the field: it will shut its gates against them ${when}.`
+      : naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders ${when}.`
       : `The armies of the ${plain(best.ca)} and the ${plain(best.cb)} are gathering. They will meet outside ${def.name} ${when}.`;
     for (const s of [def, atk]) {
       const L = this.game.world.layouts.get(s.id);
@@ -1111,6 +1132,15 @@ export class War {
 
   // The battle (reckoned up, or begun on the ground if you're near).
   battle(w, plan) {
+    // (Round 144) The town shut its gates rather than come out: the army
+    // that came for it sits down before its walls.
+    if (plan.shut && !w.siege) {
+      const day = Math.floor(plan.at / DAY);
+      this.eachCalled(plan, (d) => {
+        d.state = 'excused';
+      });
+      return startSiege(this, w, plan, 'shut', day, new RNG(hash4(w.id, plan.at, 0x5e1)));
+    }
     if (!this.live && this.nearPlayer(plan.site, 70) && this.startLiveBattle(w, plan)) return null;
     // Called up, and nowhere near the field (each of you).
     this.eachCalled(plan, (d) => {
@@ -1270,6 +1300,23 @@ export class War {
         rec.hero = fullName(hero.r);
       }
     }
+    // (Round 144) A battle to lift a siege: won, it's lifted.
+    if (plan.relief !== undefined) {
+      reliefFought(this, w, plan, winner, day, rng);
+      return rec;
+    }
+    // (Round 144) A decisive win before a walled town (or an unwalled one,
+    // by an army big enough to surround it) begins a siege; unless the ram
+    // is through already, or the beaten were cut to pieces and the victors
+    // came in on their heels.
+    const defS = this.ow.settlements[plan.def];
+    const civW = this.civ(winner === 'a' ? plan.ca : plan.cb);
+    const rush = (live && this.live && this.live.ramComing && this.live.plan === plan) || (ratio >= 3.2 && civW && this.sim.tech.has(civW, 'rams') && rng.chance(0.5));
+    const kind = decisive && winner === plan.attacker && !rush && defS && defS.civ && civW && defS.civ !== civW ? siegeFor(this, w, plan, ratio) : null;
+    if (kind) {
+      startSiege(this, w, plan, kind === 'small' ? 'small' : 'battle', day, rng);
+      return rec;
+    }
     // A decisive win takes the town behind the field (a capital only near
     // the war's end).
     if (decisive && winner === plan.attacker) {
@@ -1285,6 +1332,9 @@ export class War {
       const towers = s && this.sim.tech.has(s, 'fortress');
       const walls = DL && DL.walled ? (ram ? 1 : 0.6) * (towers ? 0.75 : 1) : 1;
       if (s && civ && s.civ && s.civ !== civ && (!cap || Math.abs(w.score) >= (siege ? 50 : 80)) && rng.chance(Math.min(0.95, ((small ? 0.3 : cap ? 0.5 : 0.6) + (siege ? 0.25 : 0)) * walls))) {
+        // (Round 144) Taken by storm on the heels of the beaten: a sack, as
+        // hard as its takers are.
+        if (DL && DL.econ && rush) sackTown(this, w, { sid: s.id, civA: civ.id, civD: s.civ.id, start: day, failed: 0, refused: 0, commander: null, leader: this.leaderOf(plan, winner) }, DL, civ, day, rng, {});
         this.capture(w, s, civ, day, plan.name);
         // (Where a ram did it: a breach in the wall, to be mended; unless
         // you saw it knocked in already.)
@@ -1495,6 +1545,8 @@ export class War {
   // Terms: the beaten serve the victor (badly beaten), cede a town (fairly
   // beaten), or both walk away.
   peace(w, day, rng, victor, total) {
+    // (Round 144) A siege under way ends with the war.
+    if (w.siege) endSiege(this, w, 'over', day, rng);
     this.wars = this.wars.filter((q) => q !== w);
     this.sim.saga?.emit('war_over', { war: w.id, a: w.lead.a, b: w.lead.b, victor: victor ? w.lead[victor] : null });
     const V = victor ? this.civ(w.lead[victor]) : null;
@@ -1590,6 +1642,7 @@ export class War {
       const how = s >= 40 ? 'winning' : s >= 10 ? 'ahead' : s <= -40 ? 'losing badly' : s <= -10 ? 'behind' : 'evenly matched';
       out.push(`At war with the ${foes} (${this.game.day - w.start} days, ${how})${friends.length ? `; with the ${friends.join(', ')}` : ''}`);
       if (w.plan) out.push(`Next battle: outside ${this.ow.settlements[w.plan.def]?.name || '?'}`);
+      if (w.siege) out.push(...siegeLines(this, w).slice(0, 2));
       const last = w.battles[w.battles.length - 1];
       if (last) out.push(`Last battle: ${last.name} (${this.civ(w.lead[last.winner]) ? `won by the ${plain(this.civ(w.lead[last.winner]))}` : '?'})`);
       out.push(`War weariness: ${Math.round((w.weary[civ.id] || 0) * 100)}%`);
@@ -1622,6 +1675,9 @@ export class War {
         }
       }
       for (const b of w.battles.slice(-3)) out.push({ x: b.site.x, z: b.site.z, kind: 'field', label: b.name });
+      // (Round 144) A siege: its lines round the town.
+      const sm = siegeMarker(this, w);
+      if (sm) out.push(sm);
     }
     for (const r of this.raids) {
       const s = this.ow.settlements[r.to];
@@ -1930,14 +1986,17 @@ export class War {
     const ax = { x: (ca.x - cb.x) / d, z: (ca.z - cb.z) / d };
     const perp = { x: -ax.z, z: ax.x };
     const c = plan.site;
-    const live = { kind: 'battle', w, plan, A, B: Bm, t: 0, axis: ax, perp, centre: c, sides: {}, walls: [], done: false, go: false };
+    // (Round 144) As many a side as the field takes (see the settings); the
+    // rest come up from the rear as the first fall.
+    const cap = this.fieldCap();
+    const live = { kind: 'battle', w, plan, A, B: Bm, t: 0, axis: ax, perp, centre: c, sides: {}, walls: [], done: false, go: false, cap, pside: new Map() };
     for (const [side, army, t] of [['a', A, plan.ta], ['b', Bm, plan.tb]]) {
       const sign = side === 'a' ? 1 : -1;
       const tech = this.sim.tech;
       const civ = this.civ(w.lead[side]);
       const s0 = side === 'a' ? sa : sb;
       const cav = tech.has(s0, 'cavalry');
-      const list = army.recs.slice(0, LIVE_MAX);
+      const list = army.recs.slice(0, cap);
       const ents = [];
       const n = list.length;
       const wide = Math.min(n, 9);
@@ -1973,7 +2032,7 @@ export class War {
         }
         ents.push(e);
       });
-      live.sides[side] = { civ, tactic: t, ents, start: ents.length, broken: false, hates: false, sign };
+      live.sides[side] = { civ, tactic: t, ents, start: ents.length, broken: false, hates: false, sign, reserve: army.recs.slice(cap) };
     }
     this.fieldMercs(live, w);
     if (!live.sides.a.ents.length || !live.sides.b.ents.length) {
@@ -1984,20 +2043,92 @@ export class War {
     for (const side of ['a', 'b']) if (live.sides[side].tactic === 'works') this.raiseWorks(live, side);
     // Catapults behind the lines, and a ram, where the realms have them.
     fieldEngines(this, live);
+    // (Round 144) Into bands, each to its place (those still out of your
+    // sight put straight there).
+    this.bandUp(live);
     plan.live = true;
     this.live = live;
     // (A column that marched here is part of it now.)
     this.columns.delete(w.id);
     const g = this.game;
     // Called up: the other side knows which line you're in (each of you).
-    this.eachCalled(plan, (d) => {
+    this.eachCalled(plan, (d, p) => {
       live.sides[d.side === 'a' ? 'b' : 'a'].hates = true;
+      live.pside.set(p, d.side);
       g.ui.msg(`You're with the ${plain(live.sides[d.side].civ)}. Into the line, and stay in the fight!`, '#ffb080');
     });
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
+    // (Round 144) Its name across the field, and the horns.
+    const na = live.sides.a.ents.length + (live.sides.a.reserve ? live.sides.a.reserve.length : 0) + (A.extra || 0);
+    const nb = live.sides.b.ents.length + (live.sides.b.reserve ? live.sides.b.reserve.length : 0) + (Bm.extra || 0);
+    g.ui.showCard?.(plan.name.replace(/^the /, 'The '), `the ${plain(live.sides.a.civ)}, ${na} strong, against the ${plain(live.sides.b.civ)}, ${nb} strong`, 4.5, live.sides.a.civ ? live.sides.a.civ.color.hex : '#f0d890');
+    g.audio?.play('war_horn', { x: c.x, y: GROUND, z: c.z });
     g.audio?.play('alarm');
     g.disturb?.('Drums and horns: you stop waiting.');
     return true;
+  }
+
+  // (Round 144) For the sieges: the size of a map square, what the land is
+  // at a spot, a townsperson from where they were noted down, and which of
+  // you (if any) led a side of a battle.
+  regionSize() {
+    return { REGION_W, REGION_D };
+  }
+
+  cellAt(at) {
+    return this.ow.cell(Math.floor(at.x / REGION_W), Math.floor(at.z / REGION_D));
+  }
+
+  biomeAt(at) {
+    const c = this.cellAt(at);
+    return c ? c.biome : 'plains';
+  }
+
+  recByRef(ref) {
+    if (!ref) return null;
+    const L = this.game.world.layouts.get(ref.sid);
+    return L ? L.npcs[ref.idx] || null : null;
+  }
+
+  leaderOf(plan, side) {
+    const c = plan && plan.cmd && plan.cmd[side];
+    return c ? c.pk : null;
+  }
+
+  // (Round 144) How many a side are on the field at once (the settings'
+  // choice; a test may say otherwise).
+  fieldCap() {
+    return Math.max(4, this.liveMax || this.game.renderer.battleCap || 60);
+  }
+
+  // (Round 144) A battle's soldiers into bands (see bands.js), each sent to
+  // its place: anyone out of your sight put straight there, the rest walk.
+  // Which side each of you is on, and a commander's presence, for the
+  // bands to know.
+  bandUp(live) {
+    const g = this.game;
+    live.mine = (p) => live.pside.get(p) ?? null;
+    live.leaderNear = (S, at) => {
+      for (const p of g.everyone ? g.everyone() : [g.player]) {
+        if (!p || p.dead || p.down) continue;
+        const side = live.pside.get(p);
+        if (!side || live.sides[side] !== S) continue;
+        if (Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= (live.cmd && live.cmd[side] && live.cmd[side].p === p ? 12 : 5)) return true;
+      }
+      return false;
+    };
+    for (const side of ['a', 'b']) {
+      formBands(this, live, side);
+      for (const b of live.sides[side].bands) {
+        b.ents.forEach((n, i) => {
+          const q = slotAt(b, i);
+          n.warband.form = q;
+          if (n.warband.phase !== 'form' || g.inSight(n.x, n.z, 2) || g.inSight(q.x, q.z, 2)) return;
+          const y = g.world.findStandY(q.x, q.z, n.y);
+          if (y > 0 && Math.abs(y - n.y) <= 3 && !g.world.isWaterAt(q.x, y, q.z)) n.teleport(q.x, y, q.z);
+        });
+      }
+    }
   }
 
   // Somewhere out of your sight (and in the world that's about) to bring a
@@ -2098,7 +2229,12 @@ export class War {
     if (this.liveT > 0) return;
     this.liveT = 0.25;
     if (L.kind === 'raid') this.raidTick(L);
-    else {
+    else if (L.siege) {
+      this.eachCalled(L.plan, (d, p) => {
+        if (!p.dead && !p.down && (Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) <= 40 || Math.max(Math.abs(p.x - L.siege.camp.x), Math.abs(p.z - L.siege.camp.z)) <= 30)) d.present += 0.25;
+      });
+      this.sieges.assaultTick(L);
+    } else {
       if (L.plan && !L.done) {
         this.eachCalled(L.plan, (d, p) => {
           if (!p.dead && !p.down && Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) <= 30) d.present += 0.25;
@@ -2180,12 +2316,20 @@ export class War {
         g.renderer.emit(x, y, z, { n: 4, color: ['#8a6a3a', '#5a4022'], up: 16, speed: 20, life: 0.4 });
       }
     }
-    const standing = (s) => L.sides[s].ents.filter((n) => !n.dead && !n.down && g.npcs.includes(n) && n.warband && n.warband.phase !== 'flee');
+    // (Round 144) The bands: their nerve, their places, their orders.
+    if (!L.done) bandsTick(this, L, 0.25);
+    const standing = (s) => L.sides[s].ents.filter((n) => !n.dead && !n.down && n.warband && n.warband.phase !== 'flee');
     for (const s of ['a', 'b']) {
       const side = L.sides[s];
       const up = standing(s);
-      // A side breaks when most of it is down.
-      if (!side.broken && !L.done && up.length <= Math.floor(side.start * 0.35)) {
+      // A side breaks when most of it is down (or its bands are all broken,
+      // or all that's left of it has given up the field).
+      const bands = side.bands || [];
+      const holding = bands.filter((b) => b.state !== 'rout' && bandUp(b) > 0);
+      const left = up.length + (side.reserve ? side.reserve.length : 0);
+      const gone = bands.length && L.go && L.t - (L.goT || 0) > 8 && (!holding.length || holding.reduce((n, b) => n + bandUp(b), 0) < Math.max(1, side.start * 0.2));
+      const off = side.withdrew && L.go && holding.every((b) => !b.engaged) && L.t - (L.goT || 0) > 30;
+      if (!side.broken && !L.done && (left <= Math.floor(side.start * 0.35) || gone || off)) {
         side.broken = true;
         for (const n of up) {
           n.warband.phase = 'flee';
@@ -2197,6 +2341,7 @@ export class War {
     const ub = standing('b');
     workEngines(this, L, 0.25);
     stormEngine(this, L);
+    this.battleDin(L);
     // The lines drawn up (most of each side in its place, or long enough
     // waiting for stragglers): it begins.
     if (!L.go) {
@@ -2205,6 +2350,8 @@ export class War {
         L.go = true;
         L.goT = L.t;
         g.audio?.play('alarm');
+        g.audio?.play('war_drums', { x: L.centre.x, y: GROUND, z: L.centre.z });
+        g.audio?.play('war_horn', { x: L.centre.x, y: GROUND, z: L.centre.z });
       }
     }
     // (Nobody's come to blows for a long while, one side never having got
@@ -2344,6 +2491,7 @@ export class War {
     // bandits are after purses, and leave the folk they cut down groaning.)
     const defender = !wb && ((this.live && this.live.kind === 'raid' && n.layout === this.live.TL && n.rec.job === 'guard') || (source && source.warband && source.warband.kind === 'bandit'));
     if (!defender && !(Math.random() < chance)) return false;
+    if (this.live && this.live.kind === 'battle' && source && source.warband) credit(this.live, source);
     n.hp = 1;
     n.down = true;
     n.sleeping = true;
@@ -2378,10 +2526,70 @@ export class War {
     L.walls = [];
   }
 
+  // (Round 144) How far the camera draws back for a battle near you: the
+  // more of them about, the further (no further than the field needs, and
+  // not at all if the settings say not).
+  battleZoom(p) {
+    const L = this.live;
+    const r = this.game.renderer;
+    if (!L || L.kind !== 'battle' || !p || (r && r.battleCam === false)) return 1;
+    const now = this.sim.abs;
+    if (L.camAt === now && L.camFor === p) return L.cam;
+    const at = L.siege ? L.centre : L.centre;
+    const near = Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= (L.siege ? 60 : 48);
+    let n = 0;
+    if (near) for (const s of ['a', 'b']) for (const q of (L.sides[s] && L.sides[s].ents) || []) if (!q.dead && !q.down && Math.max(Math.abs(q.x - p.x), Math.abs(q.z - p.z)) <= 34) n++;
+    const z = near ? 1 + clamp((n - 12) / 75, 0, 0.72) : 1;
+    L.cam = L.done ? Math.max(1, (L.cam || 1) - 0.002) : z;
+    L.camAt = now;
+    L.camFor = p;
+    return L.cam;
+  }
+
+  // (Round 144) The sound of it: the clash all along the line where it's
+  // joined, nearest you; drums now and then while it lasts.
+  battleDin(L) {
+    const g = this.game;
+    L.dinT = (L.dinT ?? 1) - 0.25;
+    if (L.dinT > 0 || L.done || !L.go) return;
+    L.dinT = 1.1 + Math.random() * 0.6;
+    const p = g.player;
+    let best = null;
+    for (const s of ['a', 'b']) for (const b of (L.sides[s] && L.sides[s].bands) || []) {
+      if (!b.engaged || !b.cen) continue;
+      const d = Math.max(Math.abs(b.cen.x - p.x), Math.abs(b.cen.z - p.z));
+      if (d <= 40 && (!best || d < best.d)) best = { b, d };
+    }
+    if (best) g.audio?.play('melee', { x: best.b.cen.x, y: GROUND, z: best.b.cen.z });
+    if (Math.random() < 0.12) g.audio?.play('war_drums', { x: L.centre.x, y: GROUND, z: L.centre.z });
+  }
+
+  // (Round 144) A siege assault's bands and engines, ticked as a battle's.
+  bandsTickFor(L) {
+    bandsTick(this, L, 0.25);
+  }
+
+  workEnginesFor(L) {
+    workEngines(this, L, 0.25);
+  }
+
+  // The siege a ram's at the gate of (by its id).
+  siegeById(id) {
+    for (const w of this.wars) if (w.siege && w.siege.id === id) return w.siege;
+    return null;
+  }
+
+  // (Round 144) One soldier's blow on another in a battle (see game.damage).
+  warHit(a, v) {
+    const L = this.live;
+    return L && L.kind === 'battle' && L.sides && L.sides.a && L.sides.a.bands ? hitMult(L, a, v) : 1;
+  }
+
   // A warrior fell: who, and on which side (from the game's kill).
   onDeath(n, source) {
     const L = this.live;
     if (!L) return;
+    if (L.kind === 'battle' && source && source.warband) credit(L, source);
     if (L.kind === 'battle' && source && source.kind === 'player') {
       const s = n.warband && n.warband.side;
       if (s && L.sides[s]) L.sides[s].hates = true;
@@ -2657,6 +2865,7 @@ export class War {
     // (A raid or battle under way when you saved is reckoned up off-screen.)
     this.raids = (d.raids || []).map((r) => (r.state === 'strike' ? { ...r, state: 'march', live: false } : r));
     for (const w of this.wars) if (w.plan) w.plan.live = false;
+    for (const w of this.wars) if (w.siege && w.siege.next) w.siege.next.live = false;
     this.raidLog = d.raidLog || [];
     this.truces = d.truces || {};
     this.cd = d.cd || {};

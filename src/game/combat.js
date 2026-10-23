@@ -436,7 +436,10 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
     return 'parried';
   }
   const sh = shieldOf(v);
-  const guarding = v.kind === 'player' ? v.blocking : sh && v.state === 'fight' && v.rng && v.rng.chance(v.rec && v.rec.job === 'guard' ? 0.45 : 0.25);
+  // (Round 144: a soldier in a band takes blows on the shield too; locked
+  // in a shield wall, most of them.)
+  const wbv = v.kind === 'npc' && v.warband && v.warband.band !== undefined ? v.warband : null;
+  const guarding = v.kind === 'player' ? v.blocking : sh && (v.state === 'fight' || (wbv && v.state === 'warband')) && v.rng && v.rng.chance(wbv && wbv.shieldwall ? 0.62 : v.rec && v.rec.job === 'guard' ? 0.45 : 0.25);
   if (guarding && facing(v, a)) {
     // Up just as it came: parried, and they're left reeling.
     const hero = v.kind === 'player' ? game.hero : null;

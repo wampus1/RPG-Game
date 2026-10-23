@@ -16,6 +16,8 @@ export const FX_CAPS = [
   { parts: 1200, fx: 64, alive: 3600, fxAlive: 160 },
 ];
 export const FX_ORDER = [2, 1, 0, 3, 4];
+// (Round 144) Soldiers a side on the field, by the setting (battleSize).
+export const BATTLE_CAPS = [16, 32, 60, 90];
 
 export const DEFAULTS = {
   music: 5, // 0-10
@@ -48,6 +50,12 @@ export const DEFAULTS = {
   // realms' roads worked out, towns laid out): 0 full, 1 gentle (half the
   // time a frame). It all comes out the same, only a little later.
   bgWork: 0,
+  // (Round 144) How many soldiers a side are on the field at once in a
+  // battle near you (the rest come up from the rear as they fall): 0 a
+  // few (16), 1 some (32), 2 many (60), 3 a host (90). And whether the
+  // view draws back to take in a big battle.
+  battleSize: 2,
+  battleCam: true,
   // (Round 77)
   autosave: true,
   questMarkers: true,
@@ -75,6 +83,8 @@ export const SETTING_ROWS = [
   { key: 'autosave', tab: 'General', label: 'Autosave each morning', kind: 'bool' },
   { key: 'frameCap', tab: 'General', label: 'Frame rate', kind: 'choice', opts: ['Full', '30 a second'] },
   { key: 'bgWork', tab: 'General', label: 'Background world work', kind: 'choice', opts: ['Full', 'Gentle'] },
+  { key: 'battleSize', tab: 'General', label: 'Soldiers on the field', kind: 'choice', opts: ['A few (16)', 'Some (32)', 'Many (60)', 'A host (90)'] },
+  { key: 'battleCam', tab: 'General', label: 'Wide view in battles', kind: 'bool' },
   { key: 'damageNumbers', tab: 'General', label: 'Damage numbers', kind: 'bool' },
   { key: 'questMarkers', tab: 'General', label: 'Quest markers', kind: 'bool' },
   { key: 'tooltips', tab: 'General', label: 'Pointer tooltips', kind: 'bool' },
@@ -166,6 +176,9 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     renderer.noQuestMarks = !s.questMarkers;
     // (Round 134: read by the sim, see Sim.workMs.)
     renderer.gentleWork = s.bgWork === 1;
+    // (Round 144: read by the war, see War.fieldCap and battleZoom.)
+    renderer.battleCap = BATTLE_CAPS[s.battleSize ?? 2] || 60;
+    renderer.battleCam = s.battleCam !== false;
   }
   // (Playing in someone else's world: how often the host sends word.)
   if (net && net.setRate) net.setRate(s.netRate === 1 ? 10 : 20);

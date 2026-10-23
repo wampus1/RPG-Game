@@ -13,6 +13,8 @@ import { B } from '../world/blocks.js';
 import { FIRESIDE } from '../sim/bandits.js';
 import { ignite, roofTarget, nearestBurnable } from '../game/fire.js';
 import { sagaFight } from './sagaman.js';
+import { bandOf, nearestBand } from '../sim/bands.js';
+import { bandSoldier, marchToBand } from './soldiery.js';
 
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
 
@@ -29,6 +31,10 @@ export function warTick(n, dt) {
   // (A prisoner being led off the field.)
   if (wb.kind === 'led') return leave(n, wb, dt);
   if (wb.kind === 'march') return march(n, wb, dt);
+  // (Round 144) A siege: the besiegers about their camp, the watch on the
+  // walls (see game/siegeground.js).
+  if (wb.kind === 'camp') return campIdle(n, wb, dt);
+  if (wb.kind === 'wallwatch') return wallWatch(n, wb, dt);
   if (wb.kind === 'raid') return raider(n, wb, dt);
   if (wb.kind === 'bandit') return bandit(n, wb, dt);
   // (The stories' own fighters: see sagaman.js.)
@@ -37,7 +43,7 @@ export function warTick(n, dt) {
 }
 
 // Along to (x, z), pathing within a box round the two.
-function goTo(n, x, z, near = 1) {
+export function goTo(n, x, z, near = 1) {
   x = Math.round(x);
   z = Math.round(z);
   const box = { x0: Math.min(n.x, x) - 12, z0: Math.min(n.z, z) - 12, x1: Math.max(n.x, x) + 12, z1: Math.max(n.z, z) + 12 };
@@ -95,7 +101,7 @@ function nearest(n, list, r = 99) {
   return best;
 }
 
-function strike(n, t, dt) {
+export function strike(n, t, dt) {
   // (How long at this fight, kept apart from how long they've been out:
   // see NPC.fight.)
   if (n.threat !== t) n.warFightT = 0;
@@ -108,7 +114,7 @@ function strike(n, t, dt) {
 
 // Off home: out of sight, out of the world (never in front of you: home,
 // but still in view, they keep walking on, away from you).
-function leave(n, wb, dt) {
+export function leave(n, wb, dt) {
   const g = n.game;
   const h = wb.home;
   wb.leaveT = (wb.leaveT || 0) + dt;
@@ -406,7 +412,7 @@ function raidBurn(n, wb, dt) {
 }
 
 // Into a house for whatever's in the chests.
-function raidChest(n, wb, dt) {
+export function raidChest(n, wb, dt) {
   const g = n.game;
   const L = g.sim.layoutOf(wb.town);
   if (!L || (wb.robbed || 0) >= 2) return false;
@@ -474,6 +480,51 @@ function march(n, wb, dt) {
   if (!wb.slot && n.rng.chance(dt * 0.04)) n.say(n.rng.pick(['Keep in step!', 'Close up there!', 'March!', 'Not far now.', 'Eyes front!']), 2, '#ffe070');
 }
 
+// ------------------------------------------------------------ a siege
+// (Round 144) One of the besiegers about their camp: by the fires, a turn
+// round the tents, a look at the walls.
+function campIdle(n, wb, dt) {
+  wb.t = (wb.t ?? n.rng.float(0, 4)) - dt;
+  if (wb.t <= 0) {
+    wb.t = n.rng.float(5, 12);
+    const h = wb.home;
+    wb.spot = { x: Math.round(h.x + n.rng.int(-3, 3)), z: Math.round(h.z + n.rng.int(-3, 3)) };
+  }
+  if (wb.spot && far(n, wb.spot.x, wb.spot.z) > 0) {
+    if (!n.moving) goTo(n, wb.spot.x, wb.spot.z, 0);
+    return;
+  }
+  if (!n.moving && n.rng.chance(dt * 0.3)) n.doAction(0.3);
+  if (n.distTo(n.game.player) <= 7 && n.rng.chance(dt * 0.03)) n.say(n.rng.pick(['How long can they hold out in there?', 'Hungry in there by now, I\'d wager.', 'Another night in the mud.', 'They say we go at dawn.', 'Keep your head down near those walls.', 'Wish they\'d just open up.']), 2.4);
+}
+
+// One of the town's watch, posted on the walls: up there, looking out.
+function wallWatch(n, wb, dt) {
+  const p = wb.post;
+  if (!p) return;
+  if (n.x !== p.x || n.z !== p.z) {
+    if (!n.moving) n.followPath({ x: p.x, y: p.y, z: p.z }, 0);
+    return;
+  }
+  if (!n.moving && n.rng.chance(dt * 0.4)) n.face(p.out ? p.out.x : p.x, p.out ? p.out.z : p.z);
+  if (n.distTo(n.game.player) <= 6 && n.rng.chance(dt * 0.03)) n.say(n.rng.pick(['They\'re building something out there.', 'Keep your heads below the stones!', 'Another day. We hold.', 'Watch for ladders!', 'There\'s their fires. They\'re not going anywhere.']), 2.4, '#ffe070');
+}
+
+// The sack: a soldier of the side that took the town, through the streets
+// (a townsperson to cut down, if it's come to that; a house to go through).
+function sackTick(n, wb, dt) {
+  const v = wb.victim;
+  if (v && !v.dead && !v.down) {
+    if (n.distTo(v) <= 1) return strike(n, v, dt);
+    if (!n.moving) goTo(n, v.x, v.z, 1);
+    return;
+  }
+  wb.victim = null;
+  if ((wb.robbed || 0) < 2 && raidChest(n, wb, dt)) return;
+  if (!n.moving && n.rng.chance(dt * 0.4)) n.doAction(0.3);
+  if (n.rng.chance(dt * 0.02)) n.say(n.rng.pick(['Ours now!', 'Search every house!', 'Look what I\'ve found!', 'Bring it all!']), 2, '#ffb080');
+}
+
 // ------------------------------------------------------------ riders
 function ride(n, wb) {
   goTo(n, wb.goal.x, wb.goal.z, 2);
@@ -496,6 +547,8 @@ function soldier(n, wb, dt) {
     return leave(n, wb, dt);
   }
   if (wb.phase === 'flee') return leave(n, wb, dt);
+  // (Round 144) A town taken by storm: the sack (see siegeground.js).
+  if (wb.phase === 'sack') return sackTick(n, wb, dt);
   const side = L.sides[wb.side];
   const other = L.sides[wb.side === 'a' ? 'b' : 'a'];
   const s = side.sign;
@@ -520,6 +573,15 @@ function soldier(n, wb, dt) {
       }
       return leave(n, wb, dt);
     }
+  }
+  // (Round 144) One of a band: their place in it, their band's orders,
+  // their own wits (see soldiery.js).
+  const band = wb.band !== undefined && wb.role !== 'crew' ? bandOf(L, wb.band) : null;
+  if (band) {
+    if (band.state === 'rout' && wb.phase !== 'flee') wb.phase = 'flee';
+    if (wb.phase === 'flee') return leave(n, wb, dt);
+    if (wb.phase === 'march') return marchToBand(n, wb, dt, L, band);
+    return bandSoldier(n, wb, dt, L, band);
   }
   const ax = L.axis;
   const perp = L.perp;
@@ -550,6 +612,13 @@ function soldier(n, wb, dt) {
     const e = (L.engines || []).find((q) => q.id === wb.engine);
     if (!e || e.broken || e.done || e.phase === 'stuck' || e.phase === 'breached') {
       wb.role = 'centre';
+      // (Round 144) Into the nearest band of theirs.
+      const nb = side.bands ? nearestBand(L, wb.side, n) : null;
+      if (nb && !L.done) {
+        wb.band = nb.id;
+        nb.ents.push(n);
+        nb.start++;
+      }
       // (The field won and the ram's work done: off home with the rest.)
       if (L.done) {
         wb.phase = 'won';

@@ -1207,7 +1207,8 @@ export class NPC extends Entity {
     this.roofT = (this.roofT || 0) - dt;
     if (this.roofT <= 0 && !this.moving) {
       this.roofT = 2;
-      if (this.y >= GROUND + 2 && this.rec.job !== 'guard' && this.layout.inside(this.x, this.z)) this.stepDown();
+      // (Round 144: not a soldier on the walls in a siege.)
+      if (this.y >= GROUND + 2 && this.rec.job !== 'guard' && !this.warband && this.layout.inside(this.x, this.z)) this.stepDown();
     }
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.dodgeCd > 0) this.dodgeCd -= dt;
@@ -3075,7 +3076,16 @@ export class NPC extends Entity {
     }
     // A shut city gate: townsfolk know how to lift the bar (the watch shuts
     // it again behind them).
-    if (feet === B.city_gate && !w.getState(nx, ty, nz)) this.game.setGate(nx, nz, true);
+    if (feet === B.city_gate && !w.getState(nx, ty, nz)) {
+      // (Round 144) Not while it's barred against a siege.
+      const war = this.game.sim && this.game.sim.war;
+      if (war && war.sieges && war.sieges.barred(nx, nz)) {
+        this.path = null;
+        this.pathFails++;
+        return false;
+      }
+      this.game.setGate(nx, nz, true);
+    }
     if (feet === B.door) {
       // (Round 73) Someone else's front door, locked: a knock, and a wait
       // to see if anyone comes; nobody does, they go elsewhere.

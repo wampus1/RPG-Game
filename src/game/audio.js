@@ -9,7 +9,7 @@ const GROUP_OF = {};
 for (const [g, names] of Object.entries({
   ui: 'ui_open ui_close select error tag save star_ding reveal_great reveal_good reveal_poor reveal_bad cook_build',
   blocks: 'step step_grass step_stone step_wood step_sand step_snow dig break place door chop stone crop pour fill chest lever gate crumble locked unlock knock pick_tick pick_bind pick_set pick_strain pick_snap plank_break plank_mend glass creak torch thud',
-  world: 'splash chirp hoot bird cricket owl howl gull wave wind gust hail frog thunder eruption rumble drip wind_low sail_flap ship_creak water_rush ship_bell crackle hiss drone whisper puff bell salt_song sea_bell',
+  world: 'splash chirp hoot bird cricket owl howl gull wave wind gust hail frog thunder eruption rumble drip wind_low sail_flap ship_creak water_rush ship_bell crackle hiss drone whisper puff bell salt_song sea_bell war_horn war_drums melee cheer',
   creatures: 'hurt death growl baa scream shout voices skitter bones flap',
   bosses: 'roar sting gate_slam victory',
 })) for (const n of names.split(' ')) GROUP_OF[n] = g;
@@ -514,6 +514,12 @@ export class Audio {
       case 'portal': this.tone(440, 0.4, 'sine', 0.08, 440); this.tone(660, 0.45, 'triangle', 0.05, 660, 0.08); this.noise(0.3, 0.05, 5000); break;
       // A ship's horn, low and long.
       case 'horn': this.tone(110, 0.9, 'sawtooth', 0.06, 8); this.tone(165, 0.9, 'triangle', 0.04, 6); break;
+      // (Round 144) A battle: the war horns blown, the drums, the din of the
+      // fighting from all along the line, a cheer for a broken enemy.
+      case 'war_horn': this.swell(98, 1.8, 'sawtooth', 0.05, 5); this.swell(147, 1.8, 'triangle', 0.045, 4); this.swell(196, 1.3, 'sawtooth', 0.022, 3, 0.2); this.noise(1.6, 0.012, 500); break;
+      case 'war_drums': for (let i = 0; i < 8; i++) { this.tone(i % 4 === 3 ? 48 : 58, 0.2, 'sine', i % 4 === 0 ? 0.24 : 0.16, -16, i * 0.3); this.noise(0.07, i % 4 === 0 ? 0.12 : 0.07, 170, i * 0.3); } break;
+      case 'melee': for (let i = 0; i < 7; i++) { const d = Math.random() * 0.9; this.tone(1200 + Math.random() * 900, 0.05, 'triangle', 0.018, 0, d); this.noise(0.04, 0.03, 2600, d); } this.noise(1.0, 0.018, 700); for (let i = 0; i < 2; i++) this.tone(220 + Math.random() * 120, 0.25, 'sawtooth', 0.008, 30, Math.random() * 0.7); break;
+      case 'cheer': for (let i = 0; i < 7; i++) this.tone(250 + Math.random() * 200, 0.55, 'sawtooth', 0.009, 40 + Math.random() * 40, i * 0.05); this.noise(0.7, 0.03, 1400); break;
       // Breath torn out of you: a hollow inward rush.
       case 'drain': this.noise(0.35, 0.08, 900); this.tone(520, 0.35, 'sine', 0.05, -380); break;
       // The stones: ice cracking shut, a void's swallow, a mirror's ring,
