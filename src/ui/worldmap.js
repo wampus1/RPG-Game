@@ -21,6 +21,7 @@ import { voyagesNow } from '../game/shipfleets.js';
 import { teleportTo } from '../game/commands.js';
 import { settlementIcons, roadCellLinks } from './windows.js';
 import { planFor, seenOf, cellSeen, GROUND_COLOR, buildingLook, kindOf, CELL } from '../game/townmap.js';
+import { lookOf, kindLook, paintTile, shade } from './townlook.js';
 
 // Pixels across a map square at each step of the zoom (a square is two
 // thirds as tall as it is wide, like two characters side by side).
@@ -38,6 +39,11 @@ export function mapMode(z) {
 }
 const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ', catacomb: '†', vault: '⌂', gut: '§', saltworks: '◊', warren: '◎', mound: '∆', broch: '♜', athanor: '✦', champion: '‖', rift: '∴', gullet: '●' };
 const LAKE = '#2a5a9a';
+// (Round 143) The town map's zoom steps (pixels a tile), and how its ground
+// plan's kinds of ground look where there's nothing better to go on (a
+// plan from before 1.43).
+const TOWN_ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
+const MASK_KIND = { 0: 'ground', 1: 'pave', 2: 'roof', 3: 'water', 4: 'field', 5: 'pave', 6: 'ground', 7: 'wall', 8: 'pave', 9: 'tree' };
 
 function hexRgb(h) {
   const n = parseInt(h.slice(1), 16);
@@ -459,7 +465,7 @@ export class MapWindow extends Window {
       return;
     }
     if (this.tab === 'civ') {
-      this.tz = Math.max(0, Math.min(3, this.tz + (d > 0 ? -1 : 1)));
+      this.zoomTown(d > 0 ? -1 : 1);
       return;
     }
     this.zoomTo(this.zi + (d > 0 ? -1 : 1), m ? m.x : null, m ? m.y : null);
@@ -508,8 +514,8 @@ export class MapWindow extends Window {
       return true;
     }
     if (this.tab === 'civ') {
-      if (k.code === 'Equal' || k.code === 'NumpadAdd') this.tz = Math.min(3, this.tz + 1);
-      else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.tz = Math.max(0, this.tz - 1);
+      if (k.code === 'Equal' || k.code === 'NumpadAdd') this.zoomTown(1);
+      else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.zoomTown(-1);
       else if (k.code === 'Space' || k.code === 'Home') this.tcam = null;
       else if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k.code)) return false;
       return true;
@@ -1183,12 +1189,32 @@ export class MapWindow extends Window {
     }
   }
 
-  // Pixels a tile of the town takes, at the zoom: as big as fits whole,
-  // and closer in from there.
-  townScale(plan) {
+  // Pixels a tile of the town takes, at the zoom: first as big as fits
+  // the whole town, then a step at a time closer in (or further out), as
+  // far as a picture of the town that size can be kept (Round 143). Out
+  // to 2 a tile it's a dot of its colour; to 6, a little stamp of it; from
+  // 8 on, a glyph on its ground, as the world map's squares are drawn.
+  townSteps(plan) {
     const a = this.area();
     const fit = Math.max(1, Math.floor(Math.min((a.x1 - a.x0) / plan.W, (a.y1 - a.y0) / plan.D)));
-    return Math.min(12, fit * [1, 2, 3, 4][this.tz]);
+    const steps = TOWN_ZOOMS.filter((k) => plan.W * plan.D * k * k <= 4e6);
+    let base = 0;
+    for (let i = 0; i < steps.length; i++) if (steps[i] <= fit) base = i;
+    return { steps, base };
+  }
+
+  townScale(plan) {
+    const { steps, base } = this.townSteps(plan);
+    return steps[Math.max(0, Math.min(steps.length - 1, base + this.tz))];
+  }
+
+  zoomTown(d) {
+    const game = this.ui.game;
+    const town = this.townHere(game);
+    const plan = town ? planFor(game, town.id) : null;
+    if (!plan) return;
+    const { steps, base } = this.townSteps(plan);
+    this.tz = Math.max(-base, Math.min(steps.length - 1 - base, this.tz + d));
   }
 
   // Where the town's tile (local) is on screen, and back.
@@ -1318,36 +1344,103 @@ export class MapWindow extends Window {
     if (!known.length) g.text(x, 3, '  nowhere yet: walk about', C.faint);
   }
 
-  // The town's ground, a pixel a tile, of the parts you've seen (made again
-  // only when you've seen more, or the town has changed).
-  townPic(plan, S) {
+  // (Round 143) The town as it's seen from above, at the zoom (`k` pixels
+  // a tile): the roofs, the trees, the crops and the lanterns, the paving,
+  // the water; lit by how high each stands, a shadow below what's taller,
+  // each building's edge drawn darker; and what you've not been near, as
+  // the world map's unknown. Made again only when you've seen more, the
+  // town has changed or the zoom has (see townlook.js).
+  townPic(plan, S, k) {
     if (typeof document === 'undefined') return null;
-    const key = `${plan.sid}|${plan.v}|${S.v}`;
+    const mode = k <= 2 ? 'dots' : k < 8 ? 'tiles' : 'glyphs';
+    const key = `${plan.sid}|${plan.v}|${S.v}|${k}`;
     if (this.tpic && this.tpic.key === key) return this.tpic.canvas;
-    const c = (this.tpic && this.tpic.canvas.width === plan.W && this.tpic.canvas.height === plan.D) ? this.tpic.canvas : document.createElement('canvas');
-    c.width = plan.W;
-    c.height = plan.D;
+    // (Only more of it seen, a moment ago: the picture as it was, a little
+    // longer, so walking with the map open doesn't make it over and over.)
+    const now = this.ui.time || 0;
+    if (this.tpic && this.tpic.base === `${plan.sid}|${plan.v}|${k}` && now - this.tpic.at < 0.75) return this.tpic.canvas;
+    const IW = plan.W * k;
+    const IH = plan.D * k;
+    const c = this.tpic && this.tpic.canvas.width === IW && this.tpic.canvas.height === IH ? this.tpic.canvas : document.createElement('canvas');
+    c.width = IW;
+    c.height = IH;
     const g = c.getContext('2d');
-    const img = g.createImageData(plan.W, plan.D);
-    const rgb = {};
-    for (const [k, hex] of Object.entries(GROUND_COLOR)) {
-      const n = parseInt(hex.slice(1), 16);
-      rgb[k] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const img = g.createImageData(IW, IH);
+    const data = img.data;
+    const px32 = new Uint32Array(data.buffer);
+    const { W, D } = plan;
+    const seen = (x, z) => cellSeen(S, Math.floor(x / CELL), Math.floor(z / CELL));
+    const fromMask = (v) => kindLook(MASK_KIND[v] || 'ground', hexRgb(GROUND_COLOR[v] || GROUND_COLOR[0]));
+    for (let z = 0; z < D; z++) {
+      for (let x = 0; x < W; x++) {
+        const i = z * W + x;
+        const fog = !seen(x, z);
+        const ht = plan.ht ? plan.ht[i] : plan.mask[i] === 2 ? 4 : 0;
+        const L = plan.top ? lookOf(plan.top[i], ht >= 2, plan.mask[i] === 2) : fromMask(plan.mask[i]);
+        let f = 0.8 + Math.min(ht, 8) * 0.045;
+        // (In the shadow of what stands taller just above it.)
+        if (z > 0 && plan.ht && plan.ht[i - W] >= ht + 2) f *= 0.7;
+        paintTile(px32, IW, x * k, z * k, k, mode, L, f, x + plan.x0, z + plan.z0, fog);
+      }
     }
-    for (let z = 0; z < plan.D; z++) {
-      for (let x = 0; x < plan.W; x++) {
-        if (!cellSeen(S, Math.floor(x / CELL), Math.floor(z / CELL))) continue;
-        const v = plan.mask[z * plan.W + x];
-        const col = rgb[v] || rgb[0];
-        const i = (z * plan.W + x) * 4;
-        img.data[i] = col[0];
-        img.data[i + 1] = col[1];
-        img.data[i + 2] = col[2];
-        img.data[i + 3] = 255;
+    // Each building's edge, darker (where you've seen it).
+    if (k >= 3) {
+      for (const b of plan.b) {
+        const bx0 = b.x0 - plan.x0;
+        const bz0 = b.z0 - plan.z0;
+        const bx1 = b.x1 - plan.x0;
+        const bz1 = b.z1 - plan.z0;
+        for (let z = bz0; z <= bz1; z++) {
+          for (let x = bx0; x <= bx1; x++) {
+            if (x < 0 || z < 0 || x >= W || z >= D || !seen(x, z)) continue;
+            if (x !== bx0 && x !== bx1 && z !== bz0 && z !== bz1) continue;
+            const L = plan.top ? lookOf(plan.top[z * W + x], true, true) : fromMask(2);
+            const col = shade(L.c, 0.42);
+            const line = (u, v) => {
+              const j = ((z * k + v) * IW + x * k + u) * 4;
+              data[j] = col[0];
+              data[j + 1] = col[1];
+              data[j + 2] = col[2];
+            };
+            for (let t = 0; t < k; t++) {
+              if (x === bx0) line(0, t);
+              if (x === bx1) line(k - 1, t);
+              if (z === bz0) line(t, 0);
+              if (z === bz1) line(t, k - 1);
+            }
+          }
+        }
+      }
+    }
+    // Its door, on the side it opens onto (Round 143).
+    if (k >= 3) {
+      const DX = [0, -1, 0, 1];
+      const DZ = [1, 0, -1, 0];
+      const dw = Math.max(1, Math.round(k / 3));
+      const dd = Math.max(1, Math.round(k / 4));
+      for (const b of plan.b) {
+        const d = b.door;
+        if (!d) continue;
+        const x = d.x - plan.x0;
+        const z = d.z - plan.z0;
+        if (x < 0 || z < 0 || x >= W || z >= D || !seen(x, z)) continue;
+        const ox = DX[d.rot & 3];
+        const oz = DZ[d.rot & 3];
+        const m = Math.floor((k - dw) / 2);
+        for (let a = 0; a < dw; a++) {
+          for (let t = 0; t < dd; t++) {
+            const u = ox ? (ox > 0 ? k - 1 - t : t) : m + a;
+            const v = oz ? (oz > 0 ? k - 1 - t : t) : m + a;
+            const j = ((z * k + v) * IW + x * k + u) * 4;
+            data[j] = 96;
+            data[j + 1] = 62;
+            data[j + 2] = 34;
+          }
+        }
       }
     }
     g.putImageData(img, 0, 0);
-    this.tpic = { key, canvas: c };
+    this.tpic = { key, base: `${plan.sid}|${plan.v}|${k}`, at: now, canvas: c };
     return c;
   }
 
@@ -1372,51 +1465,70 @@ export class MapWindow extends Window {
     const o = this.townOrigin(plan, k);
     const time = this.ui.time || 0;
     const blink = Math.floor(time * 3) % 2;
-    // The ground you've seen.
-    const pic = this.townPic(plan, S);
-    if (pic) ctx.drawImage(pic, o.x, o.y, plan.W * k, plan.D * k);
+    // The town as you've seen it.
+    const pic = this.townPic(plan, S, k);
+    if (pic) ctx.drawImage(pic, o.x, o.y);
     const rect = (q) => ({ x: o.x + (q.x0 - plan.x0) * k, y: o.y + (q.z0 - plan.z0) * k, w: (q.x1 - q.x0 + 1) * k, h: (q.z1 - q.z0 + 1) * k });
-    // The landmarks (an empire city's arena, its gardens...), outlined.
-    for (const q of plan.lm) {
-      if (!S.lm[q.id]) continue;
-      const r = rect(q);
-      ctx.fillStyle = 'rgba(255,232,160,0.18)';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = '#ffe8a0';
+    const outline = (r, col) => {
+      ctx.fillStyle = col;
       ctx.fillRect(r.x, r.y, r.w, 1);
       ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
       ctx.fillRect(r.x, r.y, 1, r.h);
       ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
-    }
-    // The places you've been near: in their colours, a sign on the ones
-    // folk look for, close enough in.
+    };
+    // The landmarks (an empire city's arena, its gardens...), outlined.
+    for (const q of plan.lm) if (S.lm[q.id]) outline(rect(q), '#ffe8a0');
+    // The places you've been near: a sign on the ones folk look for (a dot
+    // of its colour, far out), and its name over it close in.
     const hov = this.townHover;
+    const labels = [];
     for (const b of plan.b) {
       if (!S.b[b.id]) continue;
       const r = rect(b);
       const look = buildingLook(b.type);
-      ctx.fillStyle = shadeHex(look.c, 0.55);
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = b.up ? shadeHex(look.c, 0.8) : look.c;
-      if (r.w > 2 && r.h > 2) ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-      const on = hov && !hov.landmark && hov.id === b.id;
-      if (on && blink) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(r.x, r.y, r.w, 1);
-        ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
-        ctx.fillRect(r.x, r.y, 1, r.h);
-        ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+      if (hov && !hov.landmark && hov.id === b.id && blink) outline(r, '#ffffff');
+      if (!look.g) continue;
+      const cx = Math.round(r.x + r.w / 2);
+      const cy = Math.round(r.y + r.h / 2);
+      if (k <= 2) {
+        ctx.fillStyle = look.c;
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
+        continue;
       }
-      if (look.g && k >= 3 && r.w >= 7 && r.h >= 7) drawGlyph(ctx, look.g, Math.round(r.x + r.w / 2 - 3), Math.round(r.y + r.h / 2 - 4), '#1a1420');
+      // (As a town's icon on the world map: the sign on a dark square.)
+      ctx.fillStyle = '#1a1420';
+      ctx.fillRect(cx - 4, cy - 5, 8, 10);
+      drawGlyph(ctx, look.g, cx - 3, cy - 4, look.c);
+      if (k >= 8) labels.push({ text: b.name, x: cx, y: r.y - 9, c: look.c });
     }
-    // You (blinking), and where the town's edge is.
+    // (Names, close in, where they don't run into one another.)
+    const put = [];
+    for (const L of labels) {
+      const w = L.text.length * CHAR_W;
+      const box = { x0: L.x - w / 2 - 1, x1: L.x + w / 2 + 1, y0: L.y - 1, y1: L.y + 9 };
+      if (put.some((q) => box.x0 < q.x1 && box.x1 > q.x0 && box.y0 < q.y1 && box.y1 > q.y0)) continue;
+      put.push(box);
+      drawText(ctx, L.text, Math.round(L.x - w / 2), L.y, L.c, '#000');
+    }
+    // You (blinking).
     const p = game.mapPos ? game.mapPos() : game.player;
     const px = o.x + (p.x - plan.x0) * k;
     const py = o.y + (p.z - plan.z0) * k;
-    const sz = Math.max(3, k);
-    ctx.fillStyle = blink ? '#ffffff' : '#ff3030';
-    ctx.fillRect(Math.round(px - sz / 2), Math.round(py) - 1, sz, 2);
-    ctx.fillRect(Math.round(px) - 1, Math.round(py - sz / 2), 2, sz);
+    if (k >= 8) {
+      // (Close in, as on the world map: the @ on red.)
+      if (blink) {
+        ctx.fillStyle = '#c02020';
+        ctx.fillRect(Math.round(px - 4), Math.round(py - 5), 8, 10);
+        drawGlyph(ctx, '@', Math.round(px - 3), Math.round(py - 4), '#ffffff');
+      }
+    } else {
+      const sz = Math.max(3, k);
+      ctx.fillStyle = blink ? '#ffffff' : '#ff3030';
+      ctx.fillRect(Math.round(px - sz / 2), Math.round(py) - 1, sz, 2);
+      ctx.fillRect(Math.round(px) - 1, Math.round(py - sz / 2), 2, sz);
+    }
+    // (How close in, in the corner.)
+    drawText(ctx, k <= 2 ? 'far' : k < 8 ? 'near' : 'close', a.x1 - 34, a.y1 - 10, '#5a5040', '#000');
     ctx.restore();
   }
 

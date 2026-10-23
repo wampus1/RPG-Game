@@ -11213,6 +11213,40 @@ Wi-Fi it would keep it saturated. All of it is fixed:
   Enter still skips them.
 - **Version 1.42.0.** Worlds from 1.41 load as before.
 
+## Round 143: A more detailed town map
+
+The world map's **Civilization** tab draws the town in much more detail,
+in the world map's own pixel style:
+
+- **What's really there.** Each tile shows what's on top of it, in that
+  block's own colour: the roofs (slate, red tile, thatch, snow, and the
+  flat roofs of the desert peoples), chimneys, trees, crops, flowers,
+  lanterns, signs, awnings, fences, benches, wells, gravestones, statues,
+  the paving of the streets and the square, the bare ground, the water.
+  Taller things are lighter, with a shadow just below them. Each
+  building's edge is drawn darker, and its door is marked on the side it
+  opens onto.
+- **Three looks, by zoom**, like the world map's:
+  - **Far out:** a dot of colour a tile, so a whole city fits.
+  - **Closer:** a little stamp of each tile: rows of roof tiles, a round
+    treetop, ripples on the water, furrows in the fields, setts in the
+    paving.
+  - **Close in:** a glyph on its ground for each tile, the way the world
+    map draws its land: ♣ and ♠ for trees, ≈ water, " grass, , earth,
+    · sand, * snow, " crops, * flowers, ¤ lanterns, ! signs, = awnings,
+    + fences, † graves, ▒ roofs. Known places' names appear over them,
+    and you are the world map's @.
+- **The unknown** looks as it does on the world map: dark, shaded ░ close
+  in, until you've walked near it.
+- **Known places** carry their sign on a dark square, like towns on the
+  world map (a dot of their colour far out). The list down the side and
+  pointing at a building work as before.
+- **More zoom steps**, from the whole town down to sixteen pixels a tile
+  (as far as the town's picture stays a sensible size).
+- **Playing together:** the plan a player gets from the host carries the
+  same detail (about 30 KB for a city, once).
+- **Version 1.43.0.** Worlds from 1.42 load as before.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

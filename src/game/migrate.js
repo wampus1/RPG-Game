@@ -1137,6 +1137,15 @@ export const STEPS = [
       log.push('Weapon specials now strike in true shapes (a cone, a circle, a strip at any angle), so a blow aimed on the diagonal lands. The world map has a Civilization tab while you\'re in a town: its plan, drawn as you walk it. Folk who hold something against you are shorter with you, and the angriest won\'t talk at all.');
     },
   },
+  {
+    to: '1.43.0',
+    game(game, log) {
+      // (Nothing kept changes: a town's map is drawn from its layout, and
+      // what you've seen of each town stays as it was.)
+      void game;
+      log.push('The town map (the world map\'s Civilization tab) is drawn in far more detail: the roofs, trees, crops, lanterns and paving as they are, and close in, glyphs the way the world map draws its land.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
