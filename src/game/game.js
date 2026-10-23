@@ -2459,8 +2459,8 @@ export class Game {
   sceneTick(dt, pressed) {
     const sc = this.scene;
     if (!sc) return 1;
-    // (Round 142: a scene may play slower than the clock, `speed`.)
-    sc.t += dt * (sc.speed ?? 1);
+    // (Round 142: a scene may play slower than the clock, `pace`.)
+    sc.t += dt * (typeof sc.pace === 'number' ? sc.pace : 1);
     // (Round 117) A scene that goes wrong is cut short, never left holding
     // you still for good.
     try {

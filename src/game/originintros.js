@@ -86,7 +86,7 @@ export const PACE = 0.62;
 // The scene object every opening is (see cutscene.js).
 function scene(kind, info, { dur, words, mood, update, draw, intro = true }) {
   return {
-    kind, intro, t: 0, dur, lock: true, info, words, speed: PACE,
+    kind, intro, t: 0, dur, lock: true, info, words, pace: PACE,
     get mood() {
       return mood(this.t);
     },

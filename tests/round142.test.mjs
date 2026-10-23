@@ -302,7 +302,7 @@ test('the leader\'s, the brigand\'s and the outworlder\'s openings play slower, 
     const extra = origin === 'leader' ? { lead: { scope: 'town', style: 'council' } } : origin === 'outworlder' ? { mutations: ['glow'] } : {};
     const game = new Game({ seed: 12345, renderer: stubRenderer(), audio: null, ui: stubUI(), hero: { ...randomHero(12345), name: 'Anwen', origin, ...extra }, intro: true });
     const sc = game.scene;
-    assert.ok(sc && sc.intro && sc.speed === PACE, origin);
+    assert.ok(sc && sc.intro && sc.pace === PACE, origin);
     const t0 = sc.t;
     game.sceneTick(1, []);
     assert.ok(Math.abs(sc.t - t0 - PACE) < 1e-9, `${origin}: a second of the clock, ${PACE} of the scene`);

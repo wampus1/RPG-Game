@@ -661,7 +661,7 @@ export class GuestNet {
     // Your scene, played here.
     const sc = game.scene;
     if (sc) {
-      sc.t += dt * (sc.speed ?? 1);
+      sc.t += dt * (typeof sc.pace === 'number' ? sc.pace : 1);
       try {
         sc.update?.(game, dt, []);
       } catch {
