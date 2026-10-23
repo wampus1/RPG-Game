@@ -14,7 +14,7 @@
 // high and stars, an axe's whirl, a flail's arc on its chain, a great
 // crescent, a leap and a cleft in the ground, a hammer's ground split.
 import { PALS } from './abilityfx.js';
-import { SPECIALS, specialTiles, heading } from '../game/specials.js';
+import { SPECIALS, specialShapes, shapesAt, shapesReach, heading } from '../game/specials.js';
 
 const TAU = Math.PI * 2;
 const R = Math.round;
@@ -142,6 +142,76 @@ function screenDir(r, dx, dz) {
 }
 
 // ------------------------------------------------------------ coming
+// (Round 142) The ground it will cover, as its shapes (see specials.js: a
+// circle, a slice of one, a long strip, at the angle it's aimed), not
+// squares. In whole pixels as before: cells two pixels across, lit where
+// their middles fall within it, stippled denser as it winds up and filling
+// out from the one winding it; its outline marching while it winds and
+// flashing white once it's ready; a line within it where it lands harder
+// (a hammer's shock, its heart and its edge).
+const CELL = 2;
+function drawShapes(r, ctx, shapes, x0, z0, y, a, fr, P) {
+  const me = floorOf(r, x0, y, z0);
+  const far = shapesReach(shapes, x0, z0);
+  const ready = a >= 1;
+  // Where on the screen it could be: round each shape, a square's margin.
+  let sx0 = Infinity;
+  let sx1 = -Infinity;
+  let sy0 = Infinity;
+  let sy1 = -Infinity;
+  for (const sh of shapes) {
+    if (sh.t === 'go' || !sh.w) continue;
+    const reach = (sh.t === 'box' ? sh.len + sh.hw : sh.r) + 0.5;
+    for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const c = floorOf(r, sh.x + ox * reach, y, sh.z + oz * reach);
+      sx0 = Math.min(sx0, c.cx);
+      sx1 = Math.max(sx1, c.cx);
+      sy0 = Math.min(sy0, c.cy);
+      sy1 = Math.max(sy1, c.cy);
+    }
+  }
+  if (sx0 === Infinity) return;
+  sx0 = Math.floor(sx0 / CELL) * CELL;
+  sy0 = Math.floor(sy0 / CELL) * CELL;
+  const cols = Math.ceil((sx1 - sx0) / CELL) + 2;
+  const rows = Math.ceil((sy1 - sy0) / CELL) + 2;
+  if (cols * rows > 40000) return;
+  const W = new Float32Array(cols * rows);
+  const D = new Float32Array(cols * rows);
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const sx = sx0 + i * CELL + CELL / 2;
+      const sy = sy0 + j * CELL + CELL / 2;
+      const [dx, dz] = r.toWorld((sx - me.cx) / 16, (sy - me.cy) / 16);
+      const k = j * cols + i;
+      W[k] = shapesAt(shapes, x0 + dx, z0 + dz);
+      D[k] = Math.hypot(dx, dz);
+    }
+  }
+  const at = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows ? 0 : W[j * cols + i]);
+  const edge = ready ? (fr % 2 ? P[4] : P[3]) : P[3];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const k = j * cols + i;
+      const w = W[k];
+      if (!w) continue;
+      const x = sx0 + i * CELL;
+      const yy = sy0 + j * CELL;
+      // (Filling out from them as it winds up.)
+      const lit = Math.max(0, Math.min(1, a * (far + 0.6) - (D[k] - 1)));
+      stip(ctx, x, yy, CELL, CELL, P[0], 0.12);
+      stip(ctx, x, yy, CELL, CELL, P[1], (0.2 + 0.34 * lit) * (0.6 + 0.4 * w));
+      if (lit > 0.4) stip(ctx, x, yy, CELL, CELL, P[2], (lit - 0.4) * 0.75 * w);
+      // Its edge (and the line where it lands harder within it).
+      const rim = at(i - 1, j) < w || at(i + 1, j) < w || at(i, j - 1) < w || at(i, j + 1) < w;
+      if (!rim) continue;
+      const outer = !at(i - 1, j) || !at(i + 1, j) || !at(i, j - 1) || !at(i, j + 1);
+      if (!ready && (i + j + fr) % 4 >= 2) continue;
+      stip(ctx, x, yy, CELL, CELL, outer ? edge : P[2], outer ? (ready ? 1 : 0.35 + 0.65 * lit) : 0.5 + 0.5 * lit);
+    }
+  }
+}
+
 // The warning, for each of you winding one up.
 export function drawSpecialTele(r, ctx, game) {
   const list = game.netPlayers || (game.everyone ? game.everyone() : [game.player]);
@@ -154,45 +224,27 @@ export function drawSpecialTele(r, ctx, game) {
     const px0 = R(p.x);
     const pz0 = R(p.z);
     const at = s.tx !== undefined && s.tx !== null ? { x: s.tx, z: s.tz } : null;
-    const tiles = specialTiles(s.k, px0, pz0, s.dx ?? 0, s.dz ?? 1, at);
+    const ang = typeof s.ang === 'number' ? s.ang : Math.atan2(s.dz ?? 1, s.dx ?? 0);
+    const shapes = specialShapes(s.k, px0, pz0, ang, at);
     const a = s.a || 0;
     const ready = a >= 1;
-    let far = 1;
-    for (const t of tiles) far = Math.max(far, Math.max(Math.abs(t.x - px0), Math.abs(t.z - pz0)));
     const me = floorOf(r, px0, y, pz0);
-    for (const t of tiles) {
-      const d = Math.max(Math.abs(t.x - px0), Math.abs(t.z - pz0));
-      // (Filling out from them as it winds up.)
-      const lit = Math.max(0, Math.min(1, a * (far + 0.6) - (d - 1)));
-      const g = floorOf(r, t.x, y, t.z);
-      if (t.tag === 'go') {
-        // Where they'll be: a dotted line there and a diamond, pulsing.
-        for (let i = 2; i < 30; i += 3) {
-          const k = i / 30;
-          px(ctx, me.cx + (g.cx - me.cx) * k, me.cy + (g.cy - me.cy) * k, P[3], 0.4 + 0.6 * lit);
-        }
-        const sz = 3 + (fr % 4 < 2 ? 1 : 0) + (ready ? 1 : 0);
-        for (let i = -sz; i <= sz; i++) {
-          const w = sz - Math.abs(i);
-          line(ctx, g.cx - w, g.cy + i, g.cx + w, g.cy + i, Math.abs(i) === sz || w === 0 ? P[4] : P[2], ready ? 1 : 0.5 + 0.5 * lit);
-        }
-        continue;
+    // (Only a way, hurting no one: a step through the shadows with no one
+    // to step behind. Shown all the same, a little fainter.)
+    drawShapes(r, ctx, shapes.map((sh) => (sh.t === 'box' && !sh.w ? { ...sh, w: 0.5 } : sh)), px0, pz0, y, a, fr, P);
+    for (const sh of shapes) {
+      if (sh.t !== 'go') continue;
+      // Where they'll be: a dotted line there and a diamond, pulsing.
+      const g = floorOf(r, sh.x, y, sh.z);
+      const lit = Math.max(0, Math.min(1, a * 1.6));
+      for (let i = 2; i < 30; i += 3) {
+        const k = i / 30;
+        px(ctx, me.cx + (g.cx - me.cx) * k, me.cy + (g.cy - me.cy) * k, P[3], 0.4 + 0.6 * lit);
       }
-      const w = t.w || 1;
-      stip(ctx, g.x + 1, g.y + 1, 14, 14, P[0], 0.12);
-      stip(ctx, g.x + 1, g.y + 1, 14, 14, P[1], (0.2 + 0.34 * lit) * (0.6 + 0.4 * w));
-      if (lit > 0.4) stip(ctx, g.x + 3, g.y + 3, 10, 10, P[2], (lit - 0.4) * 0.75 * w);
-      // Its edge: marching while it winds up, flashing once it's ready.
-      const edge = ready ? (fr % 2 ? P[4] : P[3]) : P[3];
-      for (let i = 0; i < 52; i++) {
-        if (!ready && (i + fr) % 4 >= 2) continue;
-        const side = Math.floor(i / 13);
-        const o = i % 13;
-        const ex = side === 0 ? g.x + 1 + o : side === 1 ? g.x + 14 : side === 2 ? g.x + 14 - o : g.x + 1;
-        const ey = side === 0 ? g.y + 1 : side === 1 ? g.y + 1 + o : side === 2 ? g.y + 14 : g.y + 14 - o;
-        px(ctx, ex, ey, edge, ready ? 1 : 0.3 + 0.7 * lit);
-        // (Ready: a second, inner edge in its own colour.)
-        if (ready) px(ctx, ex + (side === 3 ? 1 : side === 1 ? -1 : 0), ey + (side === 0 ? 1 : side === 2 ? -1 : 0), P[2]);
+      const sz = 3 + (fr % 4 < 2 ? 1 : 0) + (ready ? 1 : 0);
+      for (let i = -sz; i <= sz; i++) {
+        const w = sz - Math.abs(i);
+        line(ctx, g.cx - w, g.cy + i, g.cx + w, g.cy + i, Math.abs(i) === sz || w === 0 ? P[4] : P[2], ready ? 1 : 0.5 + 0.5 * lit);
       }
     }
     // A ring of pips round their feet, lit one by one as it winds up.

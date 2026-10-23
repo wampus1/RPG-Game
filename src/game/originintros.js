@@ -79,10 +79,14 @@ function talk(ctx, sc, lines, black, fade) {
   if (sc.t > black) darkWords(ctx, sc.words, sc.t - black, LINE, sc.words.length - 1);
 }
 
+// (Round 142) How fast an opening plays: slower than the clock, so there's
+// time to read what's said (the shots, the words in the dark, all of it).
+export const PACE = 0.62;
+
 // The scene object every opening is (see cutscene.js).
 function scene(kind, info, { dur, words, mood, update, draw, intro = true }) {
   return {
-    kind, intro, t: 0, dur, lock: true, info, words,
+    kind, intro, t: 0, dur, lock: true, info, words, speed: PACE,
     get mood() {
       return mood(this.t);
     },

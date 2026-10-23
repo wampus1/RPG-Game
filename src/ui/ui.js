@@ -41,6 +41,7 @@ const FITTING_HINT = { helm: 'RMB take the wheel', ship_cannon: 'RMB man the gun
 import { BlueprintWindow } from './blueprint.js';
 import { nearMates } from '../game/guilds.js';
 import { specialLine } from '../game/specials.js';
+import { noteNear } from '../game/townmap.js';
 
 // (Round 80) Who's shown down the side of the screen of your guild: those
 // within this many paces of you lately (MATE_RECENT ms: half a minute).
@@ -458,6 +459,13 @@ export class UI {
       if (s !== this.lastSettlement) {
         this.lastSettlement = s;
         if (s && this.showHud) this.open(new W.BannerWindow(this, s));
+      }
+      // (Round 142) The parts of the town you've been near, for its map
+      // (see game/townmap.js): looked at twice a second.
+      this.nearT = (this.nearT || 0) - dt;
+      if (s && this.nearT <= 0) {
+        this.nearT = 0.5;
+        noteNear(game);
       }
     }
   }

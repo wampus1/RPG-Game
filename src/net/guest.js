@@ -25,6 +25,7 @@ import { GAME_VERSION, versionText } from '../version.js';
 import { applyShips, driftShips } from '../game/ships3d.js';
 import { registerDesign } from '../game/shipdesign.js';
 import { stormFx } from '../game/storms.js';
+import { planFromWire } from '../game/townmap.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -115,6 +116,11 @@ export class GuestNet {
     // (What a command run on the host said: into the console.)
     else if (m.t === 'cmdOut') this.commandOut(m.lines || [], m.flags || null);
     else if (m.t === 'feat') this.onFeat?.(m.id);
+    // (Round 142) A town's plan, asked for (see game/townmap.js).
+    else if (m.t === 'plan' && this.game && m.p) {
+      const p = planFromWire(m.p);
+      if (p) (this.game.townPlans ||= {})[p.sid] = { ...p, at: Date.now() };
+    }
     else if (m.t === 'friend') this.onFriend(m);
     else if (m.t === 'site') this.site(m);
     else if (m.t === 'closing' || m.t === 'hostgone') this.onEnd('The host has closed the world.');
@@ -192,6 +198,16 @@ export class GuestNet {
     const log = (ui.consoleLog ||= []);
     log.push(...lines.map((l) => (typeof l === 'string' ? l : { text: l.text, c: l.c || undefined })));
     while (log.length > 200) log.shift();
+  }
+
+  // (Round 142) A town's plan, for the map (not asked again for a while).
+  askPlan(sid) {
+    this.planAsked ||= new Map();
+    const t = this.planAsked.get(sid);
+    const now = Date.now();
+    if (t && now - t < 5000) return;
+    this.planAsked.set(sid, now);
+    this.out({ t: 'plan', sid });
   }
 
   need(rx, rz) {
@@ -645,7 +661,7 @@ export class GuestNet {
     // Your scene, played here.
     const sc = game.scene;
     if (sc) {
-      sc.t += dt;
+      sc.t += dt * (sc.speed ?? 1);
       try {
         sc.update?.(game, dt, []);
       } catch {

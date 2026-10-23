@@ -18,7 +18,7 @@ import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
 import { guardPlan, stepAside } from './tactics.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { dialogueLine, greetLine, feelBark, rallyBark, seekLine } from '../game/dialogue.js';
+import { dialogueLine, greetLine, feelBark, rallyBark, seekLine, regardOf } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
@@ -3624,8 +3624,17 @@ export class NPC extends Entity {
     if (this.act === 'work' && this.atGoal) chance *= 0.5;
     if (this.act === 'mourn' || this.act === 'funeral' || this.act === 'trial') chance = 0;
     if ((this.rec.grief || []).some((g) => g.rel !== 'acquaintance')) chance *= 0.4;
+    // (Round 142) One who won't speak to you doesn't: a look, at most.
+    const rg = player === this.game.player ? regardOf(this, this.game) : null;
+    if (rg && rg.level >= 3) chance = 0.15;
     if (!this.rng.chance(chance)) return;
     sim.markGreet();
+    if (rg && rg.level >= 3) {
+      if (rg.why === 'fear') this.face(2 * this.x - player.x, 2 * this.z - player.z);
+      else this.face(player.x, player.z);
+      this.say(this.rng.pick(rg.why === 'fear' ? ['*shrinks back*', '*hurries past*', '...'] : ['*glares*', '*turns away*', '*looks straight through you*', '...']), 3, '#ffb080');
+      return;
+    }
     this.face(player.x, player.z);
     this.say(greetLine(this, this.game, rep, citizen), 3.5, rep <= -25 ? '#ffb080' : undefined);
   }

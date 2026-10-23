@@ -318,7 +318,7 @@ function chapter(out, n, title) {
 }
 
 // ============================================================ the annals of a town
-const KIND_WORDS = { battle: 'Battle', ceded: 'A New Allegiance', proclaimed: 'The Crown', fire: 'Fire', flood: 'Flood', plague: 'Sickness', siege: 'Siege', famine: 'Hunger', omen: 'Omens', temple: 'The Temple', oath: 'Oaths', war: 'War', good: 'Good Years', bad: 'Hard Years', dungeon: 'Old Places', news: 'Recent Years', statue: 'Statues', drought: 'Drought', winter: 'Winter', fog: 'The Fog', wreck: 'The Wreck', lore: 'Remembered Things', founded: 'The Founding' };
+const KIND_WORDS = { battle: 'Battle', ceded: 'A New Allegiance', proclaimed: 'The Crown', fire: 'Fire', flood: 'Flood', plague: 'Sickness', siege: 'Siege', famine: 'Hunger', omen: 'Omens', temple: 'The Temple', oath: 'Oaths', war: 'War', good: 'Good Years', bad: 'Hard Years', dungeon: 'Old Places', news: 'Recent Years', statue: 'Statues', drought: 'Drought', winter: 'Winter', fog: 'The Fog', wreck: 'The Wreck', lore: 'Remembered Things', founded: 'The Founding', build: 'Building', trade: 'Trade', festival: 'Feasts and Fairs', growth: 'Growing', feud: 'Feuds', scandal: 'Scandal', people: 'Its People', beast: 'Beasts', quake: 'The Shaking', name: 'A New Name', mine: 'The Mines' };
 
 GENRES.annals = {
   weight: 1.4,
@@ -418,7 +418,7 @@ GENRES.annals = {
     if (text && prevQ && !when) {
       const dy = q.y - prevQ.y;
       const was = kindOf(prevQ);
-      const hard = /bad|fire|flood|plague|siege|famine|drought|winter|fog|wreck|battle|war/.test(was);
+      const hard = /bad|fire|flood|plague|siege|famine|drought|winter|fog|wreck|battle|war|quake|beast|scandal/.test(was);
       const op = W.opener('then', facts);
       const nounish = /^(a|an|the) [^,.;:]{0,40}:/i.test(text);
       if (dy === 0) when = nounish ? `That same year came ${text}` : `That same year, ${text}`;
@@ -503,7 +503,7 @@ function warLead(prev, b, siege, f, rng) {
 // What the long past brought to a town: its realm proclaimed in it; the
 // battles fought at it, and the peace that gave it away; the winters and
 // fevers that fell on its whole land. (Only after it was founded.)
-const LAND_KINDS = { winter: 'winter', fever: 'plague', comet: 'omen', quake: 'bad', blight: 'famine', locust: 'famine' };
+const LAND_KINDS = { winter: 'winter', fever: 'plague', comet: 'omen', quake: 'bad', blight: 'famine', locust: 'famine', flood: 'flood', dark: 'famine', sweat: 'plague', wolves: 'winter', gold: 'good', tide: 'bad' };
 function pastHere(lore, T, h) {
   const out = [];
   const after = (y) => y > h.founded + 1;
@@ -755,7 +755,9 @@ GENRES.war = {
     }
     if (w.end !== null && w.end <= meta.year) {
       chapter(out, n++, cap(w.peace || 'The Peace'));
-      out.push(W.para('peace', facts, { min: 2, max: 3 }));
+      // (Its terms always told: what the war came to.)
+      const pp = W.para('peace', facts, { min: 2, max: 3 });
+      out.push(w.endText && !pp.includes(w.endText) ? `${pp} ${cap(w.endText)}.` : pp);
       chapter(out, n++, 'After the War');
       out.push(W.para('aftermath', facts, { min: 2, max: 3 }));
     } else {

@@ -46,12 +46,12 @@ import { choose as chooseLine } from './talk/rules.js';
 import { dominant } from '../sim/mind/emotion.js';
 import { emote } from '../ui/textfx.js';
 import { talentsOf, SKILLS, talentHint, skillOf } from '../sim/mind/talent.js';
-import { socialTopics, socialRespond, isSocial, seekLine, rallyBark, sulking } from './social.js';
+import { socialTopics, socialRespond, isSocial, seekLine, rallyBark, sulking, regardOf, allowedBy } from './social.js';
 import { pkey } from '../sim/mind/common.js';
 import { newcomerKey } from '../sim/newcomers.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
-export { seekLine, rallyBark };
+export { seekLine, rallyBark, regardOf };
 
 // (Round 135) A line written for just this moment (see talk/rules.js), if
 // one fits at least `min` particulars: { text, rule }, or null.
@@ -317,6 +317,11 @@ function openingRaw(npc, game) {
     const sl = ruleLine(npc, game, 'sulk', 0);
     return sl ? sl.text : pick(rng, ['I\'ve nothing to say to you.', 'Go away.']);
   }
+  // (Round 142) Heard out only because you pleaded; or cold with you, and
+  // short about it.
+  const rg = regardOf(npc, game);
+  if (rg.level >= 3) return rg.why === 'fear' ? pick(rng, ['W-what do you want?', 'Please... say it and go.', '*won\'t meet your eye* What?']) : pick(rng, ['What.', 'Make it quick.', 'Say what you came to say, then go.', 'Fine. What?']);
+  if (rg.level === 2 && rng.next() < 0.5) return pick(rng, ['What do you want?', 'Yes? Be quick.', 'Oh. It\'s you.', 'Hmph. What is it?']);
   // (Round 135) Something written for just this moment: how they feel,
   // what's on their mind, how you look, who you are (see talk/lines.js).
   // The more particular, the likelier it's said over the usual. What's
@@ -466,7 +471,16 @@ export function topicCat(o) {
 }
 
 export function topicsFor(npc, game) {
-  return topicsRaw(npc, game).map((o) => ({ ...o, cat: topicCat(o) }));
+  const all = topicsRaw(npc, game).map((o) => ({ ...o, cat: topicCat(o) }));
+  // (Round 142) Only what they'll talk about with you, as they feel about
+  // you (see social.regardOf): nothing personal from the wary, only what
+  // has to be said from the cold, and next to nothing from those who'd
+  // rather not speak to you at all.
+  // (Not when it's they who came to you: the mayor with a lecture.)
+  const c = game.sim.confront;
+  if (c && c.arrived && c.idx === npc.rec.idx) return all;
+  const lv = regardOf(npc, game).level;
+  return lv ? all.filter((t) => allowedBy(lv, t)) : all;
 }
 
 function topicsRaw(npc, game) {

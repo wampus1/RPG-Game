@@ -20,6 +20,7 @@ import { GUILD_NAMES, HAVEN_MAP } from '../world/havenkit.js';
 import { voyagesNow } from '../game/shipfleets.js';
 import { teleportTo } from '../game/commands.js';
 import { settlementIcons, roadCellLinks } from './windows.js';
+import { planFor, seenOf, cellSeen, GROUND_COLOR, buildingLook, kindOf, CELL } from '../game/townmap.js';
 
 // Pixels across a map square at each step of the zoom (a square is two
 // thirds as tall as it is wide, like two characters side by side).
@@ -263,6 +264,29 @@ export class MapWindow extends Window {
     this.listScroll = 0;
     // (Round 79) A marker of your own being named (typed into).
     this.naming = null;
+    // (Round 142) Which page: the world, or the town you're in (its own
+    // map, of the parts you've been near: see game/townmap.js); and that
+    // map's view (where it's centred, in the town's tiles; how close in).
+    this.tab = 'world';
+    this.tcam = null;
+    this.tz = 0;
+    this.townHover = null;
+    this.townPick = null;
+  }
+
+  // (Round 142) The town you're in, if any (its map's tab is only there
+  // while you are).
+  townHere(game) {
+    return game && !game.dungeon && game.currentSettlement ? game.currentSettlement : null;
+  }
+
+  goTab(tab) {
+    if (this.tab === tab) return;
+    this.tab = tab;
+    this.drag = null;
+    this.searching = false;
+    this.listScroll = 0;
+    this.ui.audio?.play('page');
   }
 
   // The map's area on screen, in pixels.
@@ -354,6 +378,11 @@ export class MapWindow extends Window {
       if (k('KeyW', 'ArrowUp')) this.goal.z -= sp * 1.5;
       if (k('KeyS', 'ArrowDown')) this.goal.z += sp * 1.5;
     }
+    // (Round 142) The town's map: dragged and moved about on its own.
+    if (this.tab === 'civ') {
+      this.updateTown(dt, inp);
+      return;
+    }
     const m = this.ui.mouse;
     if (m && m.down && this.drag) {
       const dx = m.x - this.drag.x;
@@ -390,6 +419,10 @@ export class MapWindow extends Window {
     this.naming = null;
     const a = this.area();
     const inMap = ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1;
+    if (this.tab === 'civ') {
+      if (ck.button === 0 && inMap && this.tcam) this.drag = { x: ck.x, y: ck.y, cx: this.tcam.x, cz: this.tcam.z, moved: 0 };
+      return true;
+    }
     if (ck.button === 0 && inMap) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cz: this.cam.z, moved: 0 };
     // (Round 79) Right-click: a marker of your own put down there (or the
     // one there taken up).
@@ -425,6 +458,10 @@ export class MapWindow extends Window {
       this.listScroll = Math.max(0, this.listScroll + (d > 0 ? 3 : -3));
       return;
     }
+    if (this.tab === 'civ') {
+      this.tz = Math.max(0, Math.min(3, this.tz + (d > 0 ? -1 : 1)));
+      return;
+    }
     this.zoomTo(this.zi + (d > 0 ? -1 : 1), m ? m.x : null, m ? m.y : null);
   }
 
@@ -458,6 +495,22 @@ export class MapWindow extends Window {
     }
     if (k.code === 'Slash' && this.listOpen) {
       this.searching = true;
+      return true;
+    }
+    // (Round 142) The pages: 1 the world, 2 the town you're in.
+    if (k.code === 'Digit1') {
+      this.goTab('world');
+      return true;
+    }
+    if (k.code === 'Digit2' && this.townHere(game)) {
+      this.goTab('civ');
+      return true;
+    }
+    if (this.tab === 'civ') {
+      if (k.code === 'Equal' || k.code === 'NumpadAdd') this.tz = Math.min(3, this.tz + 1);
+      else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.tz = Math.max(0, this.tz - 1);
+      else if (k.code === 'Space' || k.code === 'Home') this.tcam = null;
+      else if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k.code)) return false;
       return true;
     }
     if (k.code === 'KeyV') this.civView = !this.civView;
@@ -540,10 +593,20 @@ export class MapWindow extends Window {
   }
 
   draw(g, game) {
-    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `WORLD MAP · ${ARCHIPELAGO.toUpperCase()}` });
+    const town = this.townHere(game);
+    if (this.tab === 'civ' && !town) this.tab = 'world';
+    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true });
+    // (Round 142) Its pages, as tabs along the top: the world, and the town
+    // you're in (only while you're in one).
+    this.drawTabs(g, town);
     // (The map itself is drawn in pixels over this: see drawPixels.)
     for (let y = 1; y < this.h - 4; y++) g.text(1, y, ' '.repeat(this.w - 2), '#000000', '#08080e');
     if (!game) return;
+    if (this.tab === 'civ') {
+      this.drawTownWords(g, game, town);
+      this.drawList(g, game);
+      return;
+    }
     const ow = game.world.ow;
     const m = this.ui.mouse;
     const q = m ? this.squareAt(m.x, m.y) : null;
@@ -639,6 +702,10 @@ export class MapWindow extends Window {
     const W = cols - 2;
     const bottom = this.h - 5;
     for (let y = 1; y <= bottom; y++) g.text(x, y, ' '.repeat(W), C.fg, '#100c14');
+    if (this.tab === 'civ') {
+      this.drawTownList(g, game, x, W, bottom);
+      return;
+    }
     // The search.
     const sHov = this.hovering(x, 1, W, 1);
     const cur = this.searching && Math.floor((this.ui.time || 0) * 2) % 2 ? '_' : '';
@@ -705,6 +772,11 @@ export class MapWindow extends Window {
 
   drawPixels(ctx, game) {
     if (!game) return;
+    if (this.tab === 'civ') {
+      this.drawTown(ctx, game);
+      this.drawListTab(ctx);
+      return;
+    }
     const ow = game.world.ow;
     const a = this.area();
     const o = this.origin();
@@ -1096,6 +1168,257 @@ export class MapWindow extends Window {
 
   // (Round 74) A little book on the list's tab: shut when the list is
   // put away, open when it's out.
+  // ------------------------------------------------------------ (Round 142) the town
+  drawTabs(g, town) {
+    let x = 2;
+    const tabs = [['world', ` 1·WORLD · ${ARCHIPELAGO.toUpperCase()} `]];
+    if (town) tabs.push(['civ', ` 2·CIVILIZATION · ${town.name.toUpperCase()} `]);
+    for (const [id, label] of tabs) {
+      const on = this.tab === id;
+      const hov = !on && this.hovering(x, 0, label.length, 1);
+      g.text(x, 0, label, on ? '#1a1420' : hov ? C.white : C.dim, on ? '#c8a868' : hov ? '#3a2e1e' : '#1c1620');
+      this.hit(x, 0, label.length, 1, () => this.goTab(id));
+      x += label.length + 1;
+    }
+  }
+
+  // Pixels a tile of the town takes, at the zoom: as big as fits whole,
+  // and closer in from there.
+  townScale(plan) {
+    const a = this.area();
+    const fit = Math.max(1, Math.floor(Math.min((a.x1 - a.x0) / plan.W, (a.y1 - a.y0) / plan.D)));
+    return Math.min(12, fit * [1, 2, 3, 4][this.tz]);
+  }
+
+  // Where the town's tile (local) is on screen, and back.
+  townOrigin(plan, k) {
+    const a = this.area();
+    return { x: Math.round((a.x0 + a.x1) / 2 - this.tcam.x * k), y: Math.round((a.y0 + a.y1) / 2 - this.tcam.z * k) };
+  }
+
+  updateTown(dt, inp) {
+    const game = this.ui.game;
+    const town = this.townHere(game);
+    const plan = town ? planFor(game, town.id) : null;
+    const want = this.listOpen ? LIST_W : 0;
+    this.listW += (want - this.listW) * Math.min(1, dt * 14);
+    if (Math.abs(want - this.listW) < 0.3) this.listW = want;
+    if (!plan) return;
+    // (First looked at, or asked for again: centred on you.)
+    if (!this.tcam || this.tcam.sid !== town.id) {
+      const p = game.mapPos ? game.mapPos() : game.player;
+      this.tcam = { sid: town.id, x: Math.max(0, Math.min(plan.W, p.x - plan.x0)), z: Math.max(0, Math.min(plan.D, p.z - plan.z0)) };
+    }
+    const k = this.townScale(plan);
+    if (inp && inp.isDown) {
+      const sp = (160 / k) * dt;
+      const key = (...c) => c.some((q) => inp.isDown(q));
+      if (key('KeyA', 'ArrowLeft')) this.tcam.x -= sp;
+      if (key('KeyD', 'ArrowRight')) this.tcam.x += sp;
+      if (key('KeyW', 'ArrowUp')) this.tcam.z -= sp;
+      if (key('KeyS', 'ArrowDown')) this.tcam.z += sp;
+    }
+    const m = this.ui.mouse;
+    if (m && m.down && this.drag) {
+      const dx = m.x - this.drag.x;
+      const dy = m.y - this.drag.y;
+      this.drag.moved = Math.max(this.drag.moved, Math.abs(dx) + Math.abs(dy));
+      this.tcam.x = this.drag.cx - dx / k;
+      this.tcam.z = this.drag.cz - dy / k;
+    } else if (m && !m.down && this.drag) {
+      // (A click, not a drag: the place under it picked out.)
+      if (this.drag.moved < 4) this.townPick = this.townAt(game, plan, m.x, m.y);
+      this.drag = null;
+    }
+    this.tcam.x = Math.max(0, Math.min(plan.W, this.tcam.x));
+    this.tcam.z = Math.max(0, Math.min(plan.D, this.tcam.z));
+  }
+
+  // The place of the town (one you've been near) under a screen pixel.
+  townAt(game, plan, px, py) {
+    if (!this.tcam) return null;
+    const a = this.area();
+    if (px < a.x0 || px >= a.x1 || py < a.y0 || py >= a.y1) return null;
+    const S = seenOf(game, plan.sid);
+    if (!S) return null;
+    const k = this.townScale(plan);
+    const o = this.townOrigin(plan, k);
+    const x = plan.x0 + (px - o.x) / k;
+    const z = plan.z0 + (py - o.y) / k;
+    const inside = (q) => x >= q.x0 && x < q.x1 + 1 && z >= q.z0 && z < q.z1 + 1;
+    const b = plan.b.find((q) => S.b[q.id] && inside(q));
+    if (b) return { ...b, kind: kindOf(b.type) };
+    const lm = plan.lm.find((q) => S.lm[q.id] && inside(q));
+    return lm ? { ...lm, landmark: true, kind: 'landmark' } : null;
+  }
+
+  // The words under the town's map: what's pointed at, or how much of the
+  // town you know.
+  drawTownWords(g, game, town) {
+    const y0 = this.h - 4;
+    const W = this.w - 3;
+    const put = (y, text, color) => g.text(2, y, text.slice(0, W).padEnd(W), color);
+    const plan = planFor(game, town.id);
+    if (!plan) {
+      put(y0, `${town.name}: unrolling the town's plan...`, C.dim);
+      put(y0 + 1, '', C.dim);
+      return;
+    }
+    const m = this.ui.mouse;
+    const q = (m && this.townAt(game, plan, m.x, m.y)) || this.townPick;
+    this.townHover = q;
+    const S = seenOf(game, town.id, plan);
+    const nb = plan.b.filter((b) => S.b[b.id]).length;
+    if (q) {
+      const what = q.landmark ? 'landmark' : { home: 'a home', trade: 'trade', food: 'food and drink', civic: 'the town\'s hall', faith: 'faith', craft: 'a craft', learn: 'learning', guard: 'the watch' }[q.kind] || q.type;
+      put(y0, `${q.name}${q.up ? ' (going up)' : ''} · ${what}`, C.hi);
+    } else put(y0, `${town.name}: ${nb} of its ${plan.b.length} buildings known to you.`, C.hi);
+    put(y0 + 1, 'Only where you\'ve walked is drawn · drag or WASD · wheel: zoom · Space: you', C.faint);
+  }
+
+  // The places you know in the town, down the side (homes counted, not
+  // listed); a click finds one on the map.
+  drawTownList(g, game, x, W, bottom) {
+    const town = this.townHere(game);
+    const plan = town ? planFor(game, town.id) : null;
+    const S = plan ? seenOf(game, town.id, plan) : null;
+    if (!plan || !S) {
+      g.text(x, 1, '  ...', C.faint);
+      return;
+    }
+    const RANK = { landmark: 0, civic: 1, faith: 2, food: 3, trade: 4, craft: 5, learn: 6, guard: 7, home: 8 };
+    const known = [
+      ...plan.lm.filter((q) => S.lm[q.id]).map((q) => ({ ...q, kind: 'landmark', landmark: true })),
+      ...plan.b.filter((b) => S.b[b.id]).map((b) => ({ ...b, kind: kindOf(b.type) })),
+    ];
+    const homes = known.filter((q) => q.kind === 'home').length;
+    const list = known.filter((q) => q.kind !== 'home').sort((p, q) => RANK[p.kind] - RANK[q.kind] || p.name.localeCompare(q.name));
+    g.text(x, 1, ` ${town.name}`.padEnd(W).slice(0, W), C.white, '#1c1620');
+    const rows = bottom - 2;
+    this.listScroll = Math.max(0, Math.min(this.listScroll, Math.max(0, list.length + 1 - rows)));
+    let y = 3;
+    for (let i = this.listScroll; i < list.length && y <= bottom; i++) {
+      const e = list[i];
+      const hov = this.hovering(x, y, W, 1);
+      const picked = this.townPick && this.townPick.id === e.id && !!this.townPick.landmark === !!e.landmark;
+      const look = e.landmark ? { c: '#ffe8a0', g: '◆' } : buildingLook(e.type);
+      g.text(x, y, `${look.g || '•'} ${e.name}`.padEnd(W).slice(0, W), hov || picked ? C.white : look.c, picked ? '#2a3a2e' : hov ? '#3a2e1e' : undefined);
+      this.hit(x, y, W, 1, () => {
+        this.townPick = e;
+        if (this.tcam) {
+          this.tcam.x = (e.x0 + e.x1) / 2 + 0.5 - plan.x0;
+          this.tcam.z = (e.z0 + e.z1) / 2 + 0.5 - plan.z0;
+        }
+        this.ui.audio?.play('select');
+      });
+      y++;
+    }
+    if (y <= bottom && homes) g.text(x, y, `  and ${homes} home${homes === 1 ? '' : 's'}`.slice(0, W), C.faint);
+    if (!known.length) g.text(x, 3, '  nowhere yet: walk about', C.faint);
+  }
+
+  // The town's ground, a pixel a tile, of the parts you've seen (made again
+  // only when you've seen more, or the town has changed).
+  townPic(plan, S) {
+    if (typeof document === 'undefined') return null;
+    const key = `${plan.sid}|${plan.v}|${S.v}`;
+    if (this.tpic && this.tpic.key === key) return this.tpic.canvas;
+    const c = (this.tpic && this.tpic.canvas.width === plan.W && this.tpic.canvas.height === plan.D) ? this.tpic.canvas : document.createElement('canvas');
+    c.width = plan.W;
+    c.height = plan.D;
+    const g = c.getContext('2d');
+    const img = g.createImageData(plan.W, plan.D);
+    const rgb = {};
+    for (const [k, hex] of Object.entries(GROUND_COLOR)) {
+      const n = parseInt(hex.slice(1), 16);
+      rgb[k] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    for (let z = 0; z < plan.D; z++) {
+      for (let x = 0; x < plan.W; x++) {
+        if (!cellSeen(S, Math.floor(x / CELL), Math.floor(z / CELL))) continue;
+        const v = plan.mask[z * plan.W + x];
+        const col = rgb[v] || rgb[0];
+        const i = (z * plan.W + x) * 4;
+        img.data[i] = col[0];
+        img.data[i + 1] = col[1];
+        img.data[i + 2] = col[2];
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    this.tpic = { key, canvas: c };
+    return c;
+  }
+
+  drawTown(ctx, game) {
+    const town = this.townHere(game);
+    const a = this.area();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#0c0b12';
+    ctx.fillRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+    const plan = town ? planFor(game, town.id) : null;
+    if (!plan || !this.tcam) {
+      drawText(ctx, 'unrolling the town\'s plan...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
+      ctx.restore();
+      return;
+    }
+    const S = seenOf(game, town.id, plan);
+    const k = this.townScale(plan);
+    const o = this.townOrigin(plan, k);
+    const time = this.ui.time || 0;
+    const blink = Math.floor(time * 3) % 2;
+    // The ground you've seen.
+    const pic = this.townPic(plan, S);
+    if (pic) ctx.drawImage(pic, o.x, o.y, plan.W * k, plan.D * k);
+    const rect = (q) => ({ x: o.x + (q.x0 - plan.x0) * k, y: o.y + (q.z0 - plan.z0) * k, w: (q.x1 - q.x0 + 1) * k, h: (q.z1 - q.z0 + 1) * k });
+    // The landmarks (an empire city's arena, its gardens...), outlined.
+    for (const q of plan.lm) {
+      if (!S.lm[q.id]) continue;
+      const r = rect(q);
+      ctx.fillStyle = 'rgba(255,232,160,0.18)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = '#ffe8a0';
+      ctx.fillRect(r.x, r.y, r.w, 1);
+      ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+      ctx.fillRect(r.x, r.y, 1, r.h);
+      ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+    }
+    // The places you've been near: in their colours, a sign on the ones
+    // folk look for, close enough in.
+    const hov = this.townHover;
+    for (const b of plan.b) {
+      if (!S.b[b.id]) continue;
+      const r = rect(b);
+      const look = buildingLook(b.type);
+      ctx.fillStyle = shadeHex(look.c, 0.55);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = b.up ? shadeHex(look.c, 0.8) : look.c;
+      if (r.w > 2 && r.h > 2) ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      const on = hov && !hov.landmark && hov.id === b.id;
+      if (on && blink) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(r.x, r.y, r.w, 1);
+        ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+        ctx.fillRect(r.x, r.y, 1, r.h);
+        ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+      }
+      if (look.g && k >= 3 && r.w >= 7 && r.h >= 7) drawGlyph(ctx, look.g, Math.round(r.x + r.w / 2 - 3), Math.round(r.y + r.h / 2 - 4), '#1a1420');
+    }
+    // You (blinking), and where the town's edge is.
+    const p = game.mapPos ? game.mapPos() : game.player;
+    const px = o.x + (p.x - plan.x0) * k;
+    const py = o.y + (p.z - plan.z0) * k;
+    const sz = Math.max(3, k);
+    ctx.fillStyle = blink ? '#ffffff' : '#ff3030';
+    ctx.fillRect(Math.round(px - sz / 2), Math.round(py) - 1, sz, 2);
+    ctx.fillRect(Math.round(px) - 1, Math.round(py - sz / 2), 2, sz);
+    ctx.restore();
+  }
+
   drawListTab(ctx) {
     const t = this.tabAt;
     if (!t) return;

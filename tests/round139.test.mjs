@@ -16,7 +16,10 @@ import { ITEMS, RELICS } from '../src/world/items.js';
 import { starKey } from '../src/world/quality.js';
 import { TRIGGERS } from '../src/world/triggers.js';
 import { ADDITIVES } from '../src/world/smithmats.js';
-import { SPECIALS, SPECIAL_KEYS, specialOf, specialTiles, doSpecial, windSpecial, specialTick, specialLine } from '../src/game/specials.js';
+import { SPECIALS, SPECIAL_KEYS, specialOf, specialShapes, shapeTiles, doSpecial, windSpecial, specialTick, specialLine } from '../src/game/specials.js';
+// (Round 142: the ground each covers as shapes, not squares; the squares
+// whose middles they take in, for these.)
+const specialTiles = (k, x, z, dx, dz, at) => shapeTiles(specialShapes(k, x, z, Math.atan2(dz, dx), at)).filter((t) => t.x !== x || t.z !== z);
 import { SPECIAL_FX } from '../src/render/specialfx.js';
 import { STYLES, weaponStyle, staminaCost } from '../src/game/combat.js';
 import { abState } from '../src/game/abilities.js';

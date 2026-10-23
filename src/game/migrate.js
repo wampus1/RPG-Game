@@ -1128,6 +1128,15 @@ export const STEPS = [
       log.push('Playing together is far lighter on the network: a fraction of the data each second, the ground sent a piece at a time, everything compressed between computers, and a player whose connection can\'t keep up no longer has more and more piled on it.');
     },
   },
+  {
+    to: '1.42.0',
+    game(game, log) {
+      // (Nothing kept needs changing: a town's map starts from where you
+      // walk from now on; the histories already told stay as told.)
+      game.townSeen ||= {};
+      log.push('Weapon specials now strike in true shapes (a cone, a circle, a strip at any angle), so a blow aimed on the diagonal lands. The world map has a Civilization tab while you\'re in a town: its plan, drawn as you walk it. Folk who hold something against you are shorter with you, and the angriest won\'t talk at all.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

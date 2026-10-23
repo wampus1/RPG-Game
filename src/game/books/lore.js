@@ -72,6 +72,12 @@ const CAUSES = [
   { k: 'herd', when: () => true, why: (A, B) => `a herd driven off from the pastures of ${B.capName}`, name: () => 'the Cattle War' },
   { k: 'bride', when: () => true, why: (A, B) => `a betrothal broken between the houses of ${A.short} and ${B.short}`, name: () => 'the War of the Broken Betrothal' },
   { k: 'crown', when: () => true, why: (A, B) => `a claim on the throne of ${B.short}, through a grandmother`, name: () => 'the War of the Two Crowns' },
+  // (Round 142) More reasons for a war.
+  { k: 'fish', when: (A) => A.values.includes('seafaring'), why: (A, B) => `the fishing grounds off ${B.capName}`, name: () => 'the Herring War' },
+  { k: 'relic', when: (A) => A.values.includes('pious'), why: (A, B) => `a holy relic carried off from ${A.capName} to ${B.capName}`, name: () => 'the War of the Stolen Relic' },
+  { k: 'hostage', when: () => true, why: (A, B) => `a prince of ${A.short} held hostage in ${B.capName}`, name: () => 'the Hostage War' },
+  { k: 'river', when: (A) => A.values.includes('agrarian'), why: (A, B) => `a dam ${B.short} built across the river that waters ${A.short}`, name: () => 'the War of the Dam' },
+  { k: 'insult', when: (A) => A.values.includes('scholarly') || A.values.includes('artisan'), why: (A, B) => `a mocking verse about the ruler of ${A.short}, sung at the court of ${B.short}`, name: () => 'the War of the Song' },
 ];
 // What fell on a whole land at once.
 const GREAT_EVENTS = [
@@ -81,6 +87,13 @@ const GREAT_EVENTS = [
   { k: 'quake', name: 'the Shaking', text: (land) => `the ground of ${land} shook for three days, and old walls came down in every town` },
   { k: 'blight', name: 'the Grey Blight', text: (land) => `the Grey Blight took the crops of ${land} two summers running, and bread was dearer than wine` },
   { k: 'locust', name: 'the Year of Wings', text: (land) => `clouds of locusts came over ${land} out of the south, and ate the fields to the root` },
+  // (Round 142) More that fell on a whole land.
+  { k: 'flood', name: 'the Great Flood', text: (land) => `the Great Flood: it rained on ${land} for forty days, and every river left its bed` },
+  { k: 'dark', name: 'the Dark Summer', text: (land) => `the Dark Summer: a haze hid the sun over ${land} from spring to autumn, and nothing ripened` },
+  { k: 'sweat', name: 'the Sweating Sickness', text: (land) => `the Sweating Sickness went through ${land} in a single summer, and the strong died sooner than the weak` },
+  { k: 'wolves', name: 'the Wolf Winter', text: (land) => `the Wolf Winter: the packs came down out of the hills of ${land} and into the very streets` },
+  { k: 'gold', name: 'the Gold Rush', text: (land) => `gold was found in the streams of ${land}, and half its young folk went off to pan for it` },
+  { k: 'tide', name: 'the Black Tide', text: (land) => `the Black Tide: dead fish washed up on every shore of ${land}, and the fishing towns went hungry` },
 ];
 
 export class Lore {

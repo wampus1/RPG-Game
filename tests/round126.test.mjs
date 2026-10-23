@@ -117,7 +117,7 @@ test('the realm\'s history, its wars and its towns\' annals tell the same past',
   assert.ok(book.lines.some((l) => l.includes(`${w.ceded.name} passed from ${w.loser.name} to ${w.victor.name}`)));
   for (const b of w.battles) assert.ok(book.lines.some((l) => l.toLowerCase().includes(b.name.toLowerCase())), b.name);
   const rb = lib.filter((e) => e.genre === 'realm' && e.subj.R === w.victor).map((e) => writeBook(lore, e)).find((b) => b.year > w.end);
-  if (rb) assert.ok(rb.lines.some((l) => l.includes(w.name)), 'the victor\'s history tells of the war');
+  if (rb) assert.ok(rb.lines.some((l) => l.toLowerCase().includes(w.name.toLowerCase())), 'the victor\'s history tells of the war');
 });
 
 test('the chains: sentences walked from the library, joined only where a clause ends, never repeating a turn of phrase', () => {

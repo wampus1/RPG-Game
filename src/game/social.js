@@ -172,6 +172,72 @@ export function socialTopics(npc, game) {
   return out;
 }
 
+// (Round 142) How they feel about you, all told: what the town's word and
+// their own dealings with you have made of you (their opinion), what they
+// think of you in their own heart, what you did to them that they still
+// hold against you, and the anger (or the fear) it left them with.
+// { level, why, v }: level 0, nothing against you; 1, wary (nothing
+// personal: no secrets, no favours, no gossip about the neighbours); 2,
+// cold (only what has to be said: business, the town's, an apology); 3,
+// they won't speak to you at all (unless you plead: see Game.talk).
+// `why`: 'hate', 'anger', 'fear' or 'dislike'.
+export function regardOf(npc, game) {
+  const rec = npc.rec;
+  const none = { level: 0, why: null, v: 0 };
+  if (!rec || npc.saga || npc.hired || npc.adventurer || npc.company) return none;
+  const sim = game.sim;
+  const op = sim.opinion(npc);
+  // (Your own kin, mostly, can't stay angry with you.)
+  const kin = sim.familyOf ? sim.familyOf(rec) : null;
+  const g = grievanceOf(npc, game);
+  const now = sim.abs;
+  const anger = g ? feel(rec, 'anger', now) : 0;
+  const fear = g ? feel(rec, 'fear', now) : 0;
+  let v = op + opinionOf(rec, pkey(game)) * 30;
+  if (g) v -= 10 + Math.abs(g.v) * 25 + anger * 25;
+  if (kin) v += 25;
+  let level = v <= -60 ? 3 : v <= -35 ? 2 : v <= -15 ? 1 : 0;
+  // (Afraid of you, for what you did to them: they shrink away.)
+  const afraid = !!g && fear >= 0.5 && ['hurt', 'threatened', 'killed'].includes(g.k);
+  if (afraid) level = Math.max(level, kin ? 1 : 3);
+  if (sulking(npc, game)) level = 3;
+  const why = afraid ? 'fear' : g && anger >= 0.3 ? 'anger' : v <= -60 ? 'hate' : 'dislike';
+  return { level, why: level ? why : null, v: Math.round(v) };
+}
+
+// Whether they've come to you to talk (the mayor with a lecture, someone
+// with something to say to you): they'll talk, however they feel.
+export function cameToYou(npc, game) {
+  const rec = npc.rec;
+  const c = game.sim.confront;
+  if (c && c.arrived && c.idx === rec.idx && npc.settlement && c.sid === npc.settlement.id) return true;
+  return !!(rec.seek && rec.seek.pk === pkey(game));
+}
+
+// What they won't talk about with you, as they feel (see regardOf): the
+// topics' kinds (see dialogue.topicCat) and a few besides.
+const WARY_DROP = new Set(['favor', 'companion', 'so_word', 'so_share', 'so_dream', 'so_secret', 'so_intro', 'so_mediate', 'so_spar', 'so_teach', 'so_show', 'so_drink', 'so_rumour', 'so_think']);
+const COLD_KEEP = new Set(['now', 'business', 'town', 'manners', 'bye']);
+const COLD_DROP = new Set(['job', 'hire', 'companion', 'inn_room', 'expand', 'plan_build', 'so_drink']);
+export function allowedBy(level, t) {
+  if (level >= 1 && WARY_DROP.has(t.id)) return false;
+  if (level >= 2 && (!COLD_KEEP.has(t.cat) || COLD_DROP.has(t.id)) && t.id !== 'who') return false;
+  if (level >= 3 && !['now', 'manners', 'bye'].includes(t.cat)) return false;
+  if (level >= 3 && (t.id === 'rude' || t.id === 'so_threaten' || t.id === 'so_drink')) return false;
+  return true;
+}
+
+// What they say as they turn their back on you (see Game.talk).
+export function snubLine(npc, game, why) {
+  const rng = npc.rng;
+  const pickR = (xs) => xs[Math.floor(rng.next() * xs.length)];
+  if (npc.rec.age === 'child') return pickR(['Mum says I\'m not to talk to you.', 'Go away!', '*runs off*', 'I\'m not allowed.']);
+  if (why === 'fear') return pickR(['Stay back! Please...', 'D-don\'t come any closer.', 'Leave me alone!', '*backs away from you*']);
+  if (why === 'anger') return pickR(['After what you did? Go away.', 'Don\'t you dare talk to me.', 'I\'ve nothing to say to you. Not now.', '*turns their back on you*']);
+  if (why === 'hate') return pickR(['Not you. Not today, not ever.', 'Get away from me.', '*spits at your feet*', 'We\'ve nothing to talk about.']);
+  return pickR(['I\'d rather not.', 'Some other time.', '*looks straight through you*', 'I\'m busy.']);
+}
+
 // Too angry with you to talk (they'll hear an apology, and take a gift).
 export function sulking(npc, game) {
   const rec = npc.rec;

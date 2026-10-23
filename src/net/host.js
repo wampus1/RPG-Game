@@ -23,6 +23,7 @@ import { packShip, shipById } from '../game/ships3d.js';
 import { REACH } from '../config.js';
 import { bookInfo, bookIdOf } from '../world/bookreg.js';
 import { leaderOf } from '../game/dialogue.js';
+import { planWire } from '../game/townmap.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -372,6 +373,11 @@ export class HostNet {
       const k = `${m.rx},${m.rz}`;
       const at = g.regionAt && g.regionAt.get(k);
       if (!(g.sent.regions.has(k) && ((g.pendingRegions || []).some((q) => `${q[0]},${q[1]}` === k) || (at !== undefined && this.clock - at < 3)))) this.sendRegion(g, m.rx, m.rz);
+    }
+    // (Round 142) A town's plan, for their map (see game/townmap.js).
+    else if (m.t === 'plan') {
+      const L = Number.isInteger(m.sid) ? this.game.world.layouts.get(m.sid) : null;
+      if (L) this.to(g, { t: 'plan', p: planWire(L) });
     }
     // A command typed in their console: run as them, if the host allows it.
     else if (m.t === 'cmd') this.command(g, String(m.text || '').slice(0, 200));

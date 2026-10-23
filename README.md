@@ -11121,6 +11121,98 @@ Wi-Fi it would keep it saturated. All of it is fixed:
 - **Version 1.41.0.** Worlds from 1.40 load as before. Host and players need
   the same version, as always.
 
+## Round 142: True shapes, town maps, cold shoulders
+
+- **Weapon specials strike in shapes, not squares.** Holding the mouse to
+  wind up a weapon's special used to pick out whole squares in one of
+  eight directions, so a beast standing on the diagonal could slip
+  between them. Each special now covers a real shape, at exactly the
+  angle you aim it, and anyone it touches is struck (a big beast is
+  struck if any part of it is inside):
+  - A strip at any angle: the shoulder barge, the club's crack, the
+    sword's lunge, the spear's skewer, the harpoon's haul.
+  - A slice of a circle in front of you: the flail's reap (narrow and
+    long), the halberd's hew (wide), the sabre's flurry.
+  - A circle round you: the quarterstaff's sweep, the axe's whirl.
+  - Several at once: the warhammer's quake (a heavy blast where it lands,
+    a weaker ring round it); the greatsword's cleave (a strip as you
+    leap, then a circle where you land).
+  - The dagger's step through the shadows: a circle round the one you
+    step behind, or, with no one picked, a faint strip showing the way
+    you'll go.
+  - Steps and leaps (the lunge, the cleave, the dash behind) still land
+    on the nearest square that way.
+  - The warning drawn on the ground is the shape itself, in the same
+    look as before: stippled, filling outward from you as it winds up,
+    its edge marching while it winds and flashing once it's ready, a
+    line inside where it lands harder, a diamond where you'll end up.
+    Players in your world see your aim the same way.
+- **More to a town's past.** A town's history (on the plaque on the
+  square, in the library's annals, in what folk tell you) is now made of
+  much more:
+  - How it began: a fort, a miners' camp, a ferry and its inn, a boat
+    that never put to sea again, a shrine, a market at a crossroads, a
+    woodcutters' camp, herders who stayed, refugees, exiles from a
+    neighbouring town. Each beginning can lead to something later (the
+    fort pulled down for its stones, the seam running out, a bridge
+    where the ferry crossed).
+  - Its luck: steady, blessed, troubled or turbulent. A blessed or
+    troubled town may remember a run of Golden Years or Hard Years.
+  - Forty new kinds of event, many naming the townsfolk involved: a
+    guild founded, a bell cast, a feud between two families (and how it
+    ended), a headman who ran off with the town chest, a healer who
+    stopped a fever, a child of the town who became famous, a beast
+    seen at the old well, a renaming, folk leaving to found a
+    neighbouring town (founded in the right year).
+  - Some events lead to others: a flood to a dyke, a fever to a hospice,
+    a hungry winter to a granary.
+  - Each people has more of its own events, there are many more old
+    legends, and a town can be known for something from its own past
+    (its bridge, its fair, its feuds).
+  - For the realms: five more reasons for old wars, and six more things
+    that once befell a whole land. A war's history always says what the
+    peace settled.
+  - Towns whose history was already told keep it. Towns told of for the
+    first time get the new kind.
+- **Folk who hold something against you act like it.** How someone feels
+  about you is now taken all together: their opinion of you, what they
+  think of you privately, anything you did that they still hold
+  against you, and the anger or fear it left. It decides what they'll
+  talk to you about:
+  - **Wary:** nothing personal. No secrets, gossip, dreams,
+    introductions, lessons, bouts, drinks or favours.
+  - **Cold:** only what has to be said: trade (if they'll still deal
+    with you), the town's business, an apology, a gift. Often a curt
+    "What do you want?" to start.
+  - **Won't speak to you:** they turn their back with a word, or none,
+    and don't greet you in the street (a glare at most). Talk to them
+    again straight away to plead: they'll hear an apology or take a
+    gift, and that's all.
+  - Someone who's afraid of you, because you hurt or threatened them,
+    shrinks back instead.
+  - Family forgive more easily. Someone who came to you (the mayor
+    with a warning, someone with something to say to you) still says it.
+- **The world map has tabs.** **1 · World** is the map as before.
+  **2 · Civilization** appears while you're in a town or city:
+  - It shows the town's plan, drawn only where you've walked: its
+    streets, square, water, fields and walls.
+  - The buildings you've passed close by are coloured by what they're
+    for: homes, trade, food and drink, the hall, faith, crafts,
+    learning, the watch. The ones folk look for carry a sign. A great
+    city's landmarks are outlined.
+  - Down the side are the places you know there (homes are counted).
+    Click one to find it on the plan. Point at the plan to name a
+    building.
+  - Drag or WASD to move, the wheel to zoom, Space to come back to
+    you. Number keys 1 and 2 switch tabs.
+  - What you've seen of each town is kept in the save. A player in
+    someone else's world gets the plan from the host.
+- **Slower openings.** The leader's, the brigand's and the outworlder's
+  opening scenes now play at about two thirds of their old speed, so
+  there's time to read what's said and what's written at the end.
+  Enter still skips them.
+- **Version 1.42.0.** Worlds from 1.41 load as before.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

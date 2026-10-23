@@ -84,7 +84,8 @@ import { stormFx, stormTick } from './storms.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
-import { sparDone } from './social.js';
+import { sparDone, regardOf, snubLine, cameToYou } from './social.js';
+import { saveSeen, loadSeen } from './townmap.js';
 import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
@@ -2458,7 +2459,8 @@ export class Game {
   sceneTick(dt, pressed) {
     const sc = this.scene;
     if (!sc) return 1;
-    sc.t += dt;
+    // (Round 142: a scene may play slower than the clock, `speed`.)
+    sc.t += dt * (sc.speed ?? 1);
     // (Round 117) A scene that goes wrong is cut short, never left holding
     // you still for good.
     try {
@@ -3630,11 +3632,19 @@ export class Game {
     // for the plain blow (a quick click). (Round 139: see specials.js.)
     const ch = this.charging;
     if (ch) {
-      // (Which way: at them, or toward the mouse as you turn.)
+      // (Which way: at them, or toward the mouse as you turn. Round 142:
+      // exactly that way, `ang`, for what it covers; the nearest of the
+      // eight for a step or a leap.)
       if (!ch.target) {
         const ang = this.aimAngle();
-        if (ang !== null) [ch.dx, ch.dz] = specHeading(Math.cos(ang), Math.sin(ang));
-      } else if (!ch.target.dead) [ch.dx, ch.dz] = specHeading(ch.target.x - p.x, ch.target.z - p.z);
+        if (ang !== null) {
+          ch.ang = ang;
+          [ch.dx, ch.dz] = specHeading(Math.cos(ang), Math.sin(ang));
+        }
+      } else if (!ch.target.dead) {
+        ch.ang = Math.atan2(ch.target.z - p.z, ch.target.x - p.x);
+        [ch.dx, ch.dz] = specHeading(ch.target.x - p.x, ch.target.z - p.z);
+      }
       if (ch.k && specialReady(p)) windSpecial(this, p, ch, dt);
       else ch.t += dt;
       // (Rolled out of it, knocked senseless, they're gone: no blow at all.)
@@ -6704,6 +6714,18 @@ export class Game {
       if (busy) npc.say(busy, 2);
       return;
     }
+    // (Round 142) Someone with feelings against you won't stop to talk:
+    // they turn their back on you. Only asking again, there and then, gets
+    // you a hearing (an apology, a gift: see social.regardOf).
+    const rg = npc.rec && !cameToYou(npc, this) ? regardOf(npc, this) : null;
+    if (rg && rg.level >= 3 && !(npc.snubAt !== undefined && this.sim.abs - npc.snubAt <= 15)) {
+      npc.snubAt = this.sim.abs;
+      npc.say(snubLine(npc, this, rg.why), 3, '#ffb080');
+      npc.face(2 * npc.x - this.player.x, 2 * npc.z - this.player.z);
+      this.ui.msg(`${npc.rec.name ? npc.rec.name.first : 'They'} won't speak to you. (Talk to them again to plead.)`, '#ffb080');
+      return;
+    }
+    npc.snubAt = undefined;
     npc.face(this.player.x, this.player.z);
     this.player.face(npc.x, npc.z);
     this.ui.openDialogue(npc);
@@ -7001,10 +7023,12 @@ export class Game {
 
   // Who a blow at those tiles could hurt: a foe first, else anyone at all
   // standing there (not the beast you're sat on).
+  // (Round 142: `tiles`, or a test of whether a blow takes someone in: a
+  // special's shapes, see specials.js.)
   struckOn(tiles, by) {
     const foes = this.foesOn(tiles, by);
     if (foes.length) return foes;
-    const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
+    const on = (e) => (typeof tiles === 'function' ? tiles(e) : onTiles(e, tiles)) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     // (Another player, when the host lets players fight.)
     if (this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && !q.limbo && on(q) && (this.pvp || boutOf(this, q, by))) out.push(q);
@@ -7323,7 +7347,7 @@ export class Game {
 
   // Foes of `by` standing on any of those tiles.
   foesOn(tiles, by) {
-    const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
+    const on = (e) => (typeof tiles === 'function' ? tiles(e) : onTiles(e, tiles)) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     for (const c of this.creatures) if (!c.dead && on(c) && (c.hostileNow || c.target === by)) out.push(c);
     for (const n of this.npcs) if (!n.dead && !n.down && on(n) && ((n.state === 'fight' && n.threat === by) || (n.warband && n.warband.foe))) out.push(n);
@@ -8296,6 +8320,8 @@ export class Game {
       myChests: this.myChests ? [...this.myChests] : [],
       // (Round 79) Your own markers on the map.
       mapMarks: (this.mapMarks || []).map((m) => ({ x: m.x, z: m.z, label: m.label })),
+      // (Round 142) The parts of each town you've been near (see townmap.js).
+      townSeen: saveSeen(this.townSeen),
       // (Round 79) The landmarks found or told of.
       landmarksFound: this.landmarksFound || {},
       // (Round 78) What's drawn on blueprints (see plans.js).
@@ -8436,6 +8462,7 @@ export class Game {
     if (data.ride && !this.remoteCopy) rideLoad(this, this.player, data.ride);
     this.myChests = new Set(data.myChests || []);
     this.mapMarks = (data.mapMarks || []).map((m) => ({ ...m, named: true }));
+    this.townSeen = loadSeen(data.townSeen);
     this.landmarksFound = data.landmarksFound || {};
     plansLoad(this, data.plans);
     const shipAt = this.player.deck || (data.ships && data.ships.below && this.world.inInstance(this.player.x));
