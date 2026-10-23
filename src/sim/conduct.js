@@ -132,7 +132,9 @@ export function brutality(sim, civ, ctx = {}) {
   c = clamp(c, 0, 1);
   g = clamp(g, 0, 1);
   const score = Math.max(c, g * 0.82);
-  const level = score < 0.3 ? 'orderly' : score < 0.5 ? 'plunder' : c < 0.74 ? 'sack' : 'massacre';
+  // (However greedy, a taking with little cruelty in it is plunder, not a
+  // sack: the town's stripped, but its people are left be.)
+  const level = score < 0.3 ? 'orderly' : score < 0.5 || c < 0.45 ? 'plunder' : c < 0.74 ? 'sack' : 'massacre';
   return { c: Math.round(c * 100) / 100, g: Math.round(g * 100) / 100, level, why: why.sort((p, q) => Math.abs(q.v) - Math.abs(p.v)), conduct, word };
 }
 

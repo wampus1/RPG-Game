@@ -1,7 +1,7 @@
 {
   "name": "rpg-game",
   "productName": "Tessera",
-  "version": "1.43.0",
+  "version": "1.44.0",
   "private": true,
   "type": "module",
   "description": "A 2.5D top-down grid RPG with a retro pixel/CRT look.",

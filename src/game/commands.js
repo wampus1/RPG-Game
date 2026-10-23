@@ -6,6 +6,7 @@ import { alive, DAY } from '../sim/econ.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { TECHS, BRANCHES, treeOf } from '../sim/tech.js';
 import { MODS } from '../mod/state.js';
+import { startSiege, scheduleAssault } from '../sim/siege.js';
 import { addShip, shipsOf, waterSpot, boardAt, ownerId } from './ships3d.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { makeCrew } from './shipcrew.js';
@@ -43,6 +44,8 @@ export const COMMANDS = {
   office: { args: '[town] | sit | crisis <raid|famine|fever|unrest|scandal> | leave', about: '(Round 121) Take office in a town at once (the one you\'re in, or named), as if elected; "sit" holds the council\'s morning sitting now; "crisis" brings one on; "leave" steps you down.' },
   crown: { args: '[realm] [monarchy|republic|elder|theocracy|league] | sit | crisis | leave', about: '(Round 122) Take the throne of a realm at once (the one you\'re in, or named), governed as you say; "sit" holds the crown\'s morning sitting now; "crisis" brings on a pretender; "leave" abdicates.' },
   mind: { args: '[name]', about: '(Round 135) What\'s going on inside the nearest townsperson (or one named, in the town you\'re in): how they feel, what they\'re good at and have a gift for, what they want out of life and who they stand with, what\'s on their mind, and who they think well or ill of.' },
+  battle: { args: '[size]', about: '(Round 144) A battle now, on the field outside the town you\'re in (or the nearest): its realm against the realm it\'s at war with (or its nearest neighbour: war is declared). "size": as many a side on the field (8 to 120), the levy made up to it.' },
+  siege: { args: '[storm] [town]', about: '(Round 144) The town you\'re in (or one named) besieged by the realm at war with it (or its nearest neighbour: war is declared): behind walls, a full siege; without, a smaller one. "storm": the assault, there and then.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -53,6 +56,39 @@ function civArg(game, q) {
   const civs = game.world.ow.civs.filter((c) => game.sim.realms.members(c).length);
   const nm = (c) => c.name.toLowerCase().replace(/^the /, '');
   return civs.find((c) => nm(c) === q) || civs.find((c) => nm(c).startsWith(q)) || civs.find((c) => nm(c).includes(q)) || null;
+}
+
+// (Round 144) The realm at war with `civ`, and its town nearest `s`; a war
+// declared on its nearest neighbour if it's at peace.
+function foeOf(game, civ, s) {
+  const W = game.sim.war;
+  const ow = game.world.ow;
+  const near = (q) => Math.hypot(q.cx - s.cx, q.cz - s.cz);
+  let w = W.warOf(civ);
+  if (!w) {
+    const other = ow.settlements.filter((q) => q.civ && q.civ !== civ && game.sim.realms.members(q.civ).length).sort((p, q) => near(p) - near(q))[0];
+    if (!other) return null;
+    const b = other.civ;
+    const w0 = W.warOf(b);
+    if (w0) W.peace(w0, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)), null, false);
+    if (game.sim.politics.allied(civ, b)) game.sim.politics.breakAlliance(civ, b, game.day, 'war is coming', -30);
+    game.sim.realms.shift(civ, b, -100, game.day);
+    w = W.declare(b, civ, { k: 'whim', text: 'an old grudge' }, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)));
+    if (!w) return null;
+  }
+  const mine = w.a.includes(civ.id) ? 'a' : 'b';
+  const foe = W.civ(w.lead[mine === 'a' ? 'b' : 'a']);
+  const town = foe && ow.settlements.filter((q) => q.civ === foe).sort((p, q) => near(p) - near(q))[0];
+  if (!town) return null;
+  return { w, mine, foe, town };
+}
+
+// (Round 144) A plan for a fight at `s`, attacked from `town`.
+function planAt(game, F, s) {
+  const W = game.sim.war;
+  const site = W.siteNear(s, F.town);
+  const atk = F.mine === 'a' ? 'b' : 'a';
+  return { at: game.sim.abs, site, biome: W.biomeAt(site), river: false, name: `the Battle of ${s.name} Field`, attacker: atk, atk: F.town.id, def: s.id, ca: F.w.lead.a, cb: F.w.lead.b };
 }
 
 const hod = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -551,6 +587,61 @@ export function runCommand(game, text) {
       sim.realms.shift(a, b, -100, game.day);
       W.declare(a, b, { k: 'whim', text: 'an old grudge' }, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)));
       return [`The ${a.name.replace(/^The /, '')} declare war on the ${b.name.replace(/^The /, '')}.`];
+    }
+    case 'battle': {
+      const W = sim.war;
+      if (W.live) return ['A battle is already being fought near you.'];
+      // (The town you're in, if a realm's; else the nearest that is.)
+      const far = (q) => Math.hypot(q.cx * REGION_W - p.x, q.cz * REGION_D - p.z);
+      const s = [game.currentSettlement, ow.settlementAt(p.x, p.z)].find((q) => q && q.civ) || ow.settlements.filter((q) => q.civ && sim.realms.members(q.civ).length).sort((a, b) => far(a) - far(b))[0];
+      if (!s) return ['There\'s no realm here to fight for.'];
+      const F = foeOf(game, s.civ, s);
+      if (!F) return ['No enemy can reach it.'];
+      const n = Number(words.find((q) => /^\d+$/.test(q)));
+      const plan = planAt(game, F, s);
+      if (n) {
+        plan.cap = Math.max(8, Math.min(120, n));
+        plan.muster = plan.cap;
+      }
+      F.w.plan = plan;
+      W.callUp(F.w, plan, game.day);
+      if (!W.nearPlayer(plan.site, 70)) {
+        game.loadAround(plan.site.x + 10, plan.site.z, true);
+        p.teleport(plan.site.x + 10, game.world.findStandY(plan.site.x + 10, plan.site.z), plan.site.z);
+      }
+      W.battle(F.w, plan);
+      if (!W.live) return ['It was fought, and over, before you got there.'];
+      return [`The ${F.foe.name.replace(/^The /, '')} march on ${s.name}: ${plan.name}, now${plan.cap ? `, ${plan.cap} a side on the field` : ''}. (B: the war table.)`];
+    }
+    case 'siege': {
+      const W = sim.war;
+      const storm = words[0] === 'storm' || words[0] === 'now';
+      const q = (storm ? words.slice(1) : words).join(' ').trim().toLowerCase();
+      const s = q ? ow.settlements.find((t) => t.name.toLowerCase() === q) || ow.settlements.find((t) => t.name.toLowerCase().startsWith(q)) : game.currentSettlement || ow.settlementAt(p.x, p.z);
+      if (!s) return [q ? `No town called "${q}".` : 'Stand in a town, or name one (siege [storm] <town>).'];
+      if (!s.civ) return [`${s.name} belongs to no realm.`];
+      const L = sim.layoutOf(s.id);
+      if (!L || !L.econ) return [`${s.name} can't be besieged.`];
+      const F = foeOf(game, s.civ, s);
+      if (!F) return ['No enemy can reach it.'];
+      let S = F.w.siege;
+      if (S && S.sid !== s.id) return [`The ${F.foe.name.replace(/^The /, '')} are besieging ${ow.settlements[S.sid].name} already.`];
+      if (!S) {
+        F.w.plan = null;
+        S = startSiege(W, F.w, planAt(game, F, s), L.walled ? 'battle' : 'small', game.day, new RNG(hash4(game.seed, game.day, 0x5e9)));
+        if (!S) return ['The siege couldn\'t begin.'];
+        // (A siege begun from the console comes with its engines built.)
+        S.engines.ladders = Math.max(S.engines.ladders, 6);
+        if (S.gate) S.engines.rams = Math.max(S.engines.rams, 1);
+        if (S.walls.length) S.engines.catapults = Math.max(S.engines.catapults, 1);
+      }
+      if (storm) {
+        if (S.next && S.next.live) return ['They\'re storming it already.'];
+        const where = S.small ? ['barricade'] : S.walls.some((x) => x.down) ? ['breach', 'walls'] : S.gate ? ['walls', 'gate'] : ['walls'];
+        scheduleAssault(W, F.w, S, game.day, where);
+        S.next.at = sim.abs;
+      }
+      return [`${s.name} is besieged by the ${F.foe.name.replace(/^The /, '')}${S.small ? ' (it has no walls: they\'ve surrounded it, and its people barricade the streets)' : ''}.${storm ? ' The assault begins.' : ' "siege storm" for the assault; B for the war table.'}`];
     }
     default: {
       // (Round 79) A mod's own command (see mod/scripts.js).

@@ -1706,6 +1706,27 @@ export class MapWindow extends Window {
         marks.push({ cx: Math.floor(m.x / REGION_W), cz: Math.floor(m.z / REGION_D), label: m.label, color: m.color });
         continue;
       }
+      if (m.kind === 'siege') {
+        // (Round 144) A siege: the besiegers' lines round the town, a ring
+        // of their colours marching round it, and their camp.
+        const t = game.world.ow.settlements[m.sid];
+        if (t && (known(t.cx, t.cz) || game.revealMap)) {
+          const a = this.at(t.cx * REGION_W, t.cz * REGION_D);
+          const b = this.at((t.cx + t.cw) * REGION_W, (t.cz + t.cd) * REGION_D);
+          const pad = Math.max(2, Math.round((b.x - a.x) * 0.12));
+          ctx.save();
+          ctx.lineWidth = Math.max(1, Math.round(sc));
+          ctx.strokeStyle = '#1a1410';
+          ctx.strokeRect(Math.round(a.x - pad) + 0.5, Math.round(a.y - pad) + 0.5, Math.round(b.x - a.x + pad * 2), Math.round(b.y - a.y + pad * 2));
+          ctx.setLineDash([3, 3]);
+          ctx.lineDashOffset = -Math.floor(performance.now() / 160) % 6;
+          ctx.strokeStyle = m.color || '#ff7060';
+          ctx.strokeRect(Math.round(a.x - pad) + 0.5, Math.round(a.y - pad) + 0.5, Math.round(b.x - a.x + pad * 2), Math.round(b.y - a.y + pad * 2));
+          ctx.restore();
+        }
+        put(m.x, m.z, '#', '#ffffff', blink ? m.color || '#c02020' : '#3a1a1a', m.label, m.color);
+        continue;
+      }
       if (m.kind === 'raid') {
         if (blink) put(m.x, m.z, '!', '#ffffff', '#c03020', m.label);
         else marks.push({ cx: Math.floor(m.x / REGION_W), cz: Math.floor(m.z / REGION_D), label: m.label });

@@ -55,9 +55,23 @@ function toCanvas(px) {
 }
 
 const sheetCache = new Map();
+// (Round 144) The sheet last found for a look, kept on the look itself: a
+// crowd (a battle's two hosts) drawn every frame without writing out every
+// look to find its sheet. Looked up afresh each second, for a look changed
+// where it stands (a hat put on).
+const lookSheet = new WeakMap();
 
 // Sprite sheet: 4 directions (rows) x FRAMES columns.
 export function humanoidSheet(look) {
+  const now = performance.now();
+  const kept = look && typeof look === 'object' ? lookSheet.get(look) : null;
+  if (kept && now - kept.t < 1000) return kept.c;
+  const c0 = sheetFor(look);
+  if (look && typeof look === 'object') lookSheet.set(look, { c: c0, t: now });
+  return c0;
+}
+
+function sheetFor(look) {
   let key = JSON.stringify(look);
   // (Round 66: a mod's gear looks are new with each world: see mod/gear.js.)
   if (key.includes('modgear')) key += `|${MODS.serialGear || 0}`;

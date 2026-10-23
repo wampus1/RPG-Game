@@ -1145,6 +1145,19 @@ export const STEPS = [
       void game;
       log.push('The town map (the world map\'s Civilization tab) is drawn in far more detail: the roofs, trees, crops, lanterns and paving as they are, and close in, glyphs the way the world map draws its land.');
     },
+  },  {
+    to: '1.44.0',
+    game(game, log) {
+      // (A war saved before has no sieges and no captains named: a town
+      // won before the walls is taken as it always was, and the next
+      // decisive win before a walled town begins a siege.)
+      const war = game.sim && game.sim.war;
+      if (war) {
+        war.ranks ||= {};
+        for (const w of war.wars || []) if (w.siege === undefined) w.siege = null;
+      }
+      log.push('Battles are fought by bands now, each under its captain and banner, with morale, orders, and a commander\'s plan; towns behind walls are besieged, and taken by storm, starvation or treachery, and how a taken town is treated depends on who took it. If you command, B opens the war table.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

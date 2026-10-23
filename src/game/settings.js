@@ -179,6 +179,7 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     // (Round 144: read by the war, see War.fieldCap and battleZoom.)
     renderer.battleCap = BATTLE_CAPS[s.battleSize ?? 2] || 60;
     renderer.battleCam = s.battleCam !== false;
+    renderer.frameCap = !!s.frameCap;
   }
   // (Playing in someone else's world: how often the host sends word.)
   if (net && net.setRate) net.setRate(s.netRate === 1 ? 10 : 20);

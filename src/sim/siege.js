@@ -328,8 +328,11 @@ function sapping(war, w, S, L, day, rng) {
 // some in it who'd rather the other side won.
 function betrayal(war, w, S, L, day, rng) {
   if (S.small) return false;
+  // (Not in the first days: it takes hunger, or a town that's given up
+  // hope, before anyone opens a gate.)
+  if (day - S.start < 3 || (S.hungry < 2 && S.morale.def >= 30)) return false;
   const unrest = L.econ.unrest || 0;
-  const p = (unrest >= 1.2 ? 0.06 : 0) + (S.hungry >= 3 ? 0.06 : 0) + (S.morale.def < 20 ? 0.04 : 0);
+  const p = (unrest >= 1.2 ? 0.04 : 0) + (S.hungry >= 3 ? 0.05 : 0) + (S.morale.def < 20 ? 0.03 : 0);
   if (!p || !rng.chance(p)) return false;
   const s = war.ow.settlements[S.sid];
   const by = residents(L).filter((r) => r.age === 'adult' && r.job !== 'guard' && r.job !== 'mayor').sort((a, b) => (a.mood ?? 0.5) - (b.mood ?? 0.5))[0];
@@ -590,16 +593,18 @@ export function endSiege(war, w, how, day, rng, extra = {}) {
   const civA = war.civ(S.civA);
   const civD = war.civ(S.civD);
   const days = day - S.start;
+  // ("After 3 days"; or, the day it began, "the same day".)
+  const after = days > 0 ? `after ${days} day${days === 1 ? '' : 's'}` : 'the same day';
   const taken = how === 'stormed' || how === 'surrendered' || how === 'betrayed';
   let text = null;
   if (taken && s && civA && L) {
     const sack = how === 'surrendered' && extra.terms !== 'none' ? null : sackTown(war, w, S, L, civA, day, rng, extra);
-    war.capture(w, s, civA, day, how === 'stormed' ? `the storming of ${s.name}` : how === 'betrayed' ? `treachery opened its gates` : `a siege of ${days} day${days === 1 ? '' : 's'}`);
+    war.capture(w, s, civA, day, how === 'stormed' ? `the storming of ${s.name}` : how === 'betrayed' ? `treachery opened its gates` : days > 0 ? `a siege of ${days} day${days === 1 ? '' : 's'}` : `a siege`);
     const name = `the ${how === 'surrendered' ? 'Siege' : sack && (sack.level === 'sack' || sack.level === 'massacre') ? 'Sack' : 'Fall'} of ${s.name}`;
     text = how === 'stormed'
-      ? `${cap(name)}: after ${days} day${days === 1 ? '' : 's'}, the ${plain(civA)} stormed ${s.name} ${extra.how || 'over the walls'}${sack ? `, and ${s.name} was ${LEVEL_NAMES[sack.level]}` : ''}.`
+      ? `${cap(name)}: ${after}, the ${plain(civA)} stormed ${s.name} ${extra.how || 'over the walls'}${sack ? `, and ${s.name} was ${LEVEL_NAMES[sack.level]}` : ''}.`
       : how === 'betrayed' ? `${cap(name)}: betrayed from within, ${s.name} fell to the ${plain(civA)}${sack ? ` and was ${LEVEL_NAMES[sack.level]}` : ''}.`
-        : `${cap(name)}: after ${days} day${days === 1 ? '' : 's'}, ${s.name} opened its gates to the ${plain(civA)}${extra.terms === 'generous' ? ' on terms: its garrison marched out free' : extra.terms === 'harsh' ? ' on hard terms: its garrison was taken prisoner' : ', with nothing left to bargain with'}.`;
+        : `${cap(name)}: ${after}, ${s.name} opened its gates to the ${plain(civA)}${extra.terms === 'generous' ? ' on terms: its garrison marched out free' : extra.terms === 'harsh' ? ' on hard terms: its garrison was taken prisoner' : ', with nothing left to bargain with'}.`;
     w.score = clamp(w.score + (S.atk === 'a' ? 18 : -18), -150, 150);
     S.sackLevel = sack ? sack.level : null;
     if (sack) S.sack = sack;
@@ -608,10 +613,10 @@ export function endSiege(war, w, how, day, rng, extra = {}) {
     if (w.battles.length > 12) w.battles.shift();
     war.sim.history?.add(L, text, 'war', day);
   } else if (how === 'lifted' && s) {
-    text = `The siege of ${s.name} is lifted after ${days} day${days === 1 ? '' : 's'}${extra.why ? `: ${extra.why}` : ''}. The town holds for the ${plain(civD)}.`;
+    text = `The siege of ${s.name} is lifted ${days > 0 ? `after ${days} day${days === 1 ? '' : 's'}` : 'the same day'}${extra.why ? `: ${extra.why}` : ''}. The town holds for the ${plain(civD)}.`;
     w.score = clamp(w.score + (S.atk === 'a' ? -12 : 12), -150, 150);
     if (L) {
-      war.sim.history?.add(L, `The town held out against the ${plain(civA)} for ${days} days.`, 'war', day);
+      war.sim.history?.add(L, `The town held out against the ${plain(civA)}${days > 1 ? ` for ${days} days` : ''}.`, 'war', day);
       // A hero of it: the boldest of the watch who came through.
       const hero = residents(L).filter((r) => r.job === 'guard').sort((a, b) => (b.personality?.bravery ?? 0) - (a.personality?.bravery ?? 0))[0];
       if (hero && days >= 3 && war.sim.history) war.sim.history.raiseStatue(L, fullName(hero), `holding the walls of ${s.name} against the ${plain(civA)}`, day);
@@ -687,7 +692,7 @@ export function sackTown(war, w, S, L, civA, day, rng, extra = {}) {
       if (go.length >= 2) sim.sendPeople(L, go, to, `fleeing the ${B.level} of ${s.name}`);
     }
   }
-  const line = { orderly: `The ${plain(civA)} took ${s.name} in good order: the gates held, the houses left be.`, plunder: `The ${plain(civA)} plundered ${s.name}: ¤${coin} and the stores carried off, a few houses burned.`, sack: `The ${plain(civA)} sacked ${s.name}: ¤${coin} carried off, ${k.fires} houses burned${dead.length ? `, ${dead.length} of its people killed in the streets` : ''}.`, massacre: `The ${plain(civA)} put ${s.name} to the sword: ${dead.length} of its people killed, ${k.fires} houses burned, ¤${coin} carried off.` }[B.level];
+  const line = { orderly: `The ${plain(civA)} took ${s.name} in good order: the gates held, the houses left be.`, plunder: `The ${plain(civA)} plundered ${s.name}: ¤${coin} and the stores carried off${k.fires ? `, ${k.fires === 1 ? 'a house' : 'a few houses'} burned` : ''}.`, sack: `The ${plain(civA)} sacked ${s.name}: ¤${coin} carried off, ${k.fires} houses burned${dead.length ? `, ${dead.length} of its people killed in the streets` : ''}.`, massacre: `The ${plain(civA)} put ${s.name} to the sword: ${dead.length} of its people killed, ${k.fires} houses burned, ¤${coin} carried off.` }[B.level];
   ledger(L, day, line);
   sim.history?.add(L, line, 'war', day);
   return { ...B, coin, dead: dead.length, fires: k.fires };

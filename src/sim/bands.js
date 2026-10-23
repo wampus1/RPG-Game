@@ -40,6 +40,8 @@ export const ORDERS = {
   // (A siege's: see game/siegeground.js.)
   storm: { name: 'Storm', key: 'KeyT', leash: 2, siege: true, about: 'At the town: the gate, the breach, up the ladders, over the barricades; then for the square.', bark: ['Storm the walls!', 'Up! Up the ladders!', 'Forward! Into the town!', 'Take the gate!'] },
   man: { name: 'Man the walls', key: 'KeyM', leash: 1, siege: true, about: 'Everyone to their post: on the walls, at the gate, behind the barricades.', bark: ['To the walls!', 'Hold the walls!', 'Everyone to their posts!', 'Push them off!'] },
+  // (A captain on foot: the band forms on them, wherever they go.)
+  follow: { name: 'Follow me', key: 'KeyO', leash: 3, about: 'The band forms up on you and goes where you go, fighting whoever comes within reach.', bark: ['Follow the captain!', 'On me! On me!', 'With the captain, lads!'] },
 };
 export const ORDER_IDS = Object.keys(ORDERS);
 
@@ -225,10 +227,12 @@ export function pickCaptain(war, live, b, quiet = false) {
 }
 
 // The one carrying the banner: a sturdy one from the middle of the back
-// rank (never the captain, if there's anyone else).
+// rank (never the captain, if there's anyone else; on foot, if anyone
+// is).
 export function pickBearer(live, b) {
-  const up = b.ents.filter((n) => standing(n) && n !== b.captain && !n.mount);
-  const pool = up.length ? up : b.ents.filter((n) => standing(n) && !n.mount);
+  // (A band of horse: one of the riders carries it.)
+  const foot = (n) => standing(n) && !n.mount;
+  const pool = [(n) => foot(n) && n !== b.captain, foot, (n) => standing(n) && n !== b.captain, standing].map((f) => b.ents.filter(f)).find((q) => q.length) || [];
   const bearer = pool.sort((p, q) => (q.rec.personality?.bravery ?? 0.5) - (p.rec.personality?.bravery ?? 0.5))[Math.min(pool.length - 1, 1)] || null;
   if (b.bearer && b.bearer.warband) b.bearer.warband.bearer = null;
   b.bearer = bearer;
@@ -627,6 +631,11 @@ function moveAnchor(live, S, b, dt, up) {
   } else if (o.kind === 'shieldwall') {
     goal = o.at;
     pace = 0.9;
+  } else if (o.kind === 'follow') {
+    // (Formed up a pace or two in front of whoever leads them.)
+    const p = o.p;
+    if (p && !p.dead) goal = { x: p.x + b.face.x * 2, z: p.z + b.face.z * 2 };
+    pace = 3.2;
   } else if (o.at) goal = o.at;
   // (Wavering: not one step forward.)
   if (b.state === 'waver' && goal && near) {
@@ -709,7 +718,20 @@ function marshalThink(war, live, side) {
   S.prog.t += 1;
   const mine = (b) => b.state !== 'rout' && bandUp(b) > 0;
   // A band a player's taken in hand is theirs; the rest, the marshal's.
-  const free = (b) => mine(b) && !b.player && (b.order.by === 'ai' || (M.player === null && !S.cmdBy) || b.auto);
+  // (Round 144: one of you in command, gone from the field or down: the
+  // marshal takes it back.)
+  if (S.cmdBy && live.cmd) {
+    const c = Object.values(live.cmd).find((q) => q.pk === S.cmdBy);
+    const p = c && c.p;
+    if (!p || p.dead || p.down || Math.max(Math.abs(p.x - live.centre.x), Math.abs(p.z - live.centre.z)) > 80) {
+      S.cmdBy = null;
+      if (S.marshal) S.marshal.player = null;
+      for (const b of S.bands) if (!b.player && b.order.by !== 'ai') b.order = { ...b.order, by: 'ai' };
+      if (live.cmd) for (const k of Object.keys(live.cmd)) if (live.cmd[k].pk === c?.pk) delete live.cmd[k];
+      if (M.ent && standing(M.ent)) M.ent.say(M.ent.rng.pick(['I have command! Hold together!', 'Listen to me now! I lead!']), 2.6, '#ffe070');
+    }
+  }
+  const free = (b) => mine(b) && !b.player && (b.order.by === 'ai' || b.auto);
   const bands = S.bands.filter(free);
   const foes = O.bands.filter(mine);
   if (!foes.length) return;
@@ -721,8 +743,9 @@ function marshalThink(war, live, side) {
   const reserve = bands.find((b) => b.role === 'reserve');
   const bows = bands.find((b) => b.role === 'bows');
   const horse = bands.find((b) => b.role === 'horse');
-  // The plan's next step.
-  if (!S.cmdBy) runPlan(live, S, O, front, t, M);
+  // The plan's next step (the plan one of you in command has chosen, for
+  // the bands you've left to it).
+  runPlan(live, S, O, front, t, M);
   // The bowmen: shoot into whoever's coming; back behind the line if
   // they're rushed.
   if (bows) {

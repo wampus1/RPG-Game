@@ -32,6 +32,7 @@ export const ACTIONS = [
   { id: 'feats', label: 'Achievements', group: 'Windows', def: 'KeyL' },
   { id: 'help', label: 'How to play', group: 'Windows', def: 'KeyH' },
   { id: 'party', label: 'Multiplayer (in a world)', group: 'Windows', def: 'KeyP' },
+  { id: 'wartable', label: 'War table (command)', group: 'Windows', def: 'KeyB' },
   { id: 'console', label: 'Command console', group: 'Windows', def: 'Backquote' },
   { id: 'crt', label: 'CRT effect on/off', group: 'Windows', def: 'F2' },
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: `belt${n}`, label: `Belt slot ${n}`, group: 'Belt', def: `Digit${n}` })),

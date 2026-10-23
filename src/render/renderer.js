@@ -611,6 +611,8 @@ export class Renderer {
   // in and out like a spring, without overshooting; a scene's own zoom is
   // taken as it comes. A turn of the camera swings round drawn back too.
   render(game, dt) {
+    // (Round 144: how fast the frames come, for battleView.)
+    this.frameAvg = (this.frameAvg || 1 / 60) * 0.94 + dt * 0.06;
     const goal = this.zoomGoal || 1;
     if (this.zoomSnap) {
       this.zoom = goal;
@@ -662,6 +664,7 @@ export class Renderer {
       if (main !== this.ctx) cleanCtx(main);
       throw e;
     }
+    this.warmTick();
     this.layer = null;
     if (this.zoomK !== 1) {
       this.layer = this.zcanvas;
@@ -676,6 +679,27 @@ export class Renderer {
       // world: see renderFrame.)
       if (!this.spin) drawShipHud(this, game);
     }
+  }
+
+  // (Round 144) A battle's drawn-back view (War.battleZoom's `bz`), as far
+  // as this machine keeps up with it: the world drawn back is drawn whole,
+  // pixel for pixel, on a picture as much bigger as the view is; so if the
+  // frames come slow with it drawn back, it closes in a little, and kept up
+  // with easily, it opens out again.
+  battleView(bz, dt) {
+    if (!(bz > 1.001)) return 1;
+    const avg = this.frameAvg || 1 / 60;
+    const slow = this.frameCap ? 1 / 24 : 1 / 38;
+    let room = this.zoomRoom ?? 1;
+    this.roomHold = Math.max(0, (this.roomHold || 0) - dt);
+    // (Closed in, it waits a while before opening out again: not drawing
+    // back and forth on the edge of it.)
+    if (avg > slow) {
+      room = Math.max(0, room - dt * 0.3);
+      this.roomHold = 10;
+    } else if (avg < slow * 0.72 && !this.roomHold) room = Math.min(1, room + dt * 0.04);
+    this.zoomRoom = room;
+    return 1 + (bz - 1) * room;
   }
 
   renderFrame(game, dt) {
@@ -2955,6 +2979,10 @@ export class Renderer {
         const guard = !rolling && !mount && !inWater && this.guarding(e);
         const raised = guard && dir !== 2 ? this.raisedShield(e) : null;
         const sheet = humanoidSheet(raised ? this.unshielded(e.look) : e.look);
+        // (Round 144) A shield carried, not yet raised: its picture with the
+        // shield up drawn ahead of time (a battle's lines meeting would
+        // otherwise want them all in the same moment).
+        if (!raised && e.look && e.look.gear && e.look.gear.shield) this.warmLater(this.unshielded(e.look));
         // Thrown into a blow: leaning back to wind up, lunging into it.
         const lu = mount || e.sitting || kneel ? { x: 0, y: 0 } : this.bodyLunge(e, dir);
         const sx0 = sx;
@@ -3116,7 +3144,8 @@ export class Renderer {
         if (held && !(raised && dir !== 0) && !heldBehind) this.drawHeld(ctx, held, e, sx, top, false, guard);
         if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, guard);
         // (Round 144) A band's colours, carried high over its ranks.
-        if (e.warband && e.warband.bearer && !rolling) this.drawBanner(ctx, e.warband.bearer.color, sx, top, dir, e.id || 0);
+        const bn = (e.warband && e.warband.bearer) || e.banner;
+        if (bn && !rolling) this.drawBanner(ctx, bn.color, sx, top, dir, e.id || 0);
         if (shade) ctx.globalAlpha = a0;
         sx = sx0;
         // ...and a glint of it now and then.
@@ -3259,6 +3288,22 @@ export class Renderer {
     return v;
   }
 
+  // (Round 144) A sheet wanted soon, drawn a few at a time between frames
+  // (see warmTick).
+  warmLater(look) {
+    const seen = (this.warmSeen ||= new WeakSet());
+    if (seen.has(look)) return;
+    seen.add(look);
+    (this.warmQ ||= []).push(look);
+  }
+
+  warmTick() {
+    const q = this.warmQ;
+    if (!q || !q.length) return;
+    const t0 = performance.now();
+    while (q.length && performance.now() - t0 < 2.5) humanoidSheet(q.pop());
+  }
+
   // A shield up: face on, square in front of the chest; side on, edge on
   // out in front. It jolts back when a blow lands on it, and its rim
   // shines while a blow met now would be parried.
@@ -3333,8 +3378,10 @@ export class Renderer {
     ctx.fillRect(px, py - 2, 2, 2);
     // The cloth: eight columns, each a little lower as it waves.
     const away = dir === 1 ? -1 : 1;
-    const dark = shadeHex(color, 0.62);
-    const pale = shadeHex(color, 1.45);
+    const shades = (this.bannerShades ||= new Map());
+    let sh = shades.get(color);
+    if (!sh) shades.set(color, (sh = [shadeHex(color, 0.62), shadeHex(color, 1.45)]));
+    const [dark, pale] = sh;
     for (let i = 0; i < 9; i++) {
       const wave = Math.round(Math.sin(t - i * 0.55) * 1.2 + i * 0.12);
       const x = px + (away > 0 ? 2 + i : -1 - i);

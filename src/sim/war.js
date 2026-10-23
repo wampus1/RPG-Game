@@ -29,8 +29,9 @@ import { REGION_W, REGION_D, GROUND, SURFACE } from '../config.js';
 import { B } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { fieldEngines, workEngines, endEngines, ramming } from '../game/engines.js';
-import { formBands, bandsTick, slotAt, bandUp, credit, hitMult } from './bands.js';
+import { formBands, bandsTick, slotAt, bandUp, credit, hitMult, ORDERS } from './bands.js';
 import { SiegeGround } from '../game/siegeground.js';
+import { assignCommand, afterCommand, commandOf } from './command.js';
 import { siegeFor, startSiege, siegeDay, siegeTick, endSiege, reliefFought, sackTown, siegeMarker, siegeLines } from './siege.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
@@ -1031,6 +1032,23 @@ export class War {
     }
     // Bandits paid to fight for them.
     out.extra += this.sim.bandits ? this.sim.bandits.hiredFor(w, side) : 0;
+    // (Round 144) A battle called at a size (the console's "battle"): the
+    // levy made up to it from the able-bodied of the realm's towns near.
+    if (plan.muster && out.recs.length < plan.muster) {
+      const have = new Set(out.recs.map((q) => q.r));
+      for (const id of w[side]) {
+        const civ = this.civ(id);
+        for (const s of civ ? this.realms.members(civ) : []) {
+          const L = this.game.world.layouts.get(s.id);
+          if (!L || !L.econ || Math.hypot(s.cx - near.cx, s.cz - near.cz) > 24) continue;
+          for (const r of residents(L)) {
+            if (out.recs.length >= plan.muster) break;
+            if (have.has(r) || r.age !== 'adult' || r.ruler !== undefined || r.raid !== undefined || r.soldier !== undefined || r.captive !== undefined) continue;
+            out.recs.push({ r, L, d: 30, levy: true });
+          }
+        }
+      }
+    }
     out.recs.sort((x, y) => x.d - y.d);
     return out;
   }
@@ -1058,6 +1076,8 @@ export class War {
     f += side !== plan.attacker ? 0.1 : 0;
     f -= (w.weary[w.lead[side]] || 0) * 0.2;
     f += ratio < 0.8 ? 0.1 : 0;
+    // (A battle called at a size: everyone mustered for it.)
+    if (plan.muster) f = 1;
     const n = Math.max(min, Math.min(total, Math.round(min + (total - min) * clamp(f, 0, 1))));
     const recs = pool.recs.slice(0, Math.min(n, pool.recs.length));
     return { recs, extra: Math.min(pool.extra, n - recs.length), civs: pool.civs, total, min, max: total };
@@ -1118,6 +1138,11 @@ export class War {
       if (x <= 0) return k;
     }
     return 'line';
+  }
+
+  // (Round 144) How well one plan answers another (for the council of war).
+  matchOf(t, o) {
+    return (MATCH[t] && MATCH[t][o]) || 1;
   }
 
   terrainMult(t, plan, defending) {
@@ -1988,7 +2013,7 @@ export class War {
     const c = plan.site;
     // (Round 144) As many a side as the field takes (see the settings); the
     // rest come up from the rear as the first fall.
-    const cap = this.fieldCap();
+    const cap = this.fieldCap(plan);
     const live = { kind: 'battle', w, plan, A, B: Bm, t: 0, axis: ax, perp, centre: c, sides: {}, walls: [], done: false, go: false, cap, pside: new Map() };
     for (const [side, army, t] of [['a', A, plan.ta], ['b', Bm, plan.tb]]) {
       const sign = side === 'a' ? 1 : -1;
@@ -2057,6 +2082,8 @@ export class War {
       live.pside.set(p, d.side);
       g.ui.msg(`You're with the ${plain(live.sides[d.side].civ)}. Into the line, and stay in the fight!`, '#ffb080');
     });
+    // (Who of you commands what: the host, a band, or a place in one.)
+    assignCommand(this, live);
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
     // (Round 144) Its name across the field, and the horns.
     const na = live.sides.a.ents.length + (live.sides.a.reserve ? live.sides.a.reserve.length : 0) + (A.extra || 0);
@@ -2097,8 +2124,8 @@ export class War {
 
   // (Round 144) How many a side are on the field at once (the settings'
   // choice; a test may say otherwise).
-  fieldCap() {
-    return Math.max(4, this.liveMax || this.game.renderer.battleCap || 60);
+  fieldCap(plan = null) {
+    return Math.max(4, (plan && plan.cap) || this.liveMax || this.game.renderer.battleCap || 60);
   }
 
   // (Round 144) A battle's soldiers into bands (see bands.js), each sent to
@@ -2456,6 +2483,7 @@ export class War {
     // Called up: did you do your part? And if you fell, where you wake.
     this.reckonDraft(L, winner);
     this.afterDown(L, winner);
+    afterCommand(this, L, winner);
     // You fought for one side: they remember it.
     for (const s of ['a', 'b']) {
       const o = s === 'a' ? 'b' : 'a';
@@ -2524,6 +2552,42 @@ export class War {
       if (w.regionAt(x, z) && w.getBlock(x, y, z) === id) w.setBlock(x, y, z, B.air, 0);
     }
     L.walls = [];
+  }
+
+  // (Round 144) For the HUD: your band and its order, its nerve; a fallen
+  // banner at your feet; the siege you're in.
+  hudLines() {
+    const g = this.game;
+    const p = g.player;
+    const out = [];
+    const L = this.live;
+    if (L && L.kind === 'battle' && L.pside && L.pside.has(p) && !L.done) {
+      const c = commandOf(this, p);
+      if (c) {
+        if (c.rank === 'marshal') out.push({ text: '⚑ YOU COMMAND · B: ORDERS', color: '#ffd070' });
+        const b = c.rank === 'marshal' ? null : c.band;
+        if (b) {
+          const ord = b.state === 'rout' ? 'RUNNING' : (ORDERS[b.order.kind] ? ORDERS[b.order.kind].name : b.order.kind).toUpperCase();
+          out.push({ text: `⚑ ${b.name.replace(/^the /, '').toUpperCase()} · ${ord}`, color: b.state === 'rout' ? '#ff7060' : b.state === 'waver' ? '#ffd070' : '#ffe8a0' });
+          const bars = Math.round(b.morale / 20);
+          out.push({ text: `NERVE ${'▮'.repeat(bars)}${'▯'.repeat(5 - bars)} ${bandUp(b)}/${b.start}`, color: b.state === 'ok' ? '#a0e8a0' : b.state === 'waver' ? '#ffd070' : '#ff7060' });
+        }
+        const sd = L.pside.get(p);
+        const fb = (L.fallenBanners || []).find((q) => Math.max(Math.abs(q.x - p.x), Math.abs(q.z - p.z)) <= 1);
+        if (fb && L.sides[sd] && (L.sides[sd].bands || []).some((q) => q.id === fb.band)) out.push({ text: 'F: TAKE UP THE BANNER', color: '#ffe070', blink: true });
+      }
+    }
+    for (const w of this.wars) {
+      const S = w.siege;
+      if (!S || S.phase === 'over') continue;
+      const s = this.ow.settlements[S.sid];
+      const inTown = g.currentSettlement === s;
+      if (!inTown && !this.nearPlayer(S.camp, 40)) continue;
+      const day = Math.floor(this.sim.abs / DAY) - S.start + 1;
+      out.push({ text: `SIEGE · DAY ${day} · ${S.food > 0 ? `FOOD ${Math.ceil(S.food)}d` : 'STARVING'}`, color: S.food > 2 ? '#ffd090' : '#ff8070' });
+      if (S.next && !S.next.live) out.push({ text: 'ASSAULT AT DAWN', color: '#ff9070' });
+    }
+    return out;
   }
 
   // (Round 144) How far the camera draws back for a battle near you: the
@@ -2855,6 +2919,7 @@ export class War {
     return {
       wars: this.wars, past: this.past, raids: this.raids, raidLog: this.raidLog, truces: this.truces, cd: this.cd,
       rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay, prisoners: this.prisoners, deserters: this.deserters,
+      ranks: this.ranks || {},
     };
   }
 
@@ -2875,6 +2940,7 @@ export class War {
     this.lastDay = d.lastDay ?? this.lastDay;
     this.prisoners = d.prisoners || [];
     this.deserters = d.deserters || {};
+    this.ranks = d.ranks || {};
   }
 }
 

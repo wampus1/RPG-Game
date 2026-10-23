@@ -20,6 +20,7 @@ import { drawText } from '../render/font.js';
 import { humanoidSheet, SHEET_H } from '../render/sprites.js';
 import { CHAR_W, CHAR_H } from '../config.js';
 import { REALM_FORMS, FORM_IDS } from '../sim/realmforms.js';
+import { CONDUCTS } from '../sim/conduct.js';
 import { WATCHES, DRAFTS, CROWN_ORDERS, CROWN_ORDER_IDS, FLOOR_MAX, SHARE_MIN, SHARE_MAX } from '../sim/crown.js';
 import { slider, button, drawRecord, wheelRecord, drawWar } from './govkit.js';
 import { shortTitle } from '../sim/realms.js';
@@ -459,6 +460,8 @@ export class CrownWindow extends Window {
     row('Weapons ban', [[false, 'none'], [true, 'in every town']], !!d.armsBan, 'armsBan', 'No drawn weapons in the streets of any town of the realm.', (v) => ({ armsBan: v }));
     row('The watch', WATCHES.map((v) => [v, v]), d.watch || 'standard', 'watch', 'How many of the grown folk stand watch in every town: a light watch costs less, a heavy one keeps order.');
     row('The draft', DRAFTS.map((v) => [v, v === 'none' ? 'none' : v === 'elders' ? 'elders' : 'young and old']), d.draft || 'none', 'draft', 'Who is called to the watch in time of war.');
+    // (Round 144) How the realm's armies treat a town they take by storm.
+    row('Conduct in war', CONDUCTS.map((v) => [v, { mercy: 'mercy', custom: 'custom', plunder: 'loot', ruthless: 'no quarter' }[v]]), d.conduct || 'custom', 'conduct', 'How the realm\'s armies treat a town they take. Mercy: nothing touched, no one harmed. Custom: as the soldiers\' ways and their commanders\' tempers have it. Loot: the town picked clean, but no killing. No quarter: fire and the sword. (A commander who plays can give their own word in the field.)');
     // Tariffs on the merchants of the realm's neighbours.
     g.text(2, y++, 'Tariffs', C.fg);
     const sim = this.game.sim;

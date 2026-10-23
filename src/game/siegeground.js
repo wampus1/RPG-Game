@@ -28,6 +28,7 @@ import { ignite, roofTarget } from './fire.js';
 import { slotAt, orderBand, standing, bandUp, buildGrid } from '../sim/bands.js';
 import { resolveAssault, sackTown, endSiege } from '../sim/siege.js';
 import { sackOf } from '../sim/conduct.js';
+import { assignCommand, afterCommand } from '../sim/command.js';
 
 const Y0 = GROUND;
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
@@ -468,7 +469,7 @@ export class SiegeGround {
     if (!site) return false;
     const s = L.settlement;
     const where = S.next.where;
-    const cap = war.fieldCap();
+    const cap = war.fieldCap(S.next.plan);
     const civA = war.civ(S.civA);
     const civD = war.civ(S.civD) || s.civ;
     const centre = { x: L.plaza ? L.plaza.cx : Math.round((s.bounds.x0 + s.bounds.x1) / 2), z: L.plaza ? L.plaza.cz : Math.round((s.bounds.z0 + s.bounds.z1) / 2) };
@@ -593,6 +594,7 @@ export class SiegeGround {
     }
     war.live = live;
     S.next.live = true;
+    assignCommand(war, live);
     g.ui.msg(`Horns from the camp! The ${plain(civA)} are storming ${s.name}: ${where.map((q) => ({ gate: 'the gate', breach: 'the breach', walls: 'the walls', barricade: 'the barricades' }[q])).join(' and ')}!`, '#ff9060');
     g.ui.showCard?.(`The Storming of ${s.name}`, `the ${plain(civA)}, ${S.host} strong, against ${S.garrison} on the ${S.small ? 'barricades' : 'walls'}`, 4.5, civA ? civA.color.hex : '#f0d890');
     g.audio?.play('war_horn', { x: S.camp.x, y: GROUND, z: S.camp.z });
@@ -962,6 +964,7 @@ export class SiegeGround {
     // Did each of you do your part?
     war.reckonDraft(live, winner);
     war.afterDown(live, winner);
+    afterCommand(war, live, winner);
     for (const s0 of [sideA, sideD]) for (const n of live.sides[s0].ents) {
       if (n.rec.soldier !== undefined) delete n.rec.soldier;
       if (!n.rec.captive) n.rec.away = false;

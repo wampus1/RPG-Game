@@ -933,6 +933,8 @@ export class HostNet {
       if (sim.crown) hud = hud.concat(sim.crown.hudLines());
       // (Round 129) A festival's programme, where they are.
       if (sim.events && sim.events.hudLines) hud = hud.concat(sim.events.hudLines());
+      // (Round 144) Their band in a battle, a siege where they are.
+      if (sim.war && sim.war.hudLines) hud = sim.war.hudLines().concat(hud);
     } catch {
       hud = [];
     }
@@ -943,6 +945,8 @@ export class HostNet {
       mining: game.mining ? enc(game.mining, 2) : null,
       fishing: game.fishing ? enc(game.fishing, 3) : null,
       scene: sc ? this.sceneOf(sc) : null,
+      // (Round 144) A big battle near them: how far their view draws back.
+      bz: sim.war && sim.war.battleZoom ? Math.round(sim.war.battleZoom(game.player) * 100) / 100 : 1,
       shake: game.shake || 0,
       hurt: game.hurtFlash || 0,
       heal: game.healFlash || 0,

@@ -35,6 +35,7 @@ import { full, SESSION, nextSession } from './agenda.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { countItem, removeItem, addItem } from '../game/inventory.js';
 import { isOutworlder } from '../game/hero.js';
+import { CONDUCTS, CONDUCT_NAMES } from './conduct.js';
 
 const FAVOUR_MAX = 30;
 const MAX_OPEN = 4;
@@ -913,6 +914,7 @@ export class Crown {
     if (fx.decree === 'tariff') bits.push(`${fx.v ? 'a tariff on' : 'no tariff on'} the ${plain(this.civ(fx.civ))}`);
     if (fx.decree === 'watch') bits.push(`watch: ${fx.v}`);
     if (fx.decree === 'draft') bits.push(`draft: ${fx.v}`);
+    if (fx.decree === 'conduct') bits.push(`the armies: ${CONDUCT_NAMES[fx.v]}`);
     if (fx.aid) bits.push(`¤${fx.aid.n} from the realm`);
     if (fx.road !== undefined) bits.push('¤120 from the realm');
     if (fx.relief !== undefined) bits.push('half tribute, a fortnight');
@@ -1085,7 +1087,11 @@ export class Crown {
       text = { light: 'cut the watch back to one in ten grown folk', standard: 'returned the watch to its usual strength', heavy: 'ordered one in four grown folk to stand watch' }[v];
     } else if (key === 'draft' && d.draft !== v) {
       d.draft = v;
-      text = { none: 'ended the draft', elders: 'called the hale elders to the watch', all: 'called the young to the watch as well' }[v];
+      text = { none: 'ended the draft', elders: 'called the hale elders to the watch', all: 'called the young to the watch as well' }[v];    } else if (key === 'conduct' && (d.conduct || 'custom') !== v && CONDUCTS.includes(v)) {
+      // (Round 144) How the realm's armies treat a town they take (see
+      // conduct.js).
+      d.conduct = v;
+      text = { mercy: 'ordered the realm\'s armies to show mercy to any town they take', custom: 'left the taking of towns to the custom of the realm\'s soldiers', plunder: 'gave the realm\'s armies leave to plunder the towns they take, but not to kill', ruthless: 'ordered the realm\'s armies to give no quarter' }[v];
     }
     if (text && !quiet) this.sim.realms.proclaim(civ, day, `${cap(who)} ${text}.`);
     // A decree a town governed by another player falls short of: it's theirs
@@ -1158,6 +1164,7 @@ export class Crown {
     if (key === 'tariff') return R.decrees.tariffOn.includes(b.civ);
     if (key === 'watch') return R.decrees.watch || 'standard';
     if (key === 'draft') return R.decrees.draft || 'none';
+    if (key === 'conduct') return R.decrees.conduct || 'custom';
     return R.decrees[key];
   }
 

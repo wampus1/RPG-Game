@@ -25,6 +25,7 @@ import * as W from './windows.js';
 import { QuestWindow } from './quests.js';
 import { CouncilWindow } from './council.js';
 import { CrownWindow } from './crown.js';
+import { WarTableWindow } from './command.js';
 import { HustingsWindow, CountWindow, BannerWindow, VoteWindow } from './hustings.js';
 import { pidOf } from '../sim/saga/refs.js';
 import { ZONE, KINDS } from '../game/fishing.js';
@@ -307,6 +308,11 @@ export class UI {
           continue;
         case 'KeyJ':
           if (!game.player.dead) this.toggle('journal', () => new W.JournalWindow(this));
+          continue;
+        // (Round 144) The war table: command in a battle, a council of war,
+        // a siege; or how the war stands.
+        case 'KeyB':
+          if (!game.player.dead && !game.remote) this.toggle('wartable', () => new WarTableWindow(this));
           continue;
         // (Round 121) The council of the town you govern.
         case 'KeyN': {
@@ -1032,7 +1038,7 @@ export class UI {
       }
       // (Round 121) The town you govern: its matters, a crisis.
       // (Round 122) And the realm you rule.
-      const offLines = (sim.office && !game.remote ? this.quiet('office lines', () => [...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : []), ...(sim.events && sim.events.hudLines ? sim.events.hudLines() : [])]) : null) || [];
+      const offLines = (sim.office && !game.remote ? this.quiet('office lines', () => [...(sim.war && sim.war.hudLines ? sim.war.hudLines() : []), ...sim.office.hudLines(), ...(sim.crown ? sim.crown.hudLines() : []), ...(sim.events && sim.events.hudLines ? sim.events.hudLines() : [])]) : null) || [];
       for (const l of offLines) {
         g.fill(0, y, 25, 1, ' ', C.fg, l.blink && Math.floor(this.time * 3) % 2 ? 'rgba(120,20,20,0.85)' : 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);

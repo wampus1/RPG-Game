@@ -5,6 +5,7 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, INST_X0,
 } from '../config.js';
 import { World } from '../world/world.js';
+import { takeBanner } from '../sim/command.js';
 import { HavenCardWindow, HavenCouncilWindow, TreasureMapWindow } from '../ui/havenwin.js';
 import { havenInteract } from './havenplay.js';
 import { captiveSay } from './haventalk.js';
@@ -2381,7 +2382,7 @@ export class Game {
     this.spyFocus = spyTick(this, input, dt);
     // (Round 144) A big battle, or a town stormed, near you: drawn back to
     // take it in (see War.battleZoom; and inSight, which sees as far).
-    const bz = this.sim.war && !this.dungeon ? this.sim.war.battleZoom(this.player) : 1;
+    const bz = this.sim.war && !this.dungeon ? this.renderer.battleView?.(this.sim.war.battleZoom(this.player), dt) ?? this.sim.war.battleZoom(this.player) : 1;
     this.sightK = Math.max(1, bz, this.renderer.zoom || 1);
     this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1, bz);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
@@ -3278,6 +3279,9 @@ export class Game {
           // (Round 116: off the coach, whatever's in your hand.)
           else if (p._ride) rideOff(this, p);
           else if (shipKey(this, 'KeyF')) break;
+          // (Round 144) A band's fallen banner at your feet: up with it; a
+          // ladder against the wall you're on: off with it.
+          else if (this.warUse(p)) break;
           else if (p.heldDef()?.kind === 'food') this.eat();
           else if (p.heldDef()?.kind === 'potion') this.drink();
           else if (p.heldDef()?.newspaper) this.ui.openNews?.();
@@ -3295,6 +3299,21 @@ export class Game {
     // Shift held).
     if (wheel && p.copyBox && p.heldDef()?.blueprint && boxWheel(this, p, wheel)) return;
     if (wheel) this.selectSlot((p.selected + Math.sign(wheel) + BELT_SIZE) % BELT_SIZE);
+  }
+
+  // (Round 144) In a battle: a banner to take up, a ladder to push off the
+  // wall. True if there was.
+  warUse(p) {
+    const war = this.sim && this.sim.war;
+    if (!war || !war.live || war.live.kind !== 'battle') return false;
+    const b = takeBanner(war, p);
+    if (b) {
+      this.ui.msg(`You take up the banner of ${b.name}! They're yours to lead now (B: the war table).`, '#ffe070');
+      this.audio?.play('war_horn', p);
+      return true;
+    }
+    if (war.sieges && war.sieges.pushAt(p.x, p.y, p.z)) return true;
+    return false;
   }
 
   layerLabel() {

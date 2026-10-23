@@ -505,6 +505,7 @@ export class GuestNet {
     sim.hostName = () => hn;
     game.leaderHere = o.ld || null;
     this.hud = o.hud || [];
+    this.bz = o.bz || 1;
     sim.careers.hudLines = () => this.hud;
     game.stormSea = o.storm || null;
     game.charging = o.charging || null;
@@ -687,10 +688,12 @@ export class GuestNet {
     const p = game.player;
     if (p) game.world.ow.markExplored(p.x, p.z, 1);
     if (game.audio) game.audio.listener = p;
-    game.renderer.zoomGoal = game.scene && game.scene.zoom ? game.scene.zoom : 1;
+    // (Round 144: drawn back for a big battle, as the host has it.)
+    game.renderer.zoomGoal = game.scene && game.scene.zoom ? game.scene.zoom : game.renderer.battleCam === false ? 1 : Math.max(1, game.renderer.battleView ? game.renderer.battleView(this.bz || 1, dt) : this.bz || 1);
     game.renderer.zoomSnap = !!(game.scene && game.scene.zoom);
     const vis = p ? [p] : [];
-    const near = (e) => p && Math.abs(e.x - p.x) < 26 && Math.abs(e.z - p.z) < 26;
+    const vr = 26 * Math.max(1, game.renderer.zoom || 1, game.renderer.zoomGoal || 1);
+    const near = (e) => p && Math.abs(e.x - p.x) < vr && Math.abs(e.z - p.z) < vr;
     for (const e of this.ents.values()) if (e !== p && !e.dead && near(e)) vis.push(e);
     game.visibleEntities = vis;
   }

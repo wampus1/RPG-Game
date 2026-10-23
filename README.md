@@ -11247,6 +11247,178 @@ in the world map's own pixel style:
   same detail (about 30 KB for a city, once).
 - **Version 1.43.0.** Worlds from 1.42 load as before.
 
+## Round 144: Sieges and command
+
+Wars are fought on a bigger scale now: battles by bands under their own
+captains and banners, walled towns besieged and stormed, the treatment of
+a taken town decided by who took it, and you able to command when you
+have the rank.
+
+### Battles by bands
+
+- **Bands.** Each side's soldiers form bands of a few to a dozen: the
+  left, the centre and the right of the line, a reserve, the bowmen, the
+  horse, and any hired swords. Each band has a **captain** and a
+  **banner** carried over its ranks in the realm's colours (a rider
+  carries it for the horse). Each band also has its place on the field,
+  its current order, and its **morale**.
+- **Orders:** hold, advance, charge, fall back, round their flank, rally,
+  loose (bowmen), lock shields (a realm that knows the shield wall),
+  follow me, and, at a siege, storm and man the walls. Captains shout
+  them, and the band keeps its ranks: soldiers keep their places in the
+  line, step round one another, and close up when someone falls.
+- **Morale** drops with losses, with being taken in the flank or the
+  rear, with being outnumbered, and when a captain falls or a band
+  alongside breaks. It rises when a commander is near, when the band
+  rallies to its banner, and with each enemy downed. A **wavering** band
+  won't go forward. A **broken** band runs, and can be rallied once it's
+  clear of the fight.
+- **The commander of each side** runs the chosen plan (line, flank,
+  pincer, hold, works, feint, retreat) as a series of orders to its bands,
+  and thinks as it goes:
+  - commits the reserve where the line gives;
+  - turns a band to meet a flank attack;
+  - sends the horse at the enemy's bowmen or into a flank;
+  - pulls the bowmen back when they're rushed;
+  - pursues a broken enemy, or falls back in good order when the day is
+    lost.
+
+  Bold, cautious, steady and cunning commanders each fight it their own
+  way.
+- **In the fight itself**, soldiers look for an opening on an enemy's
+  side. Bowmen loose in volleys. The wounded drop back to bind their
+  wounds. A charge hits hard, and the horse harder. A blow from the flank
+  hurts more. Shields block, and a shield wall blocks more.
+- **Fallen banners.** When a bearer falls, the colours lie where they
+  dropped. Someone in the band takes them up, or you can: stand on them
+  and press **F**. Carry them and the band is yours to lead. Win the day
+  carrying them and the realm names you a **captain**, with a band of
+  your own in the battles to come.
+- **The scale of it.** Up to 60 a side are on the field by default (the
+  rest come up from the rear as the first fall); Settings → General →
+  *Soldiers on the field* sets 16, 32, 60 or 90. The camera draws back
+  when a big fight is near you, as far as your machine keeps up: if
+  frames come slowly, it closes in. *Wide view in battles* turns this
+  off. War horns, drums and the din of the line are in the mix, and dust
+  rises where bands march.
+
+### You in command
+
+- **Who commands:**
+  - a realm's ruler commands its host;
+  - a town's head leads its levy (or the whole host, when it's their own
+    town that's fought over);
+  - a captain of the realm leads a band;
+  - everyone else fights in the band nearest them, under its captain.
+- **B** opens the **war table**. In a battle it shows our bands and
+  theirs: their strength, morale, and what each is doing. It has a map of
+  the field. Pick a band (1–9, 0 for all, or click it), then give an
+  order by key or button: H hold, A advance, C charge, F fall back,
+  W round their flank, R rally, L loose, S lock shields, O follow me,
+  T storm, M man the walls, X back to its captain. Click the map to set
+  where a band goes; right-click it to advance there. The battle never
+  stops for this. A band you give an order keeps to it, and the rest
+  follow the commander's plan. You can change the plan mid-battle.
+- **Before a battle** (the council of war), choose your plan. The table
+  shows how each plan answers theirs, if your scouts have found it out,
+  and whether the ground favours it. You can **send scouts**, leave it to
+  the marshal, or, behind walls, **shut the gates** and stand a siege.
+- **Playing together:** guests have their own ranks, their own war table,
+  and the same drawn-back view.
+
+### Sieges
+
+- **When a siege begins.** A decisive win before a walled town begins a
+  siege, unless the beaten army was cut to pieces and the ram is already
+  through. A walled town too weak to meet the enemy in the field shuts
+  its gates and waits behind its walls. An **unwalled town** can be
+  surrounded too, if the army is strong enough. That makes a smaller
+  siege: its people barricade the streets.
+- **Day by day:**
+  - The garrison is the watch, whoever made it back from the field, and
+    townsfolk who take up spears.
+  - The stores run down (full, half or quarter rations). Hunger brings
+    famine and unrest.
+  - The camp builds ladders, rams and catapults (as far as the realm's
+    knowledge goes). Catapults batter the wall, sappers dig under it, and
+    a stretch can come down.
+  - Fever and weariness thin the camp.
+  - The defenders sally out at the engines, mend the walls and send for
+    relief. A relieving army fights the besiegers.
+  - The besiegers offer terms, generous or hard, and the town accepts or
+    refuses.
+  - A starving or despairing town may be **betrayed** from within.
+  - Either commander may decide it's time to storm.
+
+  It ends with the town stormed, surrendered or betrayed, or the siege
+  lifted. All of it goes into the war's record and the towns' histories.
+- **On the ground.** Near a besieged town you see the siege lines:
+  - the camp with its fires and engines, the walkways and steps up the
+    wall, the barred gates, watchmen on the walls;
+  - stones from the catapults striking the wall.
+
+  **The assault** is fought where you are:
+  - ladders carried to the wall, raised, pushed down and raised again,
+    and climbed;
+  - the ram at the gate until it gives;
+  - the defenders at their posts on the walls, at the gate and in the
+    breach, with archers shooting from the walls;
+  - the storming parties fighting their way through and on to the square.
+
+  Hold the square and the town falls. Throw them back, and that counts
+  as a failed assault.
+- **The siege's own orders** are on the war table when it's yours to
+  command:
+  - the defenders: rations, sally, mend the wall, send for relief, and
+    accept or refuse terms;
+  - the besiegers: where to storm at dawn (the gate, the breach, the
+    walls, the barricades, or all at once), what to build, whether to dig
+    under the wall, terms, or lifting the siege.
+
+  It's marked on the world map: the besiegers' lines march round the
+  town in their colours.
+
+### The sack
+
+How a town taken by storm is treated depends on who took it. There are
+two scales: **greed** (the coin, the stores and the goods carried off)
+and **cruelty** (fires, killing in the streets, prisoners). Together
+they decide the outcome: **taken in good order**, **plundered**,
+**sacked**, or **put to the sword**. What moves them:
+
+- **The conquering people's ways and faith.** A martial people, or one
+  that raids by sea, is harder. A merchant people takes more and kills
+  less. A pious or learned people is gentler, unless it's a holy war. A
+  faith that holds charity, patience or hospitality highest softens
+  them.
+- **Their ruler.** An NPC ruler's temper and kindness count. A player
+  ruler can decree the **conduct of the realm's armies** on the crown's
+  Decrees page: mercy, custom, loot (plunder, no killing) or no quarter.
+- **The commander in the field.** Their temper and kindness count, as
+  does being merciful, stern, grasping or honest. If you command, you
+  give the word yourself on the war table: spare the town, plunder but
+  no killing, or the town is yours.
+- **What went before.** A long siege, assaults thrown back, terms
+  refused, or a hated enemy make it worse. A town of the same faith, or
+  one that was theirs once, is spared the worst.
+
+The town takes it hard (low spirits, unrest), and after a sack some
+families flee to their old realm's towns. If you led the army, they
+remember it was you.
+
+### Console
+
+- `battle [size]`: a battle now, outside the town you're in, against the
+  realm at war with it (or its nearest neighbour, which declares war).
+  With a size, that many a side are on the field.
+- `siege [storm] [town]`: the town besieged; with `storm`, the assault
+  starts there and then.
+
+### Version 1.44.0
+
+Worlds from 1.43 load as before. A war in progress carries on, and its
+next decisive win before a walled town begins a siege.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -11273,6 +11445,8 @@ you've typed. These are for exploring and testing, and they change your game.
 | `god [on\|off]` | nothing can hurt you (the console no longer does this by itself) |
 | `skip <days>` (or `ff`) | fast-forwards that many days (1–120), the whole world living them |
 | `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
+| `battle [size]` | a battle now outside the town you're in, against its enemy (war declared on its nearest neighbour if it's at peace); `size` sets how many a side are on the field |
+| `siege [storm] [town]` | the town you're in (or named) besieged by its enemy; `storm` starts the assault at once |
 | `learn <step> [realm]`, `learn all [realm]`, `learn list` | a realm (yours, the one you're in, or one named at the end) learns a step of the tree at once, with whatever it needs first ("learn portals", "learn trade ships"); `all` learns everything it can (one side of each choice); `list` names the steps |
 | `erupt [days]` (or `volcano`) | the mountain on Kharos erupts now; with `days`, how long till it next does |
 | `ship <sloop\|brigantine\|galleon\|frigate> [aboard]`, `ship foe <type>`, `ship list` | launches a ship of your own on the nearest open water, with a crew and shot (and puts you aboard with `aboard`); `foe` sends a warship against you; `list` names the ships about |
