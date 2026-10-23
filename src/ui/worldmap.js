@@ -497,12 +497,13 @@ export class MapWindow extends Window {
       this.searching = true;
       return true;
     }
-    // (Round 142) The pages: 1 the world, 2 the town you're in.
-    if (k.code === 'Digit1') {
+    // (Round 142) The pages: 1 the world, 2 the town you're in. (Only the
+    // world map's own: not the coach's, which is drawn on it.)
+    if (k.code === 'Digit1' && this.kind === 'map') {
       this.goTab('world');
       return true;
     }
-    if (k.code === 'Digit2' && this.townHere(game)) {
+    if (k.code === 'Digit2' && this.kind === 'map' && this.townHere(game)) {
       this.goTab('civ');
       return true;
     }

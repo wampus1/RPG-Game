@@ -21,6 +21,8 @@ import { MapWindow } from '../src/ui/worldmap.js';
 import { Grid } from '../src/ui/ascii.js';
 import { randomHero } from '../src/game/hero.js';
 import { PACE } from '../src/game/originintros.js';
+import { HostNet } from '../src/net/host.js';
+import { GuestNet } from '../src/net/guest.js';
 import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
@@ -233,6 +235,64 @@ test('the world map: a World tab always, a Civilization tab only while in a town
   assert.doesNotMatch(row0(), /CIVILIZATION/);
   assert.equal(w.tab, 'world');
   assert.ok(!w.onKey({ code: 'Digit2' }) || w.tab === 'world');
+});
+
+test('a player in someone else\'s world gets a town\'s plan from the host, and fills in its map as they walk', () => {
+  const game = makeGame(12345);
+  game.minute = 10 * 60;
+  for (let i = 0; i < 20; i++) game.update(0.1, input);
+  const queue = [];
+  let guestNet = null;
+  const ui = () => {
+    const u = stubUI();
+    u.windows = [];
+    u.update = () => {};
+    u.find = () => null;
+    u.closeAll = () => {};
+    return u;
+  };
+  const hostNet = new HostNet(game, {
+    send: (text) => {
+      if (text[0] === '@') queue.push(() => guestNet.receive(text.slice(text.indexOf('|') + 1)));
+    },
+    profile: { id: 'h', name: 'Hosty' },
+    world: { name: 'Testland' },
+    makeUI: () => ui(),
+  });
+  let gg = null;
+  guestNet = new GuestNet({
+    send: (text) => queue.push(() => hostNet.receive(`@7|${text}`)),
+    profile: { id: 'g', name: 'Guesty' },
+    build: (save) => (gg = new Game({ seed: save.seed, renderer: stubRenderer(), audio: null, ui: ui(), save, remote: true })),
+    onNeedHero: () => guestNet.sendHero(null),
+    onEnd: () => {},
+  });
+  const flush = () => {
+    while (queue.length) queue.shift()();
+  };
+  hostNet.receive('!' + JSON.stringify({ t: 'join', cid: 7, account: { id: 'g', name: 'Guesty' } }));
+  flush();
+  const gin = stubInput();
+  for (let i = 0; i < 10; i++) {
+    game.update(0.05, input);
+    flush();
+    if (gg) gg.update(0.05, gin);
+    flush();
+  }
+  assert.ok(gg && gg.remote, 'joined');
+  const s = game.currentSettlement || [...game.active.values()][0].layout.settlement;
+  const L = game.world.layouts.get(s.id);
+  // (No town laid out on the player's screen: it asks.)
+  assert.equal(gg.world.layouts.get(s.id), undefined);
+  gg.currentSettlement = gg.world.ow.settlements[s.id];
+  gg.player.x = L.plaza.cx + 0.5;
+  gg.player.z = L.plaza.cz + 0.5;
+  assert.equal(noteNear(gg), false, 'nothing to go on yet');
+  flush();
+  flush();
+  assert.ok(gg.townPlans && gg.townPlans[s.id], 'the host sent the plan');
+  assert.ok(noteNear(gg));
+  assert.ok(knownPlaces(gg, s.id).length > 0);
 });
 
 // ------------------------------------------------------------ the openings
