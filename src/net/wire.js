@@ -24,7 +24,27 @@ const SKIP = new Set([
   // (Round 71: an evolved master's own reckoning: what it remembers, what
   // it's counted of your arms, what it's told you.)
   'mem', 'memT', 'usedArms', 'toldForms', 'haulArms',
+  // (Round 141) The host's own clocks, counting down every frame for every
+  // townsperson and beast about you, and never drawn: they were most of
+  // what went over the network (see the README, Round 141).
+  'trailEatT', 'gemMendT', 'chairT', 'roofT', 'bedCheckT', 'idleCd', 'biteT', 'attackCd', 'tidyT', 'dishClock', 'restT', 'avoid',
 ]);
+// (Round 141) Clocks the far side runs itself between words (see
+// guest.tick): sent when they're set, or when they've gone their own way,
+// not every time they tick on. `rate`: how fast each runs, a second (of
+// the thing itself, `e`); `lo`/`hi`: where it stops. A number, or an
+// object's own `t`.
+export const CLOCKS = {
+  moveT: { rate: (e) => 1 / (e.moveDur || 0.2), lo: 0, hi: 1, tol: 0.12 },
+  actionTimer: { rate: () => -1, lo: 0, hi: Infinity, tol: 0.15 },
+  flash: { rate: () => -1, lo: 0, hi: Infinity, tol: 0.15 },
+  bubble: { rate: () => -1, lo: 0, hi: Infinity, tol: 0.4, obj: true },
+  emote: { rate: () => -1, lo: 0, hi: Infinity, tol: 0.25, obj: true },
+  // (Its `fx`: the host's own countdown to the next puff of dust or wave
+  // of a hand, those sent as they happen: left out.)
+  idleAnim: { rate: () => 1, lo: 0, hi: Infinity, tol: 0.25, obj: true, omit: ['fx'] },
+  windup: { rate: () => 1, lo: 0, hi: Infinity, tol: 0.08, obj: true },
+};
 // Of a townsperson's record, what anyone sees of them.
 const REC = ['idx', 'sid', 'name', 'age', 'job', 'look', 'equipment', 'wear', 'traits', 'personality', 'hp', 'maxHp', 'gems', 'tier', 'soldier', 'bandit', 'drafted', 'captive', 'ruler', 'councillor', 'title', 'alive'];
 
@@ -80,13 +100,26 @@ export function kindOf(e) {
 const PROTO = { P: Player.prototype, N: NPC.prototype, C: Creature.prototype, D: ItemDrop.prototype, E: Engine.prototype, S: Sailor.prototype, R: Object.prototype };
 
 // Its fields, as data (each as a string, to compare with what was sent).
+// (Round 141: a running clock's reading, and the rest of it, kept beside
+// them, out of sight: see diffFields.)
 export function fieldsOf(e) {
   const out = {};
+  let clk = null;
   for (const k of Object.keys(e)) {
     if (SKIP.has(k) || k[0] === '_') continue;
     const x = enc(e[k]);
-    if (x !== undefined) out[k] = JSON.stringify(x);
+    if (x === undefined) continue;
+    const C = CLOCKS[k];
+    if (C && C.omit && x && typeof x === 'object') for (const o of C.omit) delete x[o];
+    out[k] = JSON.stringify(x);
+    if (!C || x === null) continue;
+    if (C.obj) {
+      if (typeof x !== 'object' || typeof x.t !== 'number') continue;
+      const { t, ...rest } = x;
+      (clk ||= {})[k] = { v: t, sig: JSON.stringify(rest), rate: C.rate(e) };
+    } else if (typeof x === 'number') (clk ||= {})[k] = { v: x, sig: '', rate: C.rate(e) };
   }
+  if (clk) Object.defineProperty(out, '$clk', { value: clk, enumerable: false });
   // An item's place in the air (kept in its own fields, behind getters).
   if (e instanceof ItemDrop) for (const k of ['px', 'py', 'pz']) out[k] = JSON.stringify(enc(e[k]));
   // A townsperson's record: only what's seen.
@@ -100,11 +133,30 @@ export function fieldsOf(e) {
 
 // What changed in its fields since `last` (all of them the first time);
 // `last` brought up to date. Null if nothing did.
-// (`now`: its fields as already worked out this frame, for another of you.)
-export function diffFields(e, last, now = fieldsOf(e)) {
+// (`now`: its fields as already worked out this frame, for another of you.
+// `clock`: the time, in seconds, if running clocks may be left to run on
+// the far side: see CLOCKS.)
+export function diffFields(e, last, now = fieldsOf(e), clock = null) {
   let out = null;
+  const clk = clock === null ? null : now.$clk;
   for (const k of Object.keys(now)) {
-    if (last[k] === now[k]) continue;
+    const c = clk && clk[k];
+    // (A clock's the same as when it was last sent: but the far side's has
+    // run on since, so it's reckoned below, not passed over.)
+    if (last[k] === now[k] && !c) continue;
+    if (c) {
+      // Where the far side has it now, by its own reckoning since it was
+      // last told: near enough, and nothing else about it changed, it's
+      // left be.
+      if (!Object.prototype.hasOwnProperty.call(last, '$clk')) Object.defineProperty(last, '$clk', { value: {}, enumerable: false });
+      const was = last.$clk[k];
+      const C = CLOCKS[k];
+      if (was && was.sig === c.sig) {
+        const guess = Math.max(C.lo, Math.min(C.hi, was.v + was.rate * (clock - was.at)));
+        if (Math.abs(guess - c.v) <= C.tol) continue;
+      }
+      last.$clk[k] = { v: c.v, sig: c.sig, rate: c.rate, at: clock };
+    } else if (last.$clk) delete last.$clk[k];
     last[k] = now[k];
     (out ||= {})[k] = now[k];
   }

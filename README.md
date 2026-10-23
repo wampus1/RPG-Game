@@ -11078,6 +11078,49 @@ carry **abilities**.
     Najjars' guest") instead of cutting it off after a letter.
 - **Version 1.40.0.** Worlds from 1.39 load as before.
 
+## Round 141: Lighter on the network
+
+Wi-Fi dropping out while playing together. Measured with a host and a
+player joined, the game was far heavier on the network than it needed to
+be, and nothing stopped it piling up on a connection that couldn't keep up.
+Nothing found would knock a network over on its own, but on a weak or busy
+Wi-Fi it would keep it saturated. All of it is fixed:
+
+- **Most of what was sent wasn't needed.** Every townsperson and beast near a
+  player had their internal countdowns sent 20 times a second (when they'd
+  next eat, mend, sit, look for a roof). The player's screen never uses them.
+  They're no longer sent. Clocks the player's screen does use (a step from
+  one square to the next, a word over someone's head, someone's idle
+  business, a beast winding up a blow) are sent when they start or go wrong,
+  and the player's screen runs them on itself in between. In a town this
+  took a player's share from about 130 KB a second to about 14.
+- **Compressed between computers.** The game's server now uses the
+  compression every browser's WebSocket understands, for each player on
+  another computer (not the host's own browser, which is on the same
+  machine). That roughly halves the rest again (about 6 KB a second in a
+  town) and cuts the ground to a tenth.
+- **No more bursts.** Coming into new ground sent three or nine whole
+  regions in one go, up to about 0.8 MB at once. They now go one at a time,
+  the one underfoot first, and are never sent twice while one's still on
+  its way.
+- **A player whose connection can't keep up.** The server used to keep
+  queuing for them with no limit, so their connection stayed jammed for
+  as long as anything was sent. Now, once about 256 KB is waiting for
+  them, the host holds back until it has gone through, then sends what has
+  changed since in one go. A connection with 32 MB waiting (one that has
+  stopped altogether) is let go of; the player can join again.
+- **Input.** A player's screen sent what they were pointing at every frame
+  (60, or 144 on a fast screen, little packets a second). Pointer-only
+  movement now goes at most 30 times a second (15 on the "light" setting).
+  Keys and clicks still go at once.
+- **Checked and fine:** the "who's hosting nearby?" call-out on the network
+  is one small message every two seconds, and only while hosting. The
+  title screen's link to the server reconnects at most once a second.
+  Pictures in windows sent to players are small (the world map at most, a
+  few tens of KB a second while open).
+- **Version 1.41.0.** Worlds from 1.40 load as before. Host and players need
+  the same version, as always.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -100,6 +100,9 @@ function leaderHere(game) {
   return ld ? { sid: s.id, scope: ld.scope, title: ld.title, address: ld.address } : null;
 }
 
+// (The regions about a player, nearest first.)
+const AROUND = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+
 const regionKeyOf = (x, z) => `${Math.floor(x / REGION_W)},${Math.floor(z / REGION_D)}`;
 
 export class HostNet {
@@ -121,6 +124,9 @@ export class HostNet {
     this.bans = { ids: new Set(bans && bans.ids ? bans.ids : []), names: new Map((bans && bans.names) || []) };
     this.lobby = [];
     this.acc = 0;
+    // (Round 141) The time, in seconds, for the clocks the players' screens
+    // run themselves (see wire.CLOCKS).
+    this.clock = 0;
     this.mute = 0;
     this.inst = null;
     game.net = this;
@@ -149,6 +155,13 @@ export class HostNet {
     else if (c.t === 'left') this.left(c.cid);
     else if (c.t === 'lobby') this.lobby = c.list || [];
     else if (c.t === 'answer') this.notify(`${c.from.name} ${c.yes ? 'is on the way' : 'can\'t come just now'}.`, c.from);
+    // (Round 141) A player whose connection can't keep up (the relay's
+    // still sending them what's gone before): word held back till it's
+    // through, then what's changed since, all at once.
+    else if (c.t === 'backlog') {
+      const g = this.guests.get(c.cid);
+      if (g) g.backed = !!c.on;
+    }
   }
 
   // Someone at the door.
@@ -354,7 +367,12 @@ export class HostNet {
       if (Number.isInteger(m.view)) seat.store.v.view = m.view & 3;
       seat.away = !!m.away;
     } else if (m.t === 'drop') g.sent.regions.delete(`${m.rx},${m.rz}`);
-    else if (m.t === 'need') this.sendRegion(g, m.rx, m.rz);
+    // (Round 141: not again if it's on its way, or only just went.)
+    else if (m.t === 'need') {
+      const k = `${m.rx},${m.rz}`;
+      const at = g.regionAt && g.regionAt.get(k);
+      if (!(g.sent.regions.has(k) && ((g.pendingRegions || []).some((q) => `${q[0]},${q[1]}` === k) || (at !== undefined && this.clock - at < 3)))) this.sendRegion(g, m.rx, m.rz);
+    }
     // A command typed in their console: run as them, if the host allows it.
     else if (m.t === 'cmd') this.command(g, String(m.text || '').slice(0, 200));
     // (Word less often, asked for: see GuestNet.setRate.)
@@ -603,14 +621,22 @@ export class HostNet {
   }
 
   // ------------------------------------------------------------ the ground
+  // (Round 141: queued, and sent one a time, as it is then: see sendTo.)
   sendRegion(g, rx, rz) {
     const w = this.game.world;
     if (!w.inBounds(rx, rz)) return;
-    const r = w.isLoaded(rx, rz) ? w.regionAt(rx * REGION_W, rz * REGION_D) : w.loadRegion(rx, rz);
-    if (!r) return;
-    g.sent.regions.add(`${rx},${rz}`);
+    const k = `${rx},${rz}`;
+    g.sent.regions.add(k);
     g.pendingRegions = g.pendingRegions || [];
-    g.pendingRegions.push(r.serialize());
+    if (!g.pendingRegions.some((q) => q[0] === rx && q[1] === rz)) g.pendingRegions.push([rx, rz]);
+  }
+
+  // The next of a player's ground to go: the region, as it is now (null if
+  // it's not to be had).
+  regionData(rx, rz) {
+    const w = this.game.world;
+    const r = w.isLoaded(rx, rz) ? w.regionAt(rx * REGION_W, rz * REGION_D) : w.loadRegion(rx, rz);
+    return r ? r.serialize() : null;
   }
 
   // The ground about a player: anything they don't have yet, sent.
@@ -632,11 +658,13 @@ export class HostNet {
     }
     const rx = Math.floor(p.x / REGION_W);
     const rz = Math.floor(p.z / REGION_D);
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (!g.sent.regions.has(`${rx + dx},${rz + dz}`)) this.sendRegion(g, rx + dx, rz + dz);
+    // (The ground underfoot first, then beside, then the corners.)
+    for (const [dx, dz] of AROUND) if (!g.sent.regions.has(`${rx + dx},${rz + dz}`)) this.sendRegion(g, rx + dx, rz + dz);
   }
 
   // ------------------------------------------------------------ each frame
   afterUpdate(dt) {
+    this.clock += dt;
     this.acc += dt;
     if (this.acc < 1 / RATE) return;
     const step = this.acc;
@@ -652,6 +680,9 @@ export class HostNet {
       g.owed = (g.owed || 0) + step;
       g.beat = (g.beat || 0) + 1;
       if ((g.every || 1) > 1 && g.beat % g.every) continue;
+      // (Round 141) Their connection still behind: nothing more piled on it
+      // (what changes meanwhile goes when it's caught up: see wire.diffFields).
+      if (g.backed) continue;
       const s = g.owed;
       g.owed = 0;
       this.sendTo(g, s);
@@ -730,7 +761,7 @@ export class HostNet {
         now = fieldsOf(e);
         this.fields?.set(e, now);
       }
-      const ch = diffFields(e, last, now);
+      const ch = diffFields(e, last, now, this.clock);
       if (ch) ents.push(packEntity(e, ch));
     };
     // (Not anyone still watching their opening: not in the world yet.)
@@ -791,9 +822,26 @@ export class HostNet {
       msg.inst = g.instMsg;
       g.instMsg = null;
     }
-    if (g.pendingRegions && g.pendingRegions.length) {
-      msg.r = g.pendingRegions;
-      g.pendingRegions = [];
+    // (Round 141) The ground, a region a time: nine at once on arriving
+    // (or three, crossing into new ground) was the better part of a
+    // megabyte in one go.
+    while (g.pendingRegions && g.pendingRegions.length) {
+      // (Whichever's nearest them: what they asked for themselves, starting
+      // up, came in rows.)
+      const px = Math.floor(p.x / REGION_W);
+      const pz = Math.floor(p.z / REGION_D);
+      let best = 0;
+      for (let i = 1; i < g.pendingRegions.length; i++) {
+        const [ax, az] = g.pendingRegions[i];
+        const [bx, bz] = g.pendingRegions[best];
+        if (Math.max(Math.abs(ax - px), Math.abs(az - pz)) * 10 + Math.abs(ax - px) + Math.abs(az - pz) < Math.max(Math.abs(bx - px), Math.abs(bz - pz)) * 10 + Math.abs(bx - px) + Math.abs(bz - pz)) best = i;
+      }
+      const [rx, rz] = g.pendingRegions.splice(best, 1)[0];
+      const d = this.regionData(rx, rz);
+      if (!d) continue;
+      msg.r = [d];
+      (g.regionAt ||= new Map()).set(`${rx},${rz}`, this.clock);
+      break;
     }
     if (g.blocks.length) {
       msg.b = g.blocks;

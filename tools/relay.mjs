@@ -5,6 +5,7 @@
 // Nothing to install: a small WebSocket server of its own (RFC 6455, text
 // frames, ping and close).
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { setInterval } from 'node:timers';
 import { rankAddresses } from './lan.mjs';
 import { MAX_PLAYERS, NET_VERSION, NET_PATH } from '../src/net/protocol.js';
@@ -17,6 +18,16 @@ const MAX_MESSAGE = 64 * 1024 * 1024;
 // go of, so it can be hosted again.)
 const QUIET_MS = 45000;
 const PING_MS = 15000;
+// (Round 141) A player's connection this far behind (bytes waiting to go
+// to them): the host told to hold back its word till it's through. This
+// far, and it's never going to catch up: let go of.
+const BACKLOG_HIGH = 256 * 1024;
+const BACKLOG_GIVE_UP = 32 * 1024 * 1024;
+// (Round 141) Words to the others, squeezed (WebSocket's own compression,
+// which every browser speaks): a tenth the size, for the ground, and a
+// half or less for the rest. Not words this short.
+const DEFLATE_MIN = 96;
+const SYNC_TAIL = Buffer.from([0x00, 0x00, 0xff, 0xff]);
 
 // This machine's addresses on the network (what the others type in), the
 // one they can most likely reach first (see lan.mjs).
@@ -29,9 +40,12 @@ const isLoopback = (ip) => ['127.0.0.1', '::1', 'localhost'].includes(plainIp(ip
 
 // One WebSocket connection, server side.
 class Sock {
-  constructor(socket, ip) {
+  constructor(socket, ip, deflate = false) {
     this.socket = socket;
     this.ip = plainIp(ip);
+    // (Round 141) Compressed both ways (each message on its own: see
+    // Relay.upgrade).
+    this.deflate = deflate;
     this.open = true;
     this.buf = Buffer.alloc(0);
     this.parts = [];
@@ -53,6 +67,7 @@ class Sock {
       const b = this.buf;
       if (b.length < 2) return;
       const fin = (b[0] & 0x80) !== 0;
+      const rsv1 = (b[0] & 0x40) !== 0;
       const op = b[0] & 0x0f;
       const masked = (b[1] & 0x80) !== 0;
       let len = b[1] & 0x7f;
@@ -84,10 +99,20 @@ class Sock {
       }
       if (op === 0xa) continue;
       if (op === 0x1 || op === 0x2 || op === 0x0) {
+        // (A message's first frame says if it's compressed.)
+        if (op !== 0x0) this.squeezed = rsv1 && this.deflate;
         this.parts.push(payload);
         if (fin) {
-          const text = Buffer.concat(this.parts).toString('utf8');
+          let body = Buffer.concat(this.parts);
           this.parts = [];
+          if (this.squeezed) {
+            try {
+              body = zlib.inflateRawSync(Buffer.concat([body, SYNC_TAIL]), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: MAX_MESSAGE });
+            } catch {
+              return this.close(1007, 'bad data');
+            }
+          }
+          const text = body.toString('utf8');
           try {
             this.onmessage?.(text);
           } catch (e) {
@@ -98,19 +123,20 @@ class Sock {
     }
   }
 
-  frame(op, payload) {
+  frame(op, payload, rsv1 = false) {
     if (!this.open) return;
     const n = payload.length;
+    const b0 = 0x80 | (rsv1 ? 0x40 : 0) | op;
     let head;
-    if (n < 126) head = Buffer.from([0x80 | op, n]);
+    if (n < 126) head = Buffer.from([b0, n]);
     else if (n < 65536) {
       head = Buffer.alloc(4);
-      head[0] = 0x80 | op;
+      head[0] = b0;
       head[1] = 126;
       head.writeUInt16BE(n, 2);
     } else {
       head = Buffer.alloc(10);
-      head[0] = 0x80 | op;
+      head[0] = b0;
       head[1] = 127;
       head.writeBigUInt64BE(BigInt(n), 2);
     }
@@ -118,7 +144,18 @@ class Sock {
   }
 
   send(text) {
-    this.frame(0x1, Buffer.from(text, 'utf8'));
+    const raw = Buffer.from(text, 'utf8');
+    if (this.deflate && raw.length >= DEFLATE_MIN) {
+      // (Each on its own, the sync-flush tail cut off, as RFC 7692 has it.)
+      const z = zlib.deflateRawSync(raw, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+      return this.frame(0x1, z.subarray(0, z.length - 4), true);
+    }
+    this.frame(0x1, raw);
+  }
+
+  // (Round 141) Bytes waiting to go to them.
+  backlog() {
+    return this.socket.writableLength || 0;
   }
 
   json(msg) {
@@ -155,8 +192,11 @@ class Sock {
 export class Relay {
   // `extra()`: more to say in info (the name this machine answers to, and
   // worlds hosted elsewhere on the network: see serve.mjs).
-  constructor({ port = 8080, max = MAX_PLAYERS, addrs = lanAddresses, extra = null } = {}) {
+  // (`squeeze(ip)`: whether to compress a connection from there: anyone
+  // not on this machine. See upgrade.)
+  constructor({ port = 8080, max = MAX_PLAYERS, addrs = lanAddresses, extra = null, squeeze = (ip) => !isLoopback(ip) } = {}) {
     this.port = port;
+    this.squeeze = squeeze;
     this.max = max;
     this.addrs = addrs;
     this.extra = extra;
@@ -204,8 +244,14 @@ export class Relay {
       return null;
     }
     const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
-    socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-    const sock = new Sock(socket, req.socket.remoteAddress);
+    // (Round 141) Over the network (not this machine's own browser, on the
+    // host's side of it): compressed, if the browser offers it. Each
+    // message on its own, so neither side keeps a dictionary between them.
+    const offers = String(req.headers['sec-websocket-extensions'] || '');
+    const deflate = this.squeeze(req.socket.remoteAddress) && /permessage-deflate/i.test(offers);
+    const ext = deflate ? 'Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n' : '';
+    socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n${ext}\r\n`);
+    const sock = new Sock(socket, req.socket.remoteAddress, deflate);
     this.socks.add(sock);
     if (!this.beatT) {
       this.beatT = setInterval(() => this.beat(), PING_MS);
@@ -308,10 +354,10 @@ export class Relay {
     if (c === '@') {
       const bar = text.indexOf('|');
       const g = this.guests.get(+text.slice(1, bar));
-      if (g) g.sock.send(text.slice(bar + 1));
+      if (g) this.toGuest(g, text.slice(bar + 1));
     } else if (c === '*') {
       const body = text.slice(2);
-      for (const g of this.guests.values()) g.sock.send(body);
+      for (const g of this.guests.values()) this.toGuest(g, body);
     } else if (c === '!') {
       let m;
       try {
@@ -321,6 +367,28 @@ export class Relay {
       }
       this.control(m);
     }
+  }
+
+  // (Round 141) Word to a player, and a watch on their connection: if it
+  // can't keep up (a weak Wi-Fi signal, a busy network), the host is told
+  // to hold back till what's waiting has gone, rather than more and more
+  // piling up here and on their network; if it never catches up, they're
+  // let go (they can join again).
+  toGuest(g, body) {
+    g.sock.send(body);
+    const n = g.sock.backlog();
+    if (n > BACKLOG_GIVE_UP) {
+      console.log(`relay: ${g.account.name}'s connection fell too far behind; letting them go.`);
+      g.sock.close(1008, 'too slow');
+      return;
+    }
+    if (n <= BACKLOG_HIGH || g.backed) return;
+    g.backed = true;
+    if (this.host) this.host.sock.send(`!${JSON.stringify({ t: 'backlog', cid: g.cid, on: true })}`);
+    g.sock.socket.once('drain', () => {
+      g.backed = false;
+      if (this.host && this.guests.get(g.cid) === g) this.host.sock.send(`!${JSON.stringify({ t: 'backlog', cid: g.cid, on: false })}`);
+    });
   }
 
   control(m) {

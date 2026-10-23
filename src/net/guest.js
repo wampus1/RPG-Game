@@ -714,11 +714,16 @@ export class GuestNet {
     const j = JSON.stringify(msg);
     const now = Date.now();
     if (j === this.last && !msg.p.length && !msg.c.length && now - this.sentAt < 250) return;
-    // (On the light setting: only the pointer moved, not every frame of it.)
+    // Only the pointer moved: not every frame of it. (Round 141: thirty
+    // times a second at most, fifteen on the light setting. It was every
+    // frame, sixty or more a second on a fast screen, each its own little
+    // packet over the Wi-Fi.)
     const kj = JSON.stringify(msg.k);
-    if (this.rate && this.rate <= 10 && !msg.p.length && !msg.c.length && kj === this.lastKeys && !!msg.m.down === !!this.lastDown && now - this.sentAt < 66) return;
+    const gap = this.rate && this.rate <= 10 ? 66 : 33;
+    if (!msg.p.length && !msg.c.length && kj === this.lastKeys && !!msg.m.down === !!this.lastDown && !!msg.m.rdown === !!this.lastRDown && now - this.sentAt < gap) return;
     this.lastKeys = kj;
     this.lastDown = !!msg.m.down;
+    this.lastRDown = !!msg.m.rdown;
     this.last = j;
     this.sentAt = now;
     this.send(j);
@@ -778,6 +783,11 @@ function tick(e, dt) {
     e.emote.t -= dt;
     if (e.emote.t <= 0) e.emote = null;
   }
+  // (Round 141) Clocks that run up: a townsperson's idle business, a
+  // beast winding up a blow. Told when they start, not each moment after
+  // (see wire.CLOCKS).
+  if (e.idleAnim && typeof e.idleAnim.t === 'number') e.idleAnim.t += dt;
+  if (e.windup && typeof e.windup.t === 'number') e.windup.t += dt;
   // (A dropped thing in the air: where it was going.)
   if (e.netKind === 'D' && !e.resting) {
     e.px += (e.vx || 0) * dt;

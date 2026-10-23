@@ -1120,6 +1120,14 @@ export const STEPS = [
       log.push('A town\'s head can make others its citizens (the others playing, if they accept; nomads, adventurers and merchants staying in town) and pardon the others playing (a realm\'s ruler, in every town of the realm); the council sits at ten o\'clock sharp, and what was sent to it is voted on then; a guest\'s HUD no longer disappears in a town where they lodge.');
     },
   },
+  {
+    to: '1.41.0',
+    game(game, log) {
+      // (Nothing in a world changes: only what goes over the network.)
+      void game;
+      log.push('Playing together is far lighter on the network: a fraction of the data each second, the ground sent a piece at a time, everything compressed between computers, and a player whose connection can\'t keep up no longer has more and more piled on it.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
