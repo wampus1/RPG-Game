@@ -13,7 +13,7 @@ const TDX = [0, -1, 0, 1];
 const TDZ = [1, 0, -1, 0];
 import { NPC_STEP_TIME, GROUND, SURFACE } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
-import { findPath } from './pathfind.js';
+import { findPath, onRoof } from './pathfind.js';
 import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
 import { guardPlan, stepAside } from './tactics.js';
@@ -54,6 +54,13 @@ const MEAL_LINES = {
 
 // Who serves the meals at the tavern, and clears up after.
 const TIDIERS = new Set(['barkeep', 'innkeeper', 'cook']);
+
+// (Round 145) What one of the levy fights with when the town's armoury has
+// run out: the tools of their trade, or a club.
+const MAKESHIFT = { farmer: 'hoe', lumberjack: 'wood_axe', woodcutter: 'wood_axe', carpenter: 'hammer', builder: 'hammer', blacksmith: 'hammer', smith: 'hammer', miner: 'stone_pickaxe', fisher: 'wooden_spear', trapper: 'wooden_spear', cook: 'dagger', baker: 'dagger', butcher: 'dagger', laborer: 'wood_axe' };
+function makeshift(rec) {
+  return MAKESHIFT[rec.job] || ['club', 'wooden_spear', 'club', 'dagger'][hash4(rec.idx || 0, 0x5a1) % 4];
+}
 
 // What's said round a trading company's fire at night (see campLife).
 function campLines(n, c) {
@@ -227,8 +234,9 @@ export class NPC extends Entity {
       const b = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
       if (b) return b.item;
     }
-    // (Called up in a levy: a spear, whatever their trade.)
-    if (this.warband && this.warband.levy) return 'spear';
+    // (Called up in a levy: a spear, whatever their trade; Round 145: or,
+    // once the armoury's run out, whatever they had to hand.)
+    if (this.warband && this.warband.levy) return this.warband.kit === 'poor' ? makeshift(this.rec) : 'spear';
     const t = this.rec.equipment.tool;
     if (t && ITEMS[t] && (ITEMS[t].kind === 'weapon' || ITEMS[t].kind === 'tool')) return t;
     const w = this.rec.equipment.items.find((i) => ITEMS[i.item]?.kind === 'weapon');
@@ -1207,8 +1215,12 @@ export class NPC extends Entity {
     this.roofT = (this.roofT || 0) - dt;
     if (this.roofT <= 0 && !this.moving) {
       this.roofT = 2;
-      // (Round 144: not a soldier on the walls in a siege.)
-      if (this.y >= GROUND + 2 && this.rec.job !== 'guard' && !this.warband && this.layout.inside(this.x, this.z)) this.stepDown();
+      // (Round 144: not a soldier on the walls in a siege. Round 145: the
+      // watch and soldiers too, off the houses, save one at a post up on
+      // a wall or a platform or climbing a ladder.)
+      const wb = this.warband;
+      const posted = wb && (wb.post || wb.climb || wb.kind === 'wallwatch' || wb.kind === 'outpost');
+      if (this.y >= GROUND + 2 && !posted && this.layout.inside(this.x, this.z)) this.stepDown();
     }
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.dodgeCd > 0) this.dodgeCd -= dt;
@@ -3012,7 +3024,10 @@ export class NPC extends Entity {
       // go round too, and takes a raft across when there's no way round.)
       const dry = !!this.mount && this.pathFails < 2;
       const wet = this.state === 'caravan' && this.pathFails < 2 ? 16 : 4;
-      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: localBox ? localBox.nodes || 2500 : 5000, partial: true, blocked, dry, wet });
+      // (Round 145: never up over the houses' roofs, unless they're up
+      // there already and on their way down.)
+      const roofs = onRoof(w0, this.x, this.y, this.z);
+      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: localBox ? localBox.nodes || 2500 : 5000, partial: true, blocked, dry, wet, roofs });
       if (!p || !p.length) {
         if (BLOCKS[w0.getBlock(this.x, this.y, this.z)].solid) this.stepOff();
         this.pathFails++;

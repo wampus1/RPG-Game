@@ -31,6 +31,10 @@ export function warTick(n, dt) {
   // (A prisoner being led off the field.)
   if (wb.kind === 'led') return leave(n, wb, dt);
   if (wb.kind === 'march') return march(n, wb, dt);
+  // (Round 145) A host of one of you on its way (or in camp); an
+  // outpost's garrison at their posts.
+  if (wb.kind === 'host') return hostMarch(n, wb, dt);
+  if (wb.kind === 'outpost') return outpostWatch(n, wb, dt);
   // (Round 144) A siege: the besiegers about their camp, the watch on the
   // walls (see game/siegeground.js).
   if (wb.kind === 'camp') return campIdle(n, wb, dt);
@@ -478,6 +482,45 @@ function march(n, wb, dt) {
     if (!hopOn(n, wb, tx, tz, dt)) goTo(n, tx, tz, 1);
   } else if (!n.moving && n.rng.chance(dt * 0.5)) n.face(Math.round(n.x + m.dx * 3), Math.round(n.z + m.dz * 3));
   if (!wb.slot && n.rng.chance(dt * 0.04)) n.say(n.rng.pick(['Keep in step!', 'Close up there!', 'March!', 'Not far now.', 'Eyes front!']), 2, '#ffe070');
+}
+
+// (Round 145) One of a host: in file behind the head of its column on the
+// march; about its camp when it's halted (held up at an outpost, or
+// camped before a town, or holding one of its own).
+function hostMarch(n, wb, dt) {
+  const W = n.game.sim.war;
+  const h = (W.hosts || []).find((q) => q.id === wb.host);
+  if (wb.phase === 'flee' || !h || h.state === 'gone') {
+    wb.phase = 'flee';
+    return leave(n, wb, dt);
+  }
+  if (h.plan && h.plan.live) return;
+  const m = W.hostAtOf(h);
+  if (!m.moving) {
+    wb.home = { x: Math.round(m.x), z: Math.round(m.z) };
+    return campIdle(n, wb, dt);
+  }
+  const back = 2 + (wb.slot || 0) * 1.6;
+  const wide = (wb.slot || 0) % 2 ? 1 : -1;
+  const tx = m.x - m.dx * back - m.dz * wide;
+  const tz = m.z - m.dz * back + m.dx * wide;
+  if (far(n, tx, tz) > 1) {
+    if (!hopOn(n, wb, tx, tz, dt)) goTo(n, tx, tz, 1);
+  } else if (!n.moving && n.rng.chance(dt * 0.5)) n.face(Math.round(n.x + m.dx * 3), Math.round(n.z + m.dz * 3));
+  if (!wb.slot && n.rng.chance(dt * 0.04)) n.say(n.rng.pick(['Keep in step!', 'Close up there!', 'For the realm!', 'Eyes on the road!', 'March on!']), 2, '#ffe070');
+}
+
+// (Round 145) One of an outpost's garrison, at their post: up on the
+// platform looking out, at the gate, or by the fire.
+function outpostWatch(n, wb, dt) {
+  const p = wb.post;
+  if (!p) return;
+  if (far(n, p.x, p.z) > 0 || Math.abs(n.y - p.y) > 0.5) {
+    if (!n.moving) n.followPath({ x: p.x, y: p.y, z: p.z }, 0);
+    return;
+  }
+  if (!n.moving && n.rng.chance(dt * 0.4)) n.face(p.out ? p.out.x : p.x, p.out ? p.out.z : p.z);
+  if (n.distTo(n.game.player) <= 6 && n.rng.chance(dt * 0.03)) n.say(n.rng.pick(['Quiet out there. Too quiet.', 'We\'ll see them coming a long way off.', 'Keep your eyes on the road.', 'Nothing gets past us.', 'Another cold night on the watch.', 'Light the beacon if you see anything.']), 2.4, '#ffe070');
 }
 
 // ------------------------------------------------------------ a siege

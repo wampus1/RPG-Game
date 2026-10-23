@@ -49,6 +49,10 @@ export function rankFor(war, live, p, sd) {
       const here = ts.id === plan.def || ts.id === plan.atk || (live.siege && live.siege.sid === ts.id);
       return here ? 'marshal' : 'captain';
     }
+    // (Round 145) One of you in command of the host whose battle it is.
+    const hid = live.plan && live.plan.host;
+    const h = hid !== undefined && hid !== null ? (war.hosts || []).find((q) => q.id === hid) : null;
+    if (h && h.side === sd && h.cmd && h.cmd.kind === 'player' && h.cmd.pk === pkOf(p)) return 'marshal';
     const r = war.ranks && war.ranks[civ.id] && war.ranks[civ.id][pkOf(p)];
     return r || 'soldier';
   });

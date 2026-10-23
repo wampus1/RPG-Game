@@ -247,7 +247,11 @@ export function pickBearer(live, b) {
 function pickMarshal(war, live, S) {
   const caps = S.bands.map((b) => b.captain).filter(Boolean);
   const score = (n) => (n.rec.captain ? 2 : 0) + (n.rec.job === 'guard' ? 1 : 0) + (n.rec.skills?.combat || 0) + (n.rec.personality?.bravery ?? 0.5) * 0.5 + (n.rec.age === 'elder' ? 0.4 : 0);
-  const ent = caps.sort((p, q) => score(q) - score(p))[0] || null;
+  // (Round 145) A host's battle: its own commander, if they're on the field.
+  const hid = live.plan && live.plan.host;
+  const h = hid !== undefined && hid !== null ? (war.hosts || []).find((q) => q.id === hid) : null;
+  const want = h && h.cmd && h.cmd.kind === 'npc' ? S.ents.find((n) => n.rec && n.rec.idx === h.cmd.idx && n.layout && n.layout.settlement.id === h.cmd.sid && standing(n)) : null;
+  const ent = want || caps.sort((p, q) => score(q) - score(p))[0] || null;
   return { ent, name: ent ? `${ent.rec.name.first} ${ent.rec.name.last}` : null, style: styleOf(ent ? ent.rec : null), player: null, lost: false };
 }
 

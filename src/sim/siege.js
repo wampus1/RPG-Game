@@ -26,6 +26,7 @@ import { M } from '../world/settlement.js';
 import { brutality, sackOf, LEVEL_NAMES } from './conduct.js';
 import { remember } from './mind/memory.js';
 import { pkey } from './mind/common.js';
+import { hostById, hostsAfterSiege, hostsBesieged } from './hosts.js';
 
 const residents = (L) => L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
 const plain = (civ) => (civ ? civ.name.replace(/^The /, '') : 'free folk');
@@ -137,7 +138,8 @@ export function startSiege(war, w, plan, how, day, rng) {
   const c = centreOfS(s, REGION_W, REGION_D);
   // The camp, out past the town toward where they came from.
   const from = war.ow.settlements[plan.atk];
-  const fc = from ? centreOfS(from, REGION_W, REGION_D) : { x: c.x + 40, z: c.z };
+  // (Round 145: a host camps on the side it came from.)
+  const fc = plan.from ? plan.from : from ? centreOfS(from, REGION_W, REGION_D) : { x: c.x + 40, z: c.z };
   const d = Math.hypot(fc.x - c.x, fc.z - c.z) || 1;
   const ux = (fc.x - c.x) / d;
   const uz = (fc.z - c.z) / d;
@@ -152,7 +154,12 @@ export function startSiege(war, w, plan, how, day, rng) {
   const small = how === 'small';
   const camp = { x: Math.round(c.x + ux * (k + (small ? 12 : 16))), z: Math.round(c.z + uz * (k + (small ? 12 : 16))) };
   const host = war.pool(w, atk, plan);
+  // (Round 145: nobody to sit down before the walls, no siege; and its
+  // numbers are those who came, no more.)
+  if (!(host.recs.length + host.extra)) return null;
   const gar = residents(L).filter((r) => r.job === 'guard' && r.soldier === undefined && r.captive === undefined).length;
+  // (A small realm fighting for its life: nearly everyone on the walls.)
+  const Dd = war.draftRate ? war.draftRate(w, def) : 0;
   const fled = how === 'battle' && plan.sent ? Math.max(0, Math.round((plan.sent[def] ? plan.sent[def][0] : 0) * 0.4)) : 0;
   const tech = war.sim.tech;
   const S = {
@@ -160,7 +167,7 @@ export function startSiege(war, w, plan, how, day, rng) {
     phase: 'invest', camp, dir: { x: ux, z: uz },
     // (The garrison: the watch, whoever made it back from the field, and
     // the townsfolk who'll take up a spear on the walls.)
-    host: Math.max(4, host.recs.length + host.extra), garrison: Math.max(3, gar + fled + Math.round(residents(L).filter((r) => r.age === 'adult' && r.job !== 'guard').length * (small ? 0.2 : 0.28))),
+    host: host.recs.length + host.extra, garrison: gar + fled + Math.round(residents(L).filter((r) => (r.age === 'adult' || (Dd && r.age === 'elder')) && r.job !== 'guard').length * (Dd || (small ? 0.2 : 0.28))),
     food: foodDays(war.sim, L), hungry: 0, rations: 'full',
     walls: small ? [] : stretchesOf(L), gate: small ? null : gateNear(L, camp), barricades: small ? barricadesOf(L, camp) : [],
     engines: { catapults: 0, rams: 0, ladders: 0, building: [] }, sap: null,
@@ -172,8 +179,20 @@ export function startSiege(war, w, plan, how, day, rng) {
   };
   const cq = host.recs.filter((q) => alive(q.r) && !q.r.captive).sort((p, q) => (q.r.personality?.bravery ?? 0.5) - (p.r.personality?.bravery ?? 0.5))[0];
   if (cq) S.commander = { sid: cq.L.settlement.id, idx: cq.r.idx };
+  // (Round 145) A host's siege: the host its army, its commander in
+  // command (one of you, or theirs); the realm's own next battle still due.
+  const h = plan.host !== undefined ? hostById(war, plan.host) : null;
+  if (h) {
+    S.hostIds = [h.id];
+    if (h.cmd && h.cmd.kind === 'npc') S.commander = { sid: h.cmd.sid, idx: h.cmd.idx };
+    else if (h.cmd && h.cmd.kind === 'player') S.leader = h.cmd.pk;
+  }
   w.siege = S;
-  w.plan = null;
+  if (!h) w.plan = null;
+  // (Round 145) A host of the town's side holding it: shut up inside, and
+  // part of its garrison.
+  S.garrison += hostsBesieged(war, w, S);
+  S.garrison0 = S.garrison;
   const text = small
     ? `The ${plain(civA)} have surrounded ${s.name}. Its people have barricaded the streets.`
     : how === 'shut' ? `${s.name} has shut its gates against the ${plain(civA)}, who have laid siege to it.`
@@ -426,6 +445,8 @@ export function scheduleAssault(war, w, S, day, at) {
   note(war, w, day, `The besiegers of ${s.name} are making ready to storm ${words} at dawn.`, true);
   // (Called up: those of you of either side, to the walls or the ladders.)
   S.next.plan = { at: t, site: { ...S.camp }, name: `the storming of ${s.name}`, attacker: S.atk, atk: S.sid, def: S.sid, ca: w.lead.a, cb: w.lead.b, siege: S.id };
+  // (Round 145: a host's siege, stormed by the host.)
+  if (S.hostIds && S.hostIds.length) S.next.plan.hosts = S.hostIds.slice();
   war.callUp(w, S.next.plan, day);
 }
 
@@ -572,7 +593,7 @@ function fallenOf(war, w, S, lossA, lossD, day, rng) {
     for (const r of g.slice(0, Math.min(g.length, Math.ceil(lossD * 0.5)))) war.sim.recordDeath(L, r, `fell defending the walls of ${s.name}`, null, day);
   }
   if (lossA) {
-    const plan0 = { def: S.sid, atk: S.sid, attacker: S.atk, ca: w.lead.a, cb: w.lead.b };
+    const plan0 = { def: S.sid, atk: S.sid, attacker: S.atk, ca: w.lead.a, cb: w.lead.b, hosts: S.hostIds && S.hostIds.length ? S.hostIds.slice() : undefined };
     const P = war.pool(w, S.atk, plan0);
     for (const { r, L: HL } of rng.shuffle(P.recs).slice(0, Math.min(P.recs.length, Math.ceil(lossA * 0.5)))) war.sim.recordDeath(HL, r, `fell storming ${s.name}`, null, day);
   }
@@ -632,6 +653,8 @@ export function endSiege(war, w, how, day, rng, extra = {}) {
   w.sieges = (w.sieges || []).concat([{ sid: S.sid, how, day, days, by: S.civA, sack: S.sackLevel || null }]).slice(-6);
   w.siege = null;
   w.next = day + 1;
+  // (Round 145) The hosts in it: their dead counted; the town held, or home.
+  if ((S.hostIds && S.hostIds.length) || (S.holderIds && S.holderIds.length)) hostsAfterSiege(war, w, S, how);
   if (war.live && war.live.siege === S) war.live.siegeOver = how;
   // (What it put up on the ground comes down: at once, or once the
   // assault's done with.)

@@ -2380,11 +2380,10 @@ export class Game {
     this.helmFocus = helm ? helm.focus : null;
     // (Round 86) A spyglass to your eye: where it's looking.
     this.spyFocus = spyTick(this, input, dt);
-    // (Round 144) A big battle, or a town stormed, near you: drawn back to
-    // take it in (see War.battleZoom; and inSight, which sees as far).
-    const bz = this.sim.war && !this.dungeon ? this.renderer.battleView?.(this.sim.war.battleZoom(this.player), dt) ?? this.sim.war.battleZoom(this.player) : 1;
-    this.sightK = Math.max(1, bz, this.renderer.zoom || 1);
-    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1, bz);
+    // (Round 145: a battle near you no longer draws the view back; see
+    // inSight, which sees as far as the view does.)
+    this.sightK = Math.max(1, this.renderer.zoom || 1);
+    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
     this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
     if (this.audio) this.audio.listener = this.player;

@@ -611,8 +611,6 @@ export class Renderer {
   // in and out like a spring, without overshooting; a scene's own zoom is
   // taken as it comes. A turn of the camera swings round drawn back too.
   render(game, dt) {
-    // (Round 144: how fast the frames come, for battleView.)
-    this.frameAvg = (this.frameAvg || 1 / 60) * 0.94 + dt * 0.06;
     const goal = this.zoomGoal || 1;
     if (this.zoomSnap) {
       this.zoom = goal;
@@ -679,27 +677,6 @@ export class Renderer {
       // world: see renderFrame.)
       if (!this.spin) drawShipHud(this, game);
     }
-  }
-
-  // (Round 144) A battle's drawn-back view (War.battleZoom's `bz`), as far
-  // as this machine keeps up with it: the world drawn back is drawn whole,
-  // pixel for pixel, on a picture as much bigger as the view is; so if the
-  // frames come slow with it drawn back, it closes in a little, and kept up
-  // with easily, it opens out again.
-  battleView(bz, dt) {
-    if (!(bz > 1.001)) return 1;
-    const avg = this.frameAvg || 1 / 60;
-    const slow = this.frameCap ? 1 / 24 : 1 / 38;
-    let room = this.zoomRoom ?? 1;
-    this.roomHold = Math.max(0, (this.roomHold || 0) - dt);
-    // (Closed in, it waits a while before opening out again: not drawing
-    // back and forth on the edge of it.)
-    if (avg > slow) {
-      room = Math.max(0, room - dt * 0.3);
-      this.roomHold = 10;
-    } else if (avg < slow * 0.72 && !this.roomHold) room = Math.min(1, room + dt * 0.04);
-    this.zoomRoom = room;
-    return 1 + (bz - 1) * room;
   }
 
   renderFrame(game, dt) {

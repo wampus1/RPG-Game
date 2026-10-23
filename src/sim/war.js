@@ -33,6 +33,10 @@ import { formBands, bandsTick, slotAt, bandUp, credit, hitMult, ORDERS } from '.
 import { SiegeGround } from '../game/siegeground.js';
 import { assignCommand, afterCommand, commandOf } from './command.js';
 import { siegeFor, startSiege, siegeDay, siegeTick, endSiege, reliefFought, sackTown, siegeMarker, siegeLines } from './siege.js';
+import { hostById, hostPool, hostsTick, hostsDay, hostBattlesDue, afterHostBattle, commanderRec, commanderMult, hostMarkers, hostHud, orderHost, release as releaseRec, hostAt, hostRecs } from './hosts.js';
+import { outpostById, garrisonPool, outpostsDay, outpostsSweep, outpostsStandDown, outpostWatch, outpostAssault, afterSkirmish, raidWatch, outpostMarkers } from './outposts.js';
+import { OutpostGround } from '../game/outpostground.js';
+import { onRoof } from '../entities/pathfind.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
 import { cutOff } from '../world/farlands.js';
@@ -58,6 +62,8 @@ const MATCH = {
 };
 // Who's never called up in a levy (the realm can't spare them).
 const LEVY_EXEMPT = new Set(['mayor', 'noble', 'priest', 'researcher', 'herbalist', 'innkeeper', 'barkeep', 'blacksmith', 'merchant', 'scholar', 'child', 'retired', 'beggar']);
+// (Round 145) A small realm drafting nearly everyone: only these stay.
+const DESPERATE_EXEMPT = new Set(['mayor', 'noble', 'priest', 'child']);
 const WOODED = new Set(['forest', 'taiga', 'jungle', 'swamp']);
 const OPEN = new Set(['plains', 'desert', 'savanna', 'tundra', 'beach']);
 const FEATURE = { forest: 'Woods', taiga: 'Pines', jungle: 'Thicket', swamp: 'Fen', mountain: 'Pass', desert: 'Sands', savanna: 'Grass', tundra: 'Waste', beach: 'Strand', plains: 'Field' };
@@ -110,6 +116,13 @@ export class War {
     this.liveT = 0;
     // (Round 144) Sieges where you are (see game/siegeground.js).
     this.sieges = new SiegeGround(this);
+    // (Round 145) Hosts raised by you (see hosts.js); outposts on the ways
+    // between the realms at war (see outposts.js), and on the ground.
+    this.hosts = [];
+    this.pastHosts = [];
+    this.hostCount = {};
+    this.outposts = [];
+    this.outground = new OutpostGround(this);
   }
 
   get ow() {
@@ -191,9 +204,17 @@ export class War {
     const now = this.sim.abs;
     for (const r of this.raids.slice()) if (r.state === 'march' && now >= r.at) this.strike(r);
     for (const w of this.wars.slice()) if (w.plan && now >= w.plan.at && !w.plan.live) this.battle(w, w.plan);
+    // (Round 145) The hosts on their way; their battles, when they're due.
+    hostsTick(this);
+    for (const h of hostBattlesDue(this)) {
+      const w = this.wars.find((q) => q.id === h.war);
+      if (w) this.battle(w, h.plan);
+      else h.plan = null;
+    }
     // (Round 144) An assault on a besieged town, when it's due.
     for (const w of this.wars.slice()) if (w.siege) siegeTick(this, w);
     if (this.sieges) this.sieges.update(dt);
+    if (this.outground) this.outground.update(dt);
     // Called up: a word when it's close (if you're nowhere near the field).
     for (const w of this.wars) {
       if (!w.plan || now < w.plan.at - 90) continue;
@@ -210,6 +231,7 @@ export class War {
       this.syncT = 1;
       this.syncCaptives();
       this.syncMarch();
+      this.armyWatch();
     }
   }
 
@@ -218,6 +240,12 @@ export class War {
     this.planRaids(civs, day, rng);
     if (day % 7 === 3) this.considerWars(civs, day, rng);
     for (const w of this.wars.slice()) this.warTick(w, day, rng);
+    // (Round 145) The towns near the front got ready to muster (laid out,
+    // a little each frame, so their people are there to march).
+    for (const w of this.wars) this.readyFront(w);
+    // (Round 145) The hosts' day; posts long empty taken down.
+    hostsDay(this, day, rng);
+    outpostsSweep(this, day);
     for (const k of Object.keys(this.truces)) if (this.truces[k] <= day) delete this.truces[k];
     this.prisonersDay(day, rng);
     this.raidLog = this.raidLog.filter((q) => day - q.day <= 40);
@@ -366,6 +394,8 @@ export class War {
     const TL = this.game.world.layouts.get(raid.to);
     const FL = this.game.world.layouts.get(raid.from);
     if (!TL || !FL || deserted(TL.settlement)) return this.endRaid(raid, { result: 'called off', lost: [], loot: 0 });
+    // (Round 145) Seen from an outpost of theirs on the way, and turned back.
+    if (!raid.naval && raidWatch(this, raid, FL, TL)) return this.endRaid(raid, { result: 'called off', lost: [], loot: 0 });
     raid.state = 'strike';
     if (this.game.active.has(raid.to) && !this.live && this.startLiveRaid(raid, TL, FL)) return null;
     return this.resolveRaid(raid, TL, FL, new RNG(hash4(raid.id, raid.at, 0x4a1d)));
@@ -618,6 +648,8 @@ export class War {
     for (const id of [...w.a, ...w.b]) w.weary[id] = (w.weary[id] || 0) + 0.012;
     // Hard feelings deepen while it lasts.
     for (const x of side('a')) for (const y of side('b')) this.realms.shift(x, y, -0.6, null);
+    // (Round 145) Outposts put up near the front, and manned.
+    outpostsDay(this, w, day, rng);
     // (Round 144) A siege under way: its day (a relief army may march from
     // it); no other battle meanwhile.
     if (w.siege) siegeDay(this, w, day, rng);
@@ -970,7 +1002,8 @@ export class War {
   // Out past the edge of a town, toward another: dry land, a fair way out.
   siteNear(def, atk) {
     const a = centreOf(def);
-    const b = centreOf(atk);
+    // (Round 145: or a point: where a host is coming from.)
+    const b = atk.cx === undefined ? atk : centreOf(atk);
     const d = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     const ux = (b.x - a.x) / d;
     const uz = (b.z - a.z) / d;
@@ -996,38 +1029,55 @@ export class War {
   // Who could march: from each realm on a side, the watch of its towns,
   // less a garrison left at home (the capital keeps a third; a town the
   // enemy is marching on sends everyone). Towns far from the front send
-  // half, allies a little less. Soldiers with no record (towns not yet laid
-  // out) are counted but not named.
+  // half, allies a little less. (Round 145: only those who live there, every
+  // one of them named: a town not laid out yet sends no one; and a small
+  // realm against a much bigger one drafts nearly everyone, see draftRate.)
   pool(w, side, plan) {
+    // (Round 145) A host's battle: its own soldiers, and none else, on its
+    // side (several of them at a siege); an outpost's skirmish: its
+    // garrison, holding it.
+    const hs = plan.hosts || (plan.host !== undefined ? [plan.host] : null);
+    if (hs) {
+      const mine = hs.map((id) => hostById(this, id)).filter((h) => h && h.side === side);
+      if (mine.length) return this.kitOut({ recs: mine.flatMap((h) => hostPool(this, h).recs.map((q) => ({ ...q, levy: q.r.job !== 'guard' }))), extra: 0, civs: [this.civ(mine[0].civ)].filter(Boolean), host: mine[0].id });
+    }
+    if (plan.outpost !== undefined && side !== plan.attacker) {
+      const O = outpostById(this, plan.outpost);
+      if (O) return this.kitOut(garrisonPool(this, O));
+    }
     const near = this.ow.settlements[side === plan.attacker ? plan.atk : plan.def];
     const out = { recs: [], extra: 0, civs: [] };
+    const day = Math.floor(this.sim.abs / DAY);
+    const D = this.draftRate(w, side);
     for (const id of w[side]) {
       const civ = this.civ(id);
       if (!civ) continue;
       const lead = id === w.lead[side];
+      // (Round 145) Everyone who can stand, near enough.
+      const all = lead && D > 0;
       out.civs.push(civ);
       for (const s of this.realms.members(civ)) {
         const d = Math.hypot(s.cx - near.cx, s.cz - near.cz);
         if (d > 24) continue;
         const share = (d > 14 ? 0.5 : 1) * (lead ? 1 : 0.6);
-        const L = this.game.world.layouts.get(s.id);
-        if (!L || !L.econ) {
-          out.extra += Math.round(({ city: 8, town: 4, village: 1 }[s.type] || 1) * share);
-          continue;
-        }
+        const L = this.townFor(s, s.id === near.id);
+        if (!L) continue;
         const g = residents(L).filter((r) => r.job === 'guard' && r.ruler === undefined && r.raid === undefined && r.soldier === undefined && r.captive === undefined)
           .sort((x, y) => (y.drilled ? 1 : 0) - (x.drilled ? 1 : 0) || y.personality.bravery - x.personality.bravery);
-        const keep = s.id === near.id && side !== plan.attacker ? 0 : this.realms.isCapital(s) ? Math.max(1, Math.ceil(g.length / 3)) : 1;
-        const n = Math.max(0, Math.round((g.length - keep) * share));
+        const keep = s.id === near.id && side !== plan.attacker ? 0 : this.realms.isCapital(s) ? (all ? 1 : Math.max(1, Math.ceil(g.length / 3))) : all ? 0 : 1;
+        const n = Math.max(0, Math.round((g.length - keep) * (all ? Math.max(share, 0.85) : share)));
         for (const r of g.slice(0, n)) out.recs.push({ r, L, d });
         // The levy: a share of the able-bodied (more from a martial people,
-        // fewer from merchants and scholars), with spears.
+        // fewer from merchants and scholars), with spears (while the town's
+        // armoury lasts: see kitOut). A small realm fighting for its life
+        // takes three in four of them and more, the old as well.
         const vals = civ.values || [];
-        const rate = (0.25 + (vals.includes('martial') ? 0.1 : 0) - (vals.includes('mercantile') || vals.includes('scholarly') ? 0.06 : 0)) * share * (this.sim.tech.has(s, 'muster') ? 1.5 : 1) * (1 + this.sim.tech.fxOf(s, 'muster'));
-        const able = residents(L).filter((r) => r.age === 'adult' && r.job !== 'guard' && !LEVY_EXEMPT.has(r.job) && r.ruler === undefined && r.councillor === undefined
-          && r.raid === undefined && r.soldier === undefined && r.captive === undefined && !r.trip?.phase?.startsWith('away'))
+        const rate = all ? D * (d > 14 ? 0.85 : 1) : (0.25 + (vals.includes('martial') ? 0.1 : 0) - (vals.includes('mercantile') || vals.includes('scholarly') ? 0.06 : 0)) * share * (this.sim.tech.has(s, 'muster') ? 1.5 : 1) * (1 + this.sim.tech.fxOf(s, 'muster'));
+        const exempt = all ? DESPERATE_EXEMPT : LEVY_EXEMPT;
+        const able = residents(L).filter((r) => (r.age === 'adult' || (all && r.age === 'elder')) && r.job !== 'guard' && !exempt.has(r.job) && r.ruler === undefined && r.councillor === undefined
+          && r.raid === undefined && r.soldier === undefined && r.captive === undefined && !r.trip?.phase?.startsWith('away') && !(r.dodged >= day - 1))
           .sort((x, y) => y.personality.bravery - x.personality.bravery);
-        for (const r of able.slice(0, Math.round(able.length * rate))) out.recs.push({ r, L, d: d + 0.5, levy: true });
+        for (const r of able.slice(0, Math.round(able.length * Math.min(1, rate)))) out.recs.push({ r, L, d: d + 0.5, levy: true });
       }
     }
     // Bandits paid to fight for them.
@@ -1049,8 +1099,184 @@ export class War {
         }
       }
     }
+    // (Round 145) Hosts of this side holding the town fought over come out
+    // for it too.
+    if (side !== plan.attacker && plan.def !== undefined) {
+      for (const h of this.hosts) {
+        if (h.side !== side || h.war !== w.id || h.state !== 'camp' || !h.order || h.order.kind !== 'hold' || h.order.target !== plan.def) continue;
+        for (const q of hostPool(this, h).recs) out.recs.push({ ...q, d: 0 });
+      }
+    }
     out.recs.sort((x, y) => x.d - y.d);
-    return out;
+    // (An army's vanguard, met at an outpost on its way.)
+    if (plan.vanguard && side === plan.attacker) out.recs = out.recs.slice(0, plan.vanguard);
+    return this.kitOut(out);
+  }
+
+  // (Round 145) A town of the realm, to muster from: laid out now if it's
+  // the one fought over; otherwise, if it isn't yet, it sends no one this
+  // time (it's laid out a little each frame for the next).
+  townFor(s, now) {
+    const L = this.game.world.layouts.get(s.id);
+    if (L) return L.econ ? L : null;
+    if (now || this.game.instantWork) {
+      const T = this.sim.layoutOf(s.id);
+      return T && T.econ ? T : null;
+    }
+    this.sim.laidOut(s.id);
+    return null;
+  }
+
+  // (Round 145) The towns of a war's realms near enough an enemy's to be
+  // called on, made ready (see townFor).
+  readyFront(w) {
+    const A = w.a.flatMap((id) => (this.civ(id) ? this.realms.members(this.civ(id)) : []));
+    const Bs = w.b.flatMap((id) => (this.civ(id) ? this.realms.members(this.civ(id)) : []));
+    const near = (s, list) => list.some((t) => Math.hypot(s.cx - t.cx, s.cz - t.cz) <= 30);
+    for (const s of A) if (near(s, Bs)) this.sim.laidOut(s.id);
+    for (const s of Bs) if (near(s, A)) this.sim.laidOut(s.id);
+  }
+
+  // (Round 145) How hard a side drafts: 0, the usual levy; for a small realm
+  // (or one against a realm more than twice its size), between three in four
+  // of everyone who can stand and all of them: by how outmatched it is, how
+  // warlike, and its ruler's nerve. (Reckoned once a day.)
+  draftRate(w, side) {
+    const day = Math.floor(this.sim.abs / DAY);
+    if (!w.drafts || w.drafts.day !== day) w.drafts = { day };
+    if (w.drafts[side] !== undefined) return w.drafts[side];
+    const pop = (ids) => {
+      let n = 0;
+      for (const id of ids) {
+        const c = this.civ(id);
+        if (c) for (const s of this.realms.members(c)) n += this.realms.popOf(s);
+      }
+      return n;
+    };
+    const mine = pop(w[side]);
+    const ratio = mine / Math.max(1, pop(w[side === 'a' ? 'b' : 'a']));
+    let D = 0;
+    if (mine && (mine <= 70 || ratio < 0.5)) {
+      const civ = this.civ(w.lead[side]);
+      const ruler = civ && this.realms.ruler(civ);
+      const vals = (civ && civ.values) || [];
+      D = clamp(0.75 + Math.max(0, 0.5 - ratio) * 0.3 + (mine <= 40 ? 0.06 : 0) + (vals.includes('martial') ? 0.08 : 0) - (vals.includes('mercantile') ? 0.04 : 0) + ((ruler?.personality?.bravery ?? 0.5) - 0.5) * 0.15, 0.75, 1);
+    }
+    w.drafts[side] = Math.round(D * 100) / 100;
+    if (D && !(w.drafted || []).includes(side)) {
+      (w.drafted ||= []).push(side);
+      const civ = this.civ(w.lead[side]);
+      const cap0 = civ && this.realms.capitalOf(civ);
+      const CL = cap0 && this.game.world.layouts.get(cap0.id);
+      if (CL && CL.econ) ledger(CL, day, `Outmatched by the ${plain(this.civ(w.lead[side === 'a' ? 'b' : 'a']))}, the ${plain(civ)} calls up everyone who can hold a weapon.`);
+    }
+    return w.drafts[side];
+  }
+
+  // (Round 145) A town's armoury: how many of its levy it can give a spear
+  // and a helmet (the watch have their own). Enough for the usual levy (a
+  // share of its able-bodied, more with the art of mustering), and a few
+  // more with a smith, a guardhouse or barracks; not for everyone.
+  armoury(L) {
+    const s = L.settlement;
+    const day = Math.floor(this.sim.abs / DAY);
+    if (L.armoury && L.armoury.day === day) return L.armoury.n;
+    const able = L.npcs.filter((r) => alive(r) && !r.migrated && !r.visitor && r.age === 'adult' && r.job !== 'guard' && !LEVY_EXEMPT.has(r.job)).length;
+    let n = Math.round(able * (this.sim.tech.has(s, 'muster') ? 0.45 : 0.3)) + 1;
+    if (L.buildings.some((b) => b.type === 'smithy' || b.type === 'forge')) n += 3;
+    if (L.buildings.some((b) => b.type === 'barracks' || b.type === 'guardhouse')) n += 2;
+    L.armoury = { day, n };
+    return n;
+  }
+
+  // (Round 145) The levy armed while each town's armoury lasts; the rest go
+  // with whatever they have (their tools, a club), bareheaded: `kit: 'poor'`
+  // (see soldierPower's use in armyPower, and npc.js weapon()).
+  kitOut(P) {
+    const left = new Map();
+    for (const q of P.recs) {
+      if (q.r.job === 'guard' || q.r.bandit !== undefined || q.kit) continue;
+      const k = left.has(q.L) ? left.get(q.L) : this.armoury(q.L);
+      if (k > 0) left.set(q.L, k - 1);
+      else {
+        left.set(q.L, 0);
+        q.kit = 'poor';
+      }
+    }
+    return P;
+  }
+
+  // (Round 145) Called up, and not all of them come. Some of the levy slip
+  // away before the battle (more when the realm's taking everyone, when
+  // they've only a hoe to fight with, when they're timid or wretched, or
+  // old); most of those leave the realm for a town of another (a neutral
+  // one if there's one near, else even the enemy's), the rest lie low at
+  // home a day or two. Once a battle. Returns how many.
+  dodge(w, plan, P, side) {
+    const D = this.draftRate(w, side);
+    const day = Math.floor(this.sim.abs / DAY);
+    const gone = [];
+    P.recs = P.recs.filter((q) => {
+      const r = q.r;
+      if (!q.levy || r.bandit !== undefined || r.job === 'guard') return true;
+      let p = (D ? 0.06 + (D - 0.75) * 0.3 : 0.015) + (q.kit === 'poor' ? 0.04 : 0) + (0.5 - (r.personality?.bravery ?? 0.5)) * 0.12 + ((r.mood ?? 0.5) < 0.3 ? 0.05 : 0) + (r.age === 'elder' ? 0.03 : 0);
+      if (r.host !== undefined) p *= 0.5;
+      if ((hash4(w.id, Math.floor(plan.at || 0), r.idx, q.L.settlement.id) % 1000) / 1000 >= clamp(p, 0, 0.35)) return true;
+      gone.push(q);
+      return false;
+    });
+    if (!gone.length) return 0;
+    const byL = new Map();
+    for (const q of gone) {
+      if (!byL.has(q.L)) byL.set(q.L, []);
+      byL.get(q.L).push(q.r);
+    }
+    for (const [L, rs] of byL) {
+      for (const r of rs) {
+        delete r.host;
+        if (r.soldier !== undefined) delete r.soldier;
+        r.away = false;
+      }
+      const names = rs.map((r) => r.name.first);
+      const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
+      const T = this.refuge(L, w);
+      const fled = T ? rs.filter((r) => (hash4(r.idx, L.settlement.id, 0xd0d) % 10) < 7) : [];
+      const hid = rs.filter((r) => !fled.includes(r));
+      if (fled.length) {
+        this.sim.sendPeople(L, fled, T, 'fleeing the call to arms');
+        ledger(L, day, `${fled.length === 1 ? list.split(',')[0] : `${fled.length} of the levy`} slipped away rather than march to ${plan.name || 'war'}: gone to ${T.settlement.name}, of the ${plain(T.settlement.civ)}.`);
+      }
+      for (const r of hid) r.dodged = day;
+      if (hid.length) ledger(L, day, `${hid.length === 1 ? hid[0].name.first : `${hid.length} of the levy`} hid rather than answer the call to arms.`);
+    }
+    plan.dodged = { ...(plan.dodged || {}), [side]: gone.length };
+    return gone.length;
+  }
+
+  // (Round 145) Where those fleeing a war go: the nearest town of a realm
+  // not in it, or failing that of one that is (not their own).
+  refuge(L, w) {
+    const s0 = L.settlement;
+    const sides = new Set([...w.a, ...w.b]);
+    let best = null;
+    let bd = Infinity;
+    let alt = null;
+    let ad = Infinity;
+    for (const T of this.game.world.layouts.values()) {
+      const s = T.settlement;
+      if (!T.econ || !s.civ || s.civ === s0.civ || deserted(s) || s.haven) continue;
+      const d = Math.hypot(s.cx - s0.cx, s.cz - s0.cz);
+      if (!sides.has(s.civ.id)) {
+        if (d < bd) {
+          bd = d;
+          best = T;
+        }
+      } else if (d < ad) {
+        ad = d;
+        alt = T;
+      }
+    }
+    return best || alt;
   }
 
   // How many the leader sends of what could march: at least a third (and
@@ -1076,8 +1302,9 @@ export class War {
     f += side !== plan.attacker ? 0.1 : 0;
     f -= (w.weary[w.lead[side]] || 0) * 0.2;
     f += ratio < 0.8 ? 0.1 : 0;
-    // (A battle called at a size: everyone mustered for it.)
-    if (plan.muster) f = 1;
+    // (A battle called at a size: everyone mustered for it; a host, all of
+    // it; a skirmish, whoever's there.)
+    if (plan.muster || plan.host !== undefined || plan.hosts || plan.skirmish) f = 1;
     const n = Math.max(min, Math.min(total, Math.round(min + (total - min) * clamp(f, 0, 1))));
     const recs = pool.recs.slice(0, Math.min(n, pool.recs.length));
     return { recs, extra: Math.min(pool.extra, n - recs.length), civs: pool.civs, total, min, max: total };
@@ -1088,6 +1315,12 @@ export class War {
   raise(w, plan, rng) {
     const PA = this.pool(w, 'a', plan);
     const PB = this.pool(w, 'b', plan);
+    // (Round 145) Some of the levy never come (once a battle).
+    if (!plan.dodged) {
+      plan.dodged = {};
+      this.dodge(w, plan, PA, 'a');
+      this.dodge(w, plan, PB, 'b');
+    }
     const qa = this.armyPower(PA, 'a', w, plan);
     const qb = this.armyPower(PB, 'b', w, plan);
     plan.ta = plan.ta || this.chooseTactic(w, 'a', qa, qb, plan, rng);
@@ -1113,7 +1346,9 @@ export class War {
     const wooded = WOODED.has(plan.biome) || plan.biome === 'mountain';
     const open = OPEN.has(plan.biome);
     const ruler = this.realms.ruler(civ);
-    const p = (ruler && ruler.personality) || {};
+    // (Round 145) A host's own commander chooses its plan.
+    const hc = plan.host !== undefined && side === plan.attacker ? commanderRec(this, hostById(this, plan.host)) : null;
+    const p = (hc && hc.personality) || (ruler && ruler.personality) || {};
     const last = w.battles.length ? w.battles[w.battles.length - 1][side === 'a' ? 'tb' : 'ta'] : null;
     // Badly outnumbered: an attacker calls it off; a defender with its town
     // at its back may make a stand of it (behind walls, if it can).
@@ -1166,6 +1401,8 @@ export class War {
       });
       return startSiege(this, w, plan, 'shut', day, new RNG(hash4(w.id, plan.at, 0x5e1)));
     }
+    // (Round 145) A host's battle: those of you there are in it.
+    if (plan.host !== undefined) this.draftNear(w, plan);
     if (!this.live && this.nearPlayer(plan.site, 70) && this.startLiveBattle(w, plan)) return null;
     // Called up, and nowhere near the field (each of you).
     this.eachCalled(plan, (d) => {
@@ -1174,12 +1411,95 @@ export class War {
     });
     const rng = new RNG(hash4(w.id, plan.at, 0xba7));
     const { A, B: Bm } = this.raise(w, plan, rng);
-    return this.fight(w, plan, A, Bm, rng, null);
+    return this.afterFight(w, plan, this.fight(w, plan, A, Bm, rng, null));
+  }
+
+  // (Round 145) After a battle's reckoned up: a host's next move, an
+  // outpost's fate.
+  afterFight(w, plan, rec) {
+    if (plan.skirmish) afterSkirmish(this, w, plan, rec);
+    else if (plan.host !== undefined) afterHostBattle(this, w, plan, rec);
+    return rec;
+  }
+
+  // (Round 145) Those of you near the field of a battle you weren't called
+  // to (a host's; a skirmish at an outpost), on whichever side you're of.
+  draftNear(w, plan) {
+    const g = this.game;
+    const each = () => {
+      const me = this.playerCiv();
+      if (!me || this.draftOf(plan) || !this.nearMe(plan.site, 70)) return;
+      const side = w.a.includes(me.id) ? 'a' : w.b.includes(me.id) ? 'b' : null;
+      if (!side) return;
+      this.setDraft(plan, { side, civ: me.id, state: 'called', present: 0, hits: 0, role: this.roleIn(me), near: true });
+    };
+    if (g.seats && g.seats.length > 1) for (const q of g.everyone()) g.asPlayer(q, each);
+    else each();
+  }
+
+  // (Round 145) The armies on the march: any outpost of the enemy's they
+  // pass within sight of (see outposts.js).
+  armyWatch() {
+    const now = this.sim.abs;
+    for (const w of this.wars) {
+      const plan = w.plan;
+      if (!plan || plan.naval || plan.live || plan.shut || now >= plan.at) continue;
+      const m = this.marchPos(plan);
+      if (!m || m.f <= 0 || m.f >= 1 || m.held) continue;
+      const civ = this.civ(plan.attacker === 'a' ? plan.ca : plan.cb);
+      if (!civ) continue;
+      outpostWatch(this, w, { kind: 'army', w, plan, civ: civ.id, side: plan.attacker, at: { x: Math.round(m.x), z: Math.round(m.z) }, from: plan.via ?? plan.atk, passed: (plan.passed ||= []) });
+    }
+  }
+
+  // (Round 145) Where a host is now (see warrior.js hostMarch).
+  hostAtOf(h) {
+    return hostAt(this, h);
+  }
+
+  outpostWatch(w, mover) {
+    return outpostWatch(this, w, mover);
+  }
+
+  outpostAssault(w, O, mover) {
+    return outpostAssault(this, w, O, mover);
+  }
+
+  // (Round 145, for the hosts: see hosts.js) whether a siege, and one begun.
+  siegeFor(w, plan, ratio) {
+    return siegeFor(this, w, plan, ratio);
+  }
+
+  startSiegeFor(w, plan, how, day, rng) {
+    return startSiege(this, w, plan, how, day, rng);
+  }
+
+  // (Round 145) A soldier's fight over: home again; unless they're of a host
+  // or an outpost's garrison, which they're still with.
+  release(r) {
+    if (r.captive) {
+      delete r.host;
+      delete r.outpost;
+      if (r.soldier !== undefined) delete r.soldier;
+      return;
+    }
+    if (r.host !== undefined && hostById(this, r.host)) {
+      r.soldier = `h${r.host}`;
+      r.away = true;
+      return;
+    }
+    if (r.outpost !== undefined && outpostById(this, r.outpost) && outpostById(this, r.outpost).state !== 'burned') {
+      r.soldier = `o${r.outpost}`;
+      r.away = true;
+      return;
+    }
+    releaseRec(this, r, true);
   }
 
   armyPower(army, side, w, plan = null) {
     let n = army.extra * 1.1;
-    for (const { r, L } of army.recs) n += this.soldierPower(r, L.settlement);
+    // (Round 145: the levy with only their tools to fight with, worth less.)
+    for (const { r, L, kit } of army.recs) n += this.soldierPower(r, L.settlement) * (kit === 'poor' ? 0.7 : 1);
     const civ = this.civ(w.lead[side]);
     const tech = this.sim.tech;
     const s = this.realms.capitalOf(civ);
@@ -1197,6 +1517,8 @@ export class War {
       // (Under the other side's catapults: stones falling all the while.)
       if (this.engines(plan, side === 'a' ? 'b' : 'a').catapults) n *= 0.88;
     }
+    // (Round 145) A host's commander: their skill tells.
+    if (army && army.host !== undefined) n *= commanderMult(this, hostById(this, army.host));
     return n * (1 - Math.min(0.4, (w.weary[w.lead[side]] || 0) * 0.3));
   }
 
@@ -1268,7 +1590,7 @@ export class War {
     fallA.n += live ? live.deadA : 0;
     fallB.n += live ? live.deadB : 0;
     const decisive = ratio >= 1.5 && (winner === 'a' ? tb : ta) !== 'retreat';
-    const gain = Math.round(10 + Math.min(1, ratio - 1) * 15 + (decisive ? 8 : 0));
+    const gain = Math.round((10 + Math.min(1, ratio - 1) * 15 + (decisive ? 8 : 0)) * (plan.skirmish ? 0.25 : 1));
     w.score = clamp(w.score + (winner === 'a' ? gain : -gain), -150, 150);
     const lostSide = winner === 'a' ? 'b' : 'a';
     for (const id of w[lostSide]) w.weary[id] = (w.weary[id] || 0) + 0.07 + (lostSide === 'a' ? fallA.n / Math.max(1, nA) : fallB.n / Math.max(1, nB)) * 0.25;
@@ -1276,13 +1598,14 @@ export class War {
     const rec = { day, name: plan.name, site: plan.site, biome: plan.biome, ta, tb, na: nA, nb: nB, la: fallA.n, lb: fallB.n, winner, decisive, live: !!live };
     w.battles.push(rec);
     if (w.battles.length > 12) w.battles.shift();
-    w.plan = null;
-    w.next = day + 1 + rng.int(0, 1);
-    // Soldiers home again.
-    for (const { r } of [...A.recs, ...Bm.recs]) {
-      if (r.soldier !== undefined) delete r.soldier;
-      if (!r.captive) r.away = false;
+    // (Round 145: a host's battle, or a skirmish, isn't the war's own: the
+    // next one's still due.)
+    if (w.plan === plan) {
+      w.plan = null;
+      w.next = day + 1 + rng.int(0, 1);
     }
+    // Soldiers home again (but for a host's, or a garrison's, still with it).
+    for (const { r } of [...A.recs, ...Bm.recs]) this.release(r);
     // The news, everywhere on both sides.
     const ca = this.civ(w.lead.a);
     const cb = this.civ(w.lead.b);
@@ -1309,11 +1632,20 @@ export class War {
     void capt;
     const text = `${plan.name[0].toUpperCase()}${plan.name.slice(1)}: the ${plain(W)}${capt0(winner === 'a' ? A : Bm, winner)} ${TACTICS[wt].verb}${ground(wt)}; the ${plain(Lz)}${capt0(winner === 'a' ? Bm : A, winner === 'a' ? 'b' : 'a')} ${TACTICS[lt].verb}${ground(lt)}. `
       + `The ${plain(W)} ${decisive ? 'won the day decisively' : lt === 'retreat' ? 'held the field' : 'carried the day'}: ${toll}.`;
+    rec.text = text;
+    // (Round 145) A skirmish at an outpost: news in the towns it touched, no
+    // more; and nothing further comes of it here (see outposts.js).
+    if (plan.skirmish) {
+      for (const sid of [plan.def, plan.atk]) {
+        const L0 = this.game.world.layouts.get(sid);
+        if (L0 && L0.econ) ledger(L0, day, text);
+      }
+      return rec;
+    }
     for (const id of [...w.a, ...w.b]) {
       const c = this.civ(id);
       if (c) this.realms.proclaim(c, day, text);
     }
-    rec.text = text;
     // A great victory has its hero: the boldest of the winners who came
     // through it, with a statue on their own town's square.
     if (decisive && ratio >= 1.8) {
@@ -1621,6 +1953,9 @@ export class War {
     }
     w.over = { day, terms, victor: V ? V.id : null, text };
     this.freeAll(w, day);
+    // (Round 145) The outposts' garrisons home; the hosts too.
+    outpostsStandDown(this, w);
+    for (const h of this.hosts.filter((q) => q.war === w.id)) orderHost(this, null, h.id, 'home');
     this.past.push(w);
     if (this.past.length > 6) this.past.shift();
     const here = this.game.currentSettlement;
@@ -1647,10 +1982,8 @@ export class War {
         delete r.captive;
         r.away = false;
       }
-      if (r.soldier !== undefined && !(this.live && this.live.w && this.live.w.id === r.soldier)) {
-        delete r.soldier;
-        r.away = false;
-      }
+      if (r.soldier !== undefined && !(this.live && this.live.w && this.live.w.id === r.soldier)) this.release(r);
+      else if (r.soldier === undefined && (r.host !== undefined || r.outpost !== undefined)) this.release(r);
     }
   }
 
@@ -1708,6 +2041,8 @@ export class War {
       const s = this.ow.settlements[r.to];
       if (s) out.push({ ...centreOf(s), kind: 'raid', label: `Raiders expected at ${s.name}` });
     }
+    // (Round 145) The hosts, and the outposts.
+    out.push(...hostMarkers(this), ...outpostMarkers(this));
     return out;
   }
 
@@ -1720,9 +2055,18 @@ export class War {
     const c = centreOf(from);
     const now = this.sim.abs;
     const dep = plan.depart ?? plan.at - DAY;
-    const f = clamp((now - dep) / Math.max(1, plan.at - dep), 0, 1);
+    // (Round 145) Held up at an outpost on the way: it stands a while.
+    let lagNow = 0;
+    let lagAll = 0;
+    let held = false;
+    for (const q of plan.halts || []) {
+      lagAll += q.until - q.from;
+      lagNow += clamp(now - q.from, 0, q.until - q.from);
+      if (now >= q.from && now < q.until) held = true;
+    }
+    const f = clamp((now - lagNow - dep) / Math.max(1, plan.at - lagAll - dep), 0, 1);
     const d = Math.hypot(plan.site.x - c.x, plan.site.z - c.z) || 1;
-    return { x: c.x + (plan.site.x - c.x) * f, z: c.z + (plan.site.z - c.z) * f, f, dx: (plan.site.x - c.x) / d, dz: (plan.site.z - c.z) / d };
+    return { x: c.x + (plan.site.x - c.x) * f, z: c.z + (plan.site.z - c.z) * f, f, dx: (plan.site.x - c.x) / d, dz: (plan.site.z - c.z) / d, held };
   }
 
   // The army on the march, on the ground when you're near it: a column of
@@ -1770,12 +2114,48 @@ export class War {
         i++;
       }
     }
+    // (Round 145) A host near you: its column on the march behind its
+    // banner, or about its camp.
+    for (const h of this.hosts) {
+      if (h.state === 'muster' || h.state === 'siege' || h.state === 'gone' || (h.plan && h.plan.live) || (this.live && this.live.kind === 'battle')) continue;
+      const m = hostAt(this, h);
+      if (!this.nearPlayer(m, 36)) continue;
+      const key = `h${h.id}`;
+      want.add(key);
+      let col = this.columns.get(key);
+      if (!col) this.columns.set(key, (col = { h, ents: [], tried: false }));
+      if (col.tried) continue;
+      col.tried = true;
+      const home = centreOf(this.ow.settlements[h.sid]);
+      let i = 0;
+      for (const { r, L } of hostRecs(this, h)) {
+        if (i >= 14) break;
+        if (r.ent && !r.ent.dead) {
+          i++;
+          continue;
+        }
+        const back = 2 + i * 1.6;
+        const wide = i % 2 ? 1 : -1;
+        let x = Math.round(m.x - m.dx * back - m.dz * wide);
+        let z = Math.round(m.z - m.dz * back + m.dx * wide);
+        for (let k = 0; k < 40 && g.inSight(x, z, 1); k += 2) {
+          x = Math.round(x - (m.dx || 0.7) * 2);
+          z = Math.round(z - (m.dz || 0.7) * 2);
+        }
+        if (g.inSight(x, z, 1)) continue;
+        const e = this.spawn(r, L, x, z, h.side, 'host', { host: h.id, slot: i, foe: false, home });
+        if (!e) continue;
+        e.hostileNow = false;
+        col.ents.push(e);
+        i++;
+      }
+    }
     // A column you've left behind (or one that's become a battle): off out
     // of sight, and gone.
     for (const [id, col] of this.columns) {
       if (want.has(id)) continue;
       col.ents = col.ents.filter((e) => {
-        if (e.dead || !e.warband || e.warband.kind !== 'march') return false;
+        if (e.dead || !e.warband || (e.warband.kind !== 'march' && e.warband.kind !== 'host')) return false;
         if (!g.inSight(e.x, e.z, 2)) {
           g.despawnNpc(e);
           return false;
@@ -1800,7 +2180,7 @@ export class War {
     n.warband = { kind, side, civ: civ ? civ.id : null, foe: true, ...extra };
     n.hostileNow = true;
     const col = civ ? civ.color.hex : '#7a6a5a';
-    n.look = { ...n.rec.look, hat: kind === 'raid' ? 'hood' : 'helmet', gear: { ...(n.rec.look.gear || {}), body: `tabard:${kind === 'raid' ? darken(col) : col}` } };
+    n.look = { ...n.rec.look, hat: kind === 'raid' ? 'hood' : extra && extra.kit === 'poor' ? n.rec.look.hat ?? null : 'helmet', gear: { ...(n.rec.look.gear || {}), body: `tabard:${kind === 'raid' ? darken(col) : col}` } };
     return n;
   }
 
@@ -1814,10 +2194,12 @@ export class War {
   spawn(rec, L, x, z, side, kind, extra = {}) {
     const g = this.game;
     if (!g.world.regionAt(x, z)) return null;
-    const y = g.world.findStandY(x, z, GROUND);
+    let y = g.world.findStandY(x, z, GROUND);
     if (y <= 0) return null;
+    // (Round 145) Not up on a house's roof: on the ground beside it.
+    if (onRoof(g.world, x, y, z)) y = GROUND;
     const spot = g.findFreeSpot(x, z, y);
-    if (!spot) return null;
+    if (!spot || onRoof(g.world, spot.x, spot.y, spot.z)) return null;
     return this.spawnAt(rec, L, spot, side, kind, extra);
   }
 
@@ -1830,8 +2212,9 @@ export class War {
     n.hostileNow = true;
     // In the realm's colours (a tabard over whatever they wear), so you can
     // tell the sides apart: soldiers helmeted, raiders hooded and darker.
+    // (Round 145: the levy beyond what the armoury had, bareheaded.)
     const col = civ ? civ.color.hex : '#7a6a5a';
-    n.look = { ...rec.look, hat: kind === 'raid' ? 'hood' : 'helmet', gear: { ...(rec.look.gear || {}), body: `tabard:${kind === 'raid' ? darken(col) : col}` } };
+    n.look = { ...rec.look, hat: kind === 'raid' ? 'hood' : extra.kit === 'poor' ? rec.look.hat ?? null : 'helmet', gear: { ...(rec.look.gear || {}), body: `tabard:${kind === 'raid' ? darken(col) : col}` } };
     return n;
   }
 
@@ -2004,8 +2387,12 @@ export class War {
     }
     const sa = this.ow.settlements[plan.attacker === 'a' ? plan.atk : plan.def];
     const sb = this.ow.settlements[plan.attacker === 'a' ? plan.def : plan.atk];
-    const ca = centreOf(sa);
-    const cb = centreOf(sb);
+    // (Round 145: a host comes from where it is, not its town; a skirmish
+    // is fought toward the outpost's town.)
+    const atkPt = plan.from || centreOf(this.ow.settlements[plan.atk]);
+    const defPt = plan.toward || centreOf(this.ow.settlements[plan.def]);
+    const ca = plan.attacker === 'a' ? atkPt : defPt;
+    const cb = plan.attacker === 'a' ? defPt : atkPt;
     const d = Math.hypot(ca.x - cb.x, ca.z - cb.z) || 1;
     // The field's axis: from b's side to a's.
     const ax = { x: (ca.x - cb.x) / d, z: (ca.z - cb.z) / d };
@@ -2025,7 +2412,7 @@ export class War {
       const ents = [];
       const n = list.length;
       const wide = Math.min(n, 9);
-      list.forEach(({ r, L }, i) => {
+      list.forEach(({ r, L, kit }, i) => {
         // The line, ten paces back from the middle of the field (a second
         // rank two paces behind the first).
         const rank = Math.floor(i / wide);
@@ -2035,7 +2422,7 @@ export class War {
         const x = Math.round(c.x + ax.x * (11 + rank * 2) * sign + perp.x * off);
         const z = Math.round(c.z + ax.z * (11 + rank * 2) * sign + perp.z * off);
         const role = t === 'pincer' ? (i % 3 === 0 ? 'left' : i % 3 === 1 ? 'right' : 'centre') : t === 'flank' ? (i < Math.ceil(n * 0.4) ? 'wing' : 'centre') : 'centre';
-        const cfg = { war: w.id, role, levy: r.job !== 'guard', home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' };
+        const cfg = { war: w.id, role, levy: r.job !== 'guard', kit: kit || null, home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' };
         let e = null;
         if (r.ent && !r.ent.dead) {
           // Already about (marched here, or out of the town nearby): into
@@ -2059,15 +2446,16 @@ export class War {
       });
       live.sides[side] = { civ, tactic: t, ents, start: ents.length, broken: false, hates: false, sign, reserve: army.recs.slice(cap) };
     }
-    this.fieldMercs(live, w);
+    if (!plan.skirmish) this.fieldMercs(live, w);
     if (!live.sides.a.ents.length || !live.sides.b.ents.length) {
       for (const s of Object.values(live.sides)) for (const e of s.ents) this.game.despawnNpc(e);
       return false;
     }
     // Log walls and stakes, thrown up in front of a side that digs in.
     for (const side of ['a', 'b']) if (live.sides[side].tactic === 'works') this.raiseWorks(live, side);
-    // Catapults behind the lines, and a ram, where the realms have them.
-    fieldEngines(this, live);
+    // Catapults behind the lines, and a ram, where the realms have them
+    // (not for a skirmish at an outpost).
+    if (!plan.skirmish) fieldEngines(this, live);
     // (Round 144) Into bands, each to its place (those still out of your
     // sight put straight there).
     this.bandUp(live);
@@ -2152,7 +2540,7 @@ export class War {
           n.warband.form = q;
           if (n.warband.phase !== 'form' || g.inSight(n.x, n.z, 2) || g.inSight(q.x, q.z, 2)) return;
           const y = g.world.findStandY(q.x, q.z, n.y);
-          if (y > 0 && Math.abs(y - n.y) <= 3 && !g.world.isWaterAt(q.x, y, q.z)) n.teleport(q.x, y, q.z);
+          if (y > 0 && Math.abs(y - n.y) <= 3 && !g.world.isWaterAt(q.x, y, q.z) && !onRoof(g.world, q.x, y, q.z)) n.teleport(q.x, y, q.z);
         });
       }
     }
@@ -2206,8 +2594,8 @@ export class War {
           if (!g.world.regionAt(sx, sz) || g.inSight(sx, sz, 1)) continue;
           const y = g.world.findStandY(sx, sz, GROUND);
           if (y <= 0) continue;
-          const spot = g.findFreeSpot(sx, sz, y);
-          if (!spot) continue;
+          const spot = g.findFreeSpot(sx, sz, onRoof(g.world, sx, y, sz) ? GROUND : y);
+          if (!spot || onRoof(g.world, spot.x, spot.y, spot.z)) continue;
           const e = this.spawnAt(B0.recFor(band, m, L), L, spot, side, 'battle', {
             war: w.id, role: 'wing', levy: false, home: { x: c.x + ax.x * 45 * S.sign, z: c.z + ax.z * 45 * S.sign }, form: { x, z }, phase: sx === x && sz === z ? 'form' : 'march',
             merc: band.id, band: band.id, member: m.id,
@@ -2465,13 +2853,13 @@ export class War {
     // (The attackers' ram, if they win, goes on to break the wall of the
     // town they take: you see it done, rather than the wall just falling.)
     L.ramComing = winner === L.plan.attacker && (L.engines || []).some((e) => e.type === 'ram' && e.side === winner && e.wall && !e.broken && e.phase !== 'stuck' && e.phase !== 'breached');
-    this.fight(L.w, L.plan, A, Bm, rng, { winner, ratio, fa: fa + taken.a / Math.max(1, pa), fb: fb + taken.b / Math.max(1, pb), deadA: deadA + taken.a, deadB: deadB + taken.b, takenA: taken.a, takenB: taken.b, na: pa, nb: pb });
+    const rec = this.fight(L.w, L.plan, A, Bm, rng, { winner, ratio, fa: fa + taken.a / Math.max(1, pa), fb: fb + taken.b / Math.max(1, pb), deadA: deadA + taken.a, deadB: deadB + taken.b, takenA: taken.a, takenB: taken.b, na: pa, nb: pb });
     const def = this.ow.settlements[L.plan.def];
     endEngines(L, L.ramComing && def && def.civ === L.sides[winner].civ ? winner : null);
-    // Soldiers who walked off the field are home again.
+    // Soldiers who walked off the field are home again (a host's, and a
+    // garrison's, with theirs).
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
-      if (n.rec.soldier !== undefined) delete n.rec.soldier;
-      if (!n.rec.captive) n.rec.away = false;
+      this.release(n.rec);
       // (Except the ram's crew, still at work.)
       if (n.warband && n.warband.role === 'crew' && !n.dead) continue;
       if (!n.dead && n.warband && g.npcs.includes(n)) {
@@ -2484,6 +2872,8 @@ export class War {
     this.reckonDraft(L, winner);
     this.afterDown(L, winner);
     afterCommand(this, L, winner);
+    // (Round 145) A host's next move; an outpost's fate.
+    this.afterFight(L.w, L.plan, rec);
     // You fought for one side: they remember it.
     for (const s of ['a', 'b']) {
       const o = s === 'a' ? 'b' : 'a';
@@ -2564,11 +2954,11 @@ export class War {
     if (L && L.kind === 'battle' && L.pside && L.pside.has(p) && !L.done) {
       const c = commandOf(this, p);
       if (c) {
-        if (c.rank === 'marshal') out.push({ text: '⚑ YOU COMMAND · B: ORDERS', color: '#ffd070' });
+        if (c.rank === 'marshal') out.push({ text: '► YOU COMMAND · B: ORDERS', color: '#ffd070' });
         const b = c.rank === 'marshal' ? null : c.band;
         if (b) {
           const ord = b.state === 'rout' ? 'RUNNING' : (ORDERS[b.order.kind] ? ORDERS[b.order.kind].name : b.order.kind).toUpperCase();
-          out.push({ text: `⚑ ${b.name.replace(/^the /, '').toUpperCase()} · ${ord}`, color: b.state === 'rout' ? '#ff7060' : b.state === 'waver' ? '#ffd070' : '#ffe8a0' });
+          out.push({ text: `► ${b.name.replace(/^the /, '').toUpperCase()} · ${ord}`, color: b.state === 'rout' ? '#ff7060' : b.state === 'waver' ? '#ffd070' : '#ffe8a0' });
           const bars = Math.round(b.morale / 20);
           out.push({ text: `NERVE ${'▮'.repeat(bars)}${'▯'.repeat(5 - bars)} ${bandUp(b)}/${b.start}`, color: b.state === 'ok' ? '#a0e8a0' : b.state === 'waver' ? '#ffd070' : '#ff7060' });
         }
@@ -2577,6 +2967,8 @@ export class War {
         if (fb && L.sides[sd] && (L.sides[sd].bands || []).some((q) => q.id === fb.band)) out.push({ text: 'F: TAKE UP THE BANNER', color: '#ffe070', blink: true });
       }
     }
+    // (Round 145) Your hosts, where they are.
+    out.push(...hostHud(this, p));
     for (const w of this.wars) {
       const S = w.siege;
       if (!S || S.phase === 'over') continue;
@@ -2588,26 +2980,6 @@ export class War {
       if (S.next && !S.next.live) out.push({ text: 'ASSAULT AT DAWN', color: '#ff9070' });
     }
     return out;
-  }
-
-  // (Round 144) How far the camera draws back for a battle near you: the
-  // more of them about, the further (no further than the field needs, and
-  // not at all if the settings say not).
-  battleZoom(p) {
-    const L = this.live;
-    const r = this.game.renderer;
-    if (!L || L.kind !== 'battle' || !p || (r && r.battleCam === false)) return 1;
-    const now = this.sim.abs;
-    if (L.camAt === now && L.camFor === p) return L.cam;
-    const at = L.siege ? L.centre : L.centre;
-    const near = Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= (L.siege ? 60 : 48);
-    let n = 0;
-    if (near) for (const s of ['a', 'b']) for (const q of (L.sides[s] && L.sides[s].ents) || []) if (!q.dead && !q.down && Math.max(Math.abs(q.x - p.x), Math.abs(q.z - p.z)) <= 34) n++;
-    const z = near ? 1 + clamp((n - 12) / 75, 0, 0.72) : 1;
-    L.cam = L.done ? Math.max(1, (L.cam || 1) - 0.002) : z;
-    L.camAt = now;
-    L.camFor = p;
-    return L.cam;
   }
 
   // (Round 144) The sound of it: the clash all along the line where it's
@@ -2920,6 +3292,8 @@ export class War {
       wars: this.wars, past: this.past, raids: this.raids, raidLog: this.raidLog, truces: this.truces, cd: this.cd,
       rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay, prisoners: this.prisoners, deserters: this.deserters,
       ranks: this.ranks || {},
+      hosts: (this.hosts || []).map((h) => ({ ...h, plan: h.plan && !h.plan.live ? h.plan : null })), pastHosts: this.pastHosts || [], hostCount: this.hostCount || {},
+      outposts: this.outposts || [],
     };
   }
 
@@ -2941,6 +3315,12 @@ export class War {
     this.prisoners = d.prisoners || [];
     this.deserters = d.deserters || {};
     this.ranks = d.ranks || {};
+    this.hosts = d.hosts || [];
+    // (A host's battle under way when you saved: reckoned up off-screen.)
+    for (const h of this.hosts) if (h.plan) h.plan.live = false;
+    this.pastHosts = d.pastHosts || [];
+    this.hostCount = d.hostCount || {};
+    this.outposts = d.outposts || [];
   }
 }
 

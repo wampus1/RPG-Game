@@ -5,6 +5,11 @@ import { BLOCKS, ROAD_BLOCKS } from '../world/blocks.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+// (Round 145) The roofs of houses: nobody in a town's meant to go walking
+// over them (see opts.roofs, and the step-down in npc.js).
+export const ROOFS = new Set(BLOCKS.map((b, i) => (b && /roof|thatch/.test(b.name) ? i : -1)).filter((i) => i >= 0));
+export const onRoof = (world, x, y, z) => ROOFS.has(world.getBlock(x, y - 1, z));
+
 export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
   const maxNodes = opts.maxNodes || 6000;
   const box = opts.box; // {x0,z0,x1,z1}
@@ -14,6 +19,8 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
   // horses and wagons).
   const wet = opts.wet ?? 4;
   const dry = !!opts.dry;
+  // (`roofs: false`: not over the houses' roofs, save to the goal itself.)
+  const roofs = opts.roofs !== false;
   const key = (x, y, z) => ((x & 0xfff) << 16) | ((z & 0xfff) << 4) | y;
   const h = (x, z) => (Math.abs(x - tx) + Math.abs(z - tz)) * 0.62;
   const open = new MinHeap();
@@ -52,6 +59,7 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       if (opts.clear && !opts.clear(nx, ny, nz)) continue;
       const nk = key(nx, ny, nz);
       const floor = world.getBlock(nx, ny - 1, nz);
+      if (!roofs && ROOFS.has(floor) && !(nx === tx && nz === tz)) continue;
       const feet = BLOCKS[world.getBlock(nx, ny, nz)];
       // (Nobody walks into lava on purpose, save what lives in fire.)
       if (feet.lava && !opts.fireproof) continue;

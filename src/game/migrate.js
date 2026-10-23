@@ -1158,6 +1158,20 @@ export const STEPS = [
       }
       log.push('Battles are fought by bands now, each under its captain and banner, with morale, orders, and a commander\'s plan; towns behind walls are besieged, and taken by storm, starvation or treachery, and how a taken town is treated depends on who took it. If you command, B opens the war table.');
     },
+  },  {
+    to: '1.45.0',
+    game(game, log) {
+      // (A war saved before has no hosts raised and no outposts built; its
+      // soldiers are its towns' own from now on.)
+      const war = game.sim && game.sim.war;
+      if (war) {
+        war.hosts ||= [];
+        war.pastHosts ||= [];
+        war.hostCount ||= {};
+        war.outposts ||= [];
+      }
+      log.push('Rulers and mayors at war can raise hosts from their towns, name their commanders and send them to give battle, besiege or clear the way; realms at war build watchtowers and stockades that stop armies on the march. Every soldier is someone from a town now, small realms call up nearly everyone (not all of them armed), and some slip away to other realms rather than march.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

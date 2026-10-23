@@ -26,6 +26,7 @@ import { alive, DAY } from '../sim/econ.js';
 import { Engine } from './engines.js';
 import { ignite, roofTarget } from './fire.js';
 import { slotAt, orderBand, standing, bandUp, buildGrid } from '../sim/bands.js';
+import { onRoof } from '../entities/pathfind.js';
 import { resolveAssault, sackTown, endSiege } from '../sim/siege.js';
 import { sackOf } from '../sim/conduct.js';
 import { assignCommand, afterCommand } from '../sim/command.js';
@@ -489,7 +490,7 @@ export class SiegeGround {
     const atkEnts = [];
     const f = { x: -S.dir.x, z: -S.dir.z };
     const pp = { x: -f.z, z: f.x };
-    recs.forEach(({ r, L: HL }, i) => {
+    recs.forEach(({ r, L: HL, kit }, i) => {
       const a = -1 - Math.floor(i / 10) * 2;
       const b = ((i % 10) - 4.5) * 1.6;
       const x = Math.round(S.camp.x + f.x * a + pp.x * b);
@@ -498,12 +499,12 @@ export class SiegeGround {
       const camp = site.ents.find((q) => q.rec === r && !q.dead);
       if (camp) {
         e = camp;
-        e.warband = { ...e.warband, kind: 'battle', side: sideA, phase: 'move', war: w.id, form: { x, z }, levy: r.job !== 'guard', home: { x: S.camp.x + S.dir.x * 30, z: S.camp.z + S.dir.z * 30 } };
+        e.warband = { ...e.warband, kind: 'battle', side: sideA, phase: 'move', war: w.id, form: { x, z }, levy: r.job !== 'guard', kit: kit || null, home: { x: S.camp.x + S.dir.x * 30, z: S.camp.z + S.dir.z * 30 } };
         e.hostileNow = true;
       } else {
         const q = g.inSight(x, z, 2) ? war.offstage(x, z, ax, perp, signA) : { x, z };
         if (!q) return;
-        e = war.spawn(r, HL, q.x, q.z, sideA, 'battle', { war: w.id, role: 'centre', levy: r.job !== 'guard', home: { x: S.camp.x + S.dir.x * 30, z: S.camp.z + S.dir.z * 30 }, form: { x, z }, phase: q.x === x && q.z === z ? 'form' : 'march' });
+        e = war.spawn(r, HL, q.x, q.z, sideA, 'battle', { war: w.id, role: 'centre', levy: r.job !== 'guard', kit: kit || null, home: { x: S.camp.x + S.dir.x * 30, z: S.camp.z + S.dir.z * 30 }, form: { x, z }, phase: q.x === x && q.z === z ? 'form' : 'march' });
       }
       if (!e) return;
       r.soldier = w.id;
@@ -519,9 +520,13 @@ export class SiegeGround {
     for (const n of site.watch) if (!pool.includes(n) && !n.dead) pool.unshift(n);
     const defEnts = [];
     const want = Math.min(cap, Math.max(6, S.garrison));
+    // (Round 145) The town's armoury goes round as far as it will; the rest
+    // take up whatever they have.
+    let arms = war.armoury(L);
+    const kitOf = (r) => (r.job === 'guard' || arms-- > 0 ? null : 'poor');
     for (const n of pool.slice(0, want)) {
       n.sleeping = false;
-      war.enlist(n, sideD, 'battle', { war: w.id, role: 'centre', levy: n.rec.job !== 'guard', home: { ...centre }, form: { x: n.x, z: n.z }, phase: 'move' });
+      war.enlist(n, sideD, 'battle', { war: w.id, role: 'centre', levy: n.rec.job !== 'guard', kit: kitOf(n.rec), home: { ...centre }, form: { x: n.x, z: n.z }, phase: 'move' });
       n.rec.soldier = w.id;
       defEnts.push(n);
     }
@@ -533,7 +538,7 @@ export class SiegeGround {
         const b = L.buildings[r.home];
         if (!b || !b.door) continue;
         const at = b.door;
-        const e = war.spawn(r, L, at.x, at.z, sideD, 'battle', { war: w.id, role: 'centre', levy: r.job !== 'guard', home: { ...centre }, form: { x: at.x, z: at.z }, phase: 'move' });
+        const e = war.spawn(r, L, at.x, at.z, sideD, 'battle', { war: w.id, role: 'centre', levy: r.job !== 'guard', kit: kitOf(r), home: { ...centre }, form: { x: at.x, z: at.z }, phase: 'move' });
         if (!e) continue;
         r.soldier = w.id;
         defEnts.push(e);
@@ -736,7 +741,7 @@ export class SiegeGround {
           n.warband.form = q;
           if (g.inSight(n.x, n.z, 2) || g.inSight(q.x, q.z, 2)) return;
           const y = q.y ?? g.world.findStandY(q.x, q.z, n.y);
-          if (y > 0) n.teleport(q.x, y, q.z);
+          if (y > 0 && (q.y !== undefined || !onRoof(g.world, q.x, y, q.z))) n.teleport(q.x, y, q.z);
         });
         b.captain = null;
         b.base = b.morale = 58 + (s0 === sideD ? 8 + (S.morale.def - 50) * 0.3 : (S.morale.atk - 50) * 0.3) - (s0 === sideD && S.hungry ? Math.min(18, S.hungry * 6) : 0);

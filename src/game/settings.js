@@ -52,10 +52,9 @@ export const DEFAULTS = {
   bgWork: 0,
   // (Round 144) How many soldiers a side are on the field at once in a
   // battle near you (the rest come up from the rear as they fall): 0 a
-  // few (16), 1 some (32), 2 many (60), 3 a host (90). And whether the
-  // view draws back to take in a big battle.
+  // few (16), 1 some (32), 2 many (60), 3 a host (90). (Round 145: the
+  // view no longer draws back for a big battle.)
   battleSize: 2,
-  battleCam: true,
   // (Round 77)
   autosave: true,
   questMarkers: true,
@@ -84,7 +83,6 @@ export const SETTING_ROWS = [
   { key: 'frameCap', tab: 'General', label: 'Frame rate', kind: 'choice', opts: ['Full', '30 a second'] },
   { key: 'bgWork', tab: 'General', label: 'Background world work', kind: 'choice', opts: ['Full', 'Gentle'] },
   { key: 'battleSize', tab: 'General', label: 'Soldiers on the field', kind: 'choice', opts: ['A few (16)', 'Some (32)', 'Many (60)', 'A host (90)'] },
-  { key: 'battleCam', tab: 'General', label: 'Wide view in battles', kind: 'bool' },
   { key: 'damageNumbers', tab: 'General', label: 'Damage numbers', kind: 'bool' },
   { key: 'questMarkers', tab: 'General', label: 'Quest markers', kind: 'bool' },
   { key: 'tooltips', tab: 'General', label: 'Pointer tooltips', kind: 'bool' },
@@ -176,9 +174,8 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     renderer.noQuestMarks = !s.questMarkers;
     // (Round 134: read by the sim, see Sim.workMs.)
     renderer.gentleWork = s.bgWork === 1;
-    // (Round 144: read by the war, see War.fieldCap and battleZoom.)
+    // (Round 144: read by the war, see War.fieldCap.)
     renderer.battleCap = BATTLE_CAPS[s.battleSize ?? 2] || 60;
-    renderer.battleCam = s.battleCam !== false;
     renderer.frameCap = !!s.frameCap;
   }
   // (Playing in someone else's world: how often the host sends word.)

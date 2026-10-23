@@ -11296,11 +11296,10 @@ have the rank.
   your own in the battles to come.
 - **The scale of it.** Up to 60 a side are on the field by default (the
   rest come up from the rear as the first fall); Settings → General →
-  *Soldiers on the field* sets 16, 32, 60 or 90. The camera draws back
-  when a big fight is near you, as far as your machine keeps up: if
-  frames come slowly, it closes in. *Wide view in battles* turns this
-  off. War horns, drums and the din of the line are in the mix, and dust
-  rises where bands march.
+  *Soldiers on the field* sets 16, 32, 60 or 90. (Round 145: the camera
+  no longer draws back for a big fight, and *Wide view in battles* is
+  gone.) War horns, drums and the din of the line are in the mix, and
+  dust rises where bands march.
 
 ### You in command
 
@@ -11418,6 +11417,127 @@ remember it was you.
 
 Worlds from 1.43 load as before. A war in progress carries on, and its
 next decisive win before a walled town begins a siege.
+
+## Round 145: Hosts, outposts, and who really fights
+
+Rulers and mayors at war raise their own hosts, choose who commands them
+and send them where they like. Realms at war build outposts near the
+front that stop what passes. Every soldier is now someone from a town.
+
+### Hosts
+
+- **Raising one.** If you rule a realm or head a town and it's at war,
+  open the war table (**B**) and go to the **Hosts** tab (click it, or
+  press **Tab**). Choose *Raise a new host*, pick a town (a mayor can only
+  use their own), and set how many. The watch goes first, then the levy.
+  A town keeps one of its watch at home, and sends no more than half of
+  its able-bodied (more in a small realm: see below). The page says how
+  many it can spare, and how many of them the town's armoury can arm.
+- **Mustering.** A host takes an hour to muster, then it's in the field:
+  "the First Host of Kingsdale", or "the Levy of Morcross" if a mayor
+  raised it. Its soldiers are away from their town the whole time, so
+  the town has fewer at work and fewer on its watch.
+- **Its commander.** The best of its own commands it at first: a captain
+  of the watch, else the drilled, the brave and the skilled. You can
+  name another, call in a town's captain who isn't with it yet (they
+  join it), or take command yourself. The commander's skill counts in
+  every fight it has, and they choose its plan of battle by their own
+  nature.
+- **Orders.** Pick a host, then a target:
+  - *Attack* an enemy town (it offers battle there);
+  - *Lay siege* to it (or join the siege that's already there);
+  - *Clear it*: an enemy outpost;
+  - *Hold* a town of ours (it comes out to defend the town if it's
+    attacked);
+  - *Come home*, then *Stand down*.
+
+  It marches at a little over two leagues an hour; the table shows how
+  long until it's there. Whoever raised it, the realm's ruler, or whoever
+  commands it can give it orders.
+- **What happens.**
+  - At an enemy town it offers battle. If you're near, the battle is
+    fought on the ground and you're in it, as its marshal if you command
+    it. If it wins, it camps on the field and goes again after a rest.
+    If it loses, it falls back home.
+  - At a siege it camps with the besiegers. If the town falls, the host
+    holds it.
+  - A host holding a besieged town is shut in with it, and fights on its
+    walls.
+- **On the map**, a host is a ► in its realm's colour. The HUD shows
+  what yours are doing.
+
+### Outposts
+
+- **Watchtowers and stockades.** Towns near the front put them up on the
+  road toward the enemy:
+  - **Watchtower:** sees far, holds 3, and goes up in about ten hours.
+  - **Stockade:** a ring of logs with a gate, holds 5, holds out much
+    better, and takes about twenty hours to build.
+
+  The garrison is the town's own watch, at their posts: up on the
+  platform, at the gate, by the fire. As a ruler or mayor, you build your
+  own from the war table's **Outposts** tab: choose the town, which way
+  it faces and the kind. From there you can also send more men to one,
+  or abandon it. AI realms don't build in towns you govern.
+- **In the way.** An army or host that passes within sight of an enemy
+  outpost has to deal with it, and fights a **skirmish** there.
+  - A garrison that holds throws them back and costs them hours on the
+    march (a stockade costs them more).
+  - One that's overrun is burned, and its garrison killed or taken.
+
+  Raiders going past one may be seen from it, and driven back or let
+  slip past; the town they were after has it in its ledger. Near you,
+  a skirmish is fought on the ground.
+- **The end of it.** When the war ends, the garrisons go home. Burned and
+  empty posts come down after a while. On the map an outpost is a ♜ in
+  its realm's colour (grey once burned).
+
+### Who really fights
+
+- **Only real people.** Every soldier in a battle, a siege or a skirmish
+  is someone who lives in one of the realm's towns. No soldier is made up
+  to fill a gap. A town that hasn't been laid out yet is laid out a
+  little at a time while the war is on, and sends no one until it is
+  (except the town being fought over, which is laid out right away).
+  Hired bandits are real band members, as before.
+- **Small realms draft heavily.** A realm with few people (about 70 or
+  fewer), or one fighting a realm more than twice its size, calls up
+  **75% to 100%** of everyone near the front who can fight. That
+  includes the old (never the children), and only the mayor, nobles and
+  priests stay home. How hard it drafts depends on how badly it's
+  outmatched, how warlike it is, and its ruler's nerve. Its capital's
+  ledger records the call-up. A host raised in such a realm can take as
+  many, and one of its towns under siege puts nearly everyone on the
+  walls.
+- **Not everyone gets a spear.** Each town's armoury arms about as many
+  as its usual levy, plus a few more with a smith, a guardhouse or
+  barracks. Beyond that, the levy fight with what they have: a farmer's
+  hoe, a woodcutter's axe, a builder's hammer, a cook's knife, or a club.
+  They go bareheaded and are worth less in the fight. The raise page
+  tells you how many will go short.
+- **Some never come.** Before a battle, a few of the levy slip away. More
+  slip away when the realm takes everyone, when they've only their tools
+  to fight with, and when they're timid, wretched or old. Most leave for
+  a town of another realm (a neutral one if there's one near, otherwise
+  even the enemy's). The rest lie low at home for a day or two. Their
+  town's ledger says who went, and where.
+
+### Fixes
+
+- **Guards and soldiers stay off the roofs.** NPCs no longer walk over
+  house roofs: they go round, unless they're up there already and on
+  their way down. The watch and soldiers now step down off a roof like
+  everyone else. Only those posted on a wall, a platform or a ladder
+  stay up. Soldiers no longer spawn on a roof when a battle starts next
+  to a house.
+- **No zoom-out in battles.** The camera stays where it is in a battle,
+  however big. *Wide view in battles* is gone from the settings.
+
+### Version 1.45.0
+
+Worlds from 1.44 load as before. A war in progress carries on with no
+hosts or outposts until someone raises or builds one, and its soldiers
+are its towns' own from the next battle on.
 
 ## Command console
 

@@ -1727,6 +1727,12 @@ export class MapWindow extends Window {
         put(m.x, m.z, '#', '#ffffff', blink ? m.color || '#c02020' : '#3a1a1a', m.label, m.color);
         continue;
       }
+      if (m.kind === 'outpost') {
+        // (Round 145) An outpost: a tower in its realm's colour (grey, burned
+        // or empty).
+        put(m.x, m.z, '♜', m.burned ? '#6a6a6a' : m.empty ? '#b0a890' : m.color || '#e8d8b0', m.burned ? '#2a2420' : '#1a1410', m.label, m.burned ? '#8a8a8a' : m.color);
+        continue;
+      }
       if (m.kind === 'raid') {
         if (blink) put(m.x, m.z, '!', '#ffffff', '#c03020', m.label);
         else marks.push({ cx: Math.floor(m.x / REGION_W), cz: Math.floor(m.z / REGION_D), label: m.label });
