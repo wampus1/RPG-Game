@@ -1475,8 +1475,9 @@ export class War {
   }
 
   // (Round 145) A soldier's fight over: home again; unless they're of a host
-  // or an outpost's garrison, which they're still with.
-  release(r) {
+  // or an outpost's garrison, which they're still with. (Not release(),
+  // which frees a prisoner.)
+  releaseSoldier(r) {
     if (r.captive) {
       delete r.host;
       delete r.outpost;
@@ -1605,7 +1606,7 @@ export class War {
       w.next = day + 1 + rng.int(0, 1);
     }
     // Soldiers home again (but for a host's, or a garrison's, still with it).
-    for (const { r } of [...A.recs, ...Bm.recs]) this.release(r);
+    for (const { r } of [...A.recs, ...Bm.recs]) this.releaseSoldier(r);
     // The news, everywhere on both sides.
     const ca = this.civ(w.lead.a);
     const cb = this.civ(w.lead.b);
@@ -1982,8 +1983,8 @@ export class War {
         delete r.captive;
         r.away = false;
       }
-      if (r.soldier !== undefined && !(this.live && this.live.w && this.live.w.id === r.soldier)) this.release(r);
-      else if (r.soldier === undefined && (r.host !== undefined || r.outpost !== undefined)) this.release(r);
+      if (r.soldier !== undefined && !(this.live && this.live.w && this.live.w.id === r.soldier)) this.releaseSoldier(r);
+      else if (r.soldier === undefined && (r.host !== undefined || r.outpost !== undefined)) this.releaseSoldier(r);
     }
   }
 
@@ -2859,7 +2860,7 @@ export class War {
     // Soldiers who walked off the field are home again (a host's, and a
     // garrison's, with theirs).
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
-      this.release(n.rec);
+      this.releaseSoldier(n.rec);
       // (Except the ram's crew, still at work.)
       if (n.warband && n.warband.role === 'crew' && !n.dead) continue;
       if (!n.dead && n.warband && g.npcs.includes(n)) {

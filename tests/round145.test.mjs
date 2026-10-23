@@ -90,6 +90,10 @@ test('a ruler raises a host from their own people, names its commander, and send
   for (let t = 0; t < 60 * 24 && W.hosts.includes(h) && w.battles.length === n0; t++) game.update(1, input);
   assert.ok(w.battles.length > n0, 'a battle was fought');
   assert.ok(h.log.some((q) => /offers battle/.test(q.text)), h.log.map((q) => q.text).join(' / '));
+  // (Those taken in it stay taken: a soldier home again is no prisoner
+  // set free.)
+  for (const q of W.prisoners) assert.ok(W.recOfPrisoner(q)?.captive, `${q.name} still held`);
+  for (const { r } of hostRecs(W, h)) assert.equal(r.soldier, `h${h.id}`, 'still with the host');
   // Saved and loaded: the host is still there (or home and stood down).
   const g2 = makeGame(12345, { learned: true });
   g2.sim.war.load(JSON.parse(JSON.stringify(W.serialize())));
