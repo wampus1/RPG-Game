@@ -206,11 +206,13 @@ export function regardOf(npc, game) {
 }
 
 // Whether they've come to you to talk (the mayor with a lecture, someone
-// with something to say to you): they'll talk, however they feel.
+// with something to say to you, the watch after you): they'll talk,
+// however they feel.
 export function cameToYou(npc, game) {
   const rec = npc.rec;
   const c = game.sim.confront;
   if (c && c.arrived && c.idx === rec.idx && npc.settlement && c.sid === npc.settlement.id) return true;
+  if (rec.job === 'guard' && npc.settlement && game.isWanted && game.isWanted(npc.settlement.id)) return true;
   return !!(rec.seek && rec.seek.pk === pkey(game));
 }
 
