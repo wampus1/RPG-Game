@@ -52,7 +52,8 @@ function raise(L, lot, spec, i, rng) {
   if (build) build(q);
   q.out.sk = L.settlement.spec.indexOf(spec);
   L.quarters.push(q.out);
-  (L.landmarks ||= []).push({ kind: `q_${spec.k}`, name: spec.name, x0: lot.x, z0: lot.z, x1: lot.x + lot.W - 1, z1: lot.z + lot.D - 1, at: q.out.at, q: i });
+  // (Marked on the town's map with its landmarks: see townmap.js.)
+  (L.qmarks ||= []).push({ kind: `q_${spec.k}`, name: spec.name, x0: lot.x, z0: lot.z, x1: lot.x + lot.W - 1, z1: lot.z + lot.D - 1, at: q.out.at, q: i });
   return q.out;
 }
 
@@ -187,13 +188,52 @@ export function* layQuartersSteps(L, rng) {
   }
 }
 
+// (An older world) The lane from an annex's way in to the town: out of its
+// gate to the strip of ground just outside the town's edge, then along
+// that to the road out on that side (lot.to: where that road leaves the
+// town, along the side), up to the road's edge. Tiles [x, z].
+function laneOf(L, lot) {
+  const b = L.bounds;
+  const g = gatesOf(L, lot)[0];
+  const dx = g.out.x - g.x;
+  const dz = g.out.z - g.z;
+  const out = [];
+  let x = g.x;
+  let z = g.z;
+  // (The strip just outside the town on that side.)
+  const edge = dz > 0 ? b.z0 - 1 : dz < 0 ? b.z1 + 1 : dx > 0 ? b.x0 - 1 : b.x1 + 1;
+  for (let k = 0; k < 24 && (dz ? z !== edge : x !== edge); k++) {
+    x += dx;
+    z += dz;
+    out.push([x, z]);
+  }
+  if (lot.to === undefined) return out;
+  // (Along the town's edge: x for a lot north or south of it, z for one
+  // to the west or east.)
+  const ns = dz !== 0;
+  const from = ns ? x : z;
+  const step = Math.sign(lot.to - from);
+  for (let a = from + step; step && a !== lot.to; a += step) {
+    const [px, pz] = ns ? [a, z] : [x, a];
+    if (L.isRoadTile(px, pz)) break;
+    out.push([px, pz]);
+  }
+  // (It never goes in.)
+  return out.filter(([px, pz]) => px < b.x0 || px > b.x1 || pz < b.z0 || pz > b.z1);
+}
+
 // (An older world, its towns built up to their edges) Ground just outside
-// the town, beside one of the roads out of it: dry, level enough to be
-// made good (it's dug down or built up to the town's ground: see
-// raiseQuarters), clear of the other towns, the old places, and the
-// town's other quarters. Its way in on the road (`face`, the side it's
-// on). Sizes as for findLot (the first that has room); null if none.
-function findAnnex(L, sizes, rng, taken) {
+// the town, along one of its sides: dry, level enough to be made good (it's
+// dug down or built up to the town's ground: see raiseQuarters), clear of
+// the other towns, the old places, and the town's other quarters, and out
+// of the way of everyone else who uses the ground out there: off the roads
+// (`avoid`: the realm's roads, by x * 65536 + z) with a lane either side,
+// off the line travellers take in to the middle of town, and away from the
+// ground by each road out where caravans and companies pitch camp. Its
+// way in faces the town (`face`, the side it's on), a lane from it along
+// the town's edge to the road out on that side (`to`: see laneOf). Sizes
+// as for findLot (the first that has room); null if none.
+function findAnnex(L, sizes, rng, taken, avoid = null) {
   const t = L.world && L.world.terrain;
   const ow = L.world && L.world.ow;
   if (!t || !ow) return null;
@@ -212,14 +252,42 @@ function findAnnex(L, sizes, rng, taken) {
   };
   const others = ow.settlements.filter((o) => o && o !== L.settlement && o.bounds);
   const sites = (ow.sites || []).filter((o) => o.x !== undefined);
+  const cx = Math.floor((b.x0 + b.x1) / 2);
+  const cz = Math.floor((b.z0 + b.z1) / 2);
+  // (Where caravans camp: out along each road from where it leaves town, a
+  // good way to either side of it; see Camps.site.)
+  const ents = [...(L.entrances || []), ...L.exits().filter((e) => e.dx || e.dz)];
+  const camps = ents.map((e) => {
+    const ex = e.x - (b.x0 + b.x1) / 2;
+    const ez = e.z - (b.z0 + b.z1) / 2;
+    const ox = Math.abs(ex) / (b.x1 - b.x0 + 1) > Math.abs(ez) / (b.z1 - b.z0 + 1) ? Math.sign(ex) : 0;
+    const oz = ox ? 0 : Math.sign(ez) || 1;
+    const far = [e.x + ox * 16, e.z + oz * 16];
+    return ox
+      ? { x0: Math.min(e.x, far[0]), x1: Math.max(e.x, far[0]), z0: e.z - 22, z1: e.z + 22, e }
+      : { x0: e.x - 22, x1: e.x + 22, z0: Math.min(e.z, far[1]), z1: Math.max(e.z, far[1]), e };
+  });
+  const roadNear = (x0, z0, x1, z1) => {
+    for (let z = z0 - 3; z <= z1 + 3; z++) {
+      for (let x = x0 - 3; x <= x1 + 3; x++) {
+        const k = x * 65536 + z;
+        if ((L.outRoads && L.outRoads.has(k)) || (avoid && avoid.has(k))) return true;
+      }
+    }
+    return false;
+  };
   const ok = (lot) => {
     const x0 = lot.x - 1;
     const z0 = lot.z - 1;
     const x1 = lot.x + lot.W;
     const z1 = lot.z + lot.D;
+    // (Not across the way in to the middle of town.)
+    if (lot.face === 'n' || lot.face === 's' ? x0 - 6 <= cx && x1 + 6 >= cx : z0 - 6 <= cz && z1 + 6 >= cz) return -1;
+    for (const o of camps) if (!(o.x1 < x0 || o.x0 > x1 || o.z1 < z0 || o.z0 > z1)) return -1;
     for (const o of others) if (!(o.bounds.x1 + 4 < x0 || o.bounds.x0 - 4 > x1 || o.bounds.z1 + 4 < z0 || o.bounds.z0 - 4 > z1)) return -1;
     for (const o of sites) if (o.x >= x0 - 8 && o.x <= x1 + 8 && o.z >= z0 - 8 && o.z <= z1 + 8) return -1;
     for (const o of taken) if (o && !(o.x + o.W + 2 < x0 || o.x - 2 > x1 || o.z + o.D + 2 < z0 || o.z - 2 > z1)) return -1;
+    if (roadNear(x0, z0, x1, z1)) return -1;
     let cost = 0;
     for (let z = z0; z <= z1; z++) {
       for (let x = x0; x <= x1; x++) {
@@ -232,36 +300,58 @@ function findAnnex(L, sizes, rng, taken) {
     }
     return cost;
   };
+  // (The lane out to the road: dry, near enough level, clear of the other
+  // quarters' lots.)
+  const laneCost = (lane) => {
+    let cost = 0;
+    for (const [x, z] of lane) {
+      const c = col(x, z);
+      if (c.wet || Math.abs(c.h - SURFACE) > 4) return -1;
+      if (others.some((o) => x >= o.bounds.x0 && x <= o.bounds.x1 && z >= o.bounds.z0 && z <= o.bounds.z1)) return -1;
+      if (taken.some((o) => o && x >= o.x && x < o.x + o.W && z >= o.z && z < o.z + o.D)) return -1;
+      cost += Math.abs(c.h - SURFACE) + 0.25;
+    }
+    return cost;
+  };
+  // (The roads out on each side of town: a lot north of town, its way in
+  // on its south side, goes by a road out of the north side; and so on.)
+  const side = { s: (e) => e.dz < 0, n: (e) => e.dz > 0, e: (e) => e.dx < 0, w: (e) => e.dx > 0 };
   const exits = L.exits().filter((e) => e.dx || e.dz);
   for (const [W0, D0] of sizes) {
     let best = null;
-    for (const e of exits) {
-      for (const gap of [2, 3, 5]) {
-        for (const side of [-1, 1]) {
-          let lot;
-          if (e.dz) {
-            // A road out to the north or south: the lot beside it, its
-            // front to the road (west or east).
-            const W = D0;
-            const D = W0;
-            const x = side > 0 ? e.x + 3 : e.x - 2 - W;
-            const z = e.dz > 0 ? b.z1 + gap : b.z0 - gap - D + 1;
-            lot = { x, z, W, D, face: side > 0 ? 'w' : 'e' };
-          } else {
-            const W = W0;
-            const D = D0;
-            const z = side > 0 ? e.z + 3 : e.z - 2 - D;
-            const x = e.dx > 0 ? b.x1 + gap : b.x0 - gap - W + 1;
-            lot = { x, z, W, D, face: side > 0 ? 'n' : 's' };
-          }
+    // (Close in if there's room; a small town's roads out, in the middle
+    // of each side, leave no room by it but further out, or off a corner.)
+    for (const gap of [3, 4, 6, 9, 13, 18]) {
+      for (const face of ['n', 's', 'e', 'w']) {
+        // The lot along that side of town, its way in toward it (a lot on
+        // the north side faces south, and so on).
+        const ns = face === 'n' || face === 's';
+        const W = ns ? W0 : D0;
+        const D = ns ? D0 : W0;
+        const roads = exits.filter(side[face]).map((e) => (ns ? e.x : e.z));
+        if (!roads.length) continue;
+        const [lo, hi] = ns ? [b.x0 - (W >> 1), b.x1 - (W >> 1)] : [b.z0 - (D >> 1), b.z1 - (D >> 1)];
+        for (let a = lo; a <= hi; a += 3) {
+          const lot = face === 's' ? { x: a, z: b.z0 - gap - D + 1, W, D, face }
+            : face === 'n' ? { x: a, z: b.z1 + gap, W, D, face }
+              : face === 'e' ? { x: b.x0 - gap - W + 1, z: a, W, D, face }
+                : { x: b.x1 + gap, z: a, W, D, face };
           const c = ok(lot);
           if (c < 0) continue;
-          const score = c + gap * 2 + rng.float(0, 6);
+          const g = gatesOf(L, lot)[0];
+          const at = ns ? g.x : g.z;
+          lot.to = roads.reduce((m, r) => (Math.abs(r - at) < Math.abs(m - at) ? r : m), roads[0]);
+          const lane = laneOf(L, lot);
+          if (lane.length > 80) continue;
+          const lc = laneCost(lane);
+          if (lc < 0) continue;
+          const score = c + lc + gap * 3 + rng.float(0, 6);
           if (!best || score < best.score) best = { ...lot, score };
         }
       }
+      if (best) break;
     }
-    if (best) return { x: best.x, z: best.z, W: best.W, D: best.D, face: best.face, annex: true };
+    if (best) return { x: best.x, z: best.z, W: best.W, D: best.D, face: best.face, to: best.to, annex: true };
   }
   return null;
 }
@@ -271,7 +361,7 @@ function findAnnex(L, sizes, rng, taken) {
 // room), new ones found for any not tried yet. What's to be set into the
 // world for those raised just now (blocks to clear and blocks to place),
 // and whether any lot was found or given up on (to keep).
-export function raiseQuarters(L, lots, rng) {
+export function raiseQuarters(L, lots, rng, avoid = null) {
   L.quarters ||= [];
   const s = L.settlement;
   const ops = [];
@@ -286,7 +376,7 @@ export function raiseQuarters(L, lots, rng) {
       const r = rng.fork(`q:${spec.k}:${k}`);
       if (fresh) {
         lot = findLot(L, sizesFor(spec), r, PREFER[spec.k] || 'mid') || (PREFER[spec.k] === 'water' ? findLot(L, sizesFor(spec), r, 'edge') : null)
-          || (spec.k !== 'shipyard' ? findAnnex(L, sizesFor(spec), r, lots) : null);
+          || (spec.k !== 'shipyard' ? findAnnex(L, sizesFor(spec), r, lots, avoid) : null);
         lots[k] = lot || false;
         changed = true;
         if (!lot) return;
@@ -308,19 +398,22 @@ export function raiseQuarters(L, lots, rng) {
           ops.push([x, SURFACE, z, B.grass, 0]);
         }
       }
-      // (And a path from its way in out to the road.)
-      if (lot.annex) {
-        const g = gatesOf(L, lot)[0];
-        const dx = g.out.x - g.x;
-        const dz = g.out.z - g.z;
-        for (let k = 1; k <= 5; k++) {
-          const x = g.x + dx * k;
-          const z = g.z + dz * k;
-          if (L.maskAt(x, z) === M.ROAD && L.inside(x, z)) break;
-          for (let y = SURFACE - 3; y < SURFACE; y++) ops.push([x, y, z, B.dirt, 0]);
-          for (let w = -1; w <= 1; w++) ops.push([x + Math.abs(dz) * w, SURFACE, z + Math.abs(dx) * w, B.gravel ?? B.cobblestone, 0]);
-          for (let w = -1; w <= 1; w++) for (let y = Y0; y < Y0 + 4; y++) ops.push([x + Math.abs(dz) * w, y, z + Math.abs(dx) * w, B.air, 0]);
-        }
+      // (And a gravel lane from its way in to the town's edge and along it
+      // to the road out: on the lie of the land, sloped up or down to the
+      // quarter's own ground over its first few paces.)
+      const t = L.world && L.world.terrain;
+      if (lot.annex && t) {
+        const lane = laneOf(L, lot);
+        const xs = lane.map((p) => p[0]);
+        const zs = lane.map((p) => p[1]);
+        const ctx = lane.length ? t.context(Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)) : null;
+        lane.forEach(([x, z], k) => {
+          const h = t.column(x, z, ctx, {}).h;
+          const y = Math.round(SURFACE + (h - SURFACE) * Math.min(1, k / 4));
+          for (let d = 3; d > 0; d--) ops.push([x, y - d, z, B.dirt, 0]);
+          ops.push([x, y, z, B.gravel ?? B.cobblestone, 0]);
+          for (let d = 1; d <= 4; d++) ops.push([x, y + d, z, B.air, 0]);
+        });
       }
       for (const op of placed) ops.push(op);
     });

@@ -11685,8 +11685,12 @@ What each town is known for comes from the world's seed, so a world made
 before this version gets its specialties too. Its towns are built up to
 their edges, so each quarter is raised the first time you visit, on open
 ground in the town if there is any. Otherwise it goes just outside the
-town beside a road out, on ground levelled to the town's own. Where
-each one went is saved with the town.
+town, on ground levelled to the town's own, facing the town, with a
+gravel lane from its gate along the town's edge to the nearest road out.
+It keeps off the roads, off the way travellers come in, and off the
+ground beside each road where caravans and trading companies camp. A
+small town with no room close in gets its quarter a little further out,
+or off a corner. Where each one went is saved with the town.
 
 ### Fixes
 

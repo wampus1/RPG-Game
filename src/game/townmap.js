@@ -26,14 +26,15 @@ export function planOf(L) {
   if (!L || !L.mask || !L.bounds) return null;
   let placed = 0;
   for (const arr of L.placements ? L.placements.values() : []) placed += arr.length;
-  const v = `${L.maskV || 0}:${L.buildings.length}:${(L.landmarks || []).length}:${placed}`;
+  const marks = [...(L.landmarks || []), ...(L.qmarks || [])];
+  const v = `${L.maskV || 0}:${L.buildings.length}:${marks.length}:${placed}`;
   if (L.planCache && L.planCache.v === v) return L.planCache;
   const { top, ht } = topsOf(L);
   const p = {
     sid: L.settlement.id, v, x0: L.bounds.x0, z0: L.bounds.z0, W: L.W, D: L.D,
     mask: L.mask, top, ht,
     b: L.buildings.filter((b) => b && b.x0 !== undefined).map((b) => ({ id: b.id, type: b.type, name: b.name || b.type, x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, up: !!b.underConstruction, door: b.door ? { x: b.door.x, z: b.door.z, rot: b.door.rot | 0 } : null })),
-    lm: (L.landmarks || []).map((q, i) => ({ id: i, kind: q.kind, name: q.name, x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1 })),
+    lm: marks.map((q, i) => ({ id: i, kind: q.kind, name: q.name, x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1 })),
     plaza: L.plaza ? { x0: L.plaza.x0, z0: L.plaza.z0, x1: L.plaza.x1, z1: L.plaza.z1 } : null,
   };
   Object.defineProperty(L, 'planCache', { value: p, writable: true, configurable: true, enumerable: false });

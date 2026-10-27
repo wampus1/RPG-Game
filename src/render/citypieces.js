@@ -263,17 +263,33 @@ PIECES.colossus_head = {
         if (yf === null || y > yf) continue;
         P.set(x, y, P.tone('#5a8a3a', 0.5 + hash2(x, y, 9) * 0.25, x, y));
       }
-      if (hash2(x, 2, 8) < 0.35) for (let k = 1; k <= 2; k++) P.set(x, top - k, P.tone('#7aaa4a', 0.7, x, top - k));
+      // (The tufts lean with the wind as it goes over.)
+      const lean = Math.round(Math.sin(t * Math.PI * 2 + x * 0.55) * 0.9);
+      if (hash2(x, 2, 8) < 0.35) for (let k = 1; k <= 2; k++) P.set(x + (k === 2 ? lean : 0), top - k, P.tone('#7aaa4a', 0.7, x, top - k));
     }
     outlineSel(P.p);
-    // A bird, now on the crown, now gone.
-    if (frac(t * 2) < 0.6) {
-      const bx = hx - 4;
-      const byy = hy - 17;
-      P.set(bx, byy, hex('#2a2a30'));
-      P.set(bx + 1, byy, hex('#2a2a30'));
-      P.set(bx, byy - 1, hex('#2a2a30'));
+    // The sun on the bronze: a glint that slides over the face and back as
+    // the light moves, brightest down the nose and the brow.
+    const gx = hx + Math.sin(t * Math.PI * 2) * 9;
+    const shine = hex('#e4f4dc');
+    for (let y = hy - 16; y <= hy + 14; y++) {
+      for (let x = hx - 13; x <= hx + 13; x++) {
+        const e = ((x - hx) / 13) ** 2 + ((y - hy) / 16) ** 2;
+        if (e > 0.92 || P.p.alpha(x, y) < 200) continue;
+        const w = 1 - Math.abs(x - gx + (y - hy) * 0.45) / 3;
+        if (w <= 0.25) continue;
+        const c = P.get(x, y);
+        P.set(x, y, mix(c, shine, w > 0.7 ? 0.42 : w > 0.45 ? 0.26 : 0.12));
+      }
     }
+    // A crow on the crown, pecking at the moss.
+    const bx = hx - 4;
+    const byy = hy - 17;
+    const peck = frac(t * 3) < 0.5 ? 1 : 0;
+    P.set(bx, byy, hex('#2a2a30'));
+    P.set(bx + 1, byy, hex('#2a2a30'));
+    P.set(bx - 1, byy - 1 + peck, hex('#2a2a30'));
+    P.set(bx - 2, byy - 1 + peck * 2, hex('#c89030'));
   },
 };
 

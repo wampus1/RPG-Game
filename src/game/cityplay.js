@@ -14,7 +14,7 @@
 // Run on the host for everyone (each as themselves: see Game.asPlayer), so
 // with others playing each has their own wagers, their own name in the
 // arena, their own once-a-day blessings; the window's mirrored to them.
-import { B, BLOCKS } from '../world/blocks.js';
+import { B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { GROUND } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
@@ -663,9 +663,12 @@ export function quarterView(game, sid, i, page) {
   }
   const owed = C.owed(pid, sid);
   if (owed) row('Collect your winnings', `¤${owed}`, 'collect', true, '#80e070');
+  const me = { C, pid, sid, i, day: game.day };
   for (const s of SERVICES[q.k] || []) {
     if (s.when && !s.when({ game, L, q, S, C, pid, sid, i, now })) continue;
-    row(s.label, typeof s.fee === 'function' ? s.fee({ game, L, q, S }) : s.fee ? `¤${s.fee}` : '', s.act);
+    // (Once a day, and had today: shown, not offered.)
+    const done = ONCE[s.act] && doneToday(me, ONCE[s.act]);
+    row(s.label, done ? 'done today' : typeof s.fee === 'function' ? s.fee({ game, L, q, S }) : s.fee ? `¤${s.fee}` : '', s.act, !done);
   }
   // The quarter's own people.
   const staff = L.npcs.filter((r) => r.qtag && r.qtag.startsWith(`q${i}:`) && alive(r));
@@ -736,6 +739,9 @@ function storyOf(q, S, C, pid, sid) {
   if (q.k === 'fair' && S.champ) out.push(`The strongest at the last fair: ${S.champ}.`);
   return out;
 }
+
+// The services had once a day, by their act (the key they're kept by).
+const ONCE = { study: 'study', drill: 'drill', meditate: 'meditate' };
 
 // Each kind's own services, on its first page.
 const SERVICES = {
@@ -1603,4 +1609,3 @@ export function quarterSign(L, q) {
   return `${q.name}${ev ? ` | ${ev.title}, ${clock(ev.s)}` : ''}`;
 }
 
-export { BLOCKS };

@@ -289,7 +289,7 @@ test('no drawing back of the view in a battle', () => {
 });
 
 test('version 1.45.0', () => {
-  assert.equal(GAME_VERSION, '1.45.0');
+  assert.ok(compareVersions('1.45.0', GAME_VERSION) <= 0);
   assert.ok(compareVersions('1.44.0', GAME_VERSION) < 0);
   const steps = stepsFor('1.44.0');
   assert.ok(steps.some((s) => s.to === '1.45.0'));

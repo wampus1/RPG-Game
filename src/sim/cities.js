@@ -103,7 +103,13 @@ export class Cities {
     const wg = this.game.world.ow.wg || 1;
     if (wg < 10 && s.condition !== 'abandoned' && !L.quarters?.length) {
       Q.lots ||= [];
-      const { ops } = raiseQuarters(L, Q.lots, new RNG(hash4(s.seed >>> 0, 0x146)));
+      // (Out past the town's edge, nothing's built over the realm's roads.)
+      const avoid = new Set();
+      const b = L.bounds;
+      for (const r of (this.sim.diplomacy && this.sim.diplomacy.roads) || []) {
+        for (const t of r.tiles || []) if (t[0] >= b.x0 - 60 && t[0] <= b.x1 + 60 && t[2] >= b.z0 - 60 && t[2] <= b.z1 + 60) avoid.add(t[0] * 65536 + t[2]);
+      }
+      const { ops } = raiseQuarters(L, Q.lots, new RNG(hash4(s.seed >>> 0, 0x146)), avoid);
       if (ops.length && !Q.built) this.sim.setBlocks(ops);
       Q.built = true;
     }

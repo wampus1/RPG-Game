@@ -251,6 +251,33 @@ function monastery(q) {
     }
     q.put(px, Y0 + 8, pz, B.lantern, LIT);
   }
+  // The way from the gate to the hall's door, flagged, lanterns along it;
+  // the kitchen garden the monks keep; raked gravel and stones (or a
+  // well) in what's left of the yard.
+  const free = (x, z) => q.inLot(x, z) && q.at(x, Y0, z) === undefined && !q.onEdge(x, z);
+  for (let z = r.z1 + 1; z < q.z1; z++) {
+    if (q.at(mx, Y0, z) === undefined) q.ground(mx, z, jade ? B.flagstone : B.cobblestone);
+    if ((z - r.z1) % 3 === 0) for (const x of [mx - 1, mx + 1]) if (free(x, z)) q.put(x, Y0, z, jade ? B.lantern_tree ?? B.lantern : B.lantern, LIT);
+  }
+  const kx0 = q.x0 + 2;
+  const kz = q.z1 - 3;
+  let rows = 0;
+  for (let x = kx0; x < kx0 + 4; x++) {
+    if (!free(x, kz) || !free(x, kz + 1)) continue;
+    q.ground(x, kz, B.farmland ?? B.dirt);
+    q.put(x, Y0, kz, q.rng.pick([B.cabbage_crop, B.wheat_crop, B.carrot_crop].filter((b) => b !== undefined)) ?? B.bush, 3);
+    rows++;
+  }
+  if (rows) q.role('monk', kx0, kz + 1, 2, ['farm']);
+  const zx = mx + 3;
+  const zz = r.z1 + 2;
+  if (jade) {
+    for (let x = zx; x < zx + 3; x++) for (let z = zz; z < zz + 2; z++) if (free(x, z)) q.ground(x, z, B.sand);
+    if (free(zx + 1, zz)) q.put(zx + 1, Y0, zz, B.rock);
+  } else if (free(zx, zz)) {
+    q.put(zx, Y0, zz, B.well);
+    q.well(zx, zz);
+  }
   // Lanterns at the gate, the sign.
   const g = q.gates[0];
   q.sign(g.x + (g.side === 'n' || g.side === 's' ? 2 : 0), g.z + (g.side === 'w' || g.side === 'e' ? 2 : 0), g.side === 'n' ? 0 : 2);

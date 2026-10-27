@@ -145,6 +145,41 @@ function spring(q) {
   q.role('attendant', r.x1 + 1, r.z0 + 2, 1, []);
   q.put(q.x1 - 1, Y0, q.z1 - 1, B.bench, 2);
   q.seat(q.x1 - 1, q.z1 - 1, 2);
+  // A deck of planks on the far side of the pool, to sit with your feet in
+  // the water; benches along it.
+  const free = (x, z) => q.inLot(x, z) && q.at(x, Y0, z) === undefined && !q.atGate(x, z, 1, 2);
+  const dz = cz - rz - 2;
+  if (dz > q.z0) {
+    for (let x = cx - 2; x <= cx + 2; x++) if (free(x, dz)) q.ground(x, dz, north ? B.planks_dark : jade ? B.planks_lacquer ?? B.planks : B.planks);
+    for (const x of [cx - 2, cx + 2]) if (free(x, dz)) {
+      q.put(x, Y0, dz, B.bench, 0);
+      q.seat(x, dz, 0);
+    }
+  }
+  // Lamps round the rim; the people's own touch: a figure pouring water,
+  // a carved post, a stone lantern.
+  for (const [lx, lz] of [[cx - rx - 2, cz - rz], [cx + rx + 2, cz - rz], [cx - rx - 2, cz + rz], [cx + rx + 2, cz + rz]]) if (free(lx, lz)) {
+    if (ember) q.brazier(lx, lz);
+    else q.lamp(lx, lz, 1);
+  }
+  const sx = cx + rx + 2;
+  if (free(sx, cz)) q.put(sx, Y0, cz, north ? B.holmgang_post ?? B.log_pine : jade ? B.lantern_tree ?? B.lantern : B.bath_statue, north || jade ? 0 : 1);
+  // A cold plunge beside it; a table for the rub-downs.
+  if (q.has('cold')) {
+    const px = cx - rx - 3;
+    for (const [ax, az] of [[px, cz + 1], [px, cz + 2]]) if (free(ax, az)) {
+      q.put(ax, SURFACE - 1, az, B.stone);
+      q.ground(ax, az, north ? B.ice ?? B.water : B.water);
+      q.spot(ax, az, 0, ['bathe'], { y: SURFACE });
+    }
+  }
+  if (q.has('massage') && free(q.x1 - 2, q.z1 - 3)) q.fx(q.x1 - 2, Y0, q.z1 - 3, 'massage', B.massage_table, 0);
+  // Flowers and ferns about it, towels drying on a line.
+  if (q.has('garden') || jade) for (let k = 0; k < 6; k++) {
+    const x = q.rng.int(q.x0 + 1, q.x1 - 1);
+    const z = q.rng.int(q.z0 + 1, q.z1 - 1);
+    if (free(x, z)) q.put(x, Y0, z, q.rng.pick([B.flower_red, B.flower_white, B.fern ?? B.bush, B.bush].filter((b) => b !== undefined)));
+  }
   q.sign(cx + 1, q.z1, 0);
 }
 

@@ -45,7 +45,8 @@ import { appStorage, desktopApp } from './util/appstore.js';
 import { CarryWindow } from './ui/carry.js';
 import { CARRY_KEY, exportBundle } from './game/carry.js';
 
-// Deep links like ?autostart&seed=123&time=1320 are handy for testing.
+// Deep links like ?autostart&seed=123&time=1320 are handy for testing
+// (&wg=1 makes the world as an older version of the game would have).
 const params = new URLSearchParams(location.search);
 
 const screen = document.getElementById('screen');
@@ -328,7 +329,7 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     // into: see crossWorlds).
     const wmap = save ? save.worldMap || null : opts.worldMap || null;
     if (wmap && !useWorldMap(wmap)) ui.msg('That world\'s map isn\'t in its mods any more: the mods\' own is used.', '#ffb080');
-    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest, worldMap: opts.worldMap || null, worldRoot: opts.worldRoot || null });
+    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest, worldMap: opts.worldMap || null, worldRoot: opts.worldRoot || null, wg: params.has('wg') ? +params.get('wg') || undefined : undefined });
     game.modsUsed = opts.mods || [];
     game.onCross = (out) => crossWorlds(game, out);
     if (modded) game.modReport = modded.report;

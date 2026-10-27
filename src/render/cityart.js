@@ -7,7 +7,7 @@
 // vines and the press; the gardens' clipped shapes; the monks' wooden man;
 // the skeps; the carved stones; the mason's work; the way down. Hooked into
 // textures.js (cube faces and sprites) and sprites.js (the goods' icons).
-import { Px, shade, hex, mix } from './pixel.js';
+import { Px, shade, hex } from './pixel.js';
 import { LH } from '../config.js';
 
 const OUT = '#1c1622';
@@ -21,7 +21,6 @@ const BRASS = ['#c89a3a', '#8a6420', '#f0cc70', '#5a3e14'];
 const STONE = ['#9a968c', '#77736a', '#bdb9ae', '#55524b'];
 const MARBLE = ['#e2ded4', '#c2beb4', '#f8f6f0', '#9e9a90'];
 const PARCH = ['#e8dcb8', '#c8b890', '#f4ecd4', '#a8986c'];
-const RED = ['#a8262a', '#d04040', '#6a1418'];
 const ROPE = '#b8a070';
 const FLAME = ['#fff2a0', '#ffc040', '#ff7a20'];
 

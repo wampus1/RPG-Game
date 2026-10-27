@@ -23,9 +23,10 @@ import { QuarterWindow } from '../src/ui/citywin.js';
 import { BLOCKS, B } from '../src/world/blocks.js';
 import { countItem } from '../src/game/inventory.js';
 import { activityFor, DAY } from '../src/sim/econ.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { STEPS } from '../src/game/migrate.js';
 import { GROUND } from '../src/config.js';
+import { planOf } from '../src/game/townmap.js';
 
 const input = stubInput();
 const src = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
@@ -258,6 +259,27 @@ test('an older world raises its quarters on open ground in or just outside each 
     got += (L.quarters || []).length;
     const Q = L.econ.q;
     assert.ok(Q && Q.built && Array.isArray(Q.lots), 'its lots kept');
+    // Out past the edge, a lane in to the road; never on the ground beside
+    // a road out where caravans and companies camp.
+    for (const lot of Q.lots) {
+      if (!lot || !lot.annex) continue;
+      assert.ok(lot.to !== undefined, 'a lane to the road');
+      const inLot = (x, z) => x >= lot.x && x < lot.x + lot.W && z >= lot.z && z < lot.z + lot.D;
+      for (const e of L.exits().filter((o) => o.dx || o.dz)) {
+        for (let d = 3; d <= 15; d++) {
+          for (let w = -20; w <= 20; w++) {
+            const x = e.x + e.dx * d + Math.abs(e.dz) * w;
+            const z = e.z + e.dz * d + Math.abs(e.dx) * w;
+            assert.ok(!inLot(x, z), `${s.name}: ${lot.face} lot off the camping ground by the road out`);
+          }
+        }
+      }
+    }
+    // On the town's map, not among the empire's landmarks.
+    if ((L.quarters || []).length) {
+      assert.ok(planOf(L).lm.some((m) => m.kind.startsWith('q_')), 'on the town\'s map');
+      assert.ok(!(L.landmarks || []).some((m) => m.kind.startsWith('q_')));
+    }
   }
   assert.ok(got >= want * 0.6, `${got} of ${want} raised`);
 });
@@ -281,9 +303,9 @@ test('a builders\' catch-up never goes round forever on a repair that won\'t tak
 });
 
 test('version, the step for older saves, and the README', () => {
-  assert.equal(GAME_VERSION, '1.46.0');
+  assert.ok(compareVersions('1.46.0', GAME_VERSION) <= 0);
   assert.ok(STEPS.some((s) => s.to === '1.46.0'));
   const md = src('README.md');
   assert.ok(md.indexOf('## Round 146') > 0 && md.indexOf('## Round 146') < md.indexOf('## Command console'));
-  assert.equal(JSON.parse(src('package.json')).version, '1.46.0');
+  assert.equal(JSON.parse(src('package.json')).version, GAME_VERSION);
 });
