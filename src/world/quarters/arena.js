@@ -143,11 +143,18 @@ function front(q, taken) {
   spots.push(...[[q.x0, q.z0], [q.x1, q.z0], [q.x0, q.z1], [q.x1, q.z1]].sort((a, b) => Math.hypot(a[0] - g.x, a[1] - g.z) - Math.hypot(b[0] - g.x, b[1] - g.z)));
   const at = spots.find(([x, z]) => free(x, z));
   if (at) q.sign(at[0], at[1], inZ > 0 ? 0 : inZ < 0 ? 2 : inX > 0 ? 3 : 1);
-  const bx = g.x - (inZ ? 2 : 0) + inX;
-  const bz = g.z - (inX ? 2 : 0) + inZ;
-  if (!taken(bx, bz)) {
+  // (The board beside the way in, a pace or two to one side, where it's
+  // clear; the bookmaker beside it, on the side away from the way.)
+  const near = [[-2, 1], [2, 1], [-2, 0], [2, 0], [-3, 1], [3, 1], [-3, 0], [3, 0]];
+  for (const [a, d] of near) {
+    const bx = g.x + (inZ ? a : 0) + inX * d;
+    const bz = g.z + (inX ? a : 0) + inZ * d;
+    const kx = bx + (inZ ? Math.sign(a) : 0);
+    const kz = bz + (inX ? Math.sign(a) : 0);
+    if (!free(bx, bz) || !free(kx, kz) || q.mouth(bx, bz)) continue;
     q.fx(bx, Y0, bz, 'board', B.bout_board);
-    q.role('bookie', bx + (inZ ? 1 : 0) + inX, bz + (inX ? 1 : 0) + inZ, (q.faceIn(bx, bz) + 2) & 3, ['market']);
+    q.role('bookie', kx, kz, (q.faceIn(bx, bz) + 2) & 3, ['market']);
+    break;
   }
   q.role('lanista', g.x + inX * 2, g.z + inZ * 2, (inZ > 0 ? 2 : inZ < 0 ? 0 : inX > 0 ? 1 : 3));
 }
@@ -159,9 +166,9 @@ function bowl(q) {
   const T = city || q.W >= 21 ? 3 : 2;
   const cx = q.x0 + (q.W - 1) / 2;
   const cz = q.z0 + (q.D - 1) / 2;
-  // (A box fills its lot to the corners: kept in from its edges, for
-  // room round it.)
-  const inset = box ? 3 : 0;
+  // (Kept in from the lot's edges, a walk all round it: a box, which would
+  // fill its lot to the corners, the more.)
+  const inset = box ? 3 : 1;
   const rx = (q.W - 1) / 2 - inset;
   const rz = (q.D - 1) / 2 - inset;
   const long = q.W >= q.D ? 'x' : 'z';
@@ -175,6 +182,11 @@ function bowl(q) {
   const sand = q.has('grass') ? B.grass_lush : B.arena_sand;
   const ring = (x, z) => q.ringOf(x, z, cx, cz, rx, rz, box);
   const corridor = (x, z) => (long === 'x' ? Math.abs(z - icz) <= 1 : Math.abs(x - icx) <= 1);
+  // (Round 147) The way in from the street when that's on a long side:
+  // through the wall under an arch and down between the seats to the
+  // barrier, the seats either side stepping up from it.
+  const gx = q.gates[0].x;
+  const aisle = (x, z) => long === 'x' && Math.abs(x - gx) <= 1 && z > icz;
   const taken = (x, z) => q.inLot(x, z) && ring(x, z) >= 0;
   const H = T + (city ? 2 : 1);
   // The lord's box: three seats wide, middle of a long side, at the top.
@@ -188,14 +200,24 @@ function bowl(q) {
         q.ground(x, z, m.pave);
         continue;
       }
+      if (aisle(x, z) && k <= T) {
+        q.ground(x, z, m.pave);
+        if (k === 0) {
+          q.put(x, Y0 + 2, z, outer);
+          if (H > 3) q.stack(x, z, Y0 + 3, Y0 + H - 1, outer);
+        }
+        continue;
+      }
       // The way in at either end, through the seats to the gates.
       if (corridor(x, z) && k <= T + 1) {
         q.ground(x, z, m.pave);
         if (k === T + 1) {
           const mid = long === 'x' ? z === icz : x === icx;
           const rot = long === 'x' ? (x < icx ? 3 : 1) : z < icz ? 0 : 2;
+          // (Either side of the fighters' gate, the barrier a step high:
+          // up it from the way in and onto the lowest seats.)
           if (mid) q.fx(x, Y0, z, 'gate', B.arena_gate, rot);
-          else q.stack(x, z, Y0, Y0 + 1, fill);
+          else q.put(x, Y0, z, m.trim);
         } else if (k === 0) {
           // (The arch over the way in.)
           q.put(x, Y0 + 2, z, outer);

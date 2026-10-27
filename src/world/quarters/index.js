@@ -10,8 +10,8 @@
 // first time it's visited (see sim/cities.js), its lot kept with the town
 // so it's planned the same each time after.
 import { SPECIALTIES, formOf } from '../specialties.js';
-import { Q, findLot, claimLot, gatesOf, Y0 } from './kit.js';
-import { SURFACE } from '../../config.js';
+import { Q, findLot, claimLot, gatesOf, Y0, waysAbout } from './kit.js';
+import { SURFACE, REGION_W, REGION_D } from '../../config.js';
 import { M } from '../settlement.js';
 import { B } from '../blocks.js';
 import { ARENA } from './arena.js';
@@ -22,6 +22,13 @@ import { CRAFT } from './craft.js';
 import { MARTIAL } from './martial.js';
 import { LEISURE } from './leisure.js';
 import { DEEP } from './deep.js';
+
+// (Tests: the ways about a quarter checked but left as built.)
+export const FIX_WAYS = { on: true };
+
+// (Round 147) The design the quarters are built to: a town's quarters built
+// to an older one are built again, once (see sim/cities.js).
+export const QUARTER_V = 2;
 
 export const BUILDERS = { ...ARENA, ...LEARNING, ...HOLY, ...TRADE, ...CRAFT, ...MARTIAL, ...LEISURE, ...DEEP };
 
@@ -50,6 +57,11 @@ function raise(L, lot, spec, i, rng) {
   const q = new Q(L, lot, spec, i, rng);
   const build = BUILDERS[spec.k];
   if (build) build(q);
+  // (Round 147) Every seat, place and thing in it to be got to from its
+  // ways in: a way opened through what's set about where one isn't.
+  const ways = waysAbout(L, q.out, FIX_WAYS.on);
+  if (ways.missing.length) q.out.unreached = ways.missing.slice(0, 8).map((m) => `${m.what}@${m.x},${m.y},${m.z}`);
+  if (FIX_WAYS.seen) FIX_WAYS.seen(L, q.out, ways);
   q.out.sk = L.settlement.spec.indexOf(spec);
   L.quarters.push(q.out);
   // (Marked on the town's map with its landmarks: see townmap.js.)
@@ -361,7 +373,7 @@ function findAnnex(L, sizes, rng, taken, avoid = null) {
 // room), new ones found for any not tried yet. What's to be set into the
 // world for those raised just now (blocks to clear and blocks to place),
 // and whether any lot was found or given up on (to keep).
-export function raiseQuarters(L, lots, rng, avoid = null) {
+export function raiseQuarters(L, lots, rng, avoid = null, rebuild = false) {
   L.quarters ||= [];
   const s = L.settlement;
   const ops = [];
@@ -382,10 +394,16 @@ export function raiseQuarters(L, lots, rng, avoid = null) {
         if (!lot) return;
       }
       L.collect = [];
-      raise(L, lot, spec, L.quarters.length, r.fork('build'));
+      const qo = raise(L, lot, spec, L.quarters.length, r.fork('build'));
       const placed = L.collect;
       L.collect = null;
-      if (!fresh) return;
+      // (Its ways in kept with its lot: built the same each time after,
+      // whatever's built round it.)
+      if (!lot.gates) {
+        lot.gates = qo.gates.map((g) => ({ side: g.side, x: g.x, z: g.z }));
+        changed = true;
+      }
+      if (!fresh && !rebuild) return;
       // (Whatever grew or stood on the ground cleared off it first; out past
       // the town's edge, the ground made good to the town's own, dug down
       // or built up, a border of it round about.)
@@ -422,6 +440,40 @@ export function raiseQuarters(L, lots, rng, avoid = null) {
     L.local = local;
   }
   return { ops, changed };
+}
+
+// (World gen 10 on) What a town's quarters are, block by block, as laid
+// out with it (Layout.placements): to set into the world over what was
+// built to an older design. Each lot cleared first, as high as anything
+// goes. Only where `want(regionKey)` says so (the parts of the world kept
+// as they were left; the rest are made afresh from the plan anyway).
+export function placedOps(L, want = () => true) {
+  const ops = [];
+  const w = L.world;
+  for (const qo of L.quarters || []) {
+    const rx0 = Math.floor(qo.x0 / REGION_W);
+    const rx1 = Math.floor(qo.x1 / REGION_W);
+    const rz0 = Math.floor(qo.z0 / REGION_D);
+    const rz1 = Math.floor(qo.z1 / REGION_D);
+    for (let rz = rz0; rz <= rz1; rz++) {
+      for (let rx = rx0; rx <= rx1; rx++) {
+        const key = w.regionKey(rx, rz);
+        if (!want(key)) continue;
+        const x0 = Math.max(qo.x0, rx * REGION_W);
+        const x1 = Math.min(qo.x1, rx * REGION_W + REGION_W - 1);
+        const z0 = Math.max(qo.z0, rz * REGION_D);
+        const z1 = Math.min(qo.z1, rz * REGION_D + REGION_D - 1);
+        for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) for (let y = Y0; y < Y0 + 16; y++) ops.push([x, y, z, B.air, 0]);
+        const arr = L.placements.get(key) || [];
+        for (let i = 0; i < arr.length; i += 5) {
+          const x = arr[i];
+          const z = arr[i + 2];
+          if (x >= x0 && x <= x1 && z >= z0 && z <= z1) ops.push([x, arr[i + 1], z, arr[i + 3], arr[i + 4]]);
+        }
+      }
+    }
+  }
+  return ops;
 }
 
 // The quarter of a town at (x, z), if there's one there.

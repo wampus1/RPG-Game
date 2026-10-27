@@ -16,6 +16,7 @@ import { GROUND, SURFACE } from '../../config.js';
 import { B, BLOCKS, META_STATE, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, CANOPY_STYLES } from '../blocks.js';
 import { M } from '../settlement.js';
 import { familyOf } from '../specialties.js';
+import { MinHeap } from '../../util/heap.js';
 
 export const Y0 = GROUND;
 const LIT = META_STATE;
@@ -121,9 +122,10 @@ export function gatesOf(L, lot) {
     let k = along(gx + nx, gz + nz, Math.floor((ox ? W : D) / 2) - 2, ox, oz);
     if (k === null) k = along(gx + nx * 2, gz + nz * 2, Math.floor((ox ? W : D) / 2) - 2, ox, oz);
     if (k === null) continue;
-    // (The way in kept to the middle of the side, near the street.)
-    const off = Math.max(-2, Math.min(2, k));
-    out.push({ side, x: gx + ox * off, z: gz + oz * off, out: { x: gx + nx, z: gz + nz } });
+    // (Round 147) The way in at the middle of the side, where every
+    // quarter's built to be come into (a street near it on that side).
+    void k;
+    out.push({ side, x: gx, z: gz, out: { x: gx + nx, z: gz + nz } });
   }
   if (!out.length) out.push({ side: 's', x: mx, z: z + D - 1, out: { x: mx, z: z + D } });
   const p = L.plaza;
@@ -187,7 +189,10 @@ export class Q {
     this.i = i;
     this.rng = rng;
     this.lot = lot;
-    const wg = gatesOf(L, lot);
+    // (Its ways in as they were when it was first laid out, if they're
+    // kept: a quarter's built the same way each time.)
+    const OUT = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] };
+    const wg = lot.gates && lot.gates.length ? lot.gates.map((g) => ({ ...g, out: { x: g.x + OUT[g.side][0], z: g.z + OUT[g.side][1] } })) : gatesOf(L, lot);
     // Which way the front's turned: south, west, north, east.
     this.rot = { s: 0, w: 1, n: 2, e: 3 }[wg[0].side];
     this.x0 = lot.x;
@@ -262,6 +267,18 @@ export class Q {
   onEdge(x, z) {
     return x === this.x0 || x === this.x1 || z === this.z0 || z === this.z1;
   }
+  // The mouth of a way in: its gate and the pace inside it (as drawn up);
+  // and the paces either side of every door (see hall).
+  mouth(x, z) {
+    if (this.doorways && this.doorways.has(x * 65536 + z)) return true;
+    for (const g of this.gates) {
+      if (g.x === x && g.z === z) return true;
+      const ix = g.side === 'w' ? 1 : g.side === 'e' ? -1 : 0;
+      const iz = g.side === 'n' ? 1 : g.side === 's' ? -1 : 0;
+      if (g.x + ix === x && g.z + iz === z) return true;
+    }
+    return false;
+  }
   // Is (x, z) in the way in at a gate (`wide` either side of it, `deep`
   // in from the edge)?
   atGate(x, z, wide = 1, deep = 1) {
@@ -282,6 +299,12 @@ export class Q {
 
   put(x, y, z, id, meta = 0) {
     if (id === undefined) return;
+    // (Round 147) Nothing that stands in the way set in the mouth of a way
+    // in (its gate and the pace inside it), at head height or below.
+    if (y >= Y0 && y <= Y0 + 1 && this.mouth(x, z)) {
+      const b = BLOCKS[id];
+      if (b && b.solid && b.interact !== 'door' && b.interact !== 'gate' && !b.stair) return;
+    }
     const p = this.pt(x, z);
     const t = this.rot ? turnsOf(id) : 0;
     if (t === 1) meta = (meta & ~3) | (((meta & 3) + this.rot) & 3);
@@ -386,6 +409,21 @@ export class Q {
   }
   // A sign at the way in, saying whose it is (see sim.signText).
   sign(x, z, rot = 0) {
+    // (Beside the way in, not in it: along the edge to the first free pace.)
+    if (this.mouth(x, z) || (this.at(x, Y0, z) !== undefined && this.at(x, Y0, z) !== B.air)) {
+      const alongX = z === this.z0 || z === this.z1;
+      for (const d of [1, -1, 2, -2, 3, -3, 4, -4]) {
+        const nx = alongX ? x + d : x;
+        const nz = alongX ? z : z + d;
+        if (!this.inLot(nx, nz) || this.mouth(nx, nz)) continue;
+        const v = this.at(nx, Y0, nz);
+        if (v !== undefined && v !== B.air) continue;
+        x = nx;
+        z = nz;
+        break;
+      }
+      if (this.mouth(x, z)) return;
+    }
     this.put(x, Y0, z, B.sign, rot);
     const p = this.pt(x, z);
     this.L.signs.push({ x: p.x, y: Y0, z: p.z, kind: 'quarter', q: this.i });
@@ -436,6 +474,18 @@ export class Q {
           if (isDoor(x, z) && y <= Y0 + 1) continue;
           this.put(x, y, z, id);
         }
+      }
+    }
+    // (Round 147) Kept clear either side of each door: what's set about
+    // there already taken away, nothing put there after.
+    this.doorways ||= new Set();
+    for (const d of doors) {
+      for (const t of [this.outside(d), this.inside(d)]) {
+        for (const y of [Y0, Y0 + 1]) {
+          const v = this.at(t.x, y, t.z);
+          if (v !== undefined && v !== B.air && softId(v)) this.put(t.x, y, t.z, B.air);
+        }
+        this.doorways.add(t.x * 65536 + t.z);
       }
     }
     for (const d of doors) {
@@ -508,6 +558,205 @@ export class Q {
     this.put(x, Y0 + j - 1, z, stairs, (face + 2) & 3);
     if (seat) this.seat(x, z, face, Y0 + j);
   }
+}
+
+// ------------------------------------------------------------ ways about
+// (Round 147) Can people get about a quarter as it's planned? From each of
+// its ways in, over what's been put on its lot (Layout.at: ground at the
+// surface where nothing's been put, air above it), taking the steps a
+// person takes (see World.stepTarget: along, up one, down one or two;
+// through doors). What's to be got to: every seat and place to stand of
+// its own (a cell's excepted: the condemned are put there), and beside
+// every thing in it to use. `fix`: where something can't be got to, a way
+// opened to it through what's only set about (a rail, a crate, a row of
+// vines: never a wall, a stair or a thing to use), the shortest there is.
+const SOFT_RENDER = new Set(['sprite', 'plant', 'fence', 'flat']);
+let SOFTS = null;
+function softId(id) {
+  if (!SOFTS) {
+    SOFTS = new Uint8Array(BLOCKS.length);
+    for (const b of BLOCKS) if (b && SOFT_RENDER.has(b.render) && !b.interact && !b.liquid) SOFTS[b.id] = 1;
+    for (const n of ['hay_bale', 'stone_blocks', 'crate', 'barrel', 'rubble']) if (B[n] !== undefined) SOFTS[B[n]] = 1;
+    for (const n of ['sign', 'canopy', 'stage_curtain']) if (B[n] !== undefined) SOFTS[B[n]] = 0;
+  }
+  return !!SOFTS[id];
+}
+
+export function waysAbout(L, qo, fix = false) {
+  const lot = { x0: qo.x0, z0: qo.z0, x1: qo.x1, z1: qo.z1 };
+  const inLot = (x, z) => x >= lot.x0 && x <= lot.x1 && z >= lot.z0 && z <= lot.z1;
+  const id = (x, y, z) => {
+    const v = L.at(x, y, z);
+    if (v !== undefined) return v;
+    return y >= Y0 ? B.air : y === SURFACE ? B.dirt : B.stone;
+  };
+  const blk = (x, y, z) => BLOCKS[id(x, y, z)] || BLOCKS[B.air];
+  const canStand = (x, y, z) => {
+    const feet = blk(x, y, z);
+    if (feet.solid && feet.interact !== 'door' && feet.interact !== 'gate') return false;
+    const below = blk(x, y - 1, z);
+    const head = blk(x, y + 1, z);
+    if ((head.solid && !below.stair) || head.liquid) return false;
+    return !!below.standable || !!feet.ladder;
+  };
+  const step = (fx, fy, fz, x, z) => {
+    if (canStand(x, fy, z)) return fy;
+    if (blk(fx, fy - 1, fz).stair && blk(x, fy - 2, z).stair && canStand(x, fy - 1, z)) return fy - 1;
+    const stairs = blk(x, fy, z).stair || blk(fx, fy - 1, fz).stair;
+    if (canStand(x, fy + 1, z) && (stairs || !blk(fx, fy + 2, fz).solid)) return fy + 1;
+    if (canStand(x, fy - 1, z)) return fy - 1;
+    if (canStand(x, fy - 2, z) && !blk(x, fy - 1, z).solid && !blk(x, fy, z).solid) return fy - 2;
+    return -1;
+  };
+  const key = (x, y, z) => (x - lot.x0 + 1) * 4194304 + (z - lot.z0 + 1) * 64 + (y & 63);
+  const cols = new Map();
+  const reached = new Set();
+  const walk = (starts) => {
+    const queue = [...starts];
+    for (const [x, y, z] of starts) mark(x, y, z);
+    while (queue.length) {
+      const [x, y, z] = queue.pop();
+      for (let d = 0; d < 4; d++) {
+        const nx = x + DX[d];
+        const nz = z + DZ[d];
+        if (!inLot(nx, nz)) continue;
+        const ny = step(x, y, z, nx, nz);
+        if (ny < 0 || reached.has(key(nx, ny, nz))) continue;
+        mark(nx, ny, nz);
+        queue.push([nx, ny, nz]);
+      }
+    }
+  };
+  function mark(x, y, z) {
+    reached.add(key(x, y, z));
+    const c = x * 65536 + z;
+    const a = cols.get(c);
+    if (a) a.push(y);
+    else cols.set(c, [y]);
+  }
+  const starts = [];
+  for (const g of qo.gates || []) {
+    for (let y = Y0 - 1; y <= Y0 + 2; y++) if (canStand(g.x, y, g.z)) {
+      starts.push([g.x, y, g.z]);
+      break;
+    }
+  }
+  walk(starts);
+  const at = (x, y, z, tol) => (cols.get(x * 65536 + z) || []).some((yy) => Math.abs(yy - y) <= tol);
+  const beside = (x, y, z, tol) => at(x, y, z, tol) || at(x + 1, y, z, tol) || at(x - 1, y, z, tol) || at(x, y, z + 1, tol) || at(x, y, z - 1, tol);
+  // What's to be got to.
+  const goals = [];
+  for (const st of qo.seats || []) goals.push({ x: st.x, y: st.y, z: st.z, near: 0, what: 'seat' });
+  for (const p of L.spots) if (p.q === qo.i && !p.tags.includes('cell')) goals.push({ x: p.x, y: p.y ?? Y0, z: p.z, near: p.seat ? 1 : 0, what: p.tags[0], spot: p });
+  for (const f of qo.fx || []) goals.push({ x: f.x, y: f.y, z: f.z, near: 1, what: f.kind, big: f.kind === 'carousel' || f.kind === 'colossus' || f.kind === 'champion' || f.kind === 'lighthouse' || f.kind === 'bell' });
+  const ok = (g) => (g.big ? [-2, -1, 0, 1, 2].some((dx) => [-2, -1, 0, 1, 2].some((dz) => at(g.x + dx, Y0, g.z + dz, 12))) : g.near ? beside(g.x, g.y, g.z, 2) : at(g.x, g.y, g.z, 1) || (g.what === 'seat' && beside(g.x, g.y, g.z, 1)));
+  let missing = goals.filter((g) => !ok(g));
+  let moved = 0;
+  let cut = 0;
+  // A place to stand that's been set where nobody can stand (on a table,
+  // in a wall's footing): moved to the nearest that can be got to.
+  if (fix) {
+    for (const g of missing) {
+      if (!g.spot || g.near) continue;
+      let best = null;
+      for (let r = 1; r <= 2 && !best; r++) {
+        for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const ys = cols.get((g.x + dx) * 65536 + g.z + dz);
+          const y = ys && ys.find((yy) => Math.abs(yy - g.y) <= 1);
+          if (y !== undefined && (!best || Math.abs(dx) + Math.abs(dz) < best.d)) best = { x: g.x + dx, z: g.z + dz, y, d: Math.abs(dx) + Math.abs(dz) };
+        }
+      }
+      if (!best) continue;
+      moved++;
+      g.spot.x = g.x = best.x;
+      g.spot.z = g.z = best.z;
+      if (g.spot.y !== undefined || best.y !== Y0) g.spot.y = g.y = best.y;
+    }
+    missing = goals.filter((g) => !ok(g));
+  }
+  if (fix && missing.length) {
+    // Things that are there to be used, sat on or stood at: never cleared.
+    const keep = new Set();
+    for (const g of goals) keep.add(g.x * 65536 + g.z);
+    for (const sg of L.signs || []) if (inLot(sg.x, sg.z)) keep.add(sg.x * 65536 + sg.z);
+    const clearable = (x, y, z) => {
+      if (keep.has(x * 65536 + z)) return false;
+      for (const yy of [y, y + 1]) {
+        const v = id(x, yy, z);
+        if (v !== B.air && !softId(v)) return false;
+      }
+      return true;
+    };
+    for (let round = 0; round < 24 && missing.length; round++) {
+      const g = missing[0];
+      // The cheapest way to it from anywhere already got to: through open
+      // ground at a pace each, through what's set about at ten.
+      const dist = new Map();
+      const from = new Map();
+      const heap = new MinHeap();
+      for (const k of reached) {
+        dist.set(k, 0);
+        heap.push([Math.floor(k / 4194304) + lot.x0 - 1, k % 64, Math.floor((k % 4194304) / 64) + lot.z0 - 1], 0);
+      }
+      const reach = g.big ? 2 : g.near ? 1 : 0;
+      const tol = g.big ? 12 : 2;
+      let end = null;
+      for (let guard = 0; heap.size && guard < 30000; guard++) {
+        const d0 = heap.prio[0];
+        const [x, y, z] = heap.pop();
+        const k0 = key(x, y, z);
+        if (dist.get(k0) < d0) continue;
+        if (Math.abs(x - g.x) + Math.abs(z - g.z) <= reach && Math.abs(y - g.y) <= tol) {
+          end = [x, y, z];
+          break;
+        }
+        for (let k = 0; k < 4; k++) {
+          const nx = x + DX[k];
+          const nz = z + DZ[k];
+          if (!inLot(nx, nz)) continue;
+          let ny = step(x, y, z, nx, nz);
+          let cost = 1;
+          let cut = false;
+          if (ny < 0 && clearable(nx, y, nz) && blk(nx, y - 1, nz).standable && !blk(nx, y + 2, nz).solid) {
+            ny = y;
+            cost = 10;
+            cut = true;
+          }
+          if (ny < 0) continue;
+          const nk = key(nx, ny, nz);
+          const nd = d0 + cost;
+          if (dist.has(nk) && dist.get(nk) <= nd) continue;
+          dist.set(nk, nd);
+          from.set(nk, [x, y, z, cut]);
+          heap.push([nx, ny, nz], nd);
+        }
+      }
+      if (!end) {
+        missing.shift();
+        continue;
+      }
+      // Open the way: clear what's set about on it.
+      for (let cur = end, n = 0; cur && n < 400; n++) {
+        const prev = from.get(key(cur[0], cur[1], cur[2]));
+        if (!prev) break;
+        if (prev[3]) {
+          cut++;
+          for (const yy of [cur[1], cur[1] + 1]) if (id(cur[0], yy, cur[2]) !== B.air) L.put(cur[0], yy, cur[2], B.air);
+        }
+        cur = prev;
+      }
+      walk([end]);
+      missing = goals.filter((q) => !ok(q));
+    }
+  }
+  // (Seats nobody can get to aren't offered to a crowd.)
+  if (fix && missing.some((g) => g.what === 'seat')) {
+    const bad = new Set(missing.filter((g) => g.what === 'seat').map((g) => `${g.x},${g.y},${g.z}`));
+    qo.seats = qo.seats.filter((st) => !bad.has(`${st.x},${st.y},${st.z}`));
+    missing = missing.filter((g) => g.what !== 'seat');
+  }
+  return { reached, missing, goals: goals.length, walkable: cols.size, moved, cut };
 }
 
 export { DX, DZ, LIT };

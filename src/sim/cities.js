@@ -13,7 +13,7 @@
 // A town's quarter state is kept with its books (L.econ.q), saved with it;
 // the players' own, here, saved with the world.
 import { SHOWS, dayRng, fighterOf, settleBout, settleRace, fighterName } from './shows.js';
-import { raiseQuarters } from '../world/quarters/index.js';
+import { raiseQuarters, placedOps, QUARTER_V } from '../world/quarters/index.js';
 import { roleTag } from '../world/quarters/kit.js';
 import { SPECIALTIES, formOf } from '../world/specialties.js';
 import { JOBS, retrain } from '../entities/npcgen.js';
@@ -78,7 +78,9 @@ export class Cities {
   }
   qs(L) {
     const e = L.econ;
-    if (!e.q || e.q.v !== V) e.q = { v: V, lots: e.q && e.q.lots, built: e.q && e.q.built, st: (e.q && e.q.st) || [], biz: (e.q && e.q.biz) || {}, day: -1, ev: [], past: [], takings: 0 };
+    // (A town's quarters first planned now are to the design of the day:
+    // see attach.)
+    if (!e.q || e.q.v !== V) e.q = { v: V, lots: e.q && e.q.lots, built: e.q && e.q.built, bv: e.q ? e.q.bv : QUARTER_V, st: (e.q && e.q.st) || [], biz: (e.q && e.q.biz) || {}, day: -1, ev: [], past: [], takings: 0 };
     return e.q;
   }
   stateOf(L, i) {
@@ -109,9 +111,23 @@ export class Cities {
       for (const r of (this.sim.diplomacy && this.sim.diplomacy.roads) || []) {
         for (const t of r.tiles || []) if (t[0] >= b.x0 - 60 && t[0] <= b.x1 + 60 && t[2] >= b.z0 - 60 && t[2] <= b.z1 + 60) avoid.add(t[0] * 65536 + t[2]);
       }
-      const { ops } = raiseQuarters(L, Q.lots, new RNG(hash4(s.seed >>> 0, 0x146)), avoid);
-      if (ops.length && !Q.built) this.sim.setBlocks(ops);
+      // (Round 147) Raised to an older design: built again to this one, on
+      // the same ground.
+      const rebuild = !!Q.built && (Q.bv || 1) < QUARTER_V;
+      const { ops } = raiseQuarters(L, Q.lots, new RNG(hash4(s.seed >>> 0, 0x146)), avoid, rebuild);
+      if (ops.length) this.sim.setBlocks(ops);
       Q.built = true;
+      Q.bv = QUARTER_V;
+    } else if (wg >= 10 && L.quarters?.length && (Q.bv || 1) < QUARTER_V) {
+      // (Round 147) A world whose quarters were laid out with their towns to
+      // an older design: the town's plan is the new one already, so the
+      // parts of the world made afresh from it are too; the parts kept as
+      // they were left are put right from the plan.
+      const w = this.game.world;
+      const kept = (key) => w.saved.has(key) || !!(w.regions.get(key) && w.regions.get(key).modified);
+      const ops = placedOps(L, kept);
+      if (ops.length) this.sim.setBlocks(ops);
+      Q.bv = QUARTER_V;
     }
     if (!this.quarters(L).length) return;
     for (const q of this.quarters(L)) this.stateOf(L, q.i);

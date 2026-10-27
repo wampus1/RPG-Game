@@ -117,25 +117,27 @@ function marketHall(q) {
   const r = { x0: q.x0 + 1, z0: q.z0 + 1, x1: q.x1 - 1, z1: q.z1 - 2 };
   const mx = q.cx;
   const hall = q.hall(r, { doors: [{ x: mx, z: r.z1, rot: 0 }, { x: mx, z: r.z0, rot: 2 }], open: true, h: 4, win: 'glass', use: 'market' });
-  // Stalls along both long walls, facing in.
+  // Stalls along both long walls, facing in: the goods against the wall
+  // behind the keeper, the counter before them, a way round its end for
+  // the keeper to come and go by.
+  const wallStall = (x, z, dz, colour) => {
+    const [a, b] = stallKinds(q, rng);
+    q.put(x, Y0, z, GOODS[a] ?? B.crate);
+    q.put(x + 1, Y0, z + dz, B.counter);
+    q.put(x, Y0, z + dz, B.counter);
+    q.put(x + 2, Y0, z + dz, GOODS[b] ?? B.barrel);
+    q.canopy(x + 1, z, Y0 + 2, dz > 0 ? 0 : 2, colour);
+    q.role('stallholder', x + 1, z, dz > 0 ? 0 : 2, ['market', 'shop']);
+    const p = q.pt(x + 1, z);
+    q.out.stalls.push({ x: p.x, z: p.z, face: q.dir(dz > 0 ? 0 : 2), goods: a });
+    q.spot(x + 1, z + dz * 2, dz > 0 ? 2 : 0, ['shop', 'market', 'stroll']);
+  };
   let colour = q.m.cloth;
   for (let x = hall.ix0; x + 2 <= hall.ix1; x += 4) {
     if (Math.abs(x + 1 - mx) <= 2) continue;
-    stall(q, x, hall.iz0, stallKinds(q, rng), colour, false);
+    wallStall(x, hall.iz0, 1, colour);
+    wallStall(x, hall.iz1, -1, colour + 1);
     colour = (colour + 1) & 3;
-  }
-  for (let x = hall.ix0; x + 2 <= hall.ix1; x += 4) {
-    if (Math.abs(x + 1 - mx) <= 2) continue;
-    // (The south row's backs to the south wall: their counters face north.)
-    const z = hall.iz1;
-    const [a, b] = stallKinds(q, rng);
-    q.put(x, Y0, z, GOODS[a] ?? B.crate);
-    q.put(x + 2, Y0, z, GOODS[b] ?? B.barrel);
-    for (let dx = 0; dx < 3; dx++) q.put(x + dx, Y0, z - 1, B.counter);
-    q.role('stallholder', x + 1, z, 2, ['market', 'shop']);
-    const p = q.pt(x + 1, z);
-    q.out.stalls.push({ x: p.x, z: p.z, face: q.dir(2), goods: a });
-    q.spot(x + 1, z - 2, 0, ['shop', 'market', 'stroll']);
   }
   if (q.has('auction')) {
     q.fx(hall.ix0, Y0, Math.round((hall.iz0 + hall.iz1) / 2), 'auction', B.auction_block, 3);

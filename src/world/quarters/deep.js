@@ -35,7 +35,7 @@ function delve(q) {
   if (q.has('guild') && q.D >= 13) {
     const r = { x0: q.x0 + 1, z0: q.z0, x1: mx - 4, z1: q.z0 + 5 };
     if (r.x1 - r.x0 >= 4) {
-      const h = q.hall(r, { doors: [{ x: r.x1, z: r.z0 + 3, rot: 3 }], h: 3, use: 'guild' });
+      const h = q.hall(r, { doors: [{ x: r.x1 - 1, z: r.z1, rot: 0 }], h: 3, use: 'guild' });
       for (let x = h.ix0; x < h.ix1; x += 3) {
         q.put(x, Y0, h.iz0 + 1, B.table);
         q.put(x, Y0, h.iz0 + 2, B.chair, 2);
@@ -54,11 +54,12 @@ function delve(q) {
   // The infirmary: beds, herbs, a surgeon.
   if (q.has('infirmary') && q.x1 - (mx + 4) >= 4) {
     const r = { x0: mx + 4, z0: q.z0, x1: q.x1 - 2, z1: q.z0 + 4 };
-    const h = q.hall(r, { doors: [{ x: r.x0, z: r.z1 - 1, rot: 1 }], h: 2, use: 'infirmary' });
+    const dx = r.x0 + 1;
+    const h = q.hall(r, { doors: [{ x: dx, z: r.z1, rot: 0 }], h: 2, use: 'infirmary' });
     for (let x = h.ix0 + 1; x <= h.ix1; x++) q.put(x, Y0, h.iz0, B.bed, 0);
     q.put(h.ix0, Y0, h.iz0, B.herb);
-    q.role('surgeon', h.ix0, h.iz1, 0, []);
-    q.fx(h.ix0, Y0, h.iz1, 'infirmary');
+    q.role('surgeon', h.ix1, h.iz1, 1, []);
+    q.fx(dx, Y0, h.iz1, 'infirmary');
   }
   // The memorial to the lost.
   if (q.has('memorial')) {

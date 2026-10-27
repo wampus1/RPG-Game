@@ -370,14 +370,52 @@ function gardens(q) {
     q.fx(h.ix0, Y0, h.iz0, 'glasshouse');
   }
   if (q.has('maze') && c < 4) {
+    // (Round 147) A true maze: hedges two high, its walks cut through
+    // them every way from cell to cell (so there's always a way to the
+    // middle, and only one), its way in on the side toward the garden;
+    // the urn in the cell furthest from it.
     const [x, z] = corners[c++];
-    const x0 = x < mx ? x - 1 : x - 4;
-    const z0 = z < mz ? z - 1 : z - 3;
-    for (let zz = z0; zz <= z0 + 4; zz++) for (let xx = x0; xx <= x0 + 5; xx++) {
-      if ((xx - x0) % 2 === 0 && (zz - z0) % 2 === 0) q.stack(xx, zz, Y0, Y0 + 1, B.hedge);
-      else if (((xx - x0) * 3 + (zz - z0) * 5) % 4 === 0) q.stack(xx, zz, Y0, Y0 + 1, B.hedge);
+    const w = 7;
+    const d = 5;
+    const x0 = x < mx ? x - 1 : x - (w - 2);
+    const z0 = z < mz ? z - 1 : z - (d - 2);
+    const walk = new Set();
+    const key = (u, v) => u * 64 + v;
+    const stack = [[1, 1]];
+    walk.add(key(1, 1));
+    while (stack.length) {
+      const [u, v] = stack[stack.length - 1];
+      const next = q.rng.shuffle([[2, 0], [-2, 0], [0, 2], [0, -2]]).find(([du, dv]) => u + du > 0 && u + du < w - 1 && v + dv > 0 && v + dv < d - 1 && !walk.has(key(u + du, v + dv)));
+      if (!next) {
+        stack.pop();
+        continue;
+      }
+      walk.add(key(u + next[0] / 2, v + next[1] / 2));
+      walk.add(key(u + next[0], v + next[1]));
+      stack.push([u + next[0], v + next[1]]);
     }
-    q.fx(x0 + 3, Y0, z0 + 2, 'maze', B.garden_urn);
+    // (The way in: on the side toward the garden's middle.)
+    const inU = x < mx ? w - 1 : 0;
+    walk.add(key(inU, 1));
+    for (let v = 0; v < d; v++) for (let u = 0; u < w; u++) {
+      if (walk.has(key(u, v))) q.ground(x0 + u, z0 + v, B.gravel);
+      else q.stack(x0 + u, z0 + v, Y0, Y0 + 1, B.hedge);
+    }
+    // (The furthest cell from the way in, by its walks.)
+    const far = new Map([[key(inU, 1), 0]]);
+    const queue = [[inU, 1]];
+    let end = [inU, 1];
+    while (queue.length) {
+      const [u, v] = queue.shift();
+      for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = key(u + du, v + dv);
+        if (!walk.has(k) || far.has(k)) continue;
+        far.set(k, far.get(key(u, v)) + 1);
+        queue.push([u + du, v + dv]);
+        if (far.get(k) > far.get(key(end[0], end[1]))) end = [u + du, v + dv];
+      }
+    }
+    q.fx(x0 + end[0], Y0, z0 + end[1], 'maze', B.garden_urn);
   }
   q.role('gardener', mx - 3, mz + 3, 2, ['garden', 'farm']);
   q.role('gardener', mx + 3, mz - 3, 0, ['garden', 'farm']);

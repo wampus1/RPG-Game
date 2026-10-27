@@ -177,8 +177,9 @@ function winery(q) {
   const m = q.m;
   const kind = q.fam === 'north' ? 'mead' : q.fam === 'high' ? 'brew' : q.fam === 'jade' ? 'rice' : 'wine';
   q.fill(q.x0, q.z0, q.x1, q.z1, B.grass);
-  // The fields across the back (vines, heather and skeps, barley, paddies).
-  const fz1 = q.z0 + Math.max(4, Math.round(q.D * 0.5));
+  // The fields across the back (vines, heather and skeps, barley, paddies),
+  // leaving the yard before them room for the press house.
+  const fz1 = q.z0 + Math.max(3, Math.min(Math.round(q.D * 0.5), q.D - 8));
   if (kind === 'wine') vineyard(q, q.x0 + 1, q.z0 + 1, q.x1 - 1, fz1);
   else if (kind === 'brew') vineyard(q, q.x0 + 1, q.z0 + 1, q.x1 - 1, fz1, B.wheat_crop);
   else if (kind === 'mead') {
@@ -201,13 +202,15 @@ function winery(q) {
     q.role('vintner', q.cx, q.z0 + 3, 2, ['farm']);
   }
   // The press house (or the brewhouse, the mead hall), its door to the yard.
-  const r = { x0: q.x0 + 1, z0: fz1 + 2, x1: Math.min(q.x1 - 1, q.x0 + 8), z1: q.z1 - 1 };
-  if (r.z1 - r.z0 >= 2) {
-    const h = q.hall(r, { doors: [{ x: r.x1, z: Math.round((r.z0 + r.z1) / 2), rot: 3 }], h: 3, use: kind });
+  // (Two paces inside at least: the press and the casks along the back
+  // wall, a way along the front of them from the door.)
+  const r = { x0: q.x0 + 1, z0: fz1 + 2, x1: Math.min(q.x1 - 1, q.x0 + 8), z1: Math.min(q.z1 - 1, fz1 + 5) };
+  if (r.z1 - r.z0 >= 3) {
+    const h = q.hall(r, { doors: [{ x: r.x1, z: r.z1 - 1, rot: 3 }], h: 3, use: kind });
     q.fx(h.ix0, Y0, h.iz0, 'press', kind === 'rice' ? B.gl_jars ?? B.barrel : B.wine_press);
     if (q.has('vats') || kind === 'brew') q.put(h.ix0 + 2, Y0, h.iz0, B.wine_vat);
-    for (let x = h.ix0; x <= h.ix1; x++) if (x > h.ix0 + 2) q.fx(x, Y0, h.iz1, 'cask', B.wine_cask, 0);
-    q.role('vintner', h.ix0 + 1, h.iz1, 0, ['work']);
+    for (let x = h.ix0 + 3; x <= h.ix1; x++) q.fx(x, Y0, h.iz0, 'cask', B.wine_cask, 2);
+    q.role('vintner', h.ix0 + 1, h.iz1, 2, ['work']);
   }
   // The cellar's casks out in the yard under a roof, the tasting terrace.
   if (q.has('tasting')) {
@@ -236,22 +239,24 @@ function winery(q) {
 function apiary(q) {
   q.fill(q.x0, q.z0, q.x1, q.z1, B.grass_lush);
   const flowers = [B.flower_yellow, B.flower_purple, B.flower_white, B.flower_blue, B.heather ?? B.flower_red];
-  for (let z = q.z0 + 1; z <= q.z1 - 4; z++) for (let x = q.x0 + 1; x <= q.x1 - 1; x++) {
+  for (let z = q.z0 + 1; z <= q.z1 - 5; z++) for (let x = q.x0 + 1; x <= q.x1 - 1; x++) {
     if ((x * 7 + z * 5) % 9 === 0) q.fx(x, Y0, z, 'skep', B.bee_skep);
     else if ((x + z) % 2 === 0) q.put(x, Y0, z, flowers[(x * 3 + z) % flowers.length]);
   }
   q.role('beekeeper', q.cx, q.z0 + 2, 2, ['farm']);
   q.role('beekeeper', q.cx - 3, q.z0 + 4, 2, ['farm']);
   // The honey house.
-  const r = { x0: q.x1 - 6, z0: q.z1 - 3, x1: q.x1 - 1, z1: q.z1 - 1 };
-  const h = q.hall(r, { doors: [{ x: r.x0, z: r.z0 + 1, rot: 1 }], h: 2, roof: B.thatch, use: 'honey' });
-  q.fx(h.ix1, Y0, h.iz0, 'press', B.wine_press);
-  if (q.has('meadery')) q.fx(h.ix0 + 1, Y0, h.iz0, 'mead', B.wine_cask, 0);
-  if (q.has('candles')) {
-    q.put(h.ix0 + 2 <= h.ix1 ? h.ix0 + 2 : h.ix1, Y0, h.iz0, B.table);
-    q.put(h.ix0 + 2 <= h.ix1 ? h.ix0 + 2 : h.ix1, Y0 + 1, h.iz0, B.candles, LIT);
+  // (Two paces inside: the press, the mead and the chandler's table along
+  // the back, a way along the front of them from the door.)
+  const r = { x0: q.x1 - 6, z0: q.z1 - 4, x1: q.x1 - 1, z1: q.z1 - 1 };
+  const h = q.hall(r, { doors: [{ x: r.x0, z: r.z1 - 1, rot: 1 }], h: 2, roof: B.thatch, use: 'honey' });
+  q.fx(h.ix1, Y0, h.iz0, 'press', B.wine_press, 2);
+  if (q.has('meadery')) q.fx(h.ix0 + 1, Y0, h.iz0, 'mead', B.wine_cask, 2);
+  if (q.has('candles') && h.ix0 + 2 < h.ix1) {
+    q.put(h.ix0 + 2, Y0, h.iz0, B.table);
+    q.put(h.ix0 + 2, Y0 + 1, h.iz0, B.candles, LIT);
   }
-  q.role('beekeeper', h.ix0, h.iz0, 0, ['work']);
+  q.role('beekeeper', h.ix0 + 1, h.iz1, 2, ['work']);
   q.fx(r.x0 - 1, Y0, r.z1, 'honeystall', B.counter);
   q.put(q.x0 + 1, Y0, q.z1 - 1, B.bench, 0);
   q.spot(q.x0 + 1, q.z1 - 1, 0, ['rest', 'sketch']);

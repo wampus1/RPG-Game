@@ -89,6 +89,9 @@ const makeCanvas = (w, h) => {
   c.height = h;
   return c;
 };
+// (Round 147) Each stair as it's painted, by the atlas it's from (see
+// Renderer.drawStair).
+const STAIRS = new WeakMap();
 
 // (Round 82) Iron bars, and the cell doors hung in them: drawn as a grille
 // (see Renderer.drawBars), not a box.
@@ -889,12 +892,29 @@ export class Renderer {
   // its floor's top and front, laid out by the way it climbs on screen
   // (0 toward you, 1 to the left, 2 away, 3 to the right). A step is half
   // a layer (6px) high and half a pace deep.
+  // (Round 147) Painted once for each stair, look and way it climbs (a
+  // dozen strokes each), and kept: a stand of seats is hundreds of them.
   drawStair(ctx, atl, T, id, v, sd, sx, sy) {
     const tops = T.top[id * 4];
     const fronts = T.front[id * 4];
     if (!tops || !fronts) return;
-    const t = tops[v % tops.length];
-    const f = fronts[v % fronts.length];
+    let kept = STAIRS.get(atl);
+    if (!kept) STAIRS.set(atl, (kept = new Map()));
+    const vt = v % tops.length;
+    const vf = v % fronts.length;
+    const k = ((id * 64 + vt) * 64 + vf) * 4 + sd;
+    let c = kept.get(k);
+    if (!c) {
+      c = makeCanvas(16, 16 + LH);
+      this.paintStair(c.getContext('2d'), atl, tops[vt], fronts[vf], sd);
+      kept.set(k, c);
+    }
+    ctx.drawImage(c, sx, sy);
+  }
+
+  paintStair(ctx, atl, t, f, sd) {
+    const sx = 0;
+    const sy = 0;
     const H = LH / 2;
     const top = (x0, y0, w, h, dx, dy) => ctx.drawImage(atl, t.x + x0, t.y + y0, w, h, sx + dx, sy + dy, w, h);
     const front = (x0, y0, w, h, dx, dy) => ctx.drawImage(atl, f.x + x0, f.y + y0, w, h, sx + dx, sy + dy, w, h);

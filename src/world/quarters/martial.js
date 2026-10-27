@@ -59,12 +59,14 @@ function citadel(q) {
     const w = Math.min(ix1 - ix0 - 4, q.size === 'city' ? 9 : 7);
     const r = { x0: gx - Math.floor(w / 2), z0: iz0, x1: gx - Math.floor(w / 2) + w - 1, z1: iz0 + (q.size === 'city' ? 5 : 4) };
     const h = q.hall(r, { doors: [{ x: gx, z: r.z1, rot: 0 }], h: q.size === 'city' ? 5 : 4, flat: true, parapet: wallId, wall: wallId, corner: wallId, floor: B.stone_bricks, win: 'glass', use: 'keep' });
+    // (The commander's chair behind the table at the head of the hall,
+    // the banners either side, the strongbox in the corner; the way from
+    // the door to the table kept clear.)
     q.put(gx, Y0, h.iz0, B.chair, 0);
-    q.put(gx - 1, Y0, h.iz0, B.war_banner);
-    q.put(gx + 1, Y0, h.iz0, B.war_banner);
-    q.put(gx, Y0, h.iz0 + 2, B.table);
+    q.put(gx, Y0, h.iz0 + 1, B.table);
+    for (const x of [gx - 2, gx + 2]) if (x >= h.ix0 && x <= h.ix1) q.put(x, Y0, h.iz0, B.war_banner);
     q.put(h.ix0, Y0, h.iz0, B.chest);
-    q.role('commander', gx, h.iz0 + 1, 0, []);
+    q.role('commander', gx, h.iz0, 0, []);
     q.put(gx, h.roofBase + 1, Math.round((r.z0 + r.z1) / 2), B.war_banner);
     keepZ1 = r.z1;
   }
@@ -101,7 +103,7 @@ function citadel(q) {
     q.put(ix0, Y0, yz - 1 > iz0 ? yz - 1 : yz, B.altar);
     q.spot(ix0 + 1, yz - 1 > iz0 ? yz - 1 : yz, 3, ['pray']);
   }
-  for (const x of [gx - 1, gx + 1]) q.lamp(x, iz1, 1);
+  for (const x of [gx - 2, gx + 2]) q.lamp(x, iz1, 1);
   q.sign(gx + 3, q.z1, 0);
   void LIT;
 }
@@ -123,19 +125,24 @@ function racecourse(q) {
   const width = city ? 3 : 2;
   const ring = (x, z) => (z > tz1 ? -1 : q.ringOf(x, z, cx, cz, rx, rz));
   const pts = [];
+  // (Round 147) The way through the rails: out of the stands onto the
+  // track before the winning post, and across it into the middle on the
+  // far side.
+  const mid = q.gates[0].x;
+  const opening = (x, z, k) => (k === 0 ? Math.abs(x - mid) <= 1 && z > cz : Math.abs(x - mid) <= 0 && z < cz);
   for (let z = tz0; z <= tz1; z++) {
     for (let x = q.x0; x <= q.x1; x++) {
       const k = ring(x, z);
       if (k < 0) continue;
       if (k === 0) {
-        q.ground(x, z, B.grass);
-        q.put(x, Y0, z, B.fence);
+        q.ground(x, z, opening(x, z, 0) ? B.race_track : B.grass);
+        if (!opening(x, z, 0)) q.put(x, Y0, z, B.fence);
       } else if (k <= width) {
         q.ground(x, z, B.race_track);
         if (k === Math.ceil(width / 2)) pts.push(q.pt(x, z));
       } else if (k === width + 1) {
         q.ground(x, z, B.grass);
-        q.put(x, Y0, z, B.fence);
+        if (!opening(x, z, 1)) q.put(x, Y0, z, B.fence);
       } else q.ground(x, z, B.grass_lush);
     }
   }

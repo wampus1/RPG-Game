@@ -129,8 +129,32 @@ export function funeralSpots(L, gx, gz, n, ok = () => true) {
   return out;
 }
 
+// (Round 147) Asked of everyone in town every frame: answered from a plan
+// of the town's tiles (which building's on each, the first of them as the
+// list has it), drawn again when the town's ground or its buildings
+// change; and checked, so a building swapped for another is never missed.
+const BAT = new WeakMap();
 export function buildingAt(L, x, z) {
-  for (const b of L.buildings) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return b;
+  const B0 = L.buildings;
+  const b = L.bounds;
+  if (b && L.W && x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) {
+    let P = BAT.get(L);
+    if (!P || P.n !== B0.length || P.v !== L.maskV || P.list !== B0 || P.x0 !== b.x0 || P.z0 !== b.z0 || P.W !== L.W || P.D !== L.D) {
+      const at = new Int32Array(L.W * L.D);
+      for (let i = B0.length - 1; i >= 0; i--) {
+        const q = B0[i];
+        if (!q || q.x0 === undefined) continue;
+        for (let zz = Math.max(q.z0, b.z0); zz <= Math.min(q.z1, b.z1); zz++) for (let xx = Math.max(q.x0, b.x0); xx <= Math.min(q.x1, b.x1); xx++) at[(zz - b.z0) * L.W + (xx - b.x0)] = i + 1;
+      }
+      BAT.set(L, (P = { n: B0.length, v: L.maskV, list: B0, at, x0: b.x0, z0: b.z0, W: L.W, D: L.D }));
+    }
+    const i = P.at[(z - b.z0) * L.W + (x - b.x0)];
+    const q = i ? B0[i - 1] : null;
+    if (!i) return null;
+    if (q && x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1) return q;
+    BAT.delete(L);
+  }
+  for (const q of B0) if (x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1) return q;
   return null;
 }
 
