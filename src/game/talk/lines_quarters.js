@@ -5,7 +5,8 @@
 // of today's doings not yet over), qNow (it's on now), qOff ('siege' or
 // 'rain'), qPast (the kind of the last, within a couple of days), qCheers
 // (the last play cheered), qCrowd (the next draws a crowd), qJob (their
-// place at one), qFan (one of those who'd talk of it). See talk/facts.js.
+// place at one), qFan (one of those who'd talk of it), qThere (in the crowd
+// there now). See talk/facts.js.
 //
 // (A first word or a remark in passing about them is worth a little more
 // than the guards they're written with: enough to be said, never over
@@ -47,10 +48,15 @@ R('q_on_any', 'open', { qOn: true, qCrowd: true, qFan: true }, [
   'You\'re here for {qShow}, I suppose? {qAt}. Everyone is.',
   'There\'s {qShow} at {qAt}, if you\'ve nothing better to do. {.}I haven\'t.',
 ]);
-R('q_now', 'open', { qOn: true, qNow: true, qCrowd: true, qFan: true }, [
+R('q_now', 'open', { qOn: true, qNow: true, qCrowd: true, qFan: true, qThere: false }, [
   '{qShow}\'s on {g:right now}, at {qPlace}. What are you doing here?',
   'Can\'t stop, {name}! {qShow}\'s started without me!',
-], { bonus: 0.75 });
+], { bonus: 0.5 });
+R('q_there', 'open', { qNow: true, qThere: true }, [
+  'Isn\'t this something? {.}Sit, sit, you\'re blocking the view.',
+  '{w:Best seat in the house, this.} Well. Second best. You\'re in the best.',
+  'Shh! {.}Oh, it\'s you. {c:*whispers*} Glad you came.',
+]);
 // ---- called off
 R('q_off_siege', 'open', { qOff: 'siege' }, [
   '{d:No {qOffShow} today.} Not with them camped outside the walls.',
@@ -166,9 +172,9 @@ R('q_g_now', 'greet', { qOn: true, qNow: true, qCrowd: true, qFan: true }, ['{wg
 R('q_g_off', 'greet', { qOff: ['siege', 'rain'], qFan: true }, ['{d:Called off. Typical.}', '{d:No {qOffShow} today.}']);
 
 // ============================================================ bark
-R('q_b_games', 'bark', { qNow: true, qOn: 'games' }, ['{wg:Come on!}', '{sr:Get up! GET UP!}', '{wg:Again! Again!}']);
-R('q_b_races', 'bark', { qNow: true, qOn: 'races' }, ['{wg:Go on, go on, GO ON!}', '{wg:Look at the grey run!}']);
-R('q_b_play', 'bark', { qNow: true, qOn: 'play' }, ['{c:*whispers* Shh, this is the good part.}', '{w:Bravo!}']);
+R('q_b_games', 'bark', { qNow: true, qThere: true, qOn: 'games' }, ['{wg:Come on!}', '{sr:Get up! GET UP!}', '{wg:Again! Again!}']);
+R('q_b_races', 'bark', { qNow: true, qThere: true, qOn: 'races' }, ['{wg:Go on, go on, GO ON!}', '{wg:Look at the grey run!}']);
+R('q_b_play', 'bark', { qNow: true, qThere: true, qOn: 'play' }, ['{c:*whispers* Shh, this is the good part.}', '{w:Bravo!}']);
 
 // ============================================================ pair
 R('q_p_games', 'pair', { qPast: 'games', kid: false }, [

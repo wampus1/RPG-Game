@@ -235,6 +235,8 @@ export function factsFor(npc, game, leadOf = null) {
   // works there (and if they're one to talk of it: about half the town)
   F.qJob = rec.qtag && rec.qtag.includes(':') ? rec.qtag.slice(rec.qtag.indexOf(':') + 1) : null;
   F.qFan = !!F.qJob || ((rec.idx * 2654435761) >>> 0) % 2 === 0;
+  const ov = rec.override;
+  F.qThere = !!(ov && ov.place === 'quarter' && now >= ov.s && now < ov.e);
   F.qOn = null;
   F.qNow = false;
   F.qCrowd = false;
