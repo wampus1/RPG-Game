@@ -11759,8 +11759,8 @@ smoothly it runs.
 ### Part of the town's life
 
 - **Sieges.** While the town is besieged, its games, races, plays, fairs
-  and auctions are called off. Services, the drill and the old rites go
-  on, and draw twice the crowd.
+  and auctions are called off. Services and the old rites go on and draw
+  twice the crowd, and the garrison still drills.
 - **Weather.** Heavy rain or snow puts off races (the going's too
   heavy), star-watching, fair days, launches and promenades. The games
   go on in any weather.
@@ -11804,6 +11804,12 @@ smoothly it runs.
   quarter outside the town now checks the lie of the land every other
   pace and remembers it for all the town's quarters. The pause when you
   first visit such a town is about a third shorter.
+
+### Fixes
+
+- A festival's game could try to open its window on a screen that had
+  none (a game run without one, as the tests are) and stop the day's
+  festival short. It's only opened where there's a screen to open it on.
 
 ### Older worlds
 

@@ -3976,6 +3976,9 @@ export class Game {
   // (Round 129) A festival's game, opened in your windows (see
   // ui/festwin.js; in someone else's world it's played on your own screen).
   openFest(cfg) {
+    // (Called from the festival's own tick: no windows to open it in on a
+    // screen that has none.)
+    if (!this.ui || !this.ui.open) return;
     const b = this.ui.find && this.ui.find('festboard');
     if (b) this.ui.close(b);
     this.ui.open(new FestWindow(this.ui, cfg));
