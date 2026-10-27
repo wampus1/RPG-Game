@@ -136,11 +136,13 @@ function front(q, taken) {
   const g = q.gates[0];
   const inX = g.side === 'w' ? 1 : g.side === 'e' ? -1 : 0;
   const inZ = g.side === 'n' ? 1 : g.side === 's' ? -1 : 0;
-  const sx = g.x + (inZ ? 2 : 0);
-  const sz = g.z + (inX ? 2 : 0);
-  if (!taken(sx, sz)) {
-    q.sign(sx, sz, inZ > 0 ? 0 : inZ < 0 ? 2 : inX > 0 ? 3 : 1);
-  }
+  // (The sign beside the way in: whichever side of it has room.)
+  const free = (x, z) => q.inLot(x, z) && !taken(x, z) && q.at(x, Y0, z) === undefined;
+  const spots = [2, -3, 3, -4, 4, 1, -1].map((k) => [g.x + (inZ ? k : 0), g.z + (inX ? k : 0)]);
+  // (Else at the corner of the lot nearest the way in, out of the bowl.)
+  spots.push(...[[q.x0, q.z0], [q.x1, q.z0], [q.x0, q.z1], [q.x1, q.z1]].sort((a, b) => Math.hypot(a[0] - g.x, a[1] - g.z) - Math.hypot(b[0] - g.x, b[1] - g.z)));
+  const at = spots.find(([x, z]) => free(x, z));
+  if (at) q.sign(at[0], at[1], inZ > 0 ? 0 : inZ < 0 ? 2 : inX > 0 ? 3 : 1);
   const bx = g.x - (inZ ? 2 : 0) + inX;
   const bz = g.z - (inX ? 2 : 0) + inZ;
   if (!taken(bx, bz)) {

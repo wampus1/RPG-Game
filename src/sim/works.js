@@ -294,6 +294,10 @@ export class Works {
   noteDamage(L, b) {
     if (!b || b.playerHome || b.underConstruction || L.settlement.deserted) return null;
     if (this.projects.some((p) => !p.done && p.sid === L.settlement.id && p.bid === b.id)) return null;
+    // (Just mended: whatever's still missing can wait an hour or two.)
+    const k = `${L.settlement.id}:${b.id}`;
+    this.mended ||= new Map();
+    if (this.mended.has(k) && this.sim.now() - this.mended.get(k) < 120) return null;
     const missing = this.damageOf(L, b);
     if (!missing.length) return null;
     return this.add({ sid: L.settlement.id, kind: 'repair', bid: b.id, blocks: missing, label: `repairs to the ${b.name.replace(/^The /, '')}` });
@@ -451,7 +455,7 @@ export class Works {
 
   // ------------------------------------------------------------ time
   update() {
-    for (const p of this.projects) {
+    for (const p of [...this.projects]) {
       if (p.done) continue;
       const L = this.sim.layoutOf(p.sid);
       if (!L) continue;
@@ -463,7 +467,10 @@ export class Works {
   // A town's projects moved on to a moment in its (caught-up) day, so a
   // place you've been away from has really been building meanwhile.
   catchUp(L, upTo) {
-    for (const p of this.projects) if (!p.done && p.sid === L.settlement.id && p.last < upTo) this.advance(L, p, upTo);
+    // (The jobs there were when it began: one taken up as another finishes
+    // waits for the next time round, so a repair that can't take (a block
+    // that won't stay put) never goes round and round.)
+    for (const p of [...this.projects]) if (!p.done && p.sid === L.settlement.id && p.last < upTo) this.advance(L, p, upTo);
   }
 
   advance(L, p, now) {
@@ -604,6 +611,7 @@ export class Works {
     }
     if (p.kind === 'repair') {
       if (!silent) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
+      (this.mended ||= new Map()).set(`${L.settlement.id}:${p.bid}`, this.sim.now());
       // More damage done in the meantime? Back to work.
       this.noteDamage(L, L.buildings[p.bid]);
       return;

@@ -195,7 +195,8 @@ export class Dungeons {
     const isle = this.game.world.ow.islandAt?.(p.x, p.z);
     if (isle && this.isleFirst[isle] === undefined) this.isleFirst[isle] = this.game.day;
     for (const d of this.all) {
-      if (d.seen || Math.abs(d.x - p.x) > 14 || Math.abs(d.z - p.z) > 10) continue;
+      // (A town's delve has no place in the world till its town's laid out.)
+      if (d.seen || d.x === undefined || Math.abs(d.x - p.x) > 14 || Math.abs(d.z - p.z) > 10) continue;
       d.seen = true;
       d.known = true;
       this.game.ui.msg(d.cleared ? `You come upon ${d.name}. Its way in has fallen shut.` : `You come upon ${d.name}. ${d.type === 'kavorent' ? 'Runes crawl up its sides, glowing and fading.' : 'Something about the place makes your skin crawl.'}`, '#e0c890');

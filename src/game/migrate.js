@@ -1172,6 +1172,18 @@ export const STEPS = [
       }
       log.push('Rulers and mayors at war can raise hosts from their towns, name their commanders and send them to give battle, besiege or clear the way; realms at war build watchtowers and stockades that stop armies on the march. Every soldier is someone from a town now, small realms call up nearly everyone (not all of them armed), and some slip away to other realms rather than march.');
     },
+  },  {
+    to: '1.46.0',
+    game(game, log) {
+      // (What each town's known for is worked out from the world's seed,
+      // the same in an old world as a new one; in a world made before
+      // 1.46 its quarters are raised on whatever open ground the town has
+      // left, or out past its edge by a road, the first time it's visited:
+      // see sim/cities.js. Nobody has wagers yet.)
+      const C = game.sim && game.sim.cities;
+      if (C) C.players ||= {};
+      log.push('Towns are known for something now: an arena, a great library, a cathedral, a bazaar, a forge, a citadel, baths, a theatre, a racecourse, a fair, old ruins, a winery, a shipyard, gardens, a monastery, a delve into the old places beneath, and more, each built in its people\'s own way, with its own people, its own days (the games, race days, plays, feasts) and its own things to do. In a world made before this version they\'re raised on open ground in or just outside each town the first time you visit it.');
+    },
   },
 ];
 // (What each kind of shop took in, in 0.51.)

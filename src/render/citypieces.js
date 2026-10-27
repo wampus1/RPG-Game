@@ -203,40 +203,76 @@ PIECES.colossus_head = {
   paint(P, t) {
     const H = 70;
     const by = H - 24;
-    const stone = '#a8a294';
-    // The turf it's sunk in.
+    // Bronze gone green with the years (darker in the hollows, the old
+    // gold showing where it's been rubbed).
+    const bronze = '#5e9a86';
+    const deep = '#2e5a50';
+    const gold = '#c8a050';
+    const hx = CX + 1;
+    const hy = by - 17;
+    // The turf it's sunk in, behind it.
     for (let x = 2; x < 46; x++) {
       const yf = edge(CX, by - 2, 22, 11, x);
       if (yf === null) continue;
       for (let y = Math.floor(by - 2 - (yf - (by - 2))); y <= yf; y++) P.set(x, y, P.tone('#5a8a3a', 0.45 + hash2(x, y, 3) * 0.2, x, y));
     }
-    // The head: a great lit mass, the brow, the nose, the lips.
-    P.blob(CX - 1, by - 16, 17, 14, stone, { flat: 0.9 });
-    P.blob(CX + 9, by - 20, 4, 3, stone, { lift: 0.08 });
-    P.poly([[CX + 2, by - 26], [CX + 11, by - 24], [CX + 6, by - 18]], stone, { lv: 0.65 });
-    P.blob(CX - 3, by - 23, 4.5, 2.4, '#e8e4dc', { flat: 0.5 });
-    P.blob(CX - 3, by - 23, 1.6, 1.6, '#5a564c');
-    P.line(CX - 8, by - 26, CX + 1, by - 27, '#6a665c');
-    P.line(CX - 2, by - 10, CX + 8, by - 11, '#6a665c');
-    P.line(CX - 1, by - 8, CX + 7, by - 9, '#8a8478');
-    // The crown of rays, broken off short.
-    for (let i = 0; i < 6; i++) {
-      const a = -Math.PI * 0.95 + i * 0.32;
-      const x0 = CX - 1 + Math.cos(a) * 15;
-      const y0 = by - 16 + Math.sin(a) * 12;
-      const len = 4 + (i % 3) * 3;
-      P.poly([[x0 - 1.4, y0], [x0 + 1.4, y0], [x0 + Math.cos(a) * len, y0 + Math.sin(a) * len]], '#9a9486', { lv: 0.5 });
+    // The crown of rays, broken off short, behind the head.
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI * 0.92 + i * 0.3;
+      const len = [9, 5, 11, 3, 10, 6, 8][i];
+      const x0 = hx + Math.cos(a) * 12;
+      const y0 = hy - 3 + Math.sin(a) * 14;
+      P.spike(x0, y0, a, len, 1.6, bronze, { lv: 0.6 });
     }
-    // The crack across it, the moss in the hollows.
-    P.line(CX - 14, by - 12, CX - 4, by - 17, '#4a463e');
-    P.line(CX - 4, by - 17, CX + 2, by - 14, '#4a463e');
-    P.over((x, y, c) => (c[0] > 120 && c[0] < 200 && Math.abs(c[0] - c[1]) < 14 && hash2(x, y, 11) < 0.08 + Math.max(0, y - (by - 14)) * 0.02 ? [90, 130, 70] : null));
+    // The head: the face's great oval, the cheek turned to the light.
+    P.blob(hx, hy, 13, 16, bronze, { flat: 0.75, amb: 0.3 });
+    // The hair: a band of curls across the brow.
+    for (let k = 0; k < 9; k++) {
+      const a = -Math.PI + 0.25 + k * 0.33;
+      P.blob(hx + Math.cos(a) * 11, hy - 3 + Math.sin(a) * 13, 3, 2.6, bronze, { lift: -0.08 });
+    }
+    // The brow ridge and the shadow under it.
+    P.poly([[hx - 10, hy - 6], [hx + 10, hy - 6], [hx + 9, hy - 3.5], [hx - 9, hy - 3.5]], bronze, { lv: 0.7 });
+    for (let x = hx - 9; x <= hx + 9; x++) if (Math.abs(x - hx) > 1) P.set(x, hy - 3, P.tone(deep, 0.35, x, hy - 3));
+    // The eyes: heavy-lidded, blank, the pupils cut in.
+    for (const ex of [hx - 5, hx + 5]) {
+      P.blob(ex, hy - 0.5, 3.4, 1.6, '#9ac8b4', { flat: 0.4, lift: 0.1 });
+      P.line(ex - 3, hy - 2, ex + 3, hy - 2, deep);
+      P.set(ex, hy - 0.5, P.tone(deep, 0.2, ex, hy));
+      P.set(ex + 1, hy - 0.5, P.tone(deep, 0.3, ex + 1, hy));
+    }
+    // The nose: a straight ridge, lit down its side, the nostrils.
+    P.poly([[hx - 1, hy - 3], [hx + 1, hy - 3], [hx + 2.5, hy + 6], [hx - 2.5, hy + 6]], bronze, { lv: 0.62, grad: [0.9, -0.2] });
+    P.set(hx - 2, hy + 6, P.tone(deep, 0.25, hx - 2, hy + 6));
+    P.set(hx + 2, hy + 6, P.tone(deep, 0.25, hx + 2, hy + 6));
+    // The lips, closed; the line of the mouth.
+    P.blob(hx, hy + 9, 4.5, 1.6, bronze, { flat: 0.5, lift: 0.05 });
+    P.line(hx - 4, hy + 9, hx + 4, hy + 9, deep);
+    P.blob(hx, hy + 10.5, 3.5, 1.2, bronze, { flat: 0.5, lift: 0.1 });
+    // The old gold where hands have rubbed it for luck: the nose, the brow.
+    for (const [x, y] of [[hx + 1, hy + 2], [hx + 1, hy + 3], [hx - 2, hy - 5], [hx + 3, hy - 5]]) P.set(x, y, P.tone(gold, 0.65, x, y));
+    // Green weeping down from the eyes, a crack across the brow.
+    for (const ex of [hx - 5, hx + 6]) for (let y = hy + 1; y < hy + 6 + (ex & 1) * 2; y++) if (hash2(ex, y, 5) < 0.75) P.set(ex, y, P.tone('#7ac8a8', 0.75, ex, y));
+    P.line(hx - 9, hy - 9, hx - 3, hy - 6, deep);
+    P.line(hx - 3, hy - 6, hx + 1, hy - 8, deep);
+    // The turf in front, up to the chin, tufts of grass against the bronze.
+    for (let x = 4; x < 44; x++) {
+      const top = by - 4 + Math.round(Math.sin(x * 0.7) * 1.2 + hash2(x, 1, 7) * 1.5);
+      for (let y = top; y <= by + 2; y++) {
+        const yf = edge(CX, by - 2, 22, 11, x);
+        if (yf === null || y > yf) continue;
+        P.set(x, y, P.tone('#5a8a3a', 0.5 + hash2(x, y, 9) * 0.25, x, y));
+      }
+      if (hash2(x, 2, 8) < 0.35) for (let k = 1; k <= 2; k++) P.set(x, top - k, P.tone('#7aaa4a', 0.7, x, top - k));
+    }
     outlineSel(P.p);
-    // A bird, now on the brow, now gone.
+    // A bird, now on the crown, now gone.
     if (frac(t * 2) < 0.6) {
-      P.set(CX - 6, by - 31, hex('#2a2a30'));
-      P.set(CX - 5, by - 31, hex('#2a2a30'));
-      P.set(CX - 6, by - 32, hex('#2a2a30'));
+      const bx = hx - 4;
+      const byy = hy - 17;
+      P.set(bx, byy, hex('#2a2a30'));
+      P.set(bx + 1, byy, hex('#2a2a30'));
+      P.set(bx, byy - 1, hex('#2a2a30'));
     }
   },
 };

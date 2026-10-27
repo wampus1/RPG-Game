@@ -1307,8 +1307,8 @@ const SHOW = {
       const entOf = (f, not) => (f && f.rec !== undefined && L.npcs[f.rec] && L.npcs[f.rec].ent && !L.npcs[f.rec].ent.dead ? L.npcs[f.rec].ent : school.find((e) => e !== not) || null);
       const a = entOf(A, null);
       const b = entOf(Bf, a);
-      const names = [A ? A.name : 'a fighter', Bf ? Bf.name : 'a fighter'];
-      tellNear(game, pit.cx, pit.cz, 48, `Bout ${sh.k + 1}: ${names[0]} against ${names[1]}${bt.kind === 'title' ? ', for the title' : bt.kind === 'freedom' ? `, condemned for ${Bf.crime}, fighting for freedom` : ''}!`, '#ffe070');
+      const names = [A ? A.name : 'a fighter', Bf ? Bf.name : 'one of the condemned'];
+      tellNear(game, pit.cx, pit.cz, 48, `Bout ${sh.k + 1}: ${names[0]} against ${names[1]}${bt.kind === 'title' ? ', for the title' : bt.kind === 'freedom' ? `, condemned${Bf && Bf.crime ? ` for ${Bf.crime}` : ''}, fighting for freedom` : ''}!`, '#ffe070');
       game.audio?.play('gong', { x: pit.cx, y: GROUND, z: pit.cz });
       if (!a || !b) {
         // (Nobody to stand for them: the result's called from the sands.)

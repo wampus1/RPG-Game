@@ -410,7 +410,7 @@ for (const k of ['apiary', 'quarry', 'ruins']) SHOWS[k] = { init: () => ({ log: 
 
 // ------------------------------------------------------------ the arena's books
 export function fighterOf(st, id) {
-  return st.roster.find((f) => f.id === id) || st.condemned.find((f) => f.id === id) || (st.guests || []).find((f) => f.id === id) || null;
+  return st.roster.find((f) => f.id === id) || st.condemned.find((f) => f.id === id) || (st.guests || []).find((f) => f.id === id) || (st.gone || []).find((f) => f.id === id) || null;
 }
 
 // A bout settled (`b.result` 'a' or 'b'): the records, the champion, the
@@ -432,6 +432,7 @@ export function settleBout(st, b, L, news) {
       c.w = (c.w || 0) + 1;
       if (c.w >= 3) {
         st.condemned = st.condemned.filter((o) => o !== c);
+        gone(st, c, 'freed');
         news.push(`${c.name}, condemned for ${c.crime}, won a third bout in the arena and walked out free.`);
         st.freed = (st.freed || 0) + 1;
       }
@@ -439,7 +440,10 @@ export function settleBout(st, b, L, news) {
       // (Beaten: back to the cells, to try again another day; or, after a
       // third loss, given up on and sent off to the mines.)
       c.l = (c.l || 0) + 1;
-      if (c.l >= 3) st.condemned = st.condemned.filter((o) => o !== c);
+      if (c.l >= 3) {
+        st.condemned = st.condemned.filter((o) => o !== c);
+        gone(st, c, 'mines');
+      }
     }
   }
   // The champion: whoever stands highest.
@@ -450,6 +454,21 @@ export function settleBout(st, b, L, news) {
   }
   if (b.kind === 'title') news.push(`${winner} won the title bout at ${L.settlement.name}.`);
 }
+
+// (Those who've left the cells, one way or the other: kept a while, for
+// the boards and the wagers on their last bouts.)
+function gone(st, c, how) {
+  c.gone = how;
+  (st.gone ||= []).push(c);
+  if (st.gone.length > 12) st.gone.shift();
+  // (And new ones brought up from the town's cells, or sent from others'.)
+  if (st.condemned.length < 2) {
+    const id = st.nextId++;
+    st.condemned.push({ id, name: `${CONDEMNED_A[id % CONDEMNED_A.length]} ${CONDEMNED_B[(id * 7) % CONDEMNED_B.length]}`, crime: CRIMES[(id * 3) % CRIMES.length], w: 0 });
+  }
+}
+const CONDEMNED_A = ['Brann', 'Moll', 'Tesk', 'Haldo', 'Ysolde', 'Corrin', 'Fenna', 'Duro', 'Wynne', 'Garet'];
+const CONDEMNED_B = ['the Thief', 'Two-Knives', 'of the Marsh', 'Ratcatcher', 'the Liar', 'One-Ear', 'the Smuggler', 'Blackhand'];
 
 // A race settled (`r.result`: the field in the order they finished).
 export function settleRace(st, r, news) {

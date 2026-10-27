@@ -11539,6 +11539,162 @@ Worlds from 1.44 load as before. A war in progress carries on with no
 hosts or outposts until someone raises or builds one, and its soldiers
 are its towns' own from the next battle on.
 
+## Round 146: Towns known for something
+
+Most towns, every city and some villages are now known for something. It
+might be an arena where gladiators fight for glory and the condemned for
+their freedom, a great library with a star tower, the way down into the
+old places under the town, and so on. Each one is built in its people's
+own way, run by the town's own people, and has its own days and its own
+things for you to do.
+
+### What a place can be known for
+
+| Kind | Village | Town | City |
+| --- | --- | --- | --- |
+| Arena | fighting pit | amphitheatre | colosseum |
+| Library | scriptorium | great library | grand library |
+| Holy seat | shrine | abbey | cathedral |
+| Bazaar | | market hall | grand bazaar |
+| Forge | bloomery | forge quarter | great foundry |
+| Citadel | | fort | citadel |
+| Baths | hot spring | bathhouse | thermae |
+| Theatre | | playhouse | grand theatre |
+| Racecourse | horse fair | racecourse | hippodrome |
+| Fairground | fairground | fairground | |
+| Old ruins | ruins | ruins | ruins |
+| Winery | winery | winery | |
+| Shipyard (coast only) | | shipyard | great shipyard |
+| Gardens | | gardens | royal gardens |
+| Monastery | monastery | monastery | |
+| Apiary | apiary | | |
+| Stone circle | stone circle | | |
+| Quarry | quarry | quarry | |
+| Delve | | delve | deep delve |
+
+- **Who gets what.** It depends on where the place is (mountains, the
+  coast, open plains, old places nearby), on its people (a warlike realm
+  builds arenas and citadels, a learned one libraries, a pious one holy
+  seats) and on its size. Each kind has a cap on how many there can be in
+  a world, every one already given makes another less likely, and two of
+  a kind are never close together. The world map shows what a town is
+  famous for when you point at it.
+- **No two alike.** Each is built in its people's style: a marble
+  colosseum, a ring of carved holmgang posts, a jade courtyard; a stave
+  church, a ziggurat, a jade temple; a sauna or marble thermae. Each also
+  has its own features, drawn from that kind's list. An arena might have
+  beast cages, cells for the condemned, a lord's box, an awning over the
+  stands, a gladiator school, or a champion in bronze. Each has its own
+  name and founding year too.
+
+### Its people
+
+- **Staff.** When a town is laid out it takes on people for its places:
+  gladiators, a master of the games and a bookmaker at the arena, a
+  librarian, scribes and an astronomer at the library, clerics, smiths and
+  founders, vintners, monks, delvers, actors and musicians, stallholders,
+  gardeners and so on. They come from the commoner trades that can spare
+  them, at most about one adult in seven. Anyone lost is replaced from
+  the town in time.
+- **At work.** You can see them working: gladiators at the posts,
+  hammers and sparks at the forge, scribes inking, the astronomer at the
+  glass by night, the vintner at the press, bees round the beekeeper,
+  stallholders and showmen calling out their wares.
+- **The days.** Each place keeps a calendar:
+  - the games every few days, with bouts between named fighters, a title
+    bout, and one of the condemned fighting for freedom;
+  - race days;
+  - a play most nights (dark one night a week);
+  - services morning and evening, and a saint's feast once a month;
+  - lectures and star-watching;
+  - auctions, fair days, the pour at the foundry, the harvest and
+    tastings, a ship launched, the drill, the evening bath, the gathering
+    at the stones, and the delvers going down.
+
+  People with time to spare go: to a seat in the stands, a pew, a place
+  in the water or a walk round the gardens. More go to the big days, and
+  the brave favour the arena while the pious favour the prayers.
+- **What comes of it.** Fighters build records, a champion rises, and
+  the condemned win their freedom after three wins. Horses win races,
+  plays become famous (or don't), and pilgrims come for feasts. Now and
+  then a delver doesn't come back up, and their name goes on the
+  memorial. The news goes on the town's board, into its history and to
+  the towns around it. Each day's crowds bring coin to the town, and the
+  staff are paid from it.
+
+### What you can do
+
+Almost everything in these places can be used. The gate, board or sign
+of each opens a window on it with three tabs: **What's on**, its
+**board** and **Its story**.
+
+- **Arena.** Place wagers at the odds on the card before the games
+  start, then collect your winnings from the bookmaker. Watch the bouts
+  played out on the sands. Fight one of the school yourself: there's a
+  purse and the crowd's cheers during the games, and your name grows
+  with each win. Beat the champion before the crowd to win the laurels.
+- **Racecourse.** Bet on the race card and watch the horses in their
+  silks come round the course. Ride a lap on your own horse from the
+  gates to the winning post to set the course record.
+- **Theatre.** Buy a seat for tonight and watch the play, line by line,
+  with the house cheering or jeering at the curtain.
+- **Library.** Study at a lectern once a day: you'll learn of an old
+  place or something from the town's own books. Buy a map of the country
+  around, or a chart of the stars, and watch the stars through the great
+  glass by night.
+- **Holy seat.** The font heals you, the relic blesses you, and you can
+  light a candle or buy holy water.
+- **Bazaar.** Browse the stalls, sell gems to the changer and bid at the
+  auction.
+- **Forge.** Smelt your ore at the furnaces, buy ingots and fill the
+  guild's contracts.
+- **Citadel.** Drill with the garrison, shoot at the butts, or hire a
+  sellsword for a day.
+- **Baths.** Take the waters, have a rub-down, or just stand in the
+  pool.
+- **Fair.** Strike the bell (the festival's striker game), throw rings
+  for prizes, have your fortune told (it's often true: an old place
+  nearby), or ride the carousel.
+- **Ruins.** Dig in the trenches for finds and sell them to the
+  antiquarian. If you're a scholar, you can read the glyphs.
+- **Winery.** Pick grapes at harvest, press them, and taste the vintage.
+- **Monastery.** Meditate, train at the wooden dummies and drink the
+  tea.
+- **Apiary.** Take honey from the skeps (mind the bees).
+- **Stone circle.** Read the runes for an omen, or leave an offering on
+  the altar.
+- **Quarry.** Buy dressed stone or commission a bust.
+- **Delve.** Its way down is the door to an old place of its own, and
+  the guild posts contracts for what you bring up. The memorial lists
+  the names of the delvers who never came back.
+
+Many of these give a few hours' boost (Strength, Endurance, Agility or
+Charisma), and most of the blessings work once a day.
+
+### Multiplayer
+
+Everything is done on the host, as whoever did it. Each player has their
+own wagers, winnings, name in the arena and once-a-day blessings. The
+quarter window and the fair's games appear on each player's own screen,
+and what's played out (the bouts, races and plays) is seen by everyone
+nearby.
+
+### Older worlds
+
+What each town is known for comes from the world's seed, so a world made
+before this version gets its specialties too. Its towns are built up to
+their edges, so each quarter is raised the first time you visit, on open
+ground in the town if there is any. Otherwise it goes just outside the
+town beside a road out, on ground levelled to the town's own. Where
+each one went is saved with the town.
+
+### Fixes
+
+- A town's builders could get stuck forever in the same moment after a
+  long wait or a skip of time. This happened when a repair couldn't take
+  hold: a new repair was started and finished over and over in the same
+  instant. They now come back to it later instead.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

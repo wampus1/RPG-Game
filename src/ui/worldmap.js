@@ -8,6 +8,7 @@
 //   to a single dot of colour each, so the whole world fits: the islands,
 //   the ring of the storm round them, and the far lands no one from the
 //   islands has seen (only their outlines, from the old charts).
+import { famousFor, formOf } from '../world/specialties.js';
 import { shapeWords } from '../world/shapes.js';
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, CHAR_W, CHAR_H } from '../config.js';
 import { Window, cap } from './window.js';
@@ -633,6 +634,9 @@ export class MapWindow extends Window {
         if (rd !== undefined && rd !== null && game.day - rd <= 3) info += game.day === rd ? ' · raided today' : ` · raided ${game.day - rd} day${game.day - rd === 1 ? '' : 's'} ago`;
         put(y0, info, C.hi);
         put(y0 + 1, mark ? mark.label : s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', mark ? mark.color || '#ff9080' : s.civ ? s.civ.color.hex : C.dim);
+        // (Round 146) What it's known for (see world/specialties.js).
+        const fame = famousFor(s);
+        if (fame.length) put(y0 + 2, `Famous for ${fame.map((q) => `${q.name}${formOf(q) ? ` (${formOf(q).title.toLowerCase()})` : ''}`).join(' and ')}`, '#ffd070');
       } else {
         put(y0, d.line, d.color);
         if (mark) put(y0 + 1, mark.label, mark.color || '#ff9080');
