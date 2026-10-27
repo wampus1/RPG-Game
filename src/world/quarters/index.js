@@ -245,22 +245,24 @@ function laneOf(L, lot) {
 // way in faces the town (`face`, the side it's on), a lane from it along
 // the town's edge to the road out on that side (`to`: see laneOf). Sizes
 // as for findLot (the first that has room); null if none.
-function findAnnex(L, sizes, rng, taken, avoid = null) {
+function findAnnex(L, sizes, rng, taken, avoid = null, cols = new Map()) {
   const t = L.world && L.world.terrain;
   const ow = L.world && L.world.ow;
   if (!t || !ow) return null;
   const b = L.bounds;
-  const ctx = t.context(b.x0 - 48, b.z0 - 48, b.x1 + 48, b.z1 + 48);
-  const cols = new Map();
+  // (The lie of the land, looked up once a tile for all the town's annexes;
+  // -1 for water.)
+  cols.ctx ||= t.context(b.x0 - 48, b.z0 - 48, b.x1 + 48, b.z1 + 48);
+  const tmp = {};
   const col = (x, z) => {
     const k = x * 65536 + z;
-    let c = cols.get(k);
-    if (!c) {
-      const o = t.column(x, z, ctx, {});
-      c = { h: o.h, wet: o.water >= 0 };
-      cols.set(k, c);
+    let h = cols.get(k);
+    if (h === undefined) {
+      const o = t.column(x, z, cols.ctx, tmp);
+      h = o.water >= 0 ? -1 : o.h;
+      cols.set(k, h);
     }
-    return c;
+    return h;
   };
   const others = ow.settlements.filter((o) => o && o !== L.settlement && o.bounds);
   const sites = (ow.sites || []).filter((o) => o.x !== undefined);
@@ -300,14 +302,16 @@ function findAnnex(L, sizes, rng, taken, avoid = null) {
     for (const o of sites) if (o.x >= x0 - 8 && o.x <= x1 + 8 && o.z >= z0 - 8 && o.z <= z1 + 8) return -1;
     for (const o of taken) if (o && !(o.x + o.W + 2 < x0 || o.x - 2 > x1 || o.z + o.D + 2 < z0 || o.z - 2 > z1)) return -1;
     if (roadNear(x0, z0, x1, z1)) return -1;
+    // (The lie of it, a look every other pace (the same paces for every
+    // lot tried): enough to tell ground that can be made good.)
     let cost = 0;
-    for (let z = z0; z <= z1; z++) {
-      for (let x = x0; x <= x1; x++) {
-        const c = col(x, z);
-        if (c.wet) return -1;
-        const d = Math.abs(c.h - SURFACE);
+    for (let z = z0 + (z0 & 1); z <= z1; z += 2) {
+      for (let x = x0 + (x0 & 1); x <= x1; x += 2) {
+        const h = col(x, z);
+        if (h < 0) return -1;
+        const d = Math.abs(h - SURFACE);
         if (d > 5) return -1;
-        cost += d;
+        cost += d * 4;
       }
     }
     return cost;
@@ -317,11 +321,11 @@ function findAnnex(L, sizes, rng, taken, avoid = null) {
   const laneCost = (lane) => {
     let cost = 0;
     for (const [x, z] of lane) {
-      const c = col(x, z);
-      if (c.wet || Math.abs(c.h - SURFACE) > 4) return -1;
+      const h = col(x, z);
+      if (h < 0 || Math.abs(h - SURFACE) > 4) return -1;
       if (others.some((o) => x >= o.bounds.x0 && x <= o.bounds.x1 && z >= o.bounds.z0 && z <= o.bounds.z1)) return -1;
       if (taken.some((o) => o && x >= o.x && x < o.x + o.W && z >= o.z && z < o.z + o.D)) return -1;
-      cost += Math.abs(c.h - SURFACE) + 0.25;
+      cost += Math.abs(h - SURFACE) + 0.25;
     }
     return cost;
   };
@@ -380,6 +384,7 @@ export function raiseQuarters(L, lots, rng, avoid = null, rebuild = false) {
   let changed = false;
   const local = L.local;
   L.local = new Map();
+  const cols = new Map();
   try {
     (s.spec || []).forEach((spec, k) => {
       if (!SPECIALTIES[spec.k] || lots[k] === false) return;
@@ -388,7 +393,7 @@ export function raiseQuarters(L, lots, rng, avoid = null, rebuild = false) {
       const r = rng.fork(`q:${spec.k}:${k}`);
       if (fresh) {
         lot = findLot(L, sizesFor(spec), r, PREFER[spec.k] || 'mid') || (PREFER[spec.k] === 'water' ? findLot(L, sizesFor(spec), r, 'edge') : null)
-          || (spec.k !== 'shipyard' ? findAnnex(L, sizesFor(spec), r, lots, avoid) : null);
+          || (spec.k !== 'shipyard' ? findAnnex(L, sizesFor(spec), r, lots, avoid, cols) : null);
         lots[k] = lot || false;
         changed = true;
         if (!lot) return;

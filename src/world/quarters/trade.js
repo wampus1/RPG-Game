@@ -59,13 +59,38 @@ function grandBazaar(q) {
   // Rows of stalls back to back, aisles between; the main aisle from the
   // way in (south) to the auction block (north), the cross aisle through
   // the middle.
+  // (Round 147) The square where the aisles cross opened out, a pitch or
+  // two standing empty (a cart, sacks, a heap of baskets there instead),
+  // so no two markets are laid out pitch for pitch alike.
   let colour = q.m.cloth;
+  const square = q.W >= 21 ? 4 : 2;
   for (let z = q.z0 + 2; z + 1 <= q.z1 - 3; z += 4) {
     for (let x = q.x0 + 1; x + 2 <= q.x1 - 1; x += 4) {
       if (Math.abs(x + 1 - mx) <= 2 || (z <= mz && z + 1 >= mz - 1)) continue;
+      if (Math.abs(x + 1 - mx) <= square + 1 && Math.abs(z - mz) <= square) continue;
+      if (rng.chance(0.15)) {
+        q.put(x + 1, Y0, z, rng.pick([B.gl_cart ?? B.crate, B.sw_sacks ?? B.crate, B.rf_pots ?? B.pottery, B.hay_bale]));
+        continue;
+      }
       stall(q, x, z, stallKinds(q, rng), colour);
       colour = (colour + 1) & 3;
     }
+  }
+  // Trees at the square's corners (the north's and the high folk's a
+  // stone planter each), lamps down the main aisle.
+  for (const [dx, dz] of [[-square, -square], [square, -square], [-square, square], [square, square]]) {
+    const x = mx + dx;
+    const z = mz + dz;
+    if (!q.inLot(x, z) || q.at(x, Y0, z) !== undefined) continue;
+    if (q.fam === 'north' || q.fam === 'high') q.put(x, Y0, z, B.garden_urn);
+    else {
+      q.stack(x, z, Y0, Y0 + 1, q.fam === 'jade' ? B.log_cherry ?? B.log_oak : B.log_oak);
+      for (let ddz = -1; ddz <= 1; ddz++) for (let ddx = -1; ddx <= 1; ddx++) q.put(x + ddx, Y0 + 2, z + ddz, q.fam === 'jade' ? B.leaves_blossom ?? B.leaves_oak : B.leaves_oak);
+    }
+  }
+  for (let z = q.z0 + 3, k = 0; z <= q.z1 - 3; z += 4, k++) {
+    const x = k % 2 ? mx + 2 : mx - 2;
+    if (q.at(x, Y0, z) === undefined && Math.abs(z - mz) > square) q.lamp(x, z, q.fam === 'jade' ? 2 : 1);
   }
   // The souk's cloth roof over the aisles.
   if (souk) for (let z = q.z0 + 1; z <= q.z1 - 1; z++) for (let x = q.x0 + 1; x <= q.x1 - 1; x++) if ((z - q.z0) % 4 === 0 && (x + z) % 2 === 0) q.canopy(x, z, Y0 + 3, 0, (x >> 1) & 3);

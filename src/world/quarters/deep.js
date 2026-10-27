@@ -20,6 +20,13 @@ function delve(q) {
   q.fill(q.x0, q.z0, q.x1, q.z1, B.cobblestone);
   const mx = q.cx;
   const mz = q.cz - 1;
+  // (Round 147) The spoil brought up trodden into the yard round the
+  // shaft, thinning out toward its edges.
+  for (let z = q.z0 + 1; z < q.z1; z++) for (let x = q.x0 + 1; x < q.x1; x++) {
+    const d = Math.max(Math.abs(x - mx), Math.abs(z - mz));
+    const h = (((x * 73856093) ^ (z * 19349663)) >>> 0) % 100;
+    if (d >= 3 && h < 90 - d * 12) q.ground(x, z, B.mine_floor ?? B.gravel);
+  }
   // The ring round the shaft, the way down in it.
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) q.ground(mx + dx, mz + dz, B.flagstone);
   q.fx(mx, Y0, mz, 'delve', B.delve_mouth);
@@ -31,28 +38,44 @@ function delve(q) {
   }
   q.role('delver', mx - 1, mz + 3, 0, []);
   q.role('delver', mx + 1, mz + 3, 0, []);
-  // The guild hall at the back: the board, the tables, the strongbox.
+  // The guild hall at the back: the board, the tables, the strongbox. To
+  // one side of the shaft if there's room; on a narrow yard, right across
+  // the back, the relics on their stands along its far wall.
+  let inHall = null;
   if (q.has('guild') && q.D >= 13) {
-    const r = { x0: q.x0 + 1, z0: q.z0, x1: mx - 4, z1: q.z0 + 5 };
+    let r = { x0: q.x0 + 1, z0: q.z0, x1: mx - 4, z1: q.z0 + 5 };
+    let door = { x: r.x1 - 1, z: r.z1, rot: 0 };
+    if (r.x1 - r.x0 < 4 && mz - 3 - r.z1 >= 2) {
+      r = { x0: q.x0 + 1, z0: q.z0, x1: q.x1 - 1, z1: q.z0 + 5 };
+      door = { x: mx, z: r.z1, rot: 0 };
+    }
     if (r.x1 - r.x0 >= 4) {
-      const h = q.hall(r, { doors: [{ x: r.x1 - 1, z: r.z1, rot: 0 }], h: 3, use: 'guild' });
+      const h = q.hall(r, { doors: [door], h: 3, use: 'guild' });
+      const across = r.x1 === q.x1 - 1;
       for (let x = h.ix0; x < h.ix1; x += 3) {
-        q.put(x, Y0, h.iz0 + 1, B.table);
-        q.put(x, Y0, h.iz0 + 2, B.chair, 2);
-        q.spot(x, h.iz0 + 2, 2, ['drink', 'social', 'gossip'], { seat: true });
+        if (across && Math.abs(x - mx) <= 1) continue;
+        q.put(x, Y0, h.iz0 + 1 + (across ? 1 : 0), B.table);
+        q.put(x, Y0, h.iz0 + 2 + (across ? 1 : 0), B.chair, 2);
+        q.spot(x, h.iz0 + 2 + (across ? 1 : 0), 2, ['drink', 'social', 'gossip'], { seat: true });
       }
       q.put(h.ix1, Y0, h.iz0, B.chest);
       q.role('guildmaster', h.ix1 - 1, h.iz1, 0, []);
+      if (across) inHall = h;
     }
   }
   q.fx(mx + 4, Y0, q.z1 - 1, 'contracts', B.delve_board);
   q.role('guildmaster', mx + 5, q.z1 - 1, 0, []);
   // The relics brought up, on their stands.
-  if (q.has('relics')) for (let k = 0; k < 3; k++) q.fx(q.x1 - 1, Y0, q.z0 + 1 + k * 2, 'relics', B.display_stand ?? B.weapon_rack);
+  if (q.has('relics')) {
+    for (let k = 0; k < 3; k++) {
+      if (inHall) q.fx(inHall.ix0 + 1 + k * 2, Y0, inHall.iz0, 'relics', B.display_stand ?? B.weapon_rack);
+      else q.fx(q.x1 - 1, Y0, q.z0 + 1 + k * 2, 'relics', B.display_stand ?? B.weapon_rack);
+    }
+  }
   // The alarm bell on its post.
   if (q.has('bell')) q.fx(mx + 3, Y0, mz - 3, 'bell', B.bell);
   // The infirmary: beds, herbs, a surgeon.
-  if (q.has('infirmary') && q.x1 - (mx + 4) >= 4) {
+  if (q.has('infirmary') && !inHall && q.x1 - (mx + 4) >= 4) {
     const r = { x0: mx + 4, z0: q.z0, x1: q.x1 - 2, z1: q.z0 + 4 };
     const dx = r.x0 + 1;
     const h = q.hall(r, { doors: [{ x: dx, z: r.z1, rot: 0 }], h: 2, use: 'infirmary' });
@@ -66,11 +89,21 @@ function delve(q) {
     q.fx(q.x0 + 2, Y0, q.z1 - 2, 'memorial', B.delve_memorial);
     q.spot(q.x0 + 3, q.z1 - 1, 2, ['mourn', 'pray']);
   }
-  // Supplies: rope, crates, a cart.
+  // Supplies: rope, crates, sacks of what came up; the cart on its rails
+  // from the shaft out toward the way in.
   q.put(mx - 4, Y0, mz + 2, B.rope_coil);
   q.put(mx - 4, Y0, mz + 1, B.crate);
+  if (B.tool_rack !== undefined) q.put(mx - 4, Y0, mz - 1, B.tool_rack);
   q.put(mx + 4, Y0, mz + 2, B.barrel);
-  q.put(mx - 5, Y0, mz + 2, B.mine_cart);
+  if (B.loot_sacks !== undefined) q.put(mx + 4, Y0, mz + 1, B.loot_sacks);
+  if (B.mine_rail !== undefined) {
+    const rx = mx - 1;
+    for (let z = mz + 4; z <= q.z1 - 2; z++) if (q.at(rx, Y0, z) === undefined) q.put(rx, Y0, z, B.mine_rail, 0);
+    if (q.at(rx, Y0, q.z1 - 3) === B.mine_rail) {
+      q.put(rx, Y0, q.z1 - 3, B.mine_cart, 0);
+      if (B.ore_pile !== undefined && q.at(rx - 1, Y0, q.z1 - 3) === undefined) q.put(rx - 1, Y0, q.z1 - 3, B.ore_pile);
+    }
+  } else q.put(mx - 5, Y0, mz + 2, B.mine_cart);
   q.sign(mx + 2, q.z1, 0);
   void LIT;
 }
@@ -81,8 +114,19 @@ function ruins(q) {
   const old = q.fam === 'jade' ? B.tv_brick ?? B.mossy_bricks : q.fam === 'sun' ? B.sandstone : q.fam === 'classic' ? B.travertine : B.mossy_bricks;
   const wild = q.has('overgrown');
   q.fill(q.x0, q.z0, q.x1, q.z1, B.grass);
-  // The old paving, broken, the grass through it.
-  for (let z = q.z0 + 1; z <= q.z1 - 1; z++) for (let x = q.x0 + 1; x <= q.x1 - 1; x++) if ((x * 7 + z * 13) % 5 < 2) q.ground(x, z, B.cracked_bricks);
+  // The old paving, broken, the grass through it: whole stretches here,
+  // a slab or two there (a patchwork of old ground, not a pattern).
+  const lump = (x, z) => {
+    const cx = Math.floor(x / 3);
+    const cz = Math.floor(z / 3);
+    const h = ((cx * 73856093) ^ (cz * 19349663) ^ (q.i * 83492791)) >>> 0;
+    return (h % 100) / 100;
+  };
+  for (let z = q.z0 + 1; z <= q.z1 - 1; z++) for (let x = q.x0 + 1; x <= q.x1 - 1; x++) {
+    const v = lump(x, z) * 0.7 + rng.float(0, 0.3);
+    if (v > 0.55) q.ground(x, z, B.cracked_bricks);
+    else if (v > 0.47) q.ground(x, z, B.moss ?? B.grass);
+  }
   // The walls of the old hall, standing here and there.
   const r = { x0: q.x0 + 1, z0: q.z0 + 1, x1: q.x1 - 1, z1: q.z1 - 3 };
   for (let x = r.x0; x <= r.x1; x++) for (let z = r.z0; z <= r.z1; z++) {

@@ -154,7 +154,7 @@ function forge(q) {
   }
   if (q.has('statue') && open(q, q.cx, q.z1 - 3)) q.put(q.cx, Y0, q.z1 - 3, B.fg_statue ?? B.statue);
   // Stock about the yard: barrels of water, crates, coal, iron.
-  scatter(q, q.x0 + 1, q.z0 + 5, q.x1 - 1, q.z1 - 1, [B.barrel, B.crate, B.crate_open ?? B.crate, B.fg_coalheap ?? B.coal_ore, B.ore_pile], village ? 3 : q.size === 'city' ? 9 : 6);
+  scatter(q, q.x0 + 1, q.z0 + 5, q.x1 - 1, q.z1 - 1, [B.barrel, B.crate, B.crate_open ?? B.crate, B.fg_coalheap ?? B.coal_ore, B.ore_pile], village ? 2 : q.size === 'city' ? 5 : 3);
   q.brazier(q.cx - 1, q.z1);
   q.lamp(q.x1 - 1, q.z1 - 1, 1);
   q.sign(q.cx + 1, q.z1, 0);

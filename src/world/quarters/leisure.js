@@ -33,8 +33,7 @@ function pool(q, x0, z0, x1, z1, rim = B.bath_tile, water = B.bath_water) {
 
 function thermae(q) {
   const m = q.m;
-  const floor = q.has('mosaic') || q.fam === 'classic' ? B.mosaic : m.pave;
-  q.fill(q.x0, q.z0, q.x1, q.z1, floor);
+  q.fill(q.x0, q.z0, q.x1, q.z1, m.pave);
   q.enclose(m.wall, 2, null, 1);
   // Columns round the inside of the wall.
   for (let x = q.x0 + 1; x <= q.x1 - 1; x += 2) for (const z of [q.z0 + 1]) q.column(x, z, 2, B.lantern);
@@ -44,6 +43,11 @@ function thermae(q) {
   const px1 = q.x1 - (city && q.has('steam') ? 8 : 3);
   const pz0 = q.z0 + 3;
   const pz1 = q.z1 - 4;
+  // (Round 147) The mosaic a frame round the pool, the rest plain: the
+  // pool what the eye goes to.
+  if (q.has('mosaic') || q.fam === 'classic') {
+    for (let z = pz0 - 2; z <= pz1 + 2; z++) for (let x = px0 - 2; x <= px1 + 2; x++) if (x === px0 - 2 || x === px1 + 2 || z === pz0 - 2 || z === pz1 + 2) q.ground(x, z, B.mosaic);
+  }
   pool(q, px0, pz0, px1, pz1);
   const mx = Math.round((px0 + px1) / 2);
   q.put(mx, Y0, pz0 - 1, B.bath_statue);
@@ -248,13 +252,26 @@ function theatre(q) {
     const mx = stage(q, sx0, q.z0 + 1, sx1, q.z0 + 3);
     for (const x of [sx0 - 1, sx1 + 1]) for (const z of [q.z0 + 1, q.z0 + 4]) q.stack(x, z, Y0, Y0 + 3, B.planks_lacquer);
     for (let x = sx0 - 2; x <= sx1 + 2; x++) for (let z = q.z0; z <= q.z0 + 4; z++) q.put(x, Y0 + 4, z, B.roof_jade, z === q.z0 ? 2 : z === q.z0 + 4 ? 0 : 1);
-    // Tea tables before it.
-    for (let z = q.z0 + 6; z <= q.z1 - 2; z += 3) for (let x = q.x0 + 2; x <= q.x1 - 2; x += 4) {
+    // A lacquered rail along the front of the stage, gaps at its ends.
+    for (let x = sx0 + 1; x <= sx1 - 1; x++) if (Math.abs(x - mx) > 1) q.put(x, Y0, q.z0 + 5, B.fence);
+    // Tea tables before it, each row set over from the one before (the
+    // second row looks between the first's heads), the walk up the middle.
+    const shift = q.rng.int(0, 1) * 2;
+    for (let z = q.z0 + 7, row = 0; z <= q.z1 - 2; z += 3, row++) for (let x = q.x0 + 2 + ((row + shift / 2) % 2) * 2; x <= q.x1 - 2; x += 4) {
       if (Math.abs(x - mx) <= 1) continue;
       q.put(x, Y0, z, B.tea_table);
       for (const dx of [-1, 1]) {
         q.put(x + dx, Y0, z, B.stool);
         q.seat(x + dx, z, 2);
+      }
+    }
+    // Lantern trees down either side, peonies in beds between them.
+    for (let z = q.z0 + 6; z <= q.z1 - 1; z += 5) for (const x of [q.x0, q.x1]) {
+      q.put(x, Y0, z, B.lantern_tree ?? B.lantern, LIT);
+      for (const dz of [2, 3]) {
+        if (z + dz > q.z1 - 1) continue;
+        q.ground(x, z + dz, B.grass_lush);
+        if (dz === 2) q.put(x, Y0, z + dz, B.peony ?? B.flower_red);
       }
     }
     if (q.has('orchestra')) q.role('musician', sx0 - 2, q.z0 + 3, 3, ['music']);
@@ -374,11 +391,14 @@ function gardens(q) {
     // them every way from cell to cell (so there's always a way to the
     // middle, and only one), its way in on the side toward the garden;
     // the urn in the cell furthest from it.
+    // As big as its corner of the garden takes (cells two paces apart,
+    // so odd sizes), from 7 by 5 up to 11 by 9.
     const [x, z] = corners[c++];
-    const w = 7;
-    const d = 5;
-    const x0 = x < mx ? x - 1 : x - (w - 2);
-    const z0 = z < mz ? z - 1 : z - (d - 2);
+    const odd = (n, lo, hi) => Math.max(lo, Math.min(hi, n % 2 ? n : n - 1));
+    const w = odd(x < mx ? mx - 2 - q.x0 : q.x1 - mx - 2, 7, 11);
+    const d = odd(z < mz ? mz - 2 - q.z0 : q.z1 - mz - 2, 5, 9);
+    const x0 = x < mx ? q.x0 + 1 : q.x1 - w;
+    const z0 = z < mz ? q.z0 + 1 : q.z1 - d;
     const walk = new Set();
     const key = (u, v) => u * 64 + v;
     const stack = [[1, 1]];

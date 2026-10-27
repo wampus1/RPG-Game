@@ -195,6 +195,10 @@ export class Q {
     const wg = lot.gates && lot.gates.length ? lot.gates.map((g) => ({ ...g, out: { x: g.x + OUT[g.side][0], z: g.z + OUT[g.side][1] } })) : gatesOf(L, lot);
     // Which way the front's turned: south, west, north, east.
     this.rot = { s: 0, w: 1, n: 2, e: 3 }[wg[0].side];
+    // (Round 147) And whether it's laid out the other way about, left for
+    // right (its way in at the middle of its front either way): no two
+    // alike for that alone.
+    this.flip = rng.chance(0.5);
     this.x0 = lot.x;
     this.z0 = lot.z;
     this.W = this.rot % 2 ? lot.D : lot.W;
@@ -211,7 +215,9 @@ export class Q {
     this.gates = wg.map((g) => {
       const c = this.local(g.x, g.z);
       const k = SIDE.indexOf(g.side);
-      return { side: SIDE[(k - this.rot + 4) & 3], x: c.x, z: c.z };
+      let side = SIDE[(k - this.rot + 4) & 3];
+      if (this.flip) side = side === 'w' ? 'e' : side === 'e' ? 'w' : side;
+      return { side, x: c.x, z: c.z };
     });
     this.m = matsFor(L, this.fam, rng);
     this.poor = this.s.condition === 'poor';
@@ -226,7 +232,7 @@ export class Q {
 
   // The drawn-up frame to the world's, and back.
   pt(x, z) {
-    const u = x - this.x0;
+    const u = this.flip ? this.W - 1 - (x - this.x0) : x - this.x0;
     const v = z - this.z0;
     const { x: X, z: Z, W, D } = this.lot;
     switch (this.rot) {
@@ -240,15 +246,19 @@ export class Q {
     const { x: X, z: Z, W, D } = this.lot;
     const a = x - X;
     const b = z - Z;
+    let c;
     switch (this.rot) {
-      case 1: return { x: this.x0 + b, z: this.z0 + (W - 1 - a) };
-      case 2: return { x: this.x0 + (W - 1 - a), z: this.z0 + (D - 1 - b) };
-      case 3: return { x: this.x0 + (D - 1 - b), z: this.z0 + a };
-      default: return { x: this.x0 + a, z: this.z0 + b };
+      case 1: c = { x: this.x0 + b, z: this.z0 + (W - 1 - a) }; break;
+      case 2: c = { x: this.x0 + (W - 1 - a), z: this.z0 + (D - 1 - b) }; break;
+      case 3: c = { x: this.x0 + (D - 1 - b), z: this.z0 + a }; break;
+      default: c = { x: this.x0 + a, z: this.z0 + b };
     }
+    if (this.flip) c.x = this.x0 + this.W - 1 - (c.x - this.x0);
+    return c;
   }
   // A facing (0 south, 1 west, 2 north, 3 east) in the world's frame.
   dir(d) {
+    if (this.flip && d & 1) d ^= 2;
     return (d + this.rot) & 3;
   }
   // A rectangle in the world's frame (and anything else on it kept).
@@ -306,7 +316,9 @@ export class Q {
       if (b && b.solid && b.interact !== 'door' && b.interact !== 'gate' && !b.stair) return;
     }
     const p = this.pt(x, z);
-    const t = this.rot ? turnsOf(id) : 0;
+    const t = this.rot || this.flip ? turnsOf(id) : 0;
+    // (Laid out the other way about: what faces west faces east.)
+    if (t === 1 && this.flip && meta & 1) meta ^= 2;
     if (t === 1) meta = (meta & ~3) | (((meta & 3) + this.rot) & 3);
     else if (t === 2 && (meta & 3) !== 1) meta = (meta & ~3) | (((meta & 3) + this.rot) & 3);
     this.L.put(p.x, y, p.z, id, meta);
