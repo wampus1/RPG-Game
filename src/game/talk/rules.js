@@ -15,12 +15,14 @@
 // they're said (see ui/textfx.js).
 import { RULES as BASE } from './lines.js';
 import { RULES as SOCIAL } from './lines_social.js';
+import { RULES as QUARTERS } from './lines_quarters.js';
 import { VARIANTS } from './variants.js';
 
-// (Round 136: and what's said among people, and to you: see social.js.)
-const RULES = [...BASE, ...SOCIAL];
+// (Round 136: and what's said among people, and to you: see social.js;
+// Round 147: and of the town's great places.)
+const RULES = [...BASE, ...SOCIAL, ...QUARTERS];
 
-const KEY_W = { kid: 0.25, met: 0.25, indoors: 0.25, op: 0.5, opBand: 0.5, elder: 0.5, partnered: 0.5, parent: 0.5, job: 0.75, feel: 0.75 };
+const KEY_W = { kid: 0.25, met: 0.25, indoors: 0.25, op: 0.5, opBand: 0.5, elder: 0.5, partnered: 0.5, parent: 0.5, job: 0.75, feel: 0.75, qFan: 0.25, qNow: 0.5, qCheers: 0.25, qCrowd: 0.25 };
 const FEELS = new Set(['joy', 'grief', 'fear', 'anger', 'shame', 'pride', 'love', 'strain']);
 const BY_TOPIC = new Map();
 function compile() {

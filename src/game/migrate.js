@@ -1185,6 +1185,19 @@ export const STEPS = [
       log.push('Towns are known for something now: an arena, a great library, a cathedral, a bazaar, a forge, a citadel, baths, a theatre, a racecourse, a fair, old ruins, a winery, a shipyard, gardens, a monastery, a delve into the old places beneath, and more, each built in its people\'s own way, with its own people, its own days (the games, race days, plays, feasts) and its own things to do. In a world made before this version they\'re raised on open ground in or just outside each town the first time you visit it.');
     },
   },
+  {
+    to: '1.47.0',
+    game(game, log) {
+      // (The quarters are built to a new design: their ways in clear, every
+      // seat and stall and stand within reach, some laid out the other way
+      // about. Each town's are set into the world again the next time it's
+      // visited, over the old, on the same ground: see sim/cities.js attach
+      // and QUARTER_V. A day's doings already called keep to the old.)
+      const C = game.sim && game.sim.cities;
+      if (C) C.players ||= {};
+      log.push('The great places of each town (arenas, markets, gardens, delves...) are rebuilt the next time you visit: every seat, stall and stand can be reached now, and their days are put off by a siege or bad weather, busier on a festival, and talked of about town.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -238,6 +238,21 @@ export function matters(sim, L, T, day) {
       order: { feasts: { flush: 0, never: 1 } },
     });
   }
+  // --- (Round 147) A grand day at one of the town's great places, on the
+  // town's purse (when the budget runs to feasts and there's money).
+  const gala = budget.fetes === 1 && sim && sim.cities && e.treasury > S.pop * 40 ? sim.cities.galaFor(L, day) : null;
+  if (gala) {
+    const spend = Math.round(Math.min(e.treasury * 0.1, 60 + S.pop * 2));
+    out.push({
+      key: 'gala', kind: 'gala', prio: 3, title: `Pay for ${gala.what} at ${gala.name}?`,
+      why: [`${gala.title} is coming up at ${gala.name}. For ¤${spend} the town could make a great day of it: more would come, and go home the happier.`],
+      opts: [
+        { label: `Pay for it (¤${spend})`, fx: { act: 'quarter_gala', q: gala.i, spend, favour: { poor: 2, merchants: 1 } } },
+        { label: 'Leave it be', fx: {}, trivial: true },
+      ],
+      order: { feasts: { flush: 0, never: 1 } },
+    });
+  }
   // --- (Round 136) The town's people, come together to ask for something
   // (see mind/groups.js).
   out.push(...groupMatters(L));

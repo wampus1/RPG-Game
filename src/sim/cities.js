@@ -20,6 +20,7 @@ import { JOBS, retrain } from '../entities/npcgen.js';
 import { DAY, alive, setOverride, activityFor, st, ledger, hearNews, stockFor } from './econ.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { seatOfPid } from './saga/refs.js';
+import { wetNow, dayOf as festivalOf } from './festival.js';
 import { ITEMS } from '../world/items.js';
 import { GROUND } from '../config.js';
 
@@ -37,6 +38,14 @@ const FREE = new Set(['hobby', 'wander', 'social', 'play', 'home', 'rest']);
 const BIG = new Set(['games', 'races', 'feast', 'fairday', 'launch', 'gathering', 'auction']);
 // (Those who never leave their posts for a show.)
 const KEEP = new Set(['guard', 'mayor', 'cook', 'innkeeper', 'barkeep', 'priest', 'healer', 'builder']);
+// (Round 147) What calls a day's doings off: the town besieged (all but
+// the prayers, the drill and the old rites, which go on, and fuller), or
+// rain on what's held under the sky (the going too heavy for the races,
+// the stars hidden, the fair and the launch and the walk washed out).
+const SIEGE_ON = new Set(['service', 'drill', 'forms', 'gathering']);
+const RAIN_OFF = new Set(['races', 'fairday', 'launch', 'promenade', 'stars']);
+// (Round 147) What the town's purse can make of a day at each.
+const GALA = { arena: 'grand games', racecourse: 'a purse for the races', theatre: 'a gala night', holy: 'a feast day', baths: 'a free day at the baths', gardens: 'music in the gardens', fair: 'a grand fair day', bazaar: 'a grand auction', library: 'a public lecture', delve: 'a send-off for the delvers', winery: 'a harvest supper', shipyard: 'a launch day', citadel: 'a parade', monastery: 'an open day', circle: 'a gathering at the stones', forge: 'a casting before the town' };
 // What a day's doings bring the town (a share of the crowd's coin each).
 const GATE = { games: 1.2, races: 1, play: 0.8, feast: 1.5, auction: 0.6, fairday: 1.4, bathing: 0.5, launch: 0.4, tasting: 0.8, lecture: 0.2, gathering: 0.3, service: 0.2, casting: 0.3, expedition: 1.5, promenade: 0.1, stars: 0.2 };
 // The quarter's own traders: what they sell (see econ.STOCK).
@@ -231,6 +240,18 @@ export class Cities {
       });
       return list;
     });
+    // (Round 147) A grand day the town's paid for: the first of that
+    // quarter's doings with a crowd, from the day it was meant for (a week
+    // at most).
+    const G = Q.gala;
+    if (G && G.day <= day) {
+      const ev = (Q.ev[G.q] || []).find((o) => o.crowd > 0);
+      if (ev) {
+        ev.gala = true;
+        ev.crowd = Math.min(1, ev.crowd * 1.6 + 0.1);
+        Q.gala = null;
+      } else if (day - G.day > 7) Q.gala = null;
+    }
     return Q.ev;
   }
   eventsOf(L, i) {
@@ -255,7 +276,11 @@ export class Cities {
     const evs = this.today(L, h);
     evs.forEach((list, i) => {
       for (const ev of list) {
-        if (!ev.called && ev.s - h <= 90 && ev.e > h) this.call(L, i, ev);
+        if (!ev.called && ev.s - h <= 90 && ev.e > h) {
+          const why = this.trouble(L, ev);
+          if (why) this.callOff(L, i, ev, why);
+          else this.call(L, i, ev);
+        }
         // (One being watched is settled as it's played out: see cityplay.js;
         // left over half an hour past its end, settled here.)
         if (!ev.done && h + 60 >= ev.e && (!ev.live || h >= ev.e + 30)) this.settle(L, i, ev);
@@ -264,6 +289,75 @@ export class Cities {
     if (hod === 6) this.restock(L, day);
     if (hod === 19) this.payStaff(L);
     if (hod === 4) this.staff(L, new RNG(hash4(L.settlement.seed >>> 0, day, 0x147)));
+  }
+
+  // (Round 147) A grand day the council might pay for (see agenda.js): at
+  // the quarter whose doings draw the biggest crowds, what it would be
+  // called; null if the town has nothing of the kind, or had one lately.
+  galaFor(L, day) {
+    const Q = this.qs(L);
+    if (Q.gala || day - (Q.galaDay ?? -99) <= 10) return null;
+    let best = null;
+    for (const q of this.quarters(L)) {
+      const K = SHOWS[q.k];
+      if (!K) continue;
+      for (let d = day + 1; d <= day + 7; d++) {
+        const ev = (K.events({ L, q, st: this.stateOf(L, q.i) }, d) || []).find((o) => o.crowd > 0);
+        if (!ev) continue;
+        if (!best || ev.crowd > best.crowd) best = { i: q.i, name: q.name, k: q.k, title: ev.title, day: d, crowd: ev.crowd };
+        break;
+      }
+    }
+    if (!best) return null;
+    best.what = GALA[best.k] || 'a grand day';
+    return best;
+  }
+  patronise(L, i, day, spend = 0) {
+    const q = this.quarters(L)[i];
+    if (!q || !SHOWS[q.k]) return null;
+    const Q = this.qs(L);
+    Q.gala = { q: i, day: day + 1, spend };
+    Q.galaDay = day;
+    return `paid for ${GALA[q.k] || 'a grand day'} at ${q.name}`;
+  }
+
+  // (Round 147) Why one of the day's doings can't go on, if it can't: the
+  // town under siege, or the weather.
+  trouble(L, ev) {
+    if (this.besieged(L) && !SIEGE_ON.has(ev.type)) return 'siege';
+    if (RAIN_OFF.has(ev.type) && wetNow(this.game)) return 'rain';
+    return null;
+  }
+  besieged(L) {
+    const war = this.sim.war;
+    const id = L.settlement.id;
+    return !!war && (war.wars || []).some((w) => w.siege && w.siege.phase !== 'over' && w.siege.sid === id);
+  }
+  // Called off: nobody comes, the wagers on it given back, and it's said
+  // why (on the board, and to anyone who'd bet on it).
+  callOff(L, i, ev, why) {
+    ev.called = true;
+    ev.done = true;
+    ev.off = why;
+    const q = this.quarters(L)[i];
+    const day = Math.floor(ev.s / DAY);
+    const text = why === 'siege' ? `${ev.title} at ${q.name} is called off: the town's under siege.`
+      : ev.type === 'races' ? `${ev.title} at ${q.name} is called off: the going's too heavy after the rain.`
+        : ev.type === 'stars' ? `No star-watching at ${q.name} tonight: the sky's all cloud.`
+          : `${ev.title} at ${q.name} is put off for the weather.`;
+    hearNews(L, L.settlement.name, [text], day, ev.s);
+    const sid = L.settlement.id;
+    for (const [pid, P] of Object.entries(this.players)) {
+      for (const b of P.bets) {
+        if (b.state !== 'open' || b.sid !== sid || b.q !== i || b.ev !== ev.id) continue;
+        b.state = 'won';
+        b.pay = b.stake;
+        this.tell(pid, `${text} Your stake of ¤${b.stake} is yours again at the bookmaker's.`, '#ffe070');
+      }
+    }
+    const past = this.qs(L).past;
+    past.push({ q: i, type: ev.type, title: ev.title, day, n: 0, text, res: why === 'siege' ? 'called off for the siege' : 'called off for the weather' });
+    if (past.length > 12) past.shift();
   }
 
   // Those who'll come: the town's people with the time free, by their
@@ -297,7 +391,11 @@ export class Cities {
     };
     pool.sort((a, b) => like(b) - like(a));
     const seats = this.placesFor(L, q, ev);
-    const n = Math.min(Math.round(pool.length * ev.crowd), seats.length, 40);
+    // (Round 147) On a festival day the town's out of doors and in the mood:
+    // more come; with the enemy at the gates, the temples fill.
+    const more = festivalOf(L, ev.s) ? 1.5 : SIEGE_ON.has(ev.type) && this.besieged(L) ? 2 : 1;
+    ev.festive = more === 1.5 || undefined;
+    const n = Math.min(Math.round(pool.length * Math.min(1, ev.crowd * more)), seats.length, 40);
     const tag = ev.act === 'pray' ? 'pray' : ev.act === 'bathe' ? 'bathe' : ev.act === 'stroll' || ev.act === 'farm' ? 'stroll' : 'show';
     for (let k = 0; k < n; k++) {
       const r = pool[k];
@@ -357,12 +455,18 @@ export class Cities {
     const news = S.resolve({ L, q, st: st0, rng: r }, ev) || [];
     this.afterResolve(L, q, st0, ev);
     // The gate's takings: to the town, a share of the crowd's coin.
-    const gate = Math.round((ev.crowdN || 0) * (GATE[ev.type] || 0.3) * Math.max(0.4, L.econ.wealth || 1));
+    const gate = Math.round((ev.crowdN || 0) * (GATE[ev.type] || 0.3) * Math.max(0.4, L.econ.wealth || 1) * (ev.festive ? 1.25 : 1));
     if (gate) {
       L.econ.treasury += gate;
       this.qs(L).takings = (this.qs(L).takings || 0) + gate;
     }
     this.settleBets(L, i, ev);
+    // (Round 147) A grand day on the town's purse: those who came the
+    // happier for it, and it's remembered whose purse it was.
+    if (ev.gala) {
+      for (const r of L.npcs) if (r.override && r.override.ev === ev.id && alive(r)) r.mood = clamp((r.mood ?? 0.6) + 0.05, 0, 1);
+      news.push(`The town paid for ${ev.title} at ${q.name}, and ${ev.crowdN || 'many'} came.`);
+    }
     // What's said of it: on the town's board, in its books, and carried to
     // the towns about.
     if (news.length) {
@@ -458,6 +562,7 @@ export class Cities {
   }
   // A wager laid: `pick` 'a' or 'b' for a bout, a horse's id for a race.
   bet(pid, L, i, ev, sub, pick, stake) {
+    if (ev.done || ev.off) return null;
     const o = this.odds(L, i, ev, sub);
     if (!o || o[pick] === undefined) return null;
     const b = { sid: L.settlement.id, q: i, ev: ev.id, sub, pick, stake, odds: o[pick], state: 'open', day: Math.floor(ev.s / DAY), title: betTitle(this.stateOf(L, i), ev, sub, pick) };

@@ -658,8 +658,8 @@ export function quarterView(game, sid, i, page) {
   }
   for (const ev of evs) {
     const on = now >= ev.s && now < ev.e && !ev.done;
-    const st = ev.done ? `done${ev.crowdN ? `, ${ev.crowdN} came` : ''}` : on ? 'ON NOW' : now < ev.s ? `at ${clock(ev.s)}` : 'over';
-    line(`${on ? '►' : '·'} ${ev.title} (${clock(ev.s)}-${clock(ev.e)}): ${st}`, on ? '#80e070' : ev.done ? '#8a7a62' : '#e8d8b0');
+    const st = ev.off ? `called off (${ev.off === 'siege' ? 'the siege' : 'the weather'})` : ev.done ? `done${ev.crowdN ? `, ${ev.crowdN} came` : ''}${ev.festive ? ', a festival crowd' : ''}` : on ? 'ON NOW' : now < ev.s ? `at ${clock(ev.s)}` : 'over';
+    line(`${on ? '►' : '·'} ${ev.title}${ev.gala ? ' (on the town)' : ''} (${clock(ev.s)}-${clock(ev.e)}): ${st}`, on ? '#80e070' : ev.done ? '#8a7a62' : '#e8d8b0');
   }
   const owed = C.owed(pid, sid);
   if (owed) row('Collect your winnings', `¤${owed}`, 'collect', true, '#80e070');
@@ -785,7 +785,7 @@ function arenaBoard(o) {
   if (!ev) {
     line('No games today. The card\'s posted the morning of the games.', '#a89878');
   } else {
-    line(`${ev.title}, ${clock(ev.s)}. ${ev.done ? 'Over.' : now >= ev.s ? 'Under way: no more wagers.' : 'Wagers taken till the first bout.'}`, '#e8d8b0');
+    line(`${ev.title}, ${clock(ev.s)}. ${ev.off ? 'Called off: stakes given back.' : ev.done ? 'Over.' : now >= ev.s ? 'Under way: no more wagers.' : 'Wagers taken till the first bout.'}`, '#e8d8b0');
     ev.data.bouts.forEach((b, k) => {
       const A = fighterOf(S, b.a);
       const Bf = fighterOf(S, b.b);
@@ -814,7 +814,7 @@ function raceBoard(o) {
   if (!ev) {
     line('No racing today. The card\'s up the morning of a race day.', '#a89878');
   } else {
-    line(`${ev.title}, from ${clock(ev.s)}. ${ev.done ? 'Over.' : now >= ev.s ? 'Under way: no more wagers.' : 'Wagers taken till the off.'}`, '#e8d8b0');
+    line(`${ev.title}, from ${clock(ev.s)}. ${ev.off ? 'Called off: stakes given back.' : ev.done ? 'Over.' : now >= ev.s ? 'Under way: no more wagers.' : 'Wagers taken till the off.'}`, '#e8d8b0');
     ev.data.races.forEach((r, k) => {
       const od = C.odds(L, i, ev, k);
       const won = r.result ? S.horses.find((h) => h.id === r.result[0]) : null;
@@ -1179,7 +1179,7 @@ export function cityUpdate(game, dt) {
       const now = game.sim.abs;
       for (const q of L.quarters) {
         // (Settled as it starts, played out to its end.)
-        const ev = C.eventsOf(L, q.i).find((e) => now >= e.s && now < e.e) || null;
+        const ev = C.eventsOf(L, q.i).find((e) => now >= e.s && now < e.e && !e.off) || null;
         const key = `${L.settlement.id}:${q.i}`;
         const by = ev && players.some((p) => Math.hypot(p.x - q.at.x, p.z - q.at.z) < 48 && !p.dead);
         if (!by) continue;

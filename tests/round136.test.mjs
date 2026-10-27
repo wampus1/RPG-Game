@@ -349,7 +349,9 @@ test('the town\'s day of minds, ambitions and groups stays cheap', () => {
 
 test('every line of the new talk can be filled and read', () => {
   const known = new Set(['name', 'full', 'me', 'town', 'tw', 'trade', 'skill', 'skillWord', 'mut', 'title', 'address', 'held', 'dead', 'child', 'spouse', 'gift', 'killed', 'lost', 'kin', 'kinGift',
-    'ambWho', 'ambWhat', 'ambTrade', 'ambBiz', 'grpLeader', 'grpAsk', 'grpWhat', 'grpDead', 'friend', 'rival', 'lostLove', 'badWho', 'badTeller', 'who', 'teller', 'what', 'subj', 'there', 'price', 'n']);
+    'ambWho', 'ambWhat', 'ambTrade', 'ambBiz', 'grpLeader', 'grpAsk', 'grpWhat', 'grpDead', 'friend', 'rival', 'lostLove', 'badWho', 'badTeller', 'who', 'teller', 'what', 'subj', 'there', 'price', 'n',
+    // (Round 147: the town's great places.)
+    'qShow', 'qPlace', 'qAt', 'qOffShow', 'qPastShow', 'qRes']);
   const rules = allRules();
   assert.ok(rules.length >= 500);
   const topics = new Set(rules.map((r) => r.topic));

@@ -2509,6 +2509,9 @@ const cap = (t) => t[0].toUpperCase() + t.slice(1);
 // What each crisis choice does when carried out (beyond its cost and the
 // factions' favour, already applied). Returns the ledger's words.
 const ACTS = {
+  // (Round 147) A grand day at one of the town's great places (see
+  // agenda.js and cities.js).
+  quarter_gala: (O, L, T, day, it, fx) => (O.sim.cities ? O.sim.cities.patronise(L, fx.q, day, fx.spend || 0) : null),
   // (Round 136) A petition of the town's people, granted or refused (see
   // mind/groups.js).
   mind_group: (O, L, T, day, it, fx) => {

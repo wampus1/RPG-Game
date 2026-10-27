@@ -11699,6 +11699,120 @@ or off a corner. Where each one went is saved with the town.
   hold: a new repair was started and finished over and over in the same
   instant. They now come back to it later instead.
 
+## Round 147: The quarters gone over
+
+Every quarter from Round 146 has been gone over: getting about in it,
+how it looks, how it fits in with the rest of the town's life, and how
+smoothly it runs.
+
+### Getting about
+
+- **Everything can be reached.** Every seat, stall, stand, altar, board,
+  bed and doorway in every quarter can be walked to from its gates, by
+  you and by the townsfolk. Each quarter is checked as it's built, using
+  the same rules for steps and headroom that people walk by.
+  - Where something stood in the way, the plan was fixed rather than the
+    wall knocked through. Gates sit in the middle of their side, so they
+    line up with the openings cut for them.
+  - Halls are deep enough that their doors open onto floor, not casks.
+  - The colosseum's corridors step up to the seats.
+  - The racecourse's rails have openings into the infield.
+  - The market hall's keepers stand at counters you can reach.
+  - The delve's halls open away from the barricade.
+  - The fort's keep table no longer blocks its door.
+- **Gates stay clear.** No sign, lamp or wall is ever set on a gate or
+  the tile just inside it. A sign that would land there slides along the
+  wall to the next free spot.
+- **Work spots move to somewhere reachable.** A work spot that landed on
+  a rail or a statue moves to the nearest place that can be reached. If
+  nothing can be, a way is cut through hedge or crop; no quarter in any
+  test world has needed one.
+
+### How they look
+
+- **Mirrored layouts.** Half of all quarters are laid out the other way
+  about, so two arenas or two markets rarely look alike.
+- **Ruins.** The old paving is broken in patches and stretches, not a
+  pattern.
+- **Thermae.** The mosaic is a border round the pool, with plain floor
+  beyond, so the pool is what draws the eye.
+- **Jade theatre.** A rail runs along the front of the stage. The tea
+  tables are staggered, row on row, and lantern trees with peony beds
+  line the sides.
+- **Bazaar.**
+  - An open square where the aisles cross, with trees (stone urns in the
+    north and the mountains) at its corners and fewer lamps along the
+    main aisle.
+  - Now and then a pitch stands empty, with a cart, sacks or a heap of
+    baskets in place of a stall.
+- **Garden maze.** It's a true maze, carved cell by cell: one way to the
+  urn at its far end, and as big as its corner of the garden allows (up
+  to 11 by 9).
+- **Delve.**
+  - Spoil is trodden into the yard round the shaft, and a cart sits on
+    rails beside a heap of ore, with a rack of tools by the supplies.
+  - On a narrow yard, the guild hall runs right across the back, with
+    the relics on stands inside.
+- **Winery and apiary.** The press house and the honey house are roomier.
+- **Forge.** Less clutter.
+
+### Part of the town's life
+
+- **Sieges.** While the town is besieged, its games, races, plays, fairs
+  and auctions are called off. Services, the drill and the old rites go
+  on, and draw twice the crowd.
+- **Weather.** Heavy rain or snow puts off races (the going's too
+  heavy), star-watching, fair days, launches and promenades. The games
+  go on in any weather.
+- **Wagers on a called-off day** are given back in full at the
+  bookmaker's. The quarter window shows the day as called off, and why.
+- **Festival days.** When the town holds a festival, half as many again
+  come to its quarters' doings, and the gate takes more.
+- **The council.** If you govern a town whose budget runs to feast days
+  and whose coffers are full, the council may ask whether to pay for a
+  grand day at one of its quarters:
+
+  | Quarter | Grand day |
+  | --- | --- |
+  | Arena | grand games |
+  | Racecourse | a purse for the races |
+  | Theatre | a gala night |
+
+  The next of that quarter's doings draws a much bigger crowd, and those
+  who come go home happier. It's news about the realm, and the poor and
+  the merchants think the better of you. Your steward decides it by your
+  feast-day standing order. It isn't offered again for ten days.
+- **Talk.** Townsfolk talk about their quarters:
+  - What's on today and when, and whether you're going.
+  - How the last games, races or play went.
+  - What's been called off and why.
+  - Those who work there talk about their work: gladiators on fight day,
+    delvers before they go down, players before the curtain, jockeys,
+    vintners, monks, sellswords and more.
+
+  These lines never come before how someone is feeling.
+
+### Smoother towns
+
+- **Stairs.** Each kind of stair is drawn once and kept, not drawn from
+  a dozen pieces every frame. Stairs were the biggest single cost of
+  drawing a town with a colosseum or amphitheatre.
+- **Finding buildings.** Looking up which building is at a tile (done
+  constantly by people walking about) now uses a lookup by tile instead
+  of a search through every building.
+- **Older worlds.** In a world made before 1.46, finding ground for a
+  quarter outside the town now checks the lie of the land every other
+  pace and remembers it for all the town's quarters. The pause when you
+  first visit such a town is about a third shorter.
+
+### Older worlds
+
+Quarters built to the old design are built again to the new one the
+next time you visit each town, on the same ground. In a world made
+before 1.46 they are raised again over the old. In a world made in 1.46,
+only the parts of the world saved as you left them are put right; the
+rest are made fresh from the plan anyway.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

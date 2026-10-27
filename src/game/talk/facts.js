@@ -230,5 +230,46 @@ export function factsFor(npc, game, leadOf = null) {
       }
     }
   }
+  // ---- (Round 147) the town's great places: what's on at them today,
+  // what was called off, how the last of it went, and whether this one
+  // works there (and if they're one to talk of it: about half the town)
+  F.qJob = rec.qtag && rec.qtag.includes(':') ? rec.qtag.slice(rec.qtag.indexOf(':') + 1) : null;
+  F.qFan = !!F.qJob || ((rec.idx * 2654435761) >>> 0) % 2 === 0;
+  F.qOn = null;
+  F.qNow = false;
+  F.qCrowd = false;
+  F.qOff = null;
+  F.qPast = null;
+  F.qCheers = false;
+  const qs = (L && L.econ && L.quarters) || [];
+  if (qs.length && sim.cities) {
+    const C = sim.cities;
+    for (const q of qs) {
+      for (const e of C.eventsOf(L, q.i)) {
+        if (e.off) {
+          if (!F.qOff) {
+            F.qOff = e.off;
+            F.vars.qOffShow = e.title;
+          }
+        } else if (!e.done && e.e > now && !F.qOn) {
+          F.qOn = e.type;
+          F.qNow = now >= e.s;
+          F.qCrowd = (e.crowd || 0) > 0;
+          F.vars.qShow = e.title;
+          F.vars.qPlace = q.name;
+          const m = ((e.s % 1440) + 1440) % 1440;
+          F.vars.qAt = `${Math.floor(m / 60) % 12 || 12}${m % 60 ? `:${String(m % 60).padStart(2, '0')}` : ''}${m < 720 ? 'am' : 'pm'}`;
+        }
+      }
+    }
+    const past = C.qs(L).past;
+    const P = past.length ? past[past.length - 1] : null;
+    if (P && P.n && day - P.day <= 2 && P.res && !P.res.startsWith('called off')) {
+      F.qPast = P.type;
+      F.qCheers = P.res === 'to cheers';
+      F.vars.qPastShow = P.title;
+      F.vars.qRes = P.res.split('; ')[0];
+    }
+  }
   return F;
 }
