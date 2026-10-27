@@ -298,6 +298,8 @@ function flourish(n, act, g, dt) {
   n.fxT = (n.fxT ?? n.rng.float(0, 1)) - dt;
   if (n.fxT > 0) return;
   const mo = mouth(n);
+  // (Round 146) One of a quarter's own people, at their work there.
+  if (job && n.rec.qtag && quarterFlourish(n, job, at, mo)) return;
   if (hobby === 'music') {
     n.fxT = n.rng.float(0.45, 0.9);
     if (n.rng.chance(0.5)) n.doAction(0.2);
@@ -378,6 +380,158 @@ function flourish(n, act, g, dt) {
     n.doAction(0.3);
     R.emit(n.x, n.y + 1, n.z, { n: 1, color: ['#ffffff'], shape: 'star', up: 2, speed: 2, gravity: 0, life: 0.4, oy: 0 });
   } else n.fxT = n.rng.float(2, 4);
+}
+
+// ------------------------------------------------------------ quarters
+// (Round 146) The people of the places a town's known for, at their work
+// (see sim/cities.js): the gladiators at the posts, the smiths at the
+// anvils, the scribes' ink, the stars through the astronomer's glass, the
+// stallholders crying their wares to whoever's passing. True if done.
+const WINE = ['#6a1a4a', '#8a2a5a', '#a83a6a'];
+const STONE = ['#c8c4bc', '#a8a49c', '#e0dcd4'];
+const BEES = ['#ffd040', '#2a2a2a', '#ffe070'];
+const CRIES = {
+  stallholder: ['Silk! Spices! Finest in the realm!', 'Come and look, no charge for looking!', 'Fresh from the caravans!', 'Best price in the bazaar, friend!'],
+  showman: ['Roll up, roll up!', 'Three throws a copper! Win a prize!', 'Test your strength! Ring the bell!', 'Step right up!'],
+  horsetrader: ['Sound in wind and limb, this one!', 'Finest horseflesh this side of the hills!', 'A saddle for every rider!'],
+  fortuneteller: ['Your future, friend? Cross my palm...', 'The cards know what you seek.', 'I see a journey... and a stranger.'],
+  auctioneer: ['Lots on view before the sale!', 'Rare goods up for bidding, come and see!'],
+  drillmaster: ['Shields up! Hold the line!', 'Again! And put your back into it!', 'Left! Right! Halt!', 'Call that a thrust?'],
+  lanista: ['Footwork! I want to see footwork!', 'The crowd wants blood, not dancing!', 'Again, from the guard.'],
+  guildmaster: ['Contracts on the board! Good pay for good delvers.', 'Who\'s going down today?'],
+  cleric: ['Peace be with you.', 'A candle for your dead, friend?', 'The doors are always open.'],
+  monk: ['Breathe. Be still.', 'The mountain does not hurry.'],
+  attendant: ['The water\'s hot today!', 'A towel, friend?'],
+  vintner: ['Taste this year\'s, you won\'t be sorry.', 'Mind the vines!'],
+  beekeeper: ['Gently, gently. They know when you\'re afraid.', 'Honey fresh from the comb!'],
+  mason: ['Mind your toes!', 'Good clean stone, this.'],
+  antiquarian: ['Careful! That could be a thousand years old.', 'Another shard... from the old kings, I\'d wager.'],
+  bookie: ['Odds on the next bout! Get your wagers in!', 'Who do you fancy, friend?', 'Place your bets!'],
+};
+function quarterFlourish(n, job, at, mo) {
+  const game = n.game;
+  const R = game.renderer;
+  const crier = CRIES[job];
+  if (crier && (n.lineCd || 0) <= 0 && near(n) && n.distTo(game.player) < 9 && n.rng.chance(0.35)) {
+    n.lineCd = n.rng.float(18, 40);
+    n.say(n.rng.pick(crier), 3);
+  }
+  switch (job) {
+    case 'gladiator': case 'sellsword': case 'delver':
+      // At the posts and the dummies: blow after blow.
+      n.fxT = n.rng.float(0.5, 1);
+      n.doAction(0.3);
+      R.emit(at.x, at.y, at.z, { n: 2, color: SAWDUST, up: 16, speed: 24, life: 0.4, oy: -6 });
+      if (near(n) && n.rng.chance(0.4)) game.audio?.play(n.rng.chance(0.3) ? 'clang' : 'swing', n);
+      return true;
+    case 'drillmaster': case 'lanista':
+      n.fxT = n.rng.float(2, 4);
+      if (n.rng.chance(0.5)) n.doAction(0.2);
+      return true;
+    case 'smith': case 'founder': case 'shipwright':
+      // The hammer on the anvil (the founders at the furnace mouth).
+      n.fxT = n.rng.float(0.45, 0.8);
+      n.doAction(0.25);
+      R.emit(at.x, at.y, at.z, { n: job === 'shipwright' ? 2 : 5, color: job === 'shipwright' ? SAWDUST : SPARK, up: 16, speed: job === 'shipwright' ? 22 : 60, gravity: 90, life: 0.35, oy: -2, glow: job !== 'shipwright' });
+      if (job === 'founder' && n.rng.chance(0.3)) R.emit(at.x, at.y, at.z, { n: 4, color: FIRE, up: 26, speed: 12, gravity: -40, life: 0.6, oy: 0, glow: true });
+      if (near(n) && n.rng.chance(0.5)) game.audio?.play(job === 'shipwright' ? 'chop' : 'clang', n);
+      return true;
+    case 'librarian': case 'scribe': case 'archivist': case 'cartographer': case 'guildmaster': case 'quartermaster': case 'manager': case 'changer': case 'auctioneer': case 'bookie':
+      n.fxT = n.rng.float(3, 7);
+      n.doAction(0.15);
+      R.emit(at.x, at.y, at.z, { n: 1, color: job === 'changer' || job === 'bookie' ? GOLD : INK, shape: job === 'changer' || job === 'bookie' ? 'star' : undefined, up: 6, speed: 6, gravity: 30, life: 0.4, oy: 4 });
+      return true;
+    case 'astronomer':
+      n.fxT = n.rng.float(4, 9);
+      if (game.isDay()) return true;
+      n.dir = 2;
+      if (near(n) && n.rng.chance(0.5)) R.emit(n.x + n.rng.int(-6, 6), n.y + 7, n.z - 4, { n: 6, color: ['#ffffff', '#c8d8ff'], shape: 'star', vx: 90, vy: 30, spreadX: 1, spreadY: 1, gravity: 0, life: 0.5, glow: true });
+      return true;
+    case 'cleric': case 'seer':
+      n.fxT = n.rng.float(0.9, 1.8);
+      R.emit(n.x, n.y + 1, n.z, { n: 1, color: job === 'seer' ? ['#c8a0ff', '#e8d8ff'] : GOLD, shape: 'star', up: 14, speed: 8, gravity: -10, life: 1.6, oy: -4, glow: true });
+      if (job === 'seer' && n.rng.chance(0.4)) puff(game, at.x, at.y, at.z, SMOKE, { n: 1, oy: -2, grow: 2, life: 2, up: 10 });
+      return true;
+    case 'monk': {
+      // The slow forms of a morning; stillness the rest of the day.
+      n.fxT = n.rng.float(1.2, 2.4);
+      const m = game.minute;
+      if (m < 480 || (m > 960 && m < 1080)) {
+        n.doAction(0.6);
+        if (n.rng.chance(0.4)) n.dir = (n.dir + 1) & 3;
+      }
+      return true;
+    }
+    case 'attendant':
+      n.fxT = n.rng.float(1.5, 3);
+      puff(game, at.x, at.y, at.z, STEAM, { n: 2, oy: -2, grow: 3, life: 1.8, up: 12 });
+      if (n.rng.chance(0.3)) n.doAction(0.25);
+      return true;
+    case 'actor': case 'musician':
+      n.fxT = n.rng.float(0.5, 1.1);
+      if (job === 'musician') {
+        if (n.rng.chance(0.5)) n.doAction(0.2);
+        R.emit(mo.x, mo.y, mo.z, { n: 1, color: NOTES, shape: 'note', up: 18, speed: 14, gravity: -6, life: 1.6, oy: mo.oy - 4 });
+      } else if (n.rng.chance(0.3)) {
+        // Rehearsing: a gesture, a line to the empty seats.
+        n.doAction(0.4);
+        if ((n.lineCd || 0) <= 0 && near(n) && n.rng.chance(0.3)) {
+          n.lineCd = n.rng.float(20, 45);
+          n.say(n.rng.pick(['To be... no, no. Again.', 'My lord, the castle burns!', 'Is this the end of all our hopes?', 'Hide! Here comes my wife!', 'Hold the gate!', 'Meet me where the river bends.']), 3);
+        }
+      }
+      return true;
+    case 'gardener': case 'vintner': case 'antiquarian': case 'groom':
+      n.fxT = n.rng.float(0.9, 1.8);
+      n.doAction(0.25);
+      R.emit(at.x, at.y - 1, at.z, { n: 3, color: job === 'vintner' && game.world.getBlock(at.x, GROUND, at.z) === B.wine_press ? WINE : job === 'groom' ? ['#e8d070', '#c8b050'] : DIRT, up: 18, speed: 16, life: 0.4, oy: 4 });
+      if (job === 'antiquarian' && near(n) && n.rng.chance(0.3)) game.audio?.play('dig', n);
+      return true;
+    case 'beekeeper':
+      n.fxT = n.rng.float(0.6, 1.2);
+      R.emit(at.x, at.y, at.z, { n: 3, color: BEES, up: 6, speed: 20, gravity: 0, life: 1, oy: -6, spreadX: 6 });
+      return true;
+    case 'mason':
+      n.fxT = n.rng.float(0.5, 0.9);
+      n.doAction(0.25);
+      R.emit(at.x, at.y, at.z, { n: 3, color: STONE, up: 14, speed: 26, gravity: 120, life: 0.4, oy: -2 });
+      if (near(n) && n.rng.chance(0.4)) game.audio?.play('stone', n);
+      return true;
+    case 'surgeon':
+      n.fxT = n.rng.float(0.8, 1.6);
+      R.emit(at.x, at.y, at.z, { n: 1, color: ['#9ae07a', '#e8f0e0'], shape: 'puff', size: 1, grow: 1, up: 12, speed: 4, gravity: -12, life: 1.2, oy: -4 });
+      return true;
+    case 'stallholder': case 'horsetrader': case 'showman': case 'fortuneteller':
+      n.fxT = n.rng.float(2.5, 5);
+      if (n.rng.chance(0.5)) n.doAction(0.2);
+      if (job === 'fortuneteller') R.emit(at.x, at.y, at.z, { n: 1, color: ['#c8a0ff', '#ffffff'], shape: 'star', up: 4, speed: 2, gravity: 0, life: 0.8, oy: 0, glow: true });
+      return true;
+    default:
+      return false;
+  }
+}
+
+// (Round 146) Come for what's on at a quarter (see sim/cities.js): at
+// prayer, in the water, or in the stands, on their feet for a good blow
+// or the horses coming round the bend (the show's own moments: see
+// game/cityplay.js, which sets `hype` on its quarter as they happen).
+export function showAt(n, act, dt) {
+  const game = n.game;
+  const R = game.renderer;
+  n.fxT = (n.fxT ?? n.rng.float(0, 2)) - dt;
+  const live = game.cityLive && game.cityLive.get(`${n.layout.settlement.id}:${act.q}`);
+  if (live && live.hype > 0 && n.rng.chance(dt * live.hype * 0.8)) {
+    n.doAction(0.35);
+    if ((n.lineCd || 0) <= 0 && near(n) && n.rng.chance(0.15)) {
+      n.lineCd = n.rng.float(12, 30);
+      n.say(n.rng.pick(live.cries || ['Huzzah!', 'Again!', 'Did you see that?!', 'Go on!']), 2.2);
+    }
+  }
+  if (n.fxT > 0) return;
+  n.fxT = n.rng.float(1.5, 4);
+  if (act.tag === 'pray') R.emit(n.x, n.y + 1, n.z, { n: 1, color: GOLD, shape: 'star', up: 12, speed: 6, gravity: -10, life: 1.4, oy: -4, glow: true });
+  else if (act.tag === 'bathe') puff(game, n.x, n.y + 1, n.z, STEAM, { n: 1, oy: 0, grow: 3, life: 1.8, up: 10 });
+  else if (act.face !== undefined && n.dir !== act.face && n.rng.chance(0.6)) n.dir = act.face;
 }
 
 // ------------------------------------------------------------ entry

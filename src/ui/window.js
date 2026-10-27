@@ -75,6 +75,7 @@ export function describeActivity(e) {
     case 'poster': return e.mode === 'down' ? 'taking down posters' : 'putting up posters';
     case 'bury': return 'setting a gravestone';
     case 'pray': return 'praying for healing';
+    case 'show': return e.tag === 'pray' ? 'at prayers' : e.tag === 'bathe' ? 'at the baths' : e.tag === 'stroll' ? 'out for the day' : e.tag === 'perform' ? 'performing' : 'watching the show';
     case 'build': return e.label ? e.label : 'building a house';
     case 'forage': return 'looking for food';
     case 'trial': return 'at a hearing';

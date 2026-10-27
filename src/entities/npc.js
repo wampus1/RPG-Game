@@ -26,7 +26,7 @@ import { fortuneOf } from '../sim/prosperity.js';
 import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch, npcWingWatch, starborn } from '../game/combat.js';
 import { isStar, KIN_BARKS } from '../game/starfall.js';
 import { doorLocked, knock as knockDoor, answerTick } from '../game/doorlocks.js';
-import { actFx, finishDrink, MESS } from './acts.js';
+import { actFx, finishDrink, MESS, showAt } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk, storyTick } from './sagaman.js';
 import { laborTick } from '../sim/labor.js';
@@ -497,6 +497,19 @@ export class NPC extends Entity {
         if (!t) return plazaTile();
         if (e.seat) this.spot = { x: t.x, y: GROUND, z: t.z, face: e.face, tags: ['event'], seat: true };
         return { x: t.x, y: GROUND, z: t.z, face: e.face, tag: 'event', dance: e.role === 'dance' };
+      }
+      case 'show': {
+        // (Round 146) Come for what's on at one of the town's great places
+        // (see sim/cities.js): a seat in the stands or a pew, a place in
+        // the water, or a walk round the gardens or the fair.
+        if (e.walk && e.walk.length) {
+          const wp = e.walk[rng.int(0, e.walk.length - 1)];
+          return { x: wp.x, y: GROUND, z: wp.z, near: 1, tag: e.tag || 'stroll', wander: true };
+        }
+        const t = e.target;
+        if (!t) return plazaTile();
+        if (e.seat) this.spot = { x: t.x, y: t.y ?? GROUND, z: t.z, face: e.face, tags: ['show'], seat: true };
+        return { x: t.x, y: t.y ?? GROUND, z: t.z, face: e.face, tag: e.tag || 'show' };
       }
       case 'poster': {
         // Round the town with the posters, the nearest next.
@@ -2252,6 +2265,7 @@ export class NPC extends Entity {
     if ((act.act === 'mourn' || act.act === 'funeral' || act.act === 'event') && this.idleAnim) this.idleAnim = null;
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
+    if (act.act === 'show' && !act.walk) return showAt(this, act, dt);
     // (Round 136) Out for how they feel (see sim/mind: an evening at the
     // tavern, a vigil), or in the square with the others: said aloud, when
     // there's anyone to hear it.

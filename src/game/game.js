@@ -140,6 +140,9 @@ import { dayOf as festDayOf, posterLines as festPosterLines } from '../sim/festi
 import { FestWindow, FestBoardWindow } from '../ui/festwin.js';
 import { enter as festEnter, result as festResultOf, boardRows as festBoardRows, boutDone as festBoutDone, raceFrame as festRaceFrame, music as festMusic, cask as festCask } from './festplay.js';
 import { loreOf } from './books/lore.js';
+import { quarterInteract, cityUpdate, arenaBoutDone, cityFestResult, quarterSign, setQuarterWindow } from './cityplay.js';
+import { QuarterWindow } from '../ui/citywin.js';
+import { SPECIALTIES } from '../world/specialties.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
 const GEMS_COLOR = (k) => (ITEMS[k] && ITEMS[k].gem && GEMS[k] ? GEMS[k].color : '#ffffff');
@@ -244,6 +247,8 @@ for (let dy = 0; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -
 
 // What's drunk rather than eaten.
 const DRINKS = new Set(['ale', 'cocoa', 'wine', 'mead', 'holy_water']);
+
+setQuarterWindow(QuarterWindow);
 
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
@@ -1674,7 +1679,7 @@ export class Game {
   // They take a few seconds to square up (counting it down) before they
   // come at you, unless you swing first.
   startDuel(npc, wager, o = {}) {
-    this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null, challenge: o.challenge ?? null };
+    this.duel = { npc, wager, start: this.sim.abs, fest: o.fest || null, challenge: o.challenge ?? null, arena: o.arena || null };
     npc.duelReady = 3;
     // (In a bout with you: a guard among them neither calls "Halt!" nor
     // runs for the bell. See npc.fight.)
@@ -1684,6 +1689,8 @@ export class Game {
     // (Round 129: the champion of the green, for the festival's wrestling.)
     if (o.challenge !== undefined && o.challenge !== null) this.ui.msg(`A challenge under the Articles: you and ${npc.name}, chief of the brethren, steel on the beach. The first down to a quarter of their strength yields the chair.`, '#ffe070');
     else if (o.fest) this.ui.msg(`Wrestling ${npc.name}, the champion of the green: the first down to a quarter of their strength is thrown.`, '#ffe070');
+    // (Round 146) On the sands of a town's arena (see cityplay.arenaFight).
+    else if (o.arena) this.ui.msg(`On the sands with ${o.arena.name || npc.name}: the first down to a quarter of their strength yields.`, '#ffe070');
     else this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
     this.audio?.play('draw', npc);
   }
@@ -1707,6 +1714,13 @@ export class Game {
     const p = this.player;
     n.boutWith = null;
     if (!n.dead) n.calmDown(true);
+    // (Round 146) On the sands of a town's arena: its purse and its crowd
+    // (see cityplay.arenaBoutDone), no wager.
+    if (d.arena) {
+      arenaBoutDone(this, d, result);
+      if (result !== 'fled') gainMastery(this, 'dueling', result === 'won' ? 1.5 : 0.5);
+      return;
+    }
     // (Round 136) A friendly bout with one of the townsfolk (see social.js).
     sparDone(this, n, result);
     const adv = n.adventurer;
@@ -2246,6 +2260,8 @@ export class Game {
     });
     this.updateDuel();
     if (party) updateBouts(this, dt);
+    // (Round 146) What's on at the towns' great places, played out.
+    if (!this.world.remote) cityUpdate(this, dt);
     this.updateDummy(dt);
     this.updateGates(dt);
     this.syncStanding(dt);
@@ -3974,6 +3990,8 @@ export class Game {
 
   // How you did, from the window (checked: see festplay.result).
   festResult(cfg, msg) {
+    // (Round 146) A game at a town's fair or its butts (see cityplay.js).
+    if (cfg && cfg.quarter) return cityFestResult(this, cfg, msg);
     const f = this.festOf(cfg);
     if (!f || !msg || msg.k !== cfg.kind) return null;
     return festResultOf(this, f.L, f.ev, cfg.kind, msg);
@@ -5260,6 +5278,10 @@ export class Game {
       return;
     }
     switch (b.interact) {
+      // (Round 146) One of the things of a town's great places (see cityplay.js).
+      case 'quarter':
+        quarterInteract(this, x, y, z, b);
+        break;
       case 'door': {
         const open = w.getState(x, y, z);
         // (Round 73) Someone's front door, locked: pick it (with a pick in
@@ -5978,6 +6000,19 @@ export class Game {
       else if (b.type !== 'townhall') lines.push('', 'Nobody seems to work here now.');
       if (L.jail && L.jail.building === b.id) lines.push('', 'Holding cells within.');
       return { title: 'SIGN', lines };
+    }
+    // (Round 146) A town's great place: what it is, and what's on.
+    if (sg && sg.kind === 'quarter') {
+      const q = (L.quarters || [])[sg.q];
+      if (q) {
+        const K = SPECIALTIES[q.k];
+        const C = this.sim.cities;
+        const evs = C.eventsOf(L, q.i).filter((ev) => !ev.done);
+        const lines = [q.name.toUpperCase(), '', K ? K.blurb.charAt(0).toUpperCase() + K.blurb.slice(1) : '', ''];
+        for (const ev of evs.slice(0, 3)) lines.push(`${ev.title}: ${Math.floor((ev.s % DAY) / 60) % 12 || 12}${(ev.s % DAY) % 60 ? `:${String((ev.s % DAY) % 60).padStart(2, '0')}` : ''}${(ev.s % DAY) < 720 ? 'am' : 'pm'}`);
+        if (!evs.length) lines.push(quarterSign(L, q).split(' | ')[1] || 'Open to all.');
+        return { title: 'SIGN', lines };
+      }
     }
     if (sg && sg.kind === 'works') {
       const pr = this.sim.works.projects.find((q) => q.id === sg.project);
