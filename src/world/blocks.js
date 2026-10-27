@@ -1707,3 +1707,120 @@ def('gallows', { ...sprite, tall: true, solid: true, tool: 'axe', hardness: 3, d
 // (Round 130) A sea chest, dug up where a captain buried it (see
 // game/havenplay.js): open it for what's inside.
 def('sea_chest', { ...sprite, solid: true, interact: 'seachest', tool: 'axe', hardness: Infinity, drop: null, label: 'A Sea Chest' });
+// (Round 146) What a place is known for (see world/specialties.js and
+// world/quarters/), and the things in it to use: interact 'quarter' goes
+// to game/cityplay.js, which looks at which block it is.
+const fixed = { hardness: Infinity, drop: null };
+const quarter = { ...sprite, solid: true, interact: 'quarter', ...fixed };
+// The ground of them.
+def('arena_sand', { tool: 'shovel', hardness: 0.6, drop: 'sand', label: 'Raked Sand' });
+def('mosaic', { tool: 'pick', hardness: 3, drop: 'cobblestone', label: 'Mosaic' });
+def('stage_floor', { tool: 'axe', hardness: 1.2, drop: 'planks', label: 'Stage Boards' });
+def('stained_glass', { opaque: false, tool: 'pick', hardness: 0.6, drop: null, label: 'Stained Glass' });
+def('hedge', { tool: 'axe', hardness: 0.6, drop: [{ item: 'stick', chance: 0.4 }], label: 'Clipped Hedge' });
+def('race_track', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Racing Turf' });
+def('bath_tile', { tool: 'pick', hardness: 3, drop: 'cobblestone', label: 'Bath Tiles' });
+def('bath_water', { solid: false, opaque: false, render: 'liquid', standable: false, ...fixed, light: 1, label: 'Warm Water' });
+def('cut_stone', { tool: 'pick', hardness: 5, drop: 'stone', label: 'Cut Rock' });
+// The arena: the gate the fighters come out of (sign up there), the beasts'
+// cages, the board of the day's bouts and the odds, the champion in stone,
+// a northern ring's carved posts.
+def('arena_gate', { ...quarter, tall: true, rotatable: true, label: 'Fighters\' Gate' });
+def('beast_cage', { ...quarter, rotatable: true, label: 'Beast Cage' });
+def('bout_board', { ...quarter, tall: true, label: 'Board of Bouts' });
+def('gladiator_statue', { ...quarter, tall: true, rotatable: true, label: 'Champion\'s Statue' });
+def('holmgang_post', { ...sprite, tall: true, solid: true, ...fixed, label: 'Carved Post' });
+// The library: shelves of scrolls, a lectern with the great book open on
+// it, the map table, the globe turning, the telescope on the tower.
+def('scroll_shelf', { tool: 'axe', hardness: 1, interact: 'bookshelf', rotatable: true, label: 'Scroll Shelves' });
+def('reading_lectern', { ...quarter, rotatable: true, label: 'Reading Lectern' });
+def('map_table', { ...quarter, rotatable: true, label: 'Map Table' });
+def('globe', { ...quarter, label: 'Globe' });
+def('telescope', { ...quarter, tall: true, rotatable: true, label: 'Telescope' });
+// A holy seat: the font of holy water, the rack of candles to light, the
+// pews, the shrine of its relic.
+def('holy_font', { ...quarter, label: 'Font' });
+def('candle_rack', { ...quarter, light: 6, lightWhenState: true, label: 'Votive Candles' });
+def('pew', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.8, drop: 'planks', interact: 'sit', label: 'Pew' });
+def('relic_shrine', { ...quarter, tall: true, light: 5, label: 'Shrine of the Relic' });
+// The bazaar: what's for sale, heaped (spices, rugs, pots, songbirds,
+// silks), the board of the region's prices, the auction block.
+def('spice_sacks', { ...sprite, solid: true, ...fixed, label: 'Sacks of Spice' });
+def('rug_stack', { ...sprite, solid: true, ...fixed, label: 'Rugs' });
+def('pottery', { ...sprite, solid: true, ...fixed, label: 'Pots and Jars' });
+def('birdcages', { ...sprite, tall: true, solid: true, ...fixed, label: 'Songbirds' });
+def('silk_rack', { ...sprite, tall: true, solid: true, ...fixed, label: 'Silks' });
+def('price_board', { ...quarter, tall: true, label: 'Board of Prices' });
+def('auction_block', { ...quarter, rotatable: true, label: 'Auction Block' });
+// The forge: the great furnace, the quenching trough, the water wheel.
+def('blast_furnace', { ...sprite, tall: true, solid: true, ...fixed, light: 12, label: 'Great Furnace' });
+def('quench_trough', { ...sprite, solid: true, rotatable: true, ...fixed, label: 'Quenching Trough' });
+def('water_wheel', { ...sprite, tall: true, solid: true, rotatable: true, ...fixed, label: 'Water Wheel' });
+def('guild_board', { ...quarter, tall: true, label: 'Guild Board' });
+// The citadel: where swords are hired, butts to shoot at, an engine.
+def('merc_board', { ...quarter, tall: true, label: 'Sellswords\' Board' });
+def('target_butt', { ...quarter, tall: true, rotatable: true, label: 'Butt' });
+def('catapult', { ...sprite, tall: true, solid: true, rotatable: true, ...fixed, label: 'Catapult' });
+// The baths: the rubbing table, the statue pouring water, towels.
+def('massage_table', { ...quarter, rotatable: true, label: 'Rubbing Table' });
+def('bath_statue', { ...sprite, tall: true, solid: true, ...fixed, label: 'Water-Bearer' });
+def('towel_shelf', { ...sprite, solid: true, ...fixed, label: 'Towels' });
+// The theatre: the curtain (drawn open for a play), the footlights, the
+// painted scenery, the playbill.
+def('stage_curtain', { ...sprite, tall: true, solid: false, rotatable: true, ...fixed, label: 'Curtain' });
+def('footlight', { ...sprite, solid: false, ...fixed, light: 7, lightWhenState: true, label: 'Footlight' });
+def('stage_flat', { ...sprite, tall: true, solid: true, rotatable: true, ...fixed, label: 'Painted Scenery' });
+def('playbill', { ...quarter, tall: true, label: 'Playbill' });
+// The racecourse: the starting gate, the post, the bookmakers' board, the
+// obelisks down the spine.
+def('start_gate', { ...sprite, tall: true, solid: false, rotatable: true, ...fixed, label: 'Starting Gate' });
+def('finish_post', { ...quarter, tall: true, label: 'Winning Post' });
+def('odds_board', { ...quarter, tall: true, label: 'Bookmaker\'s Board' });
+def('spina_obelisk', { ...sprite, tall: true, solid: true, ...fixed, label: 'Obelisk' });
+// The fair: the striker, the fortune-teller's tent, the hoop-la stall.
+def('high_striker', { ...quarter, tall: true, label: 'High Striker' });
+def('fortune_tent', { ...quarter, tall: true, rotatable: true, label: 'Fortune-Teller\'s Tent' });
+def('ring_toss', { ...quarter, tall: true, rotatable: true, label: 'Hoop-La' });
+def('prize_shelf', { ...sprite, solid: true, ...fixed, label: 'Prizes' });
+// Old ruins: the dig, the stone with the old writing, the finds table.
+def('dig_site', { ...quarter, solid: false, label: 'The Dig' });
+def('glyph_stone', { ...quarter, tall: true, label: 'Inscribed Stone' });
+def('finds_table', { ...quarter, rotatable: true, label: 'Finds Table' });
+// The winery: the vines, the press, the great vat, the casks.
+def('vine_row', { ...quarter, tall: true, label: 'Vines' });
+def('wine_press', { ...quarter, label: 'Wine Press' });
+def('wine_vat', { ...sprite, tall: true, solid: true, ...fixed, label: 'Vat' });
+def('wine_cask', { ...quarter, rotatable: true, label: 'Cask' });
+// The shipyard: the crane, coils of rope.
+def('yard_crane', { ...sprite, tall: true, solid: true, rotatable: true, ...fixed, label: 'Crane' });
+def('rope_coil', { ...sprite, solid: true, ...fixed, label: 'Rope' });
+// The gardens: clipped shapes, the aviary, an urn of flowers.
+def('topiary', { ...sprite, tall: true, solid: true, ...fixed, label: 'Topiary' });
+def('aviary', { ...quarter, tall: true, label: 'Aviary' });
+def('garden_urn', { ...sprite, solid: true, ...fixed, label: 'Urn' });
+// The monastery: the mat, the wooden man, the tea table, incense.
+def('meditation_mat', { ...quarter, solid: false, label: 'Mat' });
+def('wooden_dummy', { ...quarter, tall: true, rotatable: true, label: 'Wooden Man' });
+def('tea_table', { ...quarter, label: 'Tea Table' });
+def('incense', { ...sprite, solid: false, ...fixed, label: 'Incense' });
+// The apiary: the skeps.
+def('bee_skep', { ...quarter, label: 'Skep' });
+// The stone circle: the carved stone, the altar.
+def('rune_stone', { ...quarter, tall: true, label: 'Carved Stone' });
+def('altar_stone', { ...quarter, label: 'Altar Stone' });
+// The quarry: dressed blocks, the mason's bench, a statue half out of its
+// block.
+def('stone_blocks', { ...sprite, solid: true, ...fixed, label: 'Dressed Stone' });
+def('mason_bench', { ...quarter, rotatable: true, label: 'Mason\'s Bench' });
+def('rough_statue', { ...sprite, tall: true, solid: true, ...fixed, label: 'Half-Carved Statue' });
+// The delve: the way down, the contracts board, the memorial.
+def('delve_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', ...fixed, label: 'The Way Down' });
+def('delve_board', { ...quarter, tall: true, label: 'Contracts' });
+def('delve_memorial', { ...quarter, tall: true, label: 'Memorial to the Lost' });
+// Each one's greatest thing, nine paces round (drawn whole: see
+// render/citypieces.js): the champion in bronze, the orrery, the
+// carousel, the colossus's fallen head.
+def('champion_bronze', { ...quarter, tall: true, light: 0, label: 'The Champion in Bronze' });
+def('orrery', { ...quarter, tall: true, light: 4, label: 'Orrery' });
+def('carousel', { ...quarter, tall: true, light: 6, label: 'Carousel' });
+def('colossus_head', { ...quarter, tall: true, label: 'Head of the Colossus' });

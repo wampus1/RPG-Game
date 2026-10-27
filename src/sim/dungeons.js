@@ -158,6 +158,12 @@ export class Dungeons {
       // (Round 74: four words at most.)
       rec.name = shortName(rec.name);
       rec.town = town ? town.id : null;
+      // (Round 146) A town's own delve: named for it, and its town's.
+      if (s.delve !== undefined) {
+        rec.delveOf = s.delve;
+        rec.name = s.delveName || rec.name;
+        rec.town = s.delve;
+      }
       s.state = s.state || {};
       this.list.push(rec);
     }

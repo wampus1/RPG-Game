@@ -12,6 +12,8 @@ import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
+import './citypieces.js';
+import { CITY_VARIANTS } from './cityart.js';
 import { humanoidSheet, humanoidPose, creatureSheet, lookFrame, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, WAGON_SEAT, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { parseFx, fxOffset, fxColor } from '../ui/textfx.js';
@@ -123,6 +125,8 @@ const THRUST_UP = -Math.PI * 0.25;
 // Which blocks are the Kavorent's own (recoloured floor by floor).
 let KAV_TINTED = null;
 // The great things in a square (see pieces.js), by id.
+const CITY_VARIED = new Uint8Array(BLOCKS.length);
+for (const n of CITY_VARIANTS) CITY_VARIED[B[n]] = 1;
 const PIECE_IDS = new Uint8Array(BLOCKS.length);
 for (const n of PIECE_NAMES) PIECE_IDS[B[n]] = 1;
 // Which blocks are made in a people's craft (see textures.CRAFTED).
@@ -1579,6 +1583,8 @@ export class Renderer {
         else if (id === B.canopy) idx = ((meta >> CANOPY_STYLE_SHIFT) & 7) * 8 + st * 4 + ((meta >> CANOPY_SHIFT) & 3);
         else if (id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
         else if (id === B.chair) idx = (animFrame + wx + wz) % 4;
+        // (Round 146: a cage's beast, a painted flat, a vine: which by where.)
+        else if (CITY_VARIED[id]) idx = st * 4 + (hash4(wx, wz, 0x146) % 4);
         else idx = st * 4 + (animFrame + wx + wz) % 4;
         const s = arr[idx] || arr[0];
         // (Round 83) A chair at a table: pushed in under it (unless it's

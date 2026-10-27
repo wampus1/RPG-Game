@@ -48,6 +48,8 @@ export function* empireQuarterSteps(L, rng) {
   // The landmarks, each where it fits best (the arena and the park toward
   // the middle; the pens out toward the edge).
   for (const lm of LANDMARKS) {
+    // (Round 146) No second arena where the city's known for its own.
+    if (lm.kind === 'arena' && (L.quarters || []).some((q) => q.k === 'arena')) continue;
     const lot = findLot(L, lm.sizes, rng, lm.kind === 'pens' ? 'edge' : 'mid');
     yield;
     if (!lot) continue;

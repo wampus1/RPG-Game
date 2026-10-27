@@ -64,6 +64,7 @@ import { Labor } from './labor.js';
 import { Prosperity } from './prosperity.js';
 import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
+import { Cities } from './cities.js';
 import { Ancient } from './ancient.js';
 import { Saga } from './saga/core.js';
 import { Mind, pkey } from './mind/mind.js';
@@ -164,6 +165,8 @@ export class Sim {
     // (Before anything that tells of the past: the old places have a part in it.)
     this.dungeons = new Dungeons(game, this);
     this.ancient = new Ancient(game, this);
+    // (Round 146) The places towns are known for, and what goes on there.
+    this.cities = new Cities(game, this);
     this.justice = new Justice(game, this);
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
@@ -284,6 +287,8 @@ export class Sim {
     }
     // (Round 84) An empire's empty houses lived in at last.
     settleEmpire(this, L);
+    // (Round 146) Its quarters, and their people.
+    this.cities.attach(L);
   }
 
   layoutOf(sid) {
@@ -924,6 +929,11 @@ export class Sim {
       const v = npc.visit || rec.visit;
       return { store: v.goods, purse: { get: () => v.coins, add: (n) => { v.coins += n; } }, kind: 'general', wants: null };
     }
+    // (Round 146) One of a quarter's own traders: their stall's.
+    if (rec.qtag) {
+      const sh = this.cities.shop(L, rec);
+      if (sh) return sh;
+    }
     const t = rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? (rec.job === 'cook' ? 'cook' : 'inn') : JOBS_TRADER(rec);
     if (!t) return null;
     let biz = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;
@@ -1461,6 +1471,7 @@ export class Sim {
     if (hod === 6) this.works.daily(L, day);
     this.funeralsAndBurials(L);
     this.events.hourly(L, h + 60);
+    this.cities.hourly(L, h, day, hod);
     this.woundedPray(L, h, hod);
     this.outings.hourly(L, h, day);
     // Snares near an active town catch things now and then.
@@ -2536,6 +2547,7 @@ export class Sim {
       adventurers: this.adventurers.serialize(),
       dungeons: this.dungeons.serialize(),
       ancient: this.ancient.serialize(),
+      cities: this.cities.serialize(),
       caravans: this.caravans.serialize(),
       outings: this.outings.serialize(),
       bandits: this.bandits.serialize(),
@@ -2592,7 +2604,7 @@ export class Sim {
       // Grown old (grey, stooped, slower), whether or not they retired.
       ...(r.aged || r.ruler !== undefined ? { look: r.look, maxHp: r.maxHp, schedule: r.schedule } : {}),
       // Someone who changed trade keeps their new one.
-      ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift } : {}),
+      ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift, qtag: r.qtag } : {}),
     });
     return {
       sid: L.settlement.id,
@@ -2660,6 +2672,7 @@ export class Sim {
     this.adventurers.load(data.adventurers);
     this.dungeons.load(data.dungeons);
     this.ancient.load(data.ancient);
+    this.cities.load(data.cities);
     this.caravans.load(data.caravans);
     this.outings.load(data.outings);
     this.bandits.load(data.bandits);

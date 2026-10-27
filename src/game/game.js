@@ -242,6 +242,9 @@ function wagonTiles(q) {
 const FELL_STEPS = [];
 for (let dy = 0; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dy || dz) FELL_STEPS.push([dx, dy, dz]);
 
+// What's drunk rather than eaten.
+const DRINKS = new Set(['ale', 'cocoa', 'wine', 'mead', 'holy_water']);
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
@@ -6694,13 +6697,14 @@ export class Game {
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.3);
-    this.audio?.play(slot.item === 'ale' || slot.item === 'cocoa' ? 'gulp' : 'eat');
+    const drink = DRINKS.has(slot.item);
+    this.audio?.play(drink ? 'gulp' : 'eat');
     // Crumbs (or foam) everywhere.
     if (slot.item === 'ale') this.renderer.emit(p.x, p.y + 1, p.z, { n: 5, color: ['#f4ecd8', '#ffffff', '#e8c060'], shape: 'drop', up: 10, speed: 12, gravity: 120, life: 0.5, oy: -2 });
     else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
     if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
     if (sick) this.ui.msg(`You can't keep the ${def.name.toLowerCase()} down. (+0 HP)`, '#c0a060');
-    else this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${later > 0 ? `, and ${later} more over ${secs}s` : ''})`, '#80e070');
+    else this.ui.msg(`${drink ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${later > 0 ? `, and ${later} more over ${secs}s` : ''})`, '#80e070');
     // A dish cooked up: what it does starts working (see cooking.js).
     if (!sick && def.dish) {
       eatDish(this, p, def);

@@ -193,6 +193,9 @@ export function settleSites(world, sites) {
       settleThermal(world, s);
       continue;
     }
+    // (Round 146) A town's delve: its way down's in the town (see
+    // sim/cities.js).
+    if (s.delve !== undefined) continue;
     const rng = new RNG(s.seed);
     const cx = Math.floor((s.cx + 0.5) * REGION_W);
     const cz = Math.floor((s.cz + 0.5) * REGION_D);
@@ -446,6 +449,8 @@ Object.assign(FAR_GATE, ANCIENT_GATE);
 // (Round 117) Turned back to a higher tier with a time crystal, its way in
 // grander: see grandeur.
 export function siteBlocks(s, state = {}) {
+  // (A town's delve: its way down built with the town.)
+  if (s.delve !== undefined) return [];
   const out = gateBlocks(s, state);
   const tier = state.tier || 1;
   if (tier < 2 || state.cleared || s.mod || s.type === 'kavorent') return out;

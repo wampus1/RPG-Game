@@ -10,6 +10,7 @@ import { makeNoise2D } from '../util/noise.js';
 import { BIOMES, BIOME_STYLE, BIOME_SETTLE } from './biomes.js';
 import { placeName, civName, CULTURES, nameEra } from './names.js';
 import { genSites } from './sites.js';
+import { assignSpecialties } from './specialties.js';
 import { buildLandmasses, landValue, landmassAt, stormAt, stormNear, insideStorm, DETAIL, DAGONI_KEYS, LANDMASSES } from './geography.js';
 import { shapeLands } from './shapes.js';
 import { findBridges } from './bridges.js';
@@ -62,7 +63,9 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // provinces.js.)
 // (Round 128: 9, a city's or an empire's tavern built big enough for its
 // crowd: see Layout.sizesFor.)
-export const WORLD_GEN = 9;
+// (Round 146: 10, what each place is known for built with it: see
+// world/quarters/.)
+export const WORLD_GEN = 10;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
@@ -104,6 +107,8 @@ export class Overworld {
     this.genCivsAndSettlements();
     // The old places: dungeons, and the Kavorent's spires.
     this.sites = genSites(this);
+    // (Round 146) What each place is known for (see specialties.js).
+    assignSpecialties(this);
     this.explored = new Uint8Array(MAP_W * MAP_H);
     // Places someone has told you of (a lake, the high ground...): marks
     // on your map even where you've never been.

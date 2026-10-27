@@ -489,6 +489,20 @@ food('glowcap', 1, 3, 'Glowcap');
 // (Round 100) From the Wildwood Hollow: comb out of a hornets' nest, and a
 // seed that wants the sun.
 food('honeycomb', 2, 5, 'Honeycomb');
+// (Round 146) What the places known for something make (see
+// world/specialties.js): a winery's wine and an apiary's mead, holy water
+// from a holy seat's font, the apiary's beeswax, the laurels the arena
+// crowns its victors with, a library's charts of the stars, the quarry's
+// busts, the bazaar's spices and silks.
+food('wine', 3, 9, 'Wine', { about: 'A bottle of the local wine. Better than ale, and dearer.' });
+food('mead', 3, 8, 'Mead', { about: 'Honey wine, from the hives.' });
+food('holy_water', 8, 14, 'Holy Water', { about: 'Blessed at the font. Drunk, it mends you.' });
+item('beeswax_candle', { name: 'Beeswax Candle', kind: 'misc', stack: 32, value: 3, about: 'A trade good: worth about ¤3 to a merchant.' });
+item('laurel_wreath', { name: 'Laurel Wreath', kind: 'misc', stack: 8, value: 40, about: 'Won in the arena. Worth something to anyone who admires a fighter.' });
+item('star_chart', { name: 'Star Chart', kind: 'misc', stack: 8, value: 28, about: 'The night sky as the astronomers have it. Scholars pay well for one.' });
+item('marble_bust', { name: 'Marble Bust', kind: 'misc', stack: 4, value: 45, about: 'Carved at the quarry. A fine thing for a hall.' });
+item('spices', { name: 'Spices', kind: 'misc', stack: 32, value: 7, about: 'A trade good: worth about ¤7 to a merchant.' });
+item('silk', { name: 'Silk', kind: 'misc', stack: 16, value: 14, about: 'A trade good: worth about ¤14 to a merchant.' });
 item('sun_seed', { name: 'Sun-Seed', kind: 'misc', stack: 4, value: 12, about: 'Plant it in the sunlit bed of earth in a grove (use the bed with a seed in your pack) to make it grow.' });
 // (Round 101) The Kiln-Deep's: the key cast in the master's mould.
 item('kiln_key', { name: 'Kiln-Key', kind: 'misc', stack: 4, value: 30, about: 'Opens one locked kiln-door in a forge. Used up when it opens a door.' });

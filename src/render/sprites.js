@@ -8,6 +8,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
+import { cityIcon } from './cityart.js';
 import { barrowIcon } from './art/barrow_items.js';
 import { smithItemIcon } from './art/smith_items.js';
 import { gutIcon } from './art/gut_items.js';
@@ -877,6 +878,9 @@ function simpleIcon(key) {
   // (The other Dagoni Islands' goods: see isleart.js.)
   const isle = isleIcon(key);
   if (isle) return isle;
+  // (Round 146: what the places known for something make: see cityart.js.)
+  const city = cityIcon(key);
+  if (city) return city;
   const far = farIcon(key);
   if (far) return far;
   const sh = shipIcon(key);

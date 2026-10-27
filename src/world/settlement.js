@@ -8,6 +8,7 @@ import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
 import { empireQuarterSteps } from './empire.js';
+import { layQuartersSteps, reserveQuarters, laneToQuarters } from './quarters/index.js';
 import { farTable } from './farlands.js';
 import { HAVEN_BUILDINGS, HAVEN_TYPE_NAMES, havenMats, GUILD_FLAGS } from './havenkit.js';
 
@@ -258,6 +259,8 @@ class Layout {
     this.plaza = null;
     this.npcs = [];
     this.collect = null;
+    // (Round 146) What the place is known for, built (see world/quarters/).
+    this.quarters = [];
   }
 
   // ------------------------------------------------------------ basics
@@ -734,11 +737,22 @@ class Layout {
       const vR = this.vRoad.bind(this);
       // (The town's main streets, and a city's side streets, wind; a city's
       // ring road inside its walls stays straight, as the walls are.)
-      this.hRoad = (z, xa, xb, w) => (Math.abs(xb - xa) >= 10 && !(s.type === 'city' && (z === b.z0 + 2 || z === b.z1 - 3)) ? this.wavyH(z, xa, xb, w, w >= 3 ? amp : Math.max(1, amp - 1), rc.chance(0.5) ? 0 : Math.PI) : hR(z, xa, xb, w));
+      // (Round 146: a town's main street kept straight beside the ground
+      // of what it's known for.)
+      const straightQ = (this.world.ow.wg || 1) >= 10 && s.type === 'town' && (s.spec || []).length && s.condition !== 'abandoned' && !s.haven;
+      this.hRoad = (z, xa, xb, w) => (Math.abs(xb - xa) >= 10 && !(s.type === 'city' && (z === b.z0 + 2 || z === b.z1 - 3)) && !(straightQ && w >= 3) ? this.wavyH(z, xa, xb, w, w >= 3 ? amp : Math.max(1, amp - 1), rc.chance(0.5) ? 0 : Math.PI) : hR(z, xa, xb, w));
       this.vRoad = (x, za, zb, w) => (Math.abs(zb - za) >= 10 && !(s.type === 'city' && (x === b.x0 + 2 || x === b.x1 - 3)) ? this.wavyV(x, za, zb, w, w >= 3 ? amp : Math.max(1, amp - 1), rc.chance(0.5) ? 0 : Math.PI) : vR(x, za, zb, w));
     }
+    // (Round 146, worlds made from 1.46 on) The ground for what the place
+    // is known for kept before the streets go down, so the side streets
+    // run round it (see world/quarters/). A town with one has its main
+    // street off to one side, for the room.
+    const wantQ = (this.world.ow.wg || 1) >= 10 && s.type !== 'village' && s.condition !== 'abandoned' && !s.haven && (s.spec || []).length;
+    let qcz = cz;
+    if (wantQ && s.type === 'town') qcz = b.z0 + 8 + this.rng.fork('qstreet').int(0, 2);
+    if (wantQ) this.qlots = reserveQuarters(this, cx, qcz, s.type === 'town' ? 17 : 21, s.type === 'town' ? 10 : 13, curvy ? 4 : 1, curvy && s.type !== 'town' ? 4 : 1, this.rng.fork('qlots'));
     try {
-      this.layStreets(s, b, rng, cx, cz);
+      this.layStreets(s, b, rng, cx, qcz);
     } finally {
       if (curvy) {
         delete this.hRoad;
@@ -747,7 +761,8 @@ class Layout {
     }
     ({ pw, pd } = this.streetPlaza);
     delete this.streetPlaza;
-    this.finishRoads(cx, cz, pw, pd);
+    this.finishRoads(cx, wantQ ? qcz : cz, pw, pd);
+    if (wantQ) laneToQuarters(this);
   }
 
   layStreets(s, b, rng, cx, cz) {
@@ -1101,6 +1116,9 @@ class Layout {
       }
     }
     yield;
+    // (Round 146, worlds made from 1.46 on) What the place is known for,
+    // before the houses take the ground: see world/quarters/.
+    if ((this.world.ow.wg || 1) >= 10 && s.condition !== 'abandoned' && !s.haven) yield* layQuartersSteps(this, this.rng.fork('quarters'));
     // Cities are dense: their graveyard claims ground before the houses.
     if (s.type === 'city') this.cemetery(rng.fork('cemetery'));
     yield;
@@ -1127,7 +1145,7 @@ class Layout {
         bld = yield* this.placeBuildingSteps(t, cands, rng);
         if (!bld && t === 'manor') bld = yield* this.placeBuildingSteps('house_l', cands, rng);
         if (!bld && n <= 5 && t === 'house_l') bld = yield* this.placeBuildingSteps('house_m', cands, rng);
-        if (!bld && lanes < 24 && this.growLane(rng)) {
+        if (!bld && lanes < 24 + 16 * this.quarters.length && this.growLane(rng)) {
           lanes++;
           cands = rng.shuffle(this.frontage());
         } else if (!bld) break;
@@ -4589,6 +4607,8 @@ class Layout {
     if (!J) return false;
     if (job === 'child' || job === 'retired') return true;
     switch (J.place) {
+      case 'quarter':
+        return (this.quarters || []).some((q) => q.roles && q.roles[job]);
       case 'farm':
         return this.fields.length > 0 || this.buildings.some((b) => b.type === 'barn');
       case 'dock':
@@ -4616,6 +4636,7 @@ class Layout {
   assignWork(npc, rng) {
     const job = npc.job;
     const J = JOBS[job];
+    if (npc.qtag && !(J && J.place === 'quarter')) npc.qtag = undefined;
     if (!J || job === 'child' || job === 'retired') return { kind: 'none' };
     this.workLoad = this.workLoad || new Map();
     const load = (k) => this.workLoad.get(k) || 0;
@@ -4624,6 +4645,16 @@ class Layout {
       const gh = this.buildings.filter((b) => b.type === 'guardhouse');
       const post = rng.chance(0.4) && this.gates.length ? rng.pick(this.gates) : null;
       return { kind: 'patrol', building: gh.length ? rng.pick(gh).id : null, post };
+    }
+    // (Round 146) At the quarter they work in (see world/quarters/kit.js):
+    // the one taken on there, or (come of age into the trade) the first
+    // that has a place for one; out of it again, no longer its.
+    if (J.place === 'quarter') {
+      if (!npc.qtag || !npc.qtag.endsWith(`:${job}`)) {
+        const q = (this.quarters || []).find((o) => o.roles && o.roles[job]);
+        npc.qtag = q ? `q${q.i}:${job}` : undefined;
+      }
+      return { kind: 'tag', tag: npc.qtag || `q0:${job}` };
     }
     if (J.place === 'farm') return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
     // (Researchers study at the library till the academy's built.)

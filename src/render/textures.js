@@ -11,6 +11,7 @@ import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES, FAR_ANIM } from '
 import { shipTop, shipFront, SHIP_SPRITES, SHIP_ANIM } from './shipart.js';
 import { LOOKED, LOOKS, lookSprite, awningTop, awningFront } from './lookart.js';
 import { havenTop, havenFront, HAVEN_SPRITES, HAVEN_ANIM } from './havenart.js';
+import { cityTop, cityFront, CITY_SPRITES, CITY_ANIM, CITY_VARIANTS, CITY_ROT_FRONT } from './cityart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -319,6 +320,8 @@ export function cubeTop(name, v, rand, rot) {
   if (st) return st;
   const ht = havenTop(name, v, rand, rot);
   if (ht) return ht;
+  const ct = cityTop(name, v, rand, rot);
+  if (ct) return ct;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -617,6 +620,8 @@ function cubeFront(name, v, rand, rot) {
   if (sf) return sf;
   const hf = havenFront(name, v, rand);
   if (hf) return hf;
+  const cf = cityFront(name, v, rand, rot);
+  if (cf) return cf;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -2377,14 +2382,14 @@ function crackOverlay(stage) {
 
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', 'sail_roof', ...FAR_ROT_TOP]);
-const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM, ...SHIP_ANIM, ...HAVEN_ANIM };
+const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter', ...CITY_ROT_FRONT]);
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM, ...SHIP_ANIM, ...HAVEN_ANIM, ...CITY_ANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
-  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES, SHIP_SPRITES, HAVEN_SPRITES);
+  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES, SHIP_SPRITES, HAVEN_SPRITES, CITY_SPRITES);
   for (const b of BLOCKS) buildBlock(b, TEX);
   // Round 36: the islands' crafts (see CRAFTS): the same furniture made
   // again in each people's own wood and fittings.
@@ -2524,7 +2529,7 @@ function buildBlock(b, TEX) {
         else if (b.render === 'flat') for (let v = 0; v < (b.rug ? 32 : VARIANTS); v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
-          const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' || name === 'bunting' || name === 'festival_banner' ? VARIANTS : 1;
+          const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' || name === 'bunting' || name === 'festival_banner' || CITY_VARIANTS.has(name) ? VARIANTS : 1;
           // Layout: [state * 4 + frame] for animated props, or variants.
           // (Round 79: a canopy's, [style * 8 + state * 4 + colour].)
           if (name === 'canopy') {
